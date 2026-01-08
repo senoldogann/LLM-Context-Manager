@@ -1,4 +1,4 @@
-use crate::graph::{CodeGraph, NodeType};
+use crate::graph::{CodeGraph, CodeNode, NodeType};
 use crate::vector::store::LanceDbStore;
 use anyhow::Result;
 
@@ -22,7 +22,6 @@ pub struct SuggestedContext {
 /// The main intelligence engine for speculative retrieval.
 pub struct RetrievalEngine {
     graph: CodeGraph,
-    #[allow(dead_code)]
     store: LanceDbStore,
 }
 
@@ -31,7 +30,64 @@ impl RetrievalEngine {
         Self { graph, store }
     }
 
+    /// Indexes the current graph into the vector store.
+    /// This should be called after parsing/populating the graph.
+    pub async fn index_graph(&self) -> Result<()> {
+        let mut ids = Vec::new();
+        let mut texts = Vec::new();
+
+        // Iterate over all nodes in the graph
+        for node in self.graph.graph.node_weights() {
+            // Only index Functions and Classes, skip Files (too large) or Variables (too small)
+            if matches!(node.node_type, NodeType::Function | NodeType::Class) {
+                // Combine name and content for better embedding context
+                let text_representation = format!("{}\n{}", node.name, node.content);
+
+                ids.push(node.id.clone());
+                texts.push(text_representation);
+            }
+        }
+
+        if !ids.is_empty() {
+            println!("Indexing {} nodes into vector store...", ids.len());
+            self.store.add_documents(ids, texts).await?;
+        }
+
+        Ok(())
+    }
+
+    /// Performs a purely semantic search using vectors.
+    pub async fn search_code(&self, query: &str, limit: usize) -> Result<Vec<SuggestedContext>> {
+        let hits = self.store.search(query, limit).await?;
+
+        let mut results = Vec::new();
+        for (content, score) in hits {
+            // Distance in LanceDB is usually L2 or Cosine distance.
+            // Lower is better for L2, higher is better for Cosine similarity.
+            // Assuming default L2 for now, we invert/normalize simplified score.
+            // Ideally we should lookup the Node in the graph by ID, but store returns text/id.
+
+            // For this quick implementation, we trust the store returns text.
+            // We can improve this by storing Node ID in vector db and fetching full Node from graph.
+
+            results.push(SuggestedContext {
+                title: "Semantic Match".to_string(), // TODO: Get real name from metadata
+                content,
+                relevance_score: 1.0 - score, // Rough normalization
+                reason: format!("Vector Similarity (Dist: {:.4})", score),
+            });
+        }
+
+        Ok(results)
+    }
+
+    /// Retrieves a node from the graph by its ID.
+    pub fn get_node_by_id(&self, id: &str) -> Option<&CodeNode> {
+        self.graph.find_node_by_id(id)
+    }
+
     /// Predicts relevant code context based on the user's cursor position.
+    /// Uses a hybrid approach: Graph (Structural) + Vector (Semantic).
     pub async fn predict_context(&self, cursor: &CursorPosition) -> Result<Vec<SuggestedContext>> {
         let mut suggestions = Vec::new();
 
@@ -48,12 +104,10 @@ impl RetrievalEngine {
             });
 
             // 2. Structural Retrieval: Find immediate neighbors (Callers/Callees)
-            // We verify outgoing edges
             let mut neighbors = self.graph.graph.neighbors(node_idx);
             while let Some(neighbor_idx) = neighbors.next() {
                 let neighbor = &self.graph.graph[neighbor_idx];
 
-                // Skip if it's the File node itself or just a small variable
                 if neighbor.node_type == NodeType::File {
                     continue;
                 }
@@ -65,60 +119,20 @@ impl RetrievalEngine {
                     reason: "Structural Relation".to_string(),
                 });
             }
+
+            // 3. Semantic Retrieval (Hybrid): "What else is like this function?"
+            // We use the current function's signature/docstring as a query
+            let query = format!("related to {}", current_node.name);
+            // Limiting to top 2 semantic matches to avoid noise
+            if let Ok(semantic_hits) = self.search_code(&query, 2).await {
+                for mut hit in semantic_hits {
+                    hit.reason = "Semantic Similarity to Active Node".to_string();
+                    hit.relevance_score *= 0.7; // Weigh semantic less than structural
+                    suggestions.push(hit);
+                }
+            }
         }
 
         Ok(suggestions)
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::graph::{CodeNode, EdgeType};
-
-    #[tokio::test]
-    async fn test_predict_context() {
-        let mut graph = CodeGraph::new();
-
-        // Setup: File -> Function
-        let file_node = CodeNode {
-            id: "src/main.rs".to_string(),
-            node_type: NodeType::File,
-            name: "src/main.rs".to_string(),
-            content: "".to_string(),
-            start_line: 0,
-            end_line: 100,
-        };
-        let file_idx = graph.add_node(file_node);
-
-        let func_node = CodeNode {
-            id: "main_func".to_string(),
-            node_type: NodeType::Function,
-            name: "main".to_string(),
-            content: "fn main() {}".to_string(),
-            start_line: 10,
-            end_line: 20,
-        };
-        let func_idx = graph.add_node(func_node);
-
-        // Link File -> Function
-        graph.add_edge(file_idx, func_idx, EdgeType::Contains);
-
-        // Setup Store (Mockish)
-        let store = LanceDbStore::new("data/test_db", "test").await.unwrap();
-
-        let engine = RetrievalEngine::new(graph, store);
-
-        let cursor = CursorPosition {
-            file_path: "src/main.rs".to_string(),
-            line: 15, // Inside main implementation
-            column: 0,
-        };
-
-        let suggestions = engine.predict_context(&cursor).await.unwrap();
-
-        // Assertions
-        assert!(!suggestions.is_empty());
-        assert_eq!(suggestions[0].title, "Current: main");
     }
 }

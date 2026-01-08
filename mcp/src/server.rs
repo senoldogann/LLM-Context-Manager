@@ -6,7 +6,7 @@ use std::sync::Arc;
 
 use crate::protocol::{
     create_error_response, create_success_response, JsonRpcRequest, JsonRpcResponse,
-    ServerCapabilities, ServerInfo, ToolDefinition, ToolResult, ToolResultContent, ToolsCapability,
+    ServerCapabilities, ServerInfo, ToolDefinition, ToolsCapability,
 };
 use crate::tools;
 
@@ -25,6 +25,12 @@ impl ServerState {
         let graph = CodeGraph::new();
         let store = LanceDbStore::new("data/ccm_mcp_db", "mcp_vectors").await?;
         let engine = Arc::new(RetrievalEngine::new(graph, store));
+
+        // In a real scenario, we should load an existing index or index in background.
+        // For this demo/mcp instance, we can't easily index everything on startup without scanning files.
+        // So we leave the engine initialized but empty until we add a "scan_workspace" tool.
+        // Or we could trigger a scan if we had the path.
+
         Ok(Self { engine })
     }
 }
@@ -54,7 +60,7 @@ fn handle_initialize(id: Option<Value>) -> Result<JsonRpcResponse> {
         },
         "serverInfo": ServerInfo {
             name: "ccm-mcp".to_string(),
-            version: "0.1.0".to_string(),
+            version: env!("CARGO_PKG_VERSION").to_string(),
         },
     });
     Ok(create_success_response(id, result))
@@ -64,8 +70,7 @@ fn handle_list_tools(id: Option<Value>) -> Result<JsonRpcResponse> {
     let tools_list = vec![
         ToolDefinition {
             name: "get_context".to_string(),
-            description: "Get relevant code context for a specific file and line number."
-                .to_string(),
+            description: Some("Get code context for a given file and line.".to_string()),
             input_schema: json!({
                 "type": "object",
                 "properties": {
@@ -77,13 +82,24 @@ fn handle_list_tools(id: Option<Value>) -> Result<JsonRpcResponse> {
         },
         ToolDefinition {
             name: "search_code".to_string(),
-            description: "Search for code snippets semantically.".to_string(),
-            input_schema: json!({
+            description: Some("Search the codebase using vector similarity.".to_string()),
+            input_schema: serde_json::json!({
                 "type": "object",
                 "properties": {
-                    "query": { "type": "string", "description": "The search query" }
+                    "query": { "type": "string", "description": "The search query (e.g. 'how does authentication work?')" }
                 },
                 "required": ["query"]
+            }),
+        },
+        ToolDefinition {
+            name: "read_graph".to_string(),
+            description: Some("Get details of a specific code node by ID.".to_string()),
+            input_schema: serde_json::json!({
+                "type": "object",
+                "properties": {
+                    "node_id": { "type": "string", "description": "The ID of the node to retrieve." }
+                },
+                "required": ["node_id"]
             }),
         },
     ];
@@ -106,6 +122,7 @@ async fn handle_call_tool(
     let result = match tool_name {
         "get_context" => tools::get_context(&state.engine, &arguments).await?,
         "search_code" => tools::search_code(&state.engine, &arguments).await?,
+        "read_graph" => tools::read_graph(&state.engine, &arguments).await?,
         _ => {
             return Ok(create_error_response(
                 id,

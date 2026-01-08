@@ -6,6 +6,7 @@ use serde_json::Value;
 /// JSON-RPC 2.0 Request
 #[derive(Debug, Deserialize)]
 pub struct JsonRpcRequest {
+    #[allow(dead_code)]
     pub jsonrpc: String,
     pub id: Option<Value>,
     pub method: String,
@@ -59,7 +60,7 @@ pub struct ToolsCapability {
 #[derive(Debug, Serialize)]
 pub struct ToolDefinition {
     pub name: String,
-    pub description: String,
+    pub description: Option<String>,
     #[serde(rename = "inputSchema")]
     pub input_schema: Value,
 }

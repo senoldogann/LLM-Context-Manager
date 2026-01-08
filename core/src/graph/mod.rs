@@ -109,6 +109,9 @@ impl CodeGraph {
 
         Some(best_match)
     }
+    pub fn find_node_by_id(&self, id: &str) -> Option<&CodeNode> {
+        self.graph.node_weights().find(|node| node.id == id)
+    }
 }
 
 #[cfg(test)]

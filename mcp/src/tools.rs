@@ -56,24 +56,70 @@ pub async fn get_context(engine: &Arc<RetrievalEngine>, args: &Value) -> Result<
 
 /// Tool: search_code
 /// Performs semantic search in the codebase.
-pub async fn search_code(_engine: &Arc<RetrievalEngine>, args: &Value) -> Result<ToolResult> {
+
+pub async fn search_code(engine: &Arc<RetrievalEngine>, args: &Value) -> Result<ToolResult> {
     let query = args
         .get("query")
         .and_then(|v| v.as_str())
-        .unwrap_or("(empty query)");
+        .ok_or_else(|| anyhow::anyhow!("Missing query argument"))?;
 
-    // TODO: Implement actual vector search when embedding model is integrated.
-    // For now, return a placeholder indicating the feature is planned.
+    let hits = engine.search_code(query, 5).await?;
+
+    if hits.is_empty() {
+        return Ok(ToolResult {
+            content: vec![ToolResultContent {
+                content_type: "text".to_string(),
+                text: format!("No results found for query: '{}'", query),
+            }],
+            is_error: None,
+        });
+    }
+
+    let mut output = String::new();
+    for hit in hits {
+        output.push_str(&format!(
+            "## {} (Score: {:.2})\n**Reason:** {}\n\n```\n{}\n```\n\n---\n",
+            hit.title, hit.relevance_score, hit.reason, hit.content
+        ));
+    }
+
     Ok(ToolResult {
         content: vec![ToolResultContent {
             content_type: "text".to_string(),
-            text: format!(
-                "Semantic search for '{}' is not yet fully implemented.\n\n\
-                The vector store is ready, but an embedding model needs to be integrated \
-                to convert text queries into vectors for similarity search.",
-                query
-            ),
+            text: output,
         }],
         is_error: None,
     })
+}
+
+/// Tool: read_graph
+/// Retrieves details of a specific node in the code graph.
+pub async fn read_graph(engine: &Arc<RetrievalEngine>, args: &Value) -> Result<ToolResult> {
+    let node_id = args
+        .get("node_id")
+        .and_then(|v| v.as_str())
+        .ok_or_else(|| anyhow::anyhow!("Missing node_id argument"))?;
+
+    if let Some(node) = engine.get_node_by_id(node_id) {
+        let output = format!(
+            "## Node Details: {}\n\n**Type:** {:?}\n**ID:** {}\n**Range:** Lines {}-{}\n\n```\n{}\n```",
+            node.name, node.node_type, node.id, node.start_line, node.end_line, node.content
+        );
+
+        Ok(ToolResult {
+            content: vec![ToolResultContent {
+                content_type: "text".to_string(),
+                text: output,
+            }],
+            is_error: None,
+        })
+    } else {
+        Ok(ToolResult {
+            content: vec![ToolResultContent {
+                content_type: "text".to_string(),
+                text: format!("Node not found with ID: {}", node_id),
+            }],
+            is_error: Some(true),
+        })
+    }
 }

@@ -28,9 +28,12 @@ tree-sitter-python = "0.25"
 tree-sitter-typescript = "0.23"
 
 # Arrow (Explicitly needed for Vector Store)
-arrow-array = "52"
-arrow-schema = "52"
+arrow-array = "56"
+arrow-schema = "56"
 tokio-stream = { version = "0.1", features = ["net"] }
+futures = "0.3"
+reqwest = { version = "0.11", features = ["json", "rustls-tls"] }
+dotenvy = "0.15" 
 
 [build-dependencies]
 tonic-build = "0.10"
