@@ -33,8 +33,9 @@ async fn main() -> anyhow::Result<()> {
             server::start_server(port).await?;
         }
         Commands::Query { text } => {
-            println!("Querying for: {}", text);
-            // TODO: Implement actual query logic calling core
+            if let Err(e) = ccm_core::run_query(&text).await {
+                eprintln!("Query failed: {}", e);
+            }
         }
     }
 

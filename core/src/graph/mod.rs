@@ -58,6 +58,57 @@ impl CodeGraph {
     pub fn add_edge(&mut self, source: NodeIndex, target: NodeIndex, weight: EdgeType) {
         self.graph.add_edge(source, target, weight);
     }
+
+    /// Finds the node corresponding to a specific file path.
+    pub fn find_file_node(&self, file_path: &str) -> Option<NodeIndex> {
+        self.graph.node_indices().find(|&idx| {
+            let node = &self.graph[idx];
+            node.node_type == NodeType::File && node.name == file_path
+        })
+    }
+
+    /// Finds the deepest node within a file hierarchy that covers the given line.
+    pub fn find_node_in_file(&self, file_path: &str, line: usize) -> Option<NodeIndex> {
+        let file_node_idx = self.find_file_node(file_path)?;
+
+        // We want the most specific node (narrowest range)
+        let mut best_match = file_node_idx;
+        let mut min_len = usize::MAX;
+
+        // BFS/DFS to visit all children of the file
+        let mut stack = vec![file_node_idx];
+
+        while let Some(idx) = stack.pop() {
+            let node = &self.graph[idx];
+
+            // Check if node covers the line
+            if node.start_line <= line && node.end_line >= line {
+                let len = node.end_line - node.start_line;
+                if len < min_len {
+                    min_len = len;
+                    best_match = idx;
+                }
+
+                // Add children to stack to go deeper
+                // We only follow output edges of type Contains
+                let mut neighbors = self
+                    .graph
+                    .neighbors_directed(idx, petgraph::Direction::Outgoing);
+                while let Some(neighbor_idx) = neighbors.next() {
+                    let edge = self.graph.find_edge(idx, neighbor_idx);
+                    if let Some(edge_idx) = edge {
+                        if let Some(weight) = self.graph.edge_weight(edge_idx) {
+                            if matches!(weight, EdgeType::Contains) {
+                                stack.push(neighbor_idx);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        Some(best_match)
+    }
 }
 
 #[cfg(test)]
