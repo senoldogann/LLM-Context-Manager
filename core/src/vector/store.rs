@@ -50,8 +50,52 @@ impl LanceDbStore {
             .as_ref()
             .ok_or_else(|| anyhow::anyhow!("Embedder not initialized"))?;
 
-        // 1. Generate Embeddings (Real Remote Call)
-        let embeddings = embedder.embed(texts.clone()).await?;
+        const MAX_CHARS: usize = 1500;
+        const OVERLAP: usize = 200;
+
+        let mut all_chunks = Vec::new();
+        let mut all_chunk_ids = Vec::new();
+        let mut original_ids_map = Vec::new(); // Maps chunk index to original ID index
+
+        for (i, text) in texts.iter().enumerate() {
+            if text.len() <= MAX_CHARS {
+                all_chunks.push(text.clone());
+                all_chunk_ids.push(ids[i].clone());
+                original_ids_map.push(i);
+            } else {
+                // Split large text into overlapping chunks
+                let mut start = 0;
+                let mut chunk_idx = 0;
+                while start < text.len() {
+                    let end = std::cmp::min(start + MAX_CHARS, text.len());
+                    let chunk = text[start..end].to_string();
+
+                    all_chunks.push(chunk);
+                    all_chunk_ids.push(format!("{}#chunk{}", ids[i], chunk_idx));
+                    original_ids_map.push(i);
+
+                    if end == text.len() {
+                        break;
+                    }
+                    start += MAX_CHARS - OVERLAP;
+                    chunk_idx += 1;
+                }
+            }
+        }
+
+        // 1. Generate Embeddings one at a time
+        let mut embeddings: Vec<Vec<f32>> = Vec::with_capacity(all_chunks.len());
+        for (i, chunk) in all_chunks.iter().enumerate() {
+            eprintln!("Embedding chunk {}/{}", i + 1, all_chunks.len());
+            let single_embedding = embedder.embed(vec![chunk.clone()]).await?;
+            if let Some(emb) = single_embedding.into_iter().next() {
+                embeddings.push(emb);
+            }
+        }
+
+        // Use all_chunks and all_chunk_ids for storage
+        let texts = all_chunks;
+        let ids = all_chunk_ids;
 
         let dim = embeddings.first().map(|v| v.len()).unwrap_or(1536);
 

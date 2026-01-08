@@ -25,8 +25,9 @@
 # ============================================
 PROJECT_DIR="/Users/dogan/Desktop/context-manager"
 BINARY="${PROJECT_DIR}/target/debug/ccm-mcp"
-DB_PATH="${PROJECT_DIR}/data/ccm_mcp_db"
+DB_PATH="${PROJECT_DIR}/data/ccm_db"  # Matched with CLI default
 DEBUG_LOG="${PROJECT_DIR}/mcp_debug.log"
+export CCM_PROJECT_ROOT="${PROJECT_DIR}" # Trigger auto-indexing
 
 # ============================================
 # EMBEDDING CONFIGURATION

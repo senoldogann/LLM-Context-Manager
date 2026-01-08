@@ -64,6 +64,11 @@ pub async fn search_code(engine: &Arc<RetrievalEngine>, args: &Value) -> Result<
         .ok_or_else(|| anyhow::anyhow!("Missing query argument"))?;
 
     let hits = engine.search_code(query, 5).await?;
+    eprintln!(
+        "[DEBUG] search_code found {} hits for query: '{}'",
+        hits.len(),
+        query
+    );
 
     if hits.is_empty() {
         return Ok(ToolResult {

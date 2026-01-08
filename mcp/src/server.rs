@@ -26,10 +26,35 @@ impl ServerState {
         // Use CCM_DB_PATH env var if available
         let db_path =
             std::env::var("CCM_DB_PATH").unwrap_or_else(|_| "data/ccm_mcp_db".to_string());
+        let project_root = std::env::var("CCM_PROJECT_ROOT").ok();
+
         eprintln!("Using Vector DB Path: {}", db_path);
 
+        // Auto-Index if project root is provided
+        if let Some(root) = &project_root {
+            eprintln!("Auto-indexing enabled for: {}", root);
+            let root_clone = root.clone();
+            let db_path_clone = db_path.clone();
+
+            // Spawn background indexing task
+            tokio::spawn(async move {
+                eprintln!("[Auto-Index] Starting background indexing...");
+                match ccm_core::index_directory(&root_clone, Some(&db_path_clone)).await {
+                    Ok(stats) => {
+                        eprintln!(
+                            "[Auto-Index] Complete! Indexed {} nodes.",
+                            stats.nodes_created
+                        );
+                    }
+                    Err(e) => {
+                        eprintln!("[Auto-Index] Failed: {}", e);
+                    }
+                }
+            });
+        }
+
         let graph = CodeGraph::new();
-        let store = LanceDbStore::new(&db_path, "mcp_vectors").await?;
+        let store = LanceDbStore::new(&db_path, "code_vectors").await?;
         let engine = Arc::new(RetrievalEngine::new(graph, store));
 
         Ok(Self { engine })

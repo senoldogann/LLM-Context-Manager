@@ -8,6 +8,23 @@
 [![MCP](https://img.shields.io/badge/MCP-2025--06--18-blue.svg)](https://modelcontextprotocol.io/)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
+---
+
+## ❓ Neden CCM? (Why CCM?)
+
+Günümüzün AI agentları (Cursor, Windsurf, Claude vb.) harika kod yazıyor, **ancak projeler büyüdükçe tıkanıyorlar.**
+
+1.  **Context Window Limiti:** Tüm projenizi her prompt'ta gönderemezsiniz.
+2.  **Karışıklık:** Tüm dosyaları gönderseniz bile, model gereksiz detaylarda kaybolur ("Lost in the Middle").
+3.  **Ödenen Token:** Gereksiz her satır kod, size zaman ve para kaybı olarak döner.
+
+**CCM bu sorunu çözer:**
+Projeniz 1000 dosya da olsa, CCM **sadece o anki sorunuzla ilgili** olan 2-3 dosyayı akıllıca seçer ve AI'a sunar.
+- **Bir Junior Developer gibi değil, bir Senior Architect gibi** projenin tamamına hakimdir.
+- **Herhangi bir dilde** (Rust, Python, JS...) yazılmış **herhangi bir projeye** anında zeka katar.
+
+---
+
 ## 🌟 Features
 
 - **Dual Intelligence Engine:** Combines **Code Property Graphs (CPG)** for structural understanding with **Vector Embeddings** for semantic retrieval.
