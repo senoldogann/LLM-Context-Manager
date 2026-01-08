@@ -20,12 +20,12 @@ impl MemoryManager {
     }
 
     pub fn load_page(&mut self, file_path: &str, content: String) {
-        println!("Loading page for: {}", file_path);
+        eprintln!("Loading page for: {}", file_path);
         self.active_context.insert(file_path.to_string(), content);
     }
 
     pub fn evict_page(&mut self, file_path: &str) {
-        println!("Evicting page for: {}", file_path);
+        eprintln!("Evicting page for: {}", file_path);
         self.active_context.remove(file_path);
     }
 }

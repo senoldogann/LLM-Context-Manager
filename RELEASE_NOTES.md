@@ -1,33 +1,69 @@
-# Release v0.1.0 - "Genesis"
+# Release Notes
 
-We are proud to announce the first release of **Cognitive Codebase Matrix (CCM)**. This release marks the completion of the core architecture, enabling AI agents to biologically understand codebases.
+## v0.1.0 - Initial Release (2026-01-08)
 
-## 🚀 Key Features
+### 🎉 First Public Release
 
-*   **Universal Context Provider (MCP):** Full MCP Server implementation compatible with Claude Desktop and other MCP clients.
-*   **Hybrid Retrieval Engine:**
-    *   **Graph:** Structural code analysis using Code Property Graphs (CPG).
-    *   **Vector:** Semantic search powered by LanceDB.
-*   **Flexible AI Core:**
-    *   **Local:** Native support for **Ollama** (`nomic-embed-text`, `mxbai-embed-large`).
-    *   **Cloud:** Support for **OpenAI** compatible APIs.
-*   **Tools:**
-    *   `read_graph`: Inspect deep code relationships.
-    *   `search_code`: Find code by meaning, not just keywords.
-    *   `get_context`: Cursor-aware context prediction.
+CCM (Cognitive Codebase Matrix) is now available as a fully functional MCP server for AI-powered code understanding.
 
-## 🔧 Fixes & Improvements
+---
 
-*   **Dependency Resolution:** Removed problematic `ort` dependency in favor of a clean, HTTP-based `RemoteEmbedder`.
-*   **Ollama Compatibility:** Fixed generic API pathing (`/api/embed`) and added batching support.
-*   **gRPC Foundation:** initial scaffolding for high-performance IPC.
+### ✨ Features
 
-## 📦 Usage
+- **MCP Server (`ccm-mcp`)**
+  - Full JSON-RPC 2.0 implementation
+  - Protocol version `2025-06-18` support
+  - Compatible with Antigravity, Claude Desktop, and other MCP clients
+  - Three built-in tools:
+    - `get_context` - File/line context retrieval
+    - `search_code` - Semantic vector search
+    - `read_graph` - Code graph node inspection
 
-See `README.md` for detailed installation instructions.
+- **Core Engine (`ccm-core`)**
+  - LanceDB vector store integration
+  - Tree-sitter multi-language parsing (Rust, Python, TypeScript, JavaScript)
+  - Petgraph-based code graph representation
+  - Hybrid retrieval (structural + semantic)
 
-```bash
-# Quick Start (Local)
-ollama pull nomic-embed-text
-cargo run -p ccm-cli -- query --text "Hello World"
-```
+- **Embedding Support**
+  - Local: Ollama (`mxbai-embed-large`, `nomic-embed-text`)
+  - Cloud: OpenAI (`text-embedding-3-small`)
+
+---
+
+### 🔧 Technical Details
+
+- **Protocol:** MCP 2025-06-18
+- **Transport:** stdio (JSON-RPC over stdin/stdout)
+- **Language:** Rust 1.70+
+- **Vector DB:** LanceDB
+- **Parser:** Tree-sitter
+
+---
+
+### 📋 Known Limitations
+
+1. **Manual Indexing Required:** The codebase must be indexed manually via CLI before search works.
+2. **Single Workspace:** Currently supports one workspace per MCP session.
+3. **Embedding Dependency:** Requires Ollama or OpenAI for embeddings.
+
+---
+
+### 🚀 Getting Started
+
+1. Clone and build: `cargo build --release`
+2. Configure `.env` with your embedding provider
+3. Add wrapper script to your MCP config
+4. Restart your AI editor
+
+See [README.md](README.md) for detailed instructions.
+
+---
+
+### 🔜 Roadmap (v0.2.0)
+
+- [ ] Auto-indexing on workspace open
+- [ ] Multi-workspace support
+- [ ] Incremental indexing (file watchers)
+- [ ] More language support (Go, Java, C++)
+- [ ] LSP integration for real-time updates

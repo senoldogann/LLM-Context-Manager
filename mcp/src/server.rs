@@ -22,39 +22,64 @@ pub struct ServerState {
 impl ServerState {
     pub async fn new() -> Result<Self> {
         eprintln!("Initializing CCM Core Engine for MCP...");
-        let graph = CodeGraph::new();
-        let store = LanceDbStore::new("data/ccm_mcp_db", "mcp_vectors").await?;
-        let engine = Arc::new(RetrievalEngine::new(graph, store));
 
-        // In a real scenario, we should load an existing index or index in background.
-        // For this demo/mcp instance, we can't easily index everything on startup without scanning files.
-        // So we leave the engine initialized but empty until we add a "scan_workspace" tool.
-        // Or we could trigger a scan if we had the path.
+        // Use CCM_DB_PATH env var if available
+        let db_path =
+            std::env::var("CCM_DB_PATH").unwrap_or_else(|_| "data/ccm_mcp_db".to_string());
+        eprintln!("Using Vector DB Path: {}", db_path);
+
+        let graph = CodeGraph::new();
+        let store = LanceDbStore::new(&db_path, "mcp_vectors").await?;
+        let engine = Arc::new(RetrievalEngine::new(graph, store));
 
         Ok(Self { engine })
     }
 }
 
 /// Main request dispatcher.
-pub async fn handle_request(state: &ServerState, raw_request: &str) -> Result<JsonRpcResponse> {
+/// Returns Ok(Some(response)) for requests, Ok(None) for notifications.
+pub async fn handle_request(
+    state: &ServerState,
+    raw_request: &str,
+) -> Result<Option<JsonRpcResponse>> {
     let request: JsonRpcRequest = serde_json::from_str(raw_request)?;
 
+    // Check if this is a notification (no id field means notification)
+    let is_notification = request.id.is_none();
+
     match request.method.as_str() {
-        "initialize" => handle_initialize(request.id),
-        "initialized" => Ok(create_success_response(request.id, json!({}))),
-        "tools/list" => handle_list_tools(request.id),
-        "tools/call" => handle_call_tool(state, request.id, request.params).await,
-        _ => Ok(create_error_response(
-            request.id,
-            -32601,
-            &format!("Method not found: {}", request.method),
-        )),
+        "initialize" => handle_initialize(request.id).map(Some),
+        "initialized" | "notifications/initialized" => {
+            // Notifications don't get responses per JSON-RPC 2.0 spec
+            if is_notification {
+                Ok(None)
+            } else {
+                // If it has an id (unusual), respond with empty object
+                Ok(Some(create_success_response(request.id, json!({}))))
+            }
+        }
+        "tools/list" => handle_list_tools(request.id).map(Some),
+        "tools/call" => handle_call_tool(state, request.id, request.params)
+            .await
+            .map(Some),
+        _ => {
+            // For unknown methods, only respond if it's a request (has id)
+            if is_notification {
+                Ok(None)
+            } else {
+                Ok(Some(create_error_response(
+                    request.id,
+                    -32601,
+                    &format!("Method not found: {}", request.method),
+                )))
+            }
+        }
     }
 }
 
 fn handle_initialize(id: Option<Value>) -> Result<JsonRpcResponse> {
     let result = json!({
-        "protocolVersion": "2024-11-05",
+        "protocolVersion": "2025-06-18",
         "capabilities": ServerCapabilities {
             tools: ToolsCapability { list_changed: false },
         },

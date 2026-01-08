@@ -49,7 +49,7 @@ impl RetrievalEngine {
         }
 
         if !ids.is_empty() {
-            println!("Indexing {} nodes into vector store...", ids.len());
+            eprintln!("Indexing {} nodes into vector store...", ids.len());
             self.store.add_documents(ids, texts).await?;
         }
 
