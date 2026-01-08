@@ -77,6 +77,54 @@ ollama pull mxbai-embed-large
 
 ---
 
+## 🗂️ Indexing Your Codebase
+
+Before using semantic search, you need to index your codebase. This parses all supported files and creates vector embeddings.
+
+### Index via CLI
+
+```bash
+# Index a directory
+cargo run -p ccm-cli -- index --path /path/to/your/project
+
+# Or with release binary
+./target/release/ccm-cli index --path /path/to/your/project
+
+# Custom database location
+./target/release/ccm-cli index --path ./my-project --db-path ./custom_db
+```
+
+### Supported Languages
+
+| Language | Extensions |
+|----------|------------|
+| Rust | `.rs` |
+| Python | `.py` |
+| TypeScript | `.ts` |
+| JavaScript | `.js` |
+
+### Index Output Example
+
+```
+╔══════════════════════════════════════╗
+║     CCM - Codebase Indexer           ║
+╚══════════════════════════════════════╝
+Indexing directory: /path/to/project
+  ✓ /path/to/project/src/main.rs
+  ✓ /path/to/project/src/lib.rs
+
+✓ Indexed 45 nodes from 2 files
+
+═══════════════════════════════════════
+Indexing Complete!
+  Files indexed: 2
+  Files failed:  0
+  Nodes created: 45
+═══════════════════════════════════════
+```
+
+---
+
 ## 🔌 MCP Integration (AI Editors)
 
 CCM provides an MCP server that can be integrated with any MCP-compliant AI editor like **Antigravity**, **Claude Desktop**, or **Zed**.

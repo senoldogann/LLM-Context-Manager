@@ -33,7 +33,8 @@ arrow-schema = "56"
 tokio-stream = { version = "0.1", features = ["net"] }
 futures = "0.3"
 reqwest = { version = "0.11", features = ["json", "rustls-tls"] }
-dotenvy = "0.15" 
+dotenvy = "0.15"
+walkdir = "2.5"
 
 [build-dependencies]
 tonic-build = "0.10"

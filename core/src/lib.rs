@@ -104,6 +104,82 @@ pub async fn run_query(text: &str) -> Result<()> {
     Ok(())
 }
 
+/// Index a directory recursively.
+/// Parses all supported files and stores embeddings in the vector database.
+pub async fn index_directory(path: &str, db_path: Option<&str>) -> Result<IndexStats> {
+    use walkdir::WalkDir;
+
+    let db_path = db_path.unwrap_or("data/ccm_db");
+    eprintln!("Indexing directory: {}", path);
+    eprintln!("Using database: {}", db_path);
+
+    let mut graph = CodeGraph::new();
+    let store = LanceDbStore::new(db_path, "code_vectors").await?;
+
+    let mut stats = IndexStats::default();
+
+    // Walk directory recursively
+    for entry in WalkDir::new(path)
+        .into_iter()
+        .filter_map(|e| e.ok())
+        .filter(|e| e.file_type().is_file())
+    {
+        let file_path = entry.path();
+        let file_path_str = file_path.to_string_lossy().to_string();
+
+        // Skip hidden files and common non-code directories
+        if file_path_str.contains("/.")
+            || file_path_str.contains("/target/")
+            || file_path_str.contains("/node_modules/")
+            || file_path_str.contains("/.git/")
+        {
+            continue;
+        }
+
+        // Check if file is supported
+        let extension = file_path.extension().and_then(|e| e.to_str()).unwrap_or("");
+        let is_supported = matches!(extension, "rs" | "py" | "ts" | "js");
+
+        if is_supported {
+            match populate_graph_for_file(&mut graph, &file_path_str) {
+                Ok(_) => {
+                    stats.files_indexed += 1;
+                    eprintln!("  ✓ {}", file_path_str);
+                }
+                Err(e) => {
+                    stats.files_failed += 1;
+                    eprintln!("  ✗ {} ({})", file_path_str, e);
+                }
+            }
+        }
+    }
+
+    // Count nodes
+    stats.nodes_created = graph.graph.node_count();
+
+    // Index into vector store
+    if stats.nodes_created > 0 {
+        let engine = RetrievalEngine::new(graph, store);
+        engine.index_graph().await?;
+        eprintln!(
+            "\n✓ Indexed {} nodes from {} files",
+            stats.nodes_created, stats.files_indexed
+        );
+    } else {
+        eprintln!("\n⚠ No supported files found to index");
+    }
+
+    Ok(stats)
+}
+
+/// Statistics from an indexing operation
+#[derive(Debug, Default)]
+pub struct IndexStats {
+    pub files_indexed: usize,
+    pub files_failed: usize,
+    pub nodes_created: usize,
+}
+
 fn populate_graph_for_file(graph: &mut CodeGraph, file_path: &str) -> Result<()> {
     let content = fs::read_to_string(file_path)?;
     let total_lines = content.lines().count();
