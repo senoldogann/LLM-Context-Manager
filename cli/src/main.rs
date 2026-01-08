@@ -11,7 +11,11 @@ struct Args {
 #[derive(Parser, Debug)]
 enum Commands {
     /// Start the CCM server
-    Start,
+    Start {
+        /// Port to listen on
+        #[arg(short, long, default_value = "3000")]
+        port: u16,
+    },
     /// Query the knowledge base
     Query {
         #[arg(short, long)]
@@ -24,9 +28,9 @@ async fn main() -> anyhow::Result<()> {
     let args = Args::parse();
 
     match args.cmd {
-        Commands::Start => {
-            println!("Starting CCM Server...");
-            server::start_server().await?;
+        Commands::Start { port } => {
+            println!("Starting CCM Server on port {}...", port);
+            server::start_server(port).await?;
         }
         Commands::Query { text } => {
             println!("Querying for: {}", text);

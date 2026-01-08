@@ -5,12 +5,18 @@ pub struct MemoryManager {
     pub page_size: usize,
 }
 
-impl MemoryManager {
-    pub fn new() -> Self {
+impl Default for MemoryManager {
+    fn default() -> Self {
         Self {
             active_context: HashMap::new(),
             page_size: 4096, // 4KB pages
         }
+    }
+}
+
+impl MemoryManager {
+    pub fn new() -> Self {
+        Self::default()
     }
 
     pub fn load_page(&mut self, file_path: &str, content: String) {

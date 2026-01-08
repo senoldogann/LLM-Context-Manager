@@ -1,10 +1,14 @@
 use axum::{routing::get, Router};
 use std::net::SocketAddr;
 
-pub async fn start_server() -> anyhow::Result<()> {
+/// Starts the CCM Core HTTP server on the specified port.
+///
+/// # Arguments
+/// * `port` - The port number to listen on (default: 3000)
+pub async fn start_server(port: u16) -> anyhow::Result<()> {
     let app = Router::new().route("/", get(handler));
 
-    let addr = SocketAddr::from(([127, 0, 0, 1], 3000));
+    let addr = SocketAddr::from(([127, 0, 0, 1], port));
     println!("CCM Core Server listening on {}", addr);
 
     let listener = tokio::net::TcpListener::bind(addr).await?;

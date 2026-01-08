@@ -222,8 +222,8 @@ impl Extractor {
     /// Helper: Gets the source code text for a node.
     fn get_node_text(&self, node: &Node) -> String {
         let start = node.start_byte();
-        let end = node.end_byte();
-        self.source_code[start..end].to_string()
+        let end = node.end_byte().min(self.source_code.len());
+        self.source_code.get(start..end).unwrap_or("").to_string()
     }
 }
 
@@ -243,7 +243,7 @@ fn helper(x: i32) -> i32 {
     x + 1
 }
 "#;
-        let mut parser = CodeParser::new().unwrap();
+        let mut parser = CodeParser::new();
         let tree = parser.parse_tree(code, SupportedLanguage::Rust).unwrap();
 
         let mut graph = CodeGraph::new();
@@ -268,7 +268,7 @@ class MyClass:
     def get_value(self):
         return self.value
 "#;
-        let mut parser = CodeParser::new().unwrap();
+        let mut parser = CodeParser::new();
         let tree = parser.parse_tree(code, SupportedLanguage::Python).unwrap();
 
         let mut graph = CodeGraph::new();
@@ -293,7 +293,7 @@ impl Point {
     }
 }
 "#;
-        let mut parser = CodeParser::new().unwrap();
+        let mut parser = CodeParser::new();
         let tree = parser.parse_tree(code, SupportedLanguage::Rust).unwrap();
 
         let mut graph = CodeGraph::new();

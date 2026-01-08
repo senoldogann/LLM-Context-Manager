@@ -1,6 +1,7 @@
 use anyhow::{anyhow, Result};
 use tree_sitter::Parser;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SupportedLanguage {
     Rust,
     Python,
@@ -11,10 +12,17 @@ pub struct CodeParser {
     parser: Parser,
 }
 
+impl Default for CodeParser {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl CodeParser {
-    pub fn new() -> Result<Self> {
-        let parser = Parser::new();
-        Ok(Self { parser })
+    pub fn new() -> Self {
+        Self {
+            parser: Parser::new(),
+        }
     }
 
     pub fn parse(&mut self, content: &str, lang: SupportedLanguage) -> Result<String> {
@@ -48,7 +56,7 @@ mod tests {
 
     #[test]
     fn test_parse_rust() {
-        let mut parser = CodeParser::new().unwrap();
+        let mut parser = CodeParser::new();
         let code = "fn main() { println!(\"Hello\"); }";
         let sexp = parser.parse(code, SupportedLanguage::Rust).unwrap();
         assert!(sexp.contains("function_item"));
@@ -57,7 +65,7 @@ mod tests {
 
     #[test]
     fn test_parse_python() {
-        let mut parser = CodeParser::new().unwrap();
+        let mut parser = CodeParser::new();
         let code = "def hello(): print('world')";
         let sexp = parser.parse(code, SupportedLanguage::Python).unwrap();
         assert!(sexp.contains("function_definition"));

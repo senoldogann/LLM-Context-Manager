@@ -38,11 +38,17 @@ pub struct CodeGraph {
     pub graph: DiGraph<CodeNode, EdgeType>,
 }
 
-impl CodeGraph {
-    pub fn new() -> Self {
+impl Default for CodeGraph {
+    fn default() -> Self {
         Self {
             graph: DiGraph::new(),
         }
+    }
+}
+
+impl CodeGraph {
+    pub fn new() -> Self {
+        Self::default()
     }
 
     pub fn add_node(&mut self, node: CodeNode) -> NodeIndex {
