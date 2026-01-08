@@ -2,6 +2,6 @@
 members = [
     "core",
     "cli",
-    # "sdk", # İleride eklenecek
+    "mcp",
 ]
 resolver = "2"

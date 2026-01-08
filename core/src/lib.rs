@@ -2,6 +2,7 @@ pub mod engine;
 pub mod graph;
 pub mod memory;
 pub mod parser;
+pub mod rpc;
 pub mod server;
 pub mod vector;
 

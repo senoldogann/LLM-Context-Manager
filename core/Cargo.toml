@@ -30,3 +30,7 @@ tree-sitter-typescript = "0.23"
 # Arrow (Explicitly needed for Vector Store)
 arrow-array = "52"
 arrow-schema = "52"
+tokio-stream = { version = "0.1", features = ["net"] }
+
+[build-dependencies]
+tonic-build = "0.10"
