@@ -1,0 +1,68 @@
+# ========================================
+# CCM (Cognitive Codebase Matrix) .gitignore
+# ========================================
+
+# ----------------
+# Rust / Cargo
+# ----------------
+/target/
+**/*.rs.bk
+Cargo.lock
+
+# ----------------
+# IDE & Editor
+# ----------------
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# ----------------
+# LanceDB Data
+# ----------------
+data/
+*.lance/
+*.lancedb/
+
+# ----------------
+# Logs & Debug
+# ----------------
+*.log
+debug/
+logs/
+
+# ----------------
+# Environment
+# ----------------
+.env
+.env.local
+.env.*.local
+
+# ----------------
+# Test Artifacts
+# ----------------
+*.profraw
+coverage/
+lcov.info
+
+# ----------------
+# Build Artifacts
+# ----------------
+*.o
+*.a
+*.so
+*.dylib
+*.dll
+
+# ----------------
+# OS Generated
+# ----------------
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
