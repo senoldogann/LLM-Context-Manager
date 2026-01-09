@@ -116,7 +116,23 @@ ollama pull mxbai-embed-large
 
 ---
 
-## 🗂️ Indexing Your Codebase
+## 🤖 Integrating with AI Agents (Claude / Cursor)
+
+CCM empowers your AI editor with deep codebase understanding. Instead of manually pasting code, the AI can "search" and "read" your project autonomously.
+
+![CCM Tool Usage Demo](docs/assets/ccm_tool_usage_demo.png)
+
+### How It Works
+
+1. **Ask a Question:** "How is authentication implemented in `auth.rs`?"
+2. **AI Uses CCM Tools:** The agent automatically calls `ccm_search_code` or `ccm_get_context`.
+3. **Smart Retrieval:** CCM returns the exact function definitions, dependencies, and semantic matches.
+4. **Answer:** The AI provides a precise answer based on the retrieved context.
+
+> **Tip for Power Users:** To ensure your AI agent *always* prioritizes CCM tools, you can add a `.cursorrules` (for Cursor) or system prompt instruction:
+> ```md
+> ALWAYS use mcp_context-manager tools for code search before falling back to grep.
+> ```
 
 Before using semantic search, you need to index your codebase. This parses all supported files and creates vector embeddings.
 
