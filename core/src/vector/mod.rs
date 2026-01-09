@@ -1,4 +1,4 @@
-mod extractor;
+pub mod extractor;
 pub mod remote;
 pub mod store;
 

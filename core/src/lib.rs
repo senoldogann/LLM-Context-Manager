@@ -7,7 +7,7 @@ pub mod server;
 pub mod vector;
 
 use crate::engine::{CursorPosition, RetrievalEngine};
-use crate::graph::{CodeGraph, CodeNode, EdgeType, NodeType};
+use crate::graph::CodeGraph;
 use crate::parser::{CodeParser, SupportedLanguage};
 use crate::vector::store::LanceDbStore;
 use anyhow::{Context, Result};
@@ -197,70 +197,33 @@ pub struct IndexStats {
 }
 
 fn populate_graph_for_file(graph: &mut CodeGraph, file_path: &str) -> Result<()> {
-    let content = fs::read_to_string(file_path)?;
-    let total_lines = content.lines().count();
+    use crate::vector::extractor::Extractor;
 
-    // Add File Node
-    let file_node = CodeNode {
-        id: file_path.to_string(),
-        node_type: NodeType::File,
-        name: file_path.to_string(),
-        content: content.clone(),
-        start_line: 0,
-        end_line: total_lines,
-    };
-    let file_idx = graph.add_node(file_node);
+    let content = fs::read_to_string(file_path)?;
 
     // Determine language
     let lang = if file_path.ends_with(".rs") {
         SupportedLanguage::Rust
     } else if file_path.ends_with(".py") {
         SupportedLanguage::Python
-    } else if file_path.ends_with(".ts") {
+    } else if file_path.ends_with(".ts") || file_path.ends_with(".js") {
         SupportedLanguage::TypeScript
     } else {
         return Ok(());
     };
 
-    // Parse and add functions
+    // Parse AST
     let mut parser = CodeParser::new();
-    let tree = parser.parse_tree(&content, lang)?;
-    let root = tree.root_node();
-    let mut cursor = root.walk();
+    let tree = parser.parse_tree(&content, lang.clone())?;
 
-    for child in root.children(&mut cursor) {
-        let kind = child.kind();
-        // Simplified: only looking for top-level functions
-        let is_function = match lang {
-            SupportedLanguage::Rust => kind == "function_item",
-            SupportedLanguage::Python => kind == "function_definition",
-            SupportedLanguage::TypeScript => kind == "function_declaration",
-        };
+    // PASS 1: Extract definitions (Files, Functions, Classes, etc.)
+    let mut extractor = Extractor::new(content.clone(), lang);
+    extractor.extract(&tree, graph, file_path)?;
 
-        if is_function {
-            let start_line = child.start_position().row + 1; // 1-based for user
-            let end_line = child.end_position().row + 1;
-
-            // Extract name (simplified)
-            let name_node = child.child_by_field_name("name");
-            let name = if let Some(n) = name_node {
-                &content[n.byte_range()]
-            } else {
-                "anonymous"
-            };
-
-            let func_node = CodeNode {
-                id: format!("{}::{}", file_path, name),
-                node_type: NodeType::Function,
-                name: name.to_string(),
-                content: content[child.byte_range()].to_string(),
-                start_line,
-                end_line,
-            };
-
-            let func_idx = graph.add_node(func_node);
-            graph.add_edge(file_idx, func_idx, EdgeType::Contains);
-        }
+    // PASS 2: Extract references (Function Calls -> Calls edges)
+    let edges_created = extractor.extract_references(&tree, graph)?;
+    if edges_created > 0 {
+        eprintln!("    ↳ Linked {} call edges", edges_created);
     }
 
     Ok(())

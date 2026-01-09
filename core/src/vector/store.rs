@@ -66,8 +66,23 @@ impl LanceDbStore {
                 // Split large text into overlapping chunks
                 let mut start = 0;
                 let mut chunk_idx = 0;
+
                 while start < text.len() {
-                    let end = std::cmp::min(start + MAX_CHARS, text.len());
+                    // Find a valid char boundary for 'end'
+                    let mut end = std::cmp::min(start + MAX_CHARS, text.len());
+                    while !text.is_char_boundary(end) && end > start {
+                        end -= 1;
+                    }
+
+                    // Safety check: if 'end' somehow equals 'start' (single huge char?), force forward to next valid
+                    if end == start && start < text.len() {
+                        if let Some((next_idx, _)) = text[start..].char_indices().nth(1) {
+                            end = start + next_idx;
+                        } else {
+                            end = text.len();
+                        }
+                    }
+
                     let chunk = text[start..end].to_string();
 
                     all_chunks.push(chunk);
@@ -77,7 +92,24 @@ impl LanceDbStore {
                     if end == text.len() {
                         break;
                     }
-                    start += MAX_CHARS - OVERLAP;
+
+                    // Calculate next start with overlap, ensuring valid boundary
+                    let next_target = start + MAX_CHARS - OVERLAP;
+                    let mut next_start = std::cmp::min(next_target, text.len());
+                    while !text.is_char_boundary(next_start) && next_start < text.len() {
+                        next_start += 1;
+                    }
+                    // Ensure forward progress
+                    if next_start <= start {
+                        if let Some((idx, _)) = text[start..].char_indices().nth(1) {
+                            start += idx;
+                        } else {
+                            start = text.len();
+                        }
+                    } else {
+                        start = next_start;
+                    }
+
                     chunk_idx += 1;
                 }
             }

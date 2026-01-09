@@ -225,6 +225,129 @@ impl Extractor {
         let end = node.end_byte().min(self.source_code.len());
         self.source_code.get(start..end).unwrap_or("").to_string()
     }
+
+    // ========== PHASE 2: REFERENCE EXTRACTION (Graph Navigator) ==========
+
+    /// Second pass: Extract function calls and link them to definitions.
+    /// Call this AFTER `extract()` to populate the symbol table.
+    pub fn extract_references(&self, tree: &Tree, graph: &mut CodeGraph) -> Result<usize> {
+        let mut edges_created = 0;
+        self.walk_for_calls(tree.root_node(), graph, &mut edges_created)?;
+        Ok(edges_created)
+    }
+
+    fn walk_for_calls(
+        &self,
+        node: Node,
+        graph: &mut CodeGraph,
+        edges_created: &mut usize,
+    ) -> Result<()> {
+        let kind = node.kind();
+
+        // Detect call expressions based on language
+        let is_call = match &self.language {
+            SupportedLanguage::Rust => kind == "call_expression",
+            SupportedLanguage::Python => kind == "call",
+            SupportedLanguage::TypeScript => kind == "call_expression",
+        };
+
+        if is_call {
+            if let Some(callee_name) = self.extract_callee_name(&node) {
+                // Find the calling function (parent context)
+                if let Some(caller_idx) = self.find_enclosing_function(&node, graph) {
+                    // Find the called function by name
+                    if let Some(callee_idx) = self.find_function_by_name(graph, &callee_name) {
+                        // Don't create self-edges
+                        if caller_idx != callee_idx {
+                            graph.add_edge(caller_idx, callee_idx, EdgeType::Calls);
+                            *edges_created += 1;
+                        }
+                    }
+                }
+            }
+        }
+
+        // Recurse into children
+        let mut cursor = node.walk();
+        for child in node.children(&mut cursor) {
+            self.walk_for_calls(child, graph, edges_created)?;
+        }
+
+        Ok(())
+    }
+
+    /// Extract the function name being called from a call expression.
+    fn extract_callee_name(&self, call_node: &Node) -> Option<String> {
+        // For Rust: call_expression has a "function" child
+        // For Python: call has a "function" child
+        // For TS: call_expression has a "function" child
+
+        let func_child = call_node.child_by_field_name("function")?;
+        let kind = func_child.kind();
+
+        // Handle simple identifier calls like `foo()`
+        if kind == "identifier" {
+            return Some(self.get_node_text(&func_child));
+        }
+
+        // Handle method calls like `self.foo()` or `obj.method()`
+        if kind == "field_expression" || kind == "attribute" || kind == "member_expression" {
+            // Get the rightmost identifier (the method name)
+            if let Some(field) = func_child
+                .child_by_field_name("field")
+                .or_else(|| func_child.child_by_field_name("attribute"))
+                .or_else(|| func_child.child_by_field_name("property"))
+            {
+                return Some(self.get_node_text(&field));
+            }
+            // Fallback: get last child if it's an identifier
+            let mut cursor = func_child.walk();
+            let children: Vec<_> = func_child.children(&mut cursor).collect();
+            for child in children.iter().rev() {
+                if child.kind() == "identifier" || child.kind() == "property_identifier" {
+                    return Some(self.get_node_text(child));
+                }
+            }
+        }
+
+        // Handle scoped calls like `module::function()`
+        if kind == "scoped_identifier" {
+            if let Some(name) = func_child.child_by_field_name("name") {
+                return Some(self.get_node_text(&name));
+            }
+        }
+
+        None
+    }
+
+    /// Find the enclosing function node for a given AST node.
+    fn find_enclosing_function(&self, node: &Node, graph: &CodeGraph) -> Option<NodeIndex> {
+        let line = node.start_position().row + 1; // 1-indexed
+
+        // Find the function node that contains this line
+        for idx in graph.graph.node_indices() {
+            let code_node = &graph.graph[idx];
+            if matches!(code_node.node_type, NodeType::Function | NodeType::Method) {
+                if code_node.start_line <= line && code_node.end_line >= line {
+                    return Some(idx);
+                }
+            }
+        }
+        None
+    }
+
+    /// Find a function node by its name (fuzzy match).
+    fn find_function_by_name(&self, graph: &CodeGraph, name: &str) -> Option<NodeIndex> {
+        for idx in graph.graph.node_indices() {
+            let code_node = &graph.graph[idx];
+            if matches!(code_node.node_type, NodeType::Function | NodeType::Method) {
+                if code_node.name == name {
+                    return Some(idx);
+                }
+            }
+        }
+        None
+    }
 }
 
 #[cfg(test)]

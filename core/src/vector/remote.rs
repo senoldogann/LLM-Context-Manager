@@ -20,7 +20,10 @@ pub struct RemoteEmbedder {
 impl RemoteEmbedder {
     pub fn new(api_key: String, model: String, base_url: String, provider: Provider) -> Self {
         Self {
-            client: Client::new(),
+            client: Client::builder()
+                .timeout(std::time::Duration::from_secs(30))
+                .build()
+                .unwrap_or_default(),
             api_key,
             model,
             base_url,
