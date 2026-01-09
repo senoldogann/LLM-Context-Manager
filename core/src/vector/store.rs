@@ -206,8 +206,8 @@ impl LanceDbStore {
         Ok(())
     }
 
-    /// Performs semantic search and returns (text, distance).
-    pub async fn search(&self, query: &str, limit: usize) -> Result<Vec<(String, f32)>> {
+    /// Performs semantic search and returns (id, text, distance).
+    pub async fn search(&self, query: &str, limit: usize) -> Result<Vec<(String, String, f32)>> {
         let embedder = self
             .embedder
             .as_ref()
@@ -235,6 +235,13 @@ impl LanceDbStore {
         let batches: Vec<RecordBatch> = results.try_collect().await?;
 
         for batch in batches {
+            let id_col = batch
+                .column_by_name("id")
+                .ok_or_else(|| anyhow::anyhow!("Missing 'id' column in search results"))?
+                .as_any()
+                .downcast_ref::<StringArray>()
+                .ok_or_else(|| anyhow::anyhow!("Failed to cast 'id' column to StringArray"))?;
+
             let text_col = batch
                 .column_by_name("text")
                 .ok_or_else(|| anyhow::anyhow!("Missing 'text' column in search results"))?
@@ -252,7 +259,11 @@ impl LanceDbStore {
                 })?;
 
             for i in 0..batch.num_rows() {
-                hits.push((text_col.value(i).to_string(), dist_col.value(i)));
+                hits.push((
+                    id_col.value(i).to_string(),
+                    text_col.value(i).to_string(),
+                    dist_col.value(i),
+                ));
             }
         }
 

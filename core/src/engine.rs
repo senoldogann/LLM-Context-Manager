@@ -72,17 +72,22 @@ impl RetrievalEngine {
         let hits = self.store.search(query, limit).await?;
 
         let mut results = Vec::new();
-        for (content, score) in hits {
+        for (id, content, score) in hits {
             // Distance in LanceDB is usually L2 or Cosine distance.
             // Lower is better for L2, higher is better for Cosine similarity.
             // Assuming default L2 for now, we invert/normalize simplified score.
-            // Ideally we should lookup the Node in the graph by ID, but store returns text/id.
 
-            // For this quick implementation, we trust the store returns text.
-            // We can improve this by storing Node ID in vector db and fetching full Node from graph.
+            // 1. Strip chunk suffix if present (e.g., "func:10:20#chunk0" -> "func:10:20")
+            let node_id = id.split('#').next().unwrap_or(&id);
+
+            // 2. Lookup the real Node in the Graph to get metadata (Name, Type)
+            let mut title = "Semantic Match".to_string();
+            if let Some(node) = self.get_node_by_id(node_id) {
+                title = format!("{:?}: {}", node.node_type, node.name);
+            }
 
             results.push(SuggestedContext {
-                title: "Semantic Match".to_string(), // TODO: Get real name from metadata
+                title,
                 content,
                 relevance_score: 1.0 - score, // Rough normalization
                 reason: format!("Vector Similarity (Dist: {:.4})", score),
