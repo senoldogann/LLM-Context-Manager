@@ -43,3 +43,8 @@ This package is a lightweight wrapper that:
 3. Automatically manages your global index and persistence in `~/.ccm`.
 
 For more details, visit the [Main Repository](https://github.com/senoldogann/LLM-Context-Manager).
+
+### 🆕 v0.1.7 Updates
+*   **Zero-Config:** Automatically detects project root.
+*   **Fixes:** Resolved context retrieval issues with absolute paths.
+
