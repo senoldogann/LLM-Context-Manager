@@ -10,11 +10,25 @@ use ccm_core::engine::{CursorPosition, RetrievalEngine};
 /// Tool: get_context
 /// Returns context for a given file path and line number.
 pub async fn get_context(engine: &Arc<RetrievalEngine>, args: &Value) -> Result<ToolResult> {
+    // Input Validation
     let file = args
         .get("file")
         .and_then(|v| v.as_str())
-        .unwrap_or("unknown");
-    let line = args.get("line").and_then(|v| v.as_u64()).unwrap_or(0) as usize;
+        .ok_or_else(|| anyhow::anyhow!("Missing 'file' argument"))?;
+
+    if file.is_empty() {
+        return Ok(ToolResult {
+            content: vec![ToolResultContent {
+                content_type: "text".to_string(),
+                text: "Error: 'file' argument cannot be empty.".to_string(),
+            }],
+            is_error: Some(true),
+        });
+    }
+
+    let line = args.get("line").and_then(|v| v.as_u64()).ok_or_else(|| {
+        anyhow::anyhow!("Missing or invalid 'line' argument (must be a positive integer)")
+    })? as usize;
 
     let cursor = CursorPosition {
         file_path: file.to_string(),
@@ -63,6 +77,17 @@ pub async fn search_code(engine: &Arc<RetrievalEngine>, args: &Value) -> Result<
         .and_then(|v| v.as_str())
         .ok_or_else(|| anyhow::anyhow!("Missing query argument"))?;
 
+    // Input Validation: Empty Query
+    if query.trim().is_empty() {
+        return Ok(ToolResult {
+            content: vec![ToolResultContent {
+                content_type: "text".to_string(),
+                text: "Error: 'query' cannot be empty. Please provide a search term.".to_string(),
+            }],
+            is_error: Some(true),
+        });
+    }
+
     let hits = engine.search_code(query, 5).await?;
     eprintln!(
         "[DEBUG] search_code found {} hits for query: '{}'",
@@ -74,7 +99,7 @@ pub async fn search_code(engine: &Arc<RetrievalEngine>, args: &Value) -> Result<
         return Ok(ToolResult {
             content: vec![ToolResultContent {
                 content_type: "text".to_string(),
-                text: format!("No results found for query: '{}'", query),
+                text: format!("No results found for query: '{}'\n\nTip: Make sure the project has been indexed.", query),
             }],
             is_error: None,
         });

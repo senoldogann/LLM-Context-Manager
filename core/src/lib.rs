@@ -159,12 +159,25 @@ pub async fn index_directory(path: &str, db_path: Option<&str>) -> Result<IndexS
 
     // Index into vector store
     if stats.nodes_created > 0 {
-        let engine = RetrievalEngine::new(graph, store);
+        let engine = RetrievalEngine::new(graph.clone(), store); // Clone for engine usage
         engine.index_graph().await?;
         eprintln!(
             "\n✓ Indexed {} nodes from {} files",
             stats.nodes_created, stats.files_indexed
         );
+
+        // PERSISTENCE: Save graph to disk
+        let graph_path = format!(
+            "{}/ccm_graph.json",
+            std::path::Path::new(db_path)
+                .parent()
+                .unwrap()
+                .to_string_lossy()
+        );
+        match graph.save_to_file(&graph_path) {
+            Ok(_) => eprintln!("✓ Graph saved to: {}", graph_path),
+            Err(e) => eprintln!("⚠ Failed to save graph: {}", e),
+        }
     } else {
         eprintln!("\n⚠ No supported files found to index");
     }

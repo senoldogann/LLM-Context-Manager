@@ -32,6 +32,9 @@ Projeniz 1000 dosya da olsa, CCM **sadece o anki sorunuzla ilgili** olan 2-3 dos
 - **Plug-and-Play AI:** Supports both **OpenAI** (Cloud) and **Ollama** (Local) for embedding generation.
 - **High Performance:** Built with **Rust**, **LanceDB** (Vector Store), and **Tree-sitter** (Parsing).
 - **Graph Analysis:** Deep querying of code relationships.
+- **🆕 Auto-Indexing:** MCP server automatically indexes the codebase on startup (no manual CLI commands needed).
+- **🆕 Chunk-Based Indexing:** Large files are split into overlapping chunks for complete semantic coverage.
+- **🆕 Persistent Memory:** Code graph is saved to disk and survives restarts.
 
 ---
 
@@ -162,8 +165,9 @@ cd /path/to/context-manager
 export EMBEDDING_PROVIDER=ollama
 export EMBEDDING_HOST=http://127.0.0.1:11434
 export EMBEDDING_MODEL=mxbai-embed-large
-export CCM_DB_PATH=/path/to/context-manager/data/ccm_mcp_db
-exec ./target/debug/ccm-mcp
+export CCM_DB_PATH=/path/to/context-manager/data/ccm_db
+export CCM_PROJECT_ROOT=/path/to/your/project  # Auto-indexes this directory on startup!
+exec ./target/release/ccm-mcp
 ```
 
 ### Step 2: Add to MCP Config

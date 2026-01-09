@@ -53,7 +53,29 @@ impl ServerState {
             });
         }
 
-        let graph = CodeGraph::new();
+        // Initialize Graph (Load from disk if available)
+        let graph_path = format!("{}/../ccm_graph.json", db_path); // db_path is data/ccm_db, so json is data/ccm_graph.json
+        let mut graph = CodeGraph::new();
+
+        if std::path::Path::new(&graph_path).exists() {
+            eprintln!("Loading CodeGraph from: {}", graph_path);
+            match CodeGraph::load_from_file(&graph_path) {
+                Ok(g) => {
+                    graph = g;
+                    eprintln!(
+                        "✓ Graph loaded successfully. Nodes: {}",
+                        graph.graph.node_count()
+                    );
+                }
+                Err(e) => eprintln!("⚠ Failed to load graph: {}", e),
+            }
+        } else {
+            eprintln!(
+                "⚠ No persisted graph found at {}. Starting empty.",
+                graph_path
+            );
+        }
+
         let store = LanceDbStore::new(&db_path, "code_vectors").await?;
         let engine = Arc::new(RetrievalEngine::new(graph, store));
 

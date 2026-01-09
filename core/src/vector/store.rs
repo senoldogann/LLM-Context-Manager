@@ -192,16 +192,19 @@ impl LanceDbStore {
         for batch in batches {
             let text_col = batch
                 .column_by_name("text")
-                .unwrap()
+                .ok_or_else(|| anyhow::anyhow!("Missing 'text' column in search results"))?
                 .as_any()
                 .downcast_ref::<StringArray>()
-                .unwrap();
+                .ok_or_else(|| anyhow::anyhow!("Failed to cast 'text' column to StringArray"))?;
+
             let dist_col = batch
                 .column_by_name("_distance")
-                .unwrap()
+                .ok_or_else(|| anyhow::anyhow!("Missing '_distance' column in search results"))?
                 .as_any()
                 .downcast_ref::<Float32Array>()
-                .unwrap();
+                .ok_or_else(|| {
+                    anyhow::anyhow!("Failed to cast '_distance' column to Float32Array")
+                })?;
 
             for i in 0..batch.num_rows() {
                 hits.push((text_col.value(i).to_string(), dist_col.value(i)));

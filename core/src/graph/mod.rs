@@ -34,6 +34,7 @@ pub enum EdgeType {
     Writes,
 }
 
+#[derive(Clone)] // Added Clone
 pub struct CodeGraph {
     pub graph: DiGraph<CodeNode, EdgeType>,
 }
@@ -111,6 +112,22 @@ impl CodeGraph {
     }
     pub fn find_node_by_id(&self, id: &str) -> Option<&CodeNode> {
         self.graph.node_weights().find(|node| node.id == id)
+    }
+
+    /// Saves the graph to a JSON file.
+    pub fn save_to_file(&self, path: &str) -> anyhow::Result<()> {
+        let file = std::fs::File::create(path)?;
+        let writer = std::io::BufWriter::new(file);
+        serde_json::to_writer(writer, &self.graph)?;
+        Ok(())
+    }
+
+    /// Loads the graph from a JSON file.
+    pub fn load_from_file(path: &str) -> anyhow::Result<Self> {
+        let file = std::fs::File::open(path)?;
+        let reader = std::io::BufReader::new(file);
+        let graph: DiGraph<CodeNode, EdgeType> = serde_json::from_reader(reader)?;
+        Ok(Self { graph })
     }
 }
 
