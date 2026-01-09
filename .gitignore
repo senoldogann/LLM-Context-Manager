@@ -55,6 +55,8 @@ lcov.info
 *.so
 *.dylib
 *.dll
+/dist/
+/npm/bin/*.bak
 
 # ----------------
 # OS Generated
@@ -66,3 +68,4 @@ lcov.info
 .Trashes
 ehthumbs.db
 Thumbs.db
+npm_recovery_codes.txt

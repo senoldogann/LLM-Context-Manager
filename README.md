@@ -49,15 +49,32 @@ Fully implements the **Model Context Protocol (MCP)**.
 
 ## 📦 Installation
 
-### One-Click Setup (Recommended)
-Calculates your OS, installs dependencies (Rust, Ollama), and configures everything automatically.
+### ⚡ Zero-Install (via npx) - *The Ultimate Way*
+If you have Node.js installed, you don't even need to build the project. Run CCM instantly:
 
+```bash
+# To index your current project:
+npx @senoldogann/context-manager index --path .
+
+# To AUTO-CONFIGURE your AI editor (Claude, Antigravity, etc.):
+npx @senoldogann/context-manager install
+
+# To start the MCP server manually in your config:
+"command": "npx",
+"args": ["-y", "@senoldogann/context-manager", "mcp"]
+```
+*Handles cross-platform binary downloads automatically.*
+
+---
+
+### One-Click Shell Setup (Legacy)
+Installs binaries globally to your system via Cargo.
 ```bash
 curl -sSL https://raw.githubusercontent.com/senoldogann/LLM-Context-Manager/main/install.sh | bash
 ```
 *(Requires macOS or Linux. Windows users via WSL.)*
 
-### Manual Build
+### Manual Build (Development)
 ```bash
 git clone https://github.com/senoldogann/LLM-Context-Manager.git
 cd LLM-Context-Manager
