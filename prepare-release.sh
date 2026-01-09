@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Configuration
-VERSION="0.1.5"
+VERSION="0.1.6"
 DIST_DIR="dist"
 
 echo "🎯 Preparing release assets for v$VERSION..."
