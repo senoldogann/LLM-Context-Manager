@@ -68,55 +68,85 @@ cargo build --release
 
 ## 🛠️ Configuration
 
-Create a `.env` file in your project root to select your AI backend.
+CCM uses a global configuration file. You don't need to configure it per project.
 
-### Option A: Local Privacy (Ollama) - *Recommended*
-Run entirely offline. No data leaves your machine.
-```ini
-EMBEDDING_PROVIDER=ollama
-EMBEDDING_HOST=http://127.0.0.1:11434
-EMBEDDING_MODEL=mxbai-embed-large
-```
+1.  **Create the config directory:**
+    ```bash
+    mkdir -p ~/.ccm
+    ```
 
-### Option B: Cloud Power (OpenAI)
-```ini
-EMBEDDING_PROVIDER=openai
-EMBEDDING_API_KEY=sk-your-openai-key
-EMBEDDING_MODEL=text-embedding-3-small
-```
+2.  **Create `~/.ccm/.env`:**
+    
+    **Option A: Local Privacy (Ollama) - _Recommended_**
+    ```ini
+    EMBEDDING_PROVIDER=ollama
+    EMBEDDING_HOST=http://127.0.0.1:11434
+    EMBEDDING_MODEL=mxbai-embed-large
+    # MAX_TOKENS=1000  # distinct from compilation time limit, optional
+    ```
+
+    **Option B: Cloud Power (OpenAI)**
+    ```ini
+    EMBEDDING_PROVIDER=openai
+    EMBEDDING_API_KEY=sk-your-key-here
+    EMBEDDING_MODEL=text-embedding-3-small
+    ```
 
 ---
 
-## 🤖 Integration Guide
+## 🚀 Workflow: Indexing Your Projects
 
-CCM exposes an **MCP Server** that your AI editor connects to.
+Before your AI can "see" a project, you must index it. This creates a local `data/` folder inside that project.
+
+**To index a new project:**
+
+```bash
+ccm-cli index --path /absolute/path/to/my-new-project
+```
+
+*   Running this command scans the project, generates embeddings, and saves them to `/path/to/my-new-project/data/ccm_db`.
+*   You only need to re-run this if code changes significantly (incremental indexing coming soon).
+
+---
+
+## 🤖 Integration Guide (MCP)
+
+CCM exposes an **MCP Server** that connects your AI editor (Cursor, Claude Desktop, etc.) to your indexed projects.
 
 ### 1. Locate Config File
 *   **Antigravity:** `~/.gemini/antigravity/mcp_config.json`
 *   **Claude Desktop:** `~/Library/Application Support/Claude/claude_desktop_config.json`
 
 ### 2. Add Server Entry
-The installer creates a handy wrapper script for you. Add this to your `mcpServers` object:
+Add this to your `mcpServers` object. Note that we point to the release binary directly.
 
 ```json
 {
   "mcpServers": {
     "context-manager": {
-      "command": "/Users/YOUR_USER/.ccm/ccm-mcp-wrapper.sh",
+      "command": "/Users/YOUR_USER/.cargo/bin/ccm-mcp",
       "args": [],
       "env": {
-        "CCM_PROJECT_ROOT": "/absolute/path/to/your/codebase"
-      }
+        "RUST_LOG": "info"
+       }
     }
   }
 }
 ```
+*(Replace `/Users/YOUR_USER` with your actual home directory path, e.g. `/Users/dogan`)*
 
-### 3. Usage
-Once connected, your AI will automatically use these tools:
-*   `get_context`: "Read file X at line Y."
-*   `search_code`: "Find logic about Z."
-*   `read_graph`: "Who calls function A?" **(Graph Navigator)**
+### 3. Usage in AI
+Once connected, the AI has three powerful tools:
+
+*   **`get_context`**: Reads file content with intelligent range windowing.
+*   **`search_code`**: Semantic search across your codebase.
+*   **`read_graph`**: Navigates the structural call graph.
+
+**Multi-Project Support:**
+The tools accept an optional `project_path` argument. You can simply tell your AI:
+> "Search for 'auth logic' in my /Users/me/projects/other-app project"
+
+If you don't specify a project, it defaults to the directory where the MCP server was launched (or empty). For best results, explicit paths are recommended when working with multiple repos.
 
 ---
 

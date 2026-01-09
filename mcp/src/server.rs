@@ -2,7 +2,9 @@
 
 use anyhow::Result;
 use serde_json::{json, Value};
+use std::collections::HashMap;
 use std::sync::Arc;
+use tokio::sync::RwLock;
 
 use crate::protocol::{
     create_error_response, create_success_response, JsonRpcRequest, JsonRpcResponse,
@@ -16,14 +18,14 @@ use ccm_core::vector::store::LanceDbStore;
 
 /// Holds the server's shared state.
 pub struct ServerState {
-    pub engine: Arc<RetrievalEngine>,
+    pub default_engine: Arc<RetrievalEngine>,
+    pub engines: RwLock<HashMap<String, Arc<RetrievalEngine>>>,
 }
 
 impl ServerState {
     pub async fn new() -> Result<Self> {
         eprintln!("Initializing CCM Core Engine for MCP...");
 
-        // Use CCM_DB_PATH env var if available
         // Use CCM_DB_PATH env var if available, or default to data/ccm_mcp_db
         let db_path =
             std::env::var("CCM_DB_PATH").unwrap_or_else(|_| "data/ccm_mcp_db".to_string());
@@ -84,9 +86,68 @@ impl ServerState {
         }
 
         let store = LanceDbStore::new(&db_path, "code_vectors").await?;
+        let default_engine = Arc::new(RetrievalEngine::new(Arc::new(graph), store));
+
+        Ok(Self {
+            default_engine,
+            engines: RwLock::new(HashMap::new()),
+        })
+    }
+
+    /// Retrieves the engine for a specific project path, or defaults to the startup engine.
+    /// Loads the engine dynamically if it's not in the cache.
+    pub async fn get_engine(&self, project_path: Option<&str>) -> Result<Arc<RetrievalEngine>> {
+        let path = match project_path {
+            Some(p) => p,
+            None => return Ok(self.default_engine.clone()),
+        };
+
+        // Check cache (read)
+        {
+            let read = self.engines.read().await;
+            if let Some(engine) = read.get(path) {
+                return Ok(engine.clone());
+            }
+        }
+
+        // Load (write)
+        let mut write = self.engines.write().await;
+        // Double check
+        if let Some(engine) = write.get(path) {
+            return Ok(engine.clone());
+        }
+
+        eprintln!("Loading context for project: {}", path);
+        // Assume db at path/data/ccm_db
+        let db_path = format!("{}/data/ccm_db", path);
+
+        // Sanity check
+        if !std::path::Path::new(&db_path).exists() {
+            // Suggest indexing if missing
+            return Err(anyhow::anyhow!(
+                "No CCM index found at {}. Please run 'ccm-cli index' in that directory first.",
+                db_path
+            ));
+        }
+
+        let graph_path = format!("{}/data/ccm_graph.json", path);
+        let mut graph = CodeGraph::new();
+        if std::path::Path::new(&graph_path).exists() {
+            if let Ok(g) = CodeGraph::load_from_file(&graph_path) {
+                graph = g;
+                eprintln!(
+                    "Loaded graph for {}: {} nodes",
+                    path,
+                    graph.graph.node_count()
+                );
+            }
+        }
+
+        let store = LanceDbStore::new(&db_path, "code_vectors").await?;
         let engine = Arc::new(RetrievalEngine::new(Arc::new(graph), store));
 
-        Ok(Self { engine })
+        write.insert(path.to_string(), engine.clone());
+        Ok(engine)
     }
 }
 
@@ -154,7 +215,8 @@ fn handle_list_tools(id: Option<Value>) -> Result<JsonRpcResponse> {
                 "type": "object",
                 "properties": {
                     "file": { "type": "string", "description": "The file path" },
-                    "line": { "type": "integer", "description": "The line number" }
+                    "line": { "type": "integer", "description": "The line number" },
+                    "project_path": { "type": "string", "description": "Optional absolute path to the project root. If provided, uses the index in that project." }
                 },
                 "required": ["file", "line"]
             }),
@@ -165,7 +227,8 @@ fn handle_list_tools(id: Option<Value>) -> Result<JsonRpcResponse> {
             input_schema: serde_json::json!({
                 "type": "object",
                 "properties": {
-                    "query": { "type": "string", "description": "The search query (e.g. 'how does authentication work?')" }
+                    "query": { "type": "string", "description": "The search query (e.g. 'how does authentication work?')" },
+                    "project_path": { "type": "string", "description": "Optional absolute path to the project root. If provided, uses the index in that project." }
                 },
                 "required": ["query"]
             }),
@@ -176,7 +239,8 @@ fn handle_list_tools(id: Option<Value>) -> Result<JsonRpcResponse> {
             input_schema: serde_json::json!({
                 "type": "object",
                 "properties": {
-                    "node_id": { "type": "string", "description": "The ID of the node to retrieve." }
+                    "node_id": { "type": "string", "description": "The ID of the node to retrieve." },
+                    "project_path": { "type": "string", "description": "Optional absolute path to the project root. If provided, uses the index in that project." }
                 },
                 "required": ["node_id"]
             }),
@@ -198,10 +262,25 @@ async fn handle_call_tool(
         .ok_or_else(|| anyhow::anyhow!("Missing tool name"))?;
     let arguments = params.get("arguments").cloned().unwrap_or(json!({}));
 
+    // Extract project_path if present
+    let project_path = arguments.get("project_path").and_then(|v| v.as_str());
+
+    // Resolve Engine
+    let engine = match state.get_engine(project_path).await {
+        Ok(e) => e,
+        Err(e) => {
+            return Ok(create_error_response(
+                id,
+                -32603, // Internal error / Invalid params
+                &format!("Failed to load project context: {}", e),
+            ));
+        }
+    };
+
     let result = match tool_name {
-        "get_context" => tools::get_context(&state.engine, &arguments).await?,
-        "search_code" => tools::search_code(&state.engine, &arguments).await?,
-        "read_graph" => tools::read_graph(&state.engine, &arguments).await?,
+        "get_context" => tools::get_context(&engine, &arguments).await?,
+        "search_code" => tools::search_code(&engine, &arguments).await?,
+        "read_graph" => tools::read_graph(&engine, &arguments).await?,
         _ => {
             return Ok(create_error_response(
                 id,
