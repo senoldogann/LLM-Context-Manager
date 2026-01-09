@@ -79,7 +79,7 @@ async fn main() -> anyhow::Result<()> {
 
             if watch {
                 println!("\n👀 Watching for changes in: {}", path.display());
-                use notify::{EventKind, RecursiveMode, Watcher};
+                use notify::{RecursiveMode, Watcher};
                 use std::time::Duration;
                 use tokio::sync::mpsc;
 
@@ -112,7 +112,7 @@ async fn main() -> anyhow::Result<()> {
                 watcher.watch(&path, RecursiveMode::Recursive)?;
 
                 // Debounce loop
-                while let Some(_) = rx.recv().await {
+                while (rx.recv().await).is_some() {
                     // Flush any other events that came properly
                     while rx.try_recv().is_ok() {}
 
