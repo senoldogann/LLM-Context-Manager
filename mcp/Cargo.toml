@@ -3,6 +3,9 @@ name = "ccm-mcp"
 version = "0.1.0"
 edition = "2021"
 description = "MCP (Model Context Protocol) Server for CCM"
+authors = ["Senol Dogan"]
+license = "MIT"
+repository = "https://github.com/senoldogann/LLM-Context-Manager"
 
 [[bin]]
 name = "ccm-mcp"

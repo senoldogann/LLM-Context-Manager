@@ -2,6 +2,10 @@
 name = "ccm-cli"
 version = "0.1.0"
 edition = "2021"
+authors = ["Senol Dogan"]
+description = "CLI for Cognitive Codebase Matrix"
+license = "MIT"
+repository = "https://github.com/senoldogann/LLM-Context-Manager"
 
 [dependencies]
 ccm-core = { path = "../core" }
