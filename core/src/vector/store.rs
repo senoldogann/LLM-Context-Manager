@@ -50,7 +50,7 @@ impl LanceDbStore {
             .as_ref()
             .ok_or_else(|| anyhow::anyhow!("Embedder not initialized"))?;
 
-        const MAX_CHARS: usize = 1500;
+        const MAX_CHARS: usize = 1000;
         const OVERLAP: usize = 200;
 
         let mut all_chunks = Vec::new();

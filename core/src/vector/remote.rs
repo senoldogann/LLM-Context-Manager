@@ -32,7 +32,14 @@ impl RemoteEmbedder {
     }
 
     pub fn from_env() -> Result<Self> {
+        use std::path::PathBuf;
         let _ = dotenvy::dotenv();
+
+        // Load global config from ~/.ccm/.env if it exists
+        if let Ok(home) = env::var("HOME") {
+            let global_config = PathBuf::from(home).join(".ccm").join(".env");
+            let _ = dotenvy::from_path(global_config);
+        }
 
         let model =
             env::var("EMBEDDING_MODEL").unwrap_or_else(|_| "text-embedding-3-small".to_string());

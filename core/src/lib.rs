@@ -109,12 +109,18 @@ pub async fn run_query(text: &str) -> Result<()> {
 pub async fn index_directory(path: &str, db_path: Option<&str>) -> Result<IndexStats> {
     use walkdir::WalkDir;
 
-    let db_path = db_path.unwrap_or("data/ccm_db");
+    // If db_path is provided, use it. Otherwise default to path/data/ccm_db
+    let default_db_path = std::path::Path::new(path).join("data/ccm_db");
+    let db_path_buf = db_path
+        .map(std::path::PathBuf::from)
+        .unwrap_or(default_db_path);
+    let db_path_str = db_path_buf.to_string_lossy().to_string();
+
     eprintln!("Indexing directory: {}", path);
-    eprintln!("Using database: {}", db_path);
+    eprintln!("Using database: {}", db_path_str);
 
     let mut graph = CodeGraph::new();
-    let store = LanceDbStore::new(db_path, "code_vectors").await?;
+    let store = LanceDbStore::new(&db_path_str, "code_vectors").await?;
 
     let mut stats = IndexStats::default();
 
@@ -127,21 +133,25 @@ pub async fn index_directory(path: &str, db_path: Option<&str>) -> Result<IndexS
         let file_path = entry.path();
         let file_path_str = file_path.to_string_lossy().to_string();
 
-        // Skip hidden files and common non-code directories
-        if file_path_str.contains("/.")
-            || file_path_str.contains("/target/")
-            || file_path_str.contains("/node_modules/")
-            || file_path_str.contains("/.git/")
-            || file_path_str.contains("/dist/")
-            || file_path_str.contains("/build/")
-            || file_path_str.contains("/.next/")
-        {
-            continue;
-        }
-
         // Check if file is supported
         let extension = file_path.extension().and_then(|e| e.to_str()).unwrap_or("");
-        let is_supported = matches!(extension, "rs" | "py" | "ts" | "js");
+        let is_supported = matches!(extension, "rs" | "py" | "ts" | "js" | "tsx" | "jsx");
+
+        // Robust ignore check using path components
+        let should_ignore = file_path.components().any(|c| {
+            let s = c.as_os_str().to_string_lossy();
+            s == "target"
+                || s == "node_modules"
+                || s == ".git"
+                || s == "dist"
+                || s == "build"
+                || s == ".next"
+                || s.starts_with('.')
+        });
+
+        if should_ignore {
+            continue;
+        }
 
         if is_supported {
             match populate_graph_for_file(&mut graph, &file_path_str) {
@@ -172,10 +182,10 @@ pub async fn index_directory(path: &str, db_path: Option<&str>) -> Result<IndexS
         );
 
         // PERSISTENCE: Save graph to disk
-        let parent_dir = std::path::Path::new(db_path).parent().ok_or_else(|| {
+        let parent_dir = std::path::Path::new(&db_path_str).parent().ok_or_else(|| {
             anyhow::anyhow!(
                 "Invalid DB path '{}': cannot determine parent directory",
-                db_path
+                db_path_str
             )
         })?;
 
@@ -209,7 +219,11 @@ fn populate_graph_for_file(graph: &mut CodeGraph, file_path: &str) -> Result<()>
         SupportedLanguage::Rust
     } else if file_path.ends_with(".py") {
         SupportedLanguage::Python
-    } else if file_path.ends_with(".ts") || file_path.ends_with(".js") {
+    } else if file_path.ends_with(".ts")
+        || file_path.ends_with(".js")
+        || file_path.ends_with(".tsx")
+        || file_path.ends_with(".jsx")
+    {
         SupportedLanguage::TypeScript
     } else {
         return Ok(());
