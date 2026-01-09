@@ -114,14 +114,14 @@ Before your AI can "see" a project, you must index it. This creates a local `dat
 **To index a new project:**
 
 ```bash
-ccm-cli index --path .
+npx @senoldogann/context-manager index --path .
 ```
 
 ### 👀 Watch Mode (Automatic Re-indexing)
 If you want CCM to automatically update the index whenever you save a file, use the `--watch` flag:
 
 ```bash
-ccm-cli index --path . --watch
+npx @senoldogann/context-manager index --path . --watch
 ```
 *   This scans the project and monitors for changes in `.rs`, `.py`, `.ts`, `.js`, `.tsx`, and `.jsx` files.
 *   It uses an intelligent debounce to prevent excessive indexing during rapid edits.
