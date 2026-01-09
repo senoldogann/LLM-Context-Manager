@@ -40,19 +40,37 @@ Projeniz 1000 dosya da olsa, CCM **sadece o anki sorunuzla ilgili** olan 2-3 dos
 
 ## 📦 Installation
 
-### Prerequisites
+### ⚡ One-Click Install (Recommended)
+
+The fastest way to get started. This script automatically:
+- Installs Rust (if needed)
+- Installs Ollama (if needed)
+- Builds the project
+- Configures environment
+
+```bash
+curl -sSL https://raw.githubusercontent.com/senoldogann/LLM-Context-Manager/main/install.sh | bash
+```
+
+> **Note:** After installation, restart your terminal or run `source ~/.zshrc` to update your PATH.
+
+---
+
+### Manual Installation
+
+#### Prerequisites
 
 | Requirement | Description |
 |-------------|-------------|
 | **Rust** | 1.70+ (`curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \| sh`) |
 | **Ollama** | For local embeddings ([ollama.com](https://ollama.com/)) |
 
-### Build from Source
+#### Build from Source
 
 ```bash
 # Clone the repository
 git clone https://github.com/senoldogann/LLM-Context-Manager.git
-cd context-manager
+cd LLM-Context-Manager
 
 # Build release binaries
 cargo build --release
