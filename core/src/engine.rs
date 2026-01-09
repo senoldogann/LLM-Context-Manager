@@ -19,14 +19,16 @@ pub struct SuggestedContext {
     pub reason: String,
 }
 
+use std::sync::Arc;
+
 /// The main intelligence engine for speculative retrieval.
 pub struct RetrievalEngine {
-    graph: CodeGraph,
+    graph: Arc<CodeGraph>,
     store: LanceDbStore,
 }
 
 impl RetrievalEngine {
-    pub fn new(graph: CodeGraph, store: LanceDbStore) -> Self {
+    pub fn new(graph: Arc<CodeGraph>, store: LanceDbStore) -> Self {
         Self { graph, store }
     }
 
@@ -104,8 +106,8 @@ impl RetrievalEngine {
             });
 
             // 2. Structural Retrieval: Find immediate neighbors (Callers/Callees)
-            let mut neighbors = self.graph.graph.neighbors(node_idx);
-            while let Some(neighbor_idx) = neighbors.next() {
+            let neighbors = self.graph.graph.neighbors(node_idx);
+            for neighbor_idx in neighbors {
                 let neighbor = &self.graph.graph[neighbor_idx];
 
                 if neighbor.node_type == NodeType::File {

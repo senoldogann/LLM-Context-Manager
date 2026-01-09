@@ -70,7 +70,6 @@ pub async fn get_context(engine: &Arc<RetrievalEngine>, args: &Value) -> Result<
 
 /// Tool: search_code
 /// Performs semantic search in the codebase.
-
 pub async fn search_code(engine: &Arc<RetrievalEngine>, args: &Value) -> Result<ToolResult> {
     let query = args
         .get("query")

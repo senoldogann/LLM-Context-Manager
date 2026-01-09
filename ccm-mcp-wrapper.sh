@@ -24,7 +24,7 @@
 # CONFIGURATION - Update these paths!
 # ============================================
 PROJECT_DIR="/Users/dogan/Desktop/context-manager"
-BINARY="${PROJECT_DIR}/target/debug/ccm-mcp"
+BINARY="${PROJECT_DIR}/target/release/ccm-mcp"
 DB_PATH="${PROJECT_DIR}/data/ccm_db"  # Matched with CLI default
 DEBUG_LOG="${PROJECT_DIR}/mcp_debug.log"
 export CCM_PROJECT_ROOT="${PROJECT_DIR}" # Trigger auto-indexing

@@ -18,7 +18,7 @@ pub async fn start_server(http_port: u16) -> anyhow::Result<()> {
     let graph = CodeGraph::new();
     // Use a persistent path for the vector store
     let store = LanceDbStore::new("data/ccm_db", "code_vectors").await?;
-    let engine = Arc::new(RetrievalEngine::new(graph, store));
+    let engine = Arc::new(RetrievalEngine::new(Arc::new(graph), store));
 
     // 1. HTTP Server (Health Check & Debug)
     let app = Router::new().route("/", get(|| async { "CCM Core is Running" }));
@@ -37,7 +37,7 @@ pub async fn start_server(http_port: u16) -> anyhow::Result<()> {
     // Run both concurrently
     println!("CCM Sidecar is ready to accept connections.");
 
-    if let Err(e) = try_join!(
+    try_join!(
         async move {
             http_server
                 .await
@@ -48,9 +48,7 @@ pub async fn start_server(http_port: u16) -> anyhow::Result<()> {
                 .await
                 .map_err(|e| anyhow::anyhow!("gRPC Server error: {}", e))
         }
-    ) {
-        return Err(e);
-    }
+    )?;
 
     Ok(())
 }

@@ -77,7 +77,7 @@ impl ServerState {
         }
 
         let store = LanceDbStore::new(&db_path, "code_vectors").await?;
-        let engine = Arc::new(RetrievalEngine::new(graph, store));
+        let engine = Arc::new(RetrievalEngine::new(Arc::new(graph), store));
 
         Ok(Self { engine })
     }

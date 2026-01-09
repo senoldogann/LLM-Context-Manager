@@ -92,10 +92,10 @@ impl CodeGraph {
 
                 // Add children to stack to go deeper
                 // We only follow output edges of type Contains
-                let mut neighbors = self
+                let neighbors = self
                     .graph
                     .neighbors_directed(idx, petgraph::Direction::Outgoing);
-                while let Some(neighbor_idx) = neighbors.next() {
+                for neighbor_idx in neighbors {
                     let edge = self.graph.find_edge(idx, neighbor_idx);
                     if let Some(edge_idx) = edge {
                         if let Some(weight) = self.graph.edge_weight(edge_idx) {

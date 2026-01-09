@@ -38,7 +38,7 @@ pub async fn run_query(text: &str) -> Result<()> {
             // Populate graph for the file
             populate_graph_for_file(&mut graph, file_path)?;
 
-            let engine = RetrievalEngine::new(graph, store);
+            let engine = RetrievalEngine::new(std::sync::Arc::new(graph), store);
 
             let cursor = CursorPosition {
                 file_path: file_path.to_string(),
@@ -79,7 +79,7 @@ pub async fn run_query(text: &str) -> Result<()> {
         }
     } else {
         println!("Processing Semantic Query: '{}'", text);
-        let engine = RetrievalEngine::new(graph, store);
+        let engine = RetrievalEngine::new(std::sync::Arc::new(graph), store);
 
         match engine.search_code(text, 5).await {
             Ok(results) => {
@@ -159,7 +159,9 @@ pub async fn index_directory(path: &str, db_path: Option<&str>) -> Result<IndexS
 
     // Index into vector store
     if stats.nodes_created > 0 {
-        let engine = RetrievalEngine::new(graph.clone(), store); // Clone for engine usage
+        use std::sync::Arc;
+        let graph_arc = Arc::new(graph.clone()); // Still need clone because graph is used below for save_to_file
+        let engine = RetrievalEngine::new(graph_arc, store);
         engine.index_graph().await?;
         eprintln!(
             "\n✓ Indexed {} nodes from {} files",
@@ -167,13 +169,14 @@ pub async fn index_directory(path: &str, db_path: Option<&str>) -> Result<IndexS
         );
 
         // PERSISTENCE: Save graph to disk
-        let graph_path = format!(
-            "{}/ccm_graph.json",
-            std::path::Path::new(db_path)
-                .parent()
-                .unwrap()
-                .to_string_lossy()
-        );
+        let parent_dir = std::path::Path::new(db_path).parent().ok_or_else(|| {
+            anyhow::anyhow!(
+                "Invalid DB path '{}': cannot determine parent directory",
+                db_path
+            )
+        })?;
+
+        let graph_path = format!("{}/ccm_graph.json", parent_dir.to_string_lossy());
         match graph.save_to_file(&graph_path) {
             Ok(_) => eprintln!("✓ Graph saved to: {}", graph_path),
             Err(e) => eprintln!("⚠ Failed to save graph: {}", e),

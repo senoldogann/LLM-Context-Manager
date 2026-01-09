@@ -103,8 +103,13 @@ impl LanceDbStore {
         let total_records = ids.len();
         let mut flatten_data = Vec::with_capacity(total_records * dim);
         for vec in &embeddings {
-            // Resize if dimension mismatch (Ollama might vary?)
-            // Just pushing for now, assuming consistency.
+            if vec.len() != dim {
+                return Err(anyhow::anyhow!(
+                    "Embedding dimension mismatch. Expected {}, got {}",
+                    dim,
+                    vec.len()
+                ));
+            }
             flatten_data.extend_from_slice(vec);
         }
 

@@ -13,7 +13,7 @@ async fn test_grpc_get_context() -> anyhow::Result<()> {
     // 1. Setup Engine
     let graph = CodeGraph::new();
     let store = LanceDbStore::new("data/test_grpc_db", "test_vecs").await?;
-    let engine = Arc::new(RetrievalEngine::new(graph, store));
+    let engine = Arc::new(RetrievalEngine::new(Arc::new(graph), store));
 
     // 2. Start Server on random port
     let listener = TcpListener::bind("127.0.0.1:0").await?;
