@@ -130,9 +130,8 @@ impl RetrievalEngine {
             .edges_directed(node_idx, Direction::Incoming)
         {
             let source_node = &self.graph.graph[edge.source()];
-            match edge.weight() {
-                EdgeType::Calls => called_by.push(source_node.name.clone()),
-                _ => {}
+            if let EdgeType::Calls = edge.weight() {
+                called_by.push(source_node.name.clone());
             }
         }
 

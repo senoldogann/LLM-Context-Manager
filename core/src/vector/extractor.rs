@@ -327,10 +327,11 @@ impl Extractor {
         // Find the function node that contains this line
         for idx in graph.graph.node_indices() {
             let code_node = &graph.graph[idx];
-            if matches!(code_node.node_type, NodeType::Function | NodeType::Method) {
-                if code_node.start_line <= line && code_node.end_line >= line {
-                    return Some(idx);
-                }
+            if matches!(code_node.node_type, NodeType::Function | NodeType::Method)
+                && code_node.start_line <= line
+                && code_node.end_line >= line
+            {
+                return Some(idx);
             }
         }
         None
@@ -340,10 +341,10 @@ impl Extractor {
     fn find_function_by_name(&self, graph: &CodeGraph, name: &str) -> Option<NodeIndex> {
         for idx in graph.graph.node_indices() {
             let code_node = &graph.graph[idx];
-            if matches!(code_node.node_type, NodeType::Function | NodeType::Method) {
-                if code_node.name == name {
-                    return Some(idx);
-                }
+            if matches!(code_node.node_type, NodeType::Function | NodeType::Method)
+                && code_node.name == name
+            {
+                return Some(idx);
             }
         }
         None

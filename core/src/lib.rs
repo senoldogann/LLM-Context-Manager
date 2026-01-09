@@ -214,7 +214,7 @@ fn populate_graph_for_file(graph: &mut CodeGraph, file_path: &str) -> Result<()>
 
     // Parse AST
     let mut parser = CodeParser::new();
-    let tree = parser.parse_tree(&content, lang.clone())?;
+    let tree = parser.parse_tree(&content, lang)?;
 
     // PASS 1: Extract definitions (Files, Functions, Classes, etc.)
     let mut extractor = Extractor::new(content.clone(), lang);
