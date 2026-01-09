@@ -152,19 +152,21 @@ setup_repository() {
 }
 
 # ============================================
-# Step 5: Build Project
+# Step 5: Build & Install Project
 # ============================================
 build_project() {
-    info "Building CCM (release mode)..."
+    info "Building and installing CCM binaries globally..."
     cd "$INSTALL_DIR"
     
     # Ensure cargo is in PATH
     source "$HOME/.cargo/env" 2>/dev/null || true
     
-    cargo build --release --workspace
+    # Install globally via cargo
+    cargo install --path cli
+    cargo install --path mcp
     
-    success "Build completed successfully"
-    success "Binaries available at: $INSTALL_DIR/target/release/"
+    success "Installation completed successfully"
+    success "Binaries installed to ~/.cargo/bin/"
 }
 
 # ============================================
@@ -248,7 +250,7 @@ add_to_path() {
 }
 
 # ============================================
-# Step 9: Interactive Project Indexing
+# Step 7: Project Indexing (Optional)
 # ============================================
 index_project() {
     echo ""
@@ -266,6 +268,7 @@ index_project() {
         # Get project path
         echo ""
         read -p "Enter the full path to your project: " PROJECT_PATH
+        echo ""
         
         # Expand ~ to $HOME
         PROJECT_PATH="${PROJECT_PATH/#\~/$HOME}"
@@ -278,21 +281,15 @@ index_project() {
         fi
         
         info "Indexing project: $PROJECT_PATH"
-        echo ""
-        
-        # Source env for cargo
-        source "$HOME/.cargo/env" 2>/dev/null || true
         
         # Run indexing
-        if "$INSTALL_DIR/target/release/ccm-cli" index --path "$PROJECT_PATH"; then
+        if ccm-cli index --path "$PROJECT_PATH"; then
             success "Project indexed successfully!"
         else
-            warn "Indexing failed. You can retry later with:"
-            echo "    ccm-cli index --path $PROJECT_PATH"
+            warn "Indexing failed. You can retry later."
         fi
     else
-        info "Skipping indexing. You can index later with:"
-        echo "    $INSTALL_DIR/target/release/ccm-cli index --path /your/project"
+        info "Skipping indexing. You can index later with 'ccm-cli index --path .'"
     fi
 }
 
@@ -305,18 +302,18 @@ print_success() {
     echo -e "${GREEN}║              ✓ CCM Installation Complete!                    ║${NC}"
     echo -e "${GREEN}╚══════════════════════════════════════════════════════════════╝${NC}"
     echo ""
-    echo -e "${BLUE}📁 Installation Directory:${NC} $INSTALL_DIR"
+    echo -e "${BLUE}📁 Global Config Directory:${NC} ~/.ccm/"
     echo ""
     echo -e "${YELLOW}🚀 Quick Start:${NC}"
     echo ""
-    echo "   1. Index your project:"
-    echo "      ${GREEN}$INSTALL_DIR/target/release/ccm-cli index --path /path/to/your/project${NC}"
+    echo "   1. Index your project (run this in your project root):"
+    echo "      ${GREEN}ccm-cli index --path . --watch${NC}"
     echo ""
     echo "   2. Add to your AI editor (Antigravity/Claude Desktop):"
     echo "      Edit your MCP config and add:"
     echo ""
     echo -e "      ${BLUE}\"context-manager\": {"
-    echo "        \"command\": \"$INSTALL_DIR/ccm-mcp-wrapper.sh\","
+    echo "        \"command\": \"ccm-mcp\","
     echo "        \"args\": []"
     echo -e "      }${NC}"
     echo ""

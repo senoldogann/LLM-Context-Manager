@@ -101,30 +101,36 @@ Before your AI can "see" a project, you must index it. This creates a local `dat
 **To index a new project:**
 
 ```bash
-ccm-cli index --path /absolute/path/to/my-new-project
+ccm-cli index --path .
 ```
 
-*   Running this command scans the project, generates embeddings, and saves them to `/path/to/my-new-project/data/ccm_db`.
-*   You only need to re-run this if code changes significantly (incremental indexing coming soon).
+### 👀 Watch Mode (Automatic Re-indexing)
+If you want CCM to automatically update the index whenever you save a file, use the `--watch` flag:
+
+```bash
+ccm-cli index --path . --watch
+```
+*   This scans the project and monitors for changes in `.rs`, `.py`, `.ts`, `.js`, `.tsx`, and `.jsx` files.
+*   It uses an intelligent debounce to prevent excessive indexing during rapid edits.
 
 ---
 
 ## 🤖 Integration Guide (MCP)
 
-CCM exposes an **MCP Server** that connects your AI editor (Cursor, Claude Desktop, etc.) to your indexed projects.
+CCM uses a **state-of-the-art MCP Server** that works without complex per-project configuration.
 
 ### 1. Locate Config File
 *   **Antigravity:** `~/.gemini/antigravity/mcp_config.json`
 *   **Claude Desktop:** `~/Library/Application Support/Claude/claude_desktop_config.json`
 
 ### 2. Add Server Entry
-Add this to your `mcpServers` object. Note that we point to the release binary directly.
+Since CCM binaries are installed globally, you can point to them directly. This setup supports **all projects** automatically.
 
 ```json
 {
   "mcpServers": {
     "context-manager": {
-      "command": "/Users/YOUR_USER/.cargo/bin/ccm-mcp",
+      "command": "ccm-mcp",
       "args": [],
       "env": {
         "RUST_LOG": "info"
@@ -133,20 +139,16 @@ Add this to your `mcpServers` object. Note that we point to the release binary d
   }
 }
 ```
-*(Replace `/Users/YOUR_USER` with your actual home directory path, e.g. `/Users/dogan`)*
 
 ### 3. Usage in AI
-Once connected, the AI has three powerful tools:
+The AI has three main tools to understand your code:
 
-*   **`get_context`**: Reads file content with intelligent range windowing.
-*   **`search_code`**: Semantic search across your codebase.
-*   **`read_graph`**: Navigates the structural call graph.
+*   **`search_code`**: Semantic search ("Find where we handle auth").
+*   **`read_graph`**: Structural navigation ("Who calls this function?").
+*   **`get_context`**: Intelligent code reading.
 
-**Multi-Project Support:**
-The tools accept an optional `project_path` argument. You can simply tell your AI:
-> "Search for 'auth logic' in my /Users/me/projects/other-app project"
-
-If you don't specify a project, it defaults to the directory where the MCP server was launched (or empty). For best results, explicit paths are recommended when working with multiple repos.
+**Pro-Tip: Multi-Project Workflows**
+The tools automatically detect the current project context from your editor. If you are working across multiple repositories, the AI can query any indexed project by path.
 
 ---
 
