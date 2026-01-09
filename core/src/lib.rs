@@ -139,14 +139,18 @@ pub async fn index_directory(path: &str, db_path: Option<&str>) -> Result<IndexS
 
         // Robust ignore check using path components
         let should_ignore = file_path.components().any(|c| {
-            let s = c.as_os_str().to_string_lossy();
-            s == "target"
-                || s == "node_modules"
-                || s == ".git"
-                || s == "dist"
-                || s == "build"
-                || s == ".next"
-                || s.starts_with('.')
+            if let std::path::Component::Normal(os_str) = c {
+                let s = os_str.to_string_lossy();
+                s == "target"
+                    || s == "node_modules"
+                    || s == ".git"
+                    || s == "dist"
+                    || s == "build"
+                    || s == ".next"
+                    || s.starts_with('.')
+            } else {
+                false
+            }
         });
 
         if should_ignore {
