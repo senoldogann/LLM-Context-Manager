@@ -18,16 +18,20 @@ Run the indexer in your project root:
 npx @senoldogann/context-manager index --path .
 ```
 
-## 🤖 AI Editor Integration (MCP)
+## ⚒️ Manual Configuration (Alternative)
 
-Add this to your `mcp_config.json`:
+If you prefer to configure your AI editor manually without the `install` command, add this to your `mcp_config.json`:
 
 ```json
-"context-manager": {
-  "command": "npx",
-  "args": ["-y", "@senoldogann/context-manager", "mcp"],
-  "env": {
-    "RUST_LOG": "info"
+{
+  "mcpServers": {
+    "context-manager": {
+      "command": "npx",
+      "args": ["-y", "@senoldogann/context-manager", "mcp"],
+      "env": {
+        "RUST_LOG": "info"
+      }
+    }
   }
 }
 ```

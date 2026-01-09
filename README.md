@@ -49,19 +49,15 @@ Fully implements the **Model Context Protocol (MCP)**.
 
 ## 📦 Installation
 
-### ⚡ Zero-Install (via npx) - *The Ultimate Way*
-If you have Node.js installed, you don't even need to build the project. Run CCM instantly:
+### ⚡ Automatic Setup (via npx) - *Recommended*
+If you have Node.js installed, this is the easiest way to get started. It automatically handles binary downloads and configures your editor.
 
 ```bash
-# To index your current project:
-npx @senoldogann/context-manager index --path .
-
-# To AUTO-CONFIGURE your AI editor (Claude, Antigravity, etc.):
+# 1. AUTO-CONFIGURE your AI editor (Claude, Antigravity, Cursor, Cline, etc.)
 npx @senoldogann/context-manager install
 
-# To start the MCP server manually in your config:
-"command": "npx",
-"args": ["-y", "@senoldogann/context-manager", "mcp"]
+# 2. Index your current project
+npx @senoldogann/context-manager index --path .
 ```
 *Handles cross-platform binary downloads automatically.*
 
@@ -136,12 +132,15 @@ ccm-cli index --path . --watch
 
 CCM uses a **state-of-the-art MCP Server** that works without complex per-project configuration.
 
-### 1. Locate Config File
-*   **Antigravity:** `~/.gemini/antigravity/mcp_config.json`
-*   **Claude Desktop:** `~/Library/Application Support/Claude/claude_desktop_config.json`
+### 1. Automatic Setup (Simple)
+Open your terminal and run:
+```bash
+npx @senoldogann/context-manager install
+```
+This will automatically detect and update your config files for Claude, Antigravity, Cursor, Cline, and Roo Code.
 
-### 2. Add Server Entry
-Since CCM binaries are installed globally, you can point to them directly. This setup supports **all projects** automatically.
+### 2. Manual Configuration (Advanced)
+If you prefer to configure it manually, add the following entry to your `mcp_config.json`:
 
 ```json
 {
