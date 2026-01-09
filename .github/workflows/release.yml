@@ -45,21 +45,19 @@ jobs:
           RUSTFLAGS: ${{ matrix.target == 'x86_64-apple-darwin' && '-C target-feature=-avx,-avx2,-avx512f,-f16c,-fma' || '' }}
         run: cargo build --release --target ${{ matrix.target }}
 
-      - name: Package (CLI)
+      - name: Prepare Binaries
         run: |
           cd target/${{ matrix.target }}/release
-          tar -czf ../../../ccm-cli-${{ matrix.name }}.tar.gz ccm-cli
-
-      - name: Package (MCP)
-        run: |
-          cd target/${{ matrix.target }}/release
-          tar -czf ../../../ccm-mcp-${{ matrix.name }}.tar.gz ccm-mcp
+          mv ccm-cli ccm-cli-${{ matrix.target }}
+          mv ccm-mcp ccm-mcp-${{ matrix.target }}
 
       - name: Upload Artifacts
         uses: actions/upload-artifact@v4
         with:
           name: binaries-${{ matrix.name }}
-          path: "*.tar.gz"
+          path: |
+            target/${{ matrix.target }}/release/ccm-cli-${{ matrix.target }}
+            target/${{ matrix.target }}/release/ccm-mcp-${{ matrix.target }}
 
   create-release:
     name: Create Release
@@ -73,5 +71,5 @@ jobs:
       - name: Create Release
         uses: softprops/action-gh-release@v1
         with:
-          files: artifacts/**/*.tar.gz
+          files: artifacts/**/*
           generate_release_notes: true
