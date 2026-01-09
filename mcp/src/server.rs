@@ -24,9 +24,16 @@ impl ServerState {
         eprintln!("Initializing CCM Core Engine for MCP...");
 
         // Use CCM_DB_PATH env var if available
+        // Use CCM_DB_PATH env var if available, or default to data/ccm_mcp_db
         let db_path =
             std::env::var("CCM_DB_PATH").unwrap_or_else(|_| "data/ccm_mcp_db".to_string());
-        let project_root = std::env::var("CCM_PROJECT_ROOT").ok();
+
+        // Use CCM_PROJECT_ROOT env var if available, otherwise default to CWD
+        let project_root = std::env::var("CCM_PROJECT_ROOT").ok().or_else(|| {
+            std::env::current_dir()
+                .ok()
+                .map(|p| p.to_string_lossy().to_string())
+        });
 
         eprintln!("Using Vector DB Path: {}", db_path);
 
