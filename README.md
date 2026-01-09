@@ -129,10 +129,16 @@ CCM empowers your AI editor with deep codebase understanding. Instead of manuall
 3. **Smart Retrieval:** CCM returns the exact function definitions, dependencies, and semantic matches.
 4. **Answer:** The AI provides a precise answer based on the retrieved context.
 
-> **Tip for Power Users:** To ensure your AI agent *always* prioritizes CCM tools, you can add a `.cursorrules` (for Cursor) or system prompt instruction:
-> ```md
-> ALWAYS use mcp_context-manager tools for code search before falling back to grep.
-> ```
+### Why CCM?
+
+As shown in advanced context management strategies:
+
+- **RAG (Retrieval-Augmented Generation):** CCM maps your code to a vector space, allowing the AI to "pull" only the relevant parts dynamically.
+- **Hierarchical/Deep Memory:** Unlike simple text search, CCM understands code structure (Call Graphs), enabling it to navigate complex relationships.
+
+> **Note:** Once installed, your AI editor (Claude, Antigravity, etc.) will automatically detect the `context-manager` tools and use them whenever you ask a question about your code.
+
+## 🗂️ Indexing Your Codebase
 
 Before using semantic search, you need to index your codebase. This parses all supported files and creates vector embeddings.
 
