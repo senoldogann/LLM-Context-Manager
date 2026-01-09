@@ -34,10 +34,6 @@ impl RemoteEmbedder {
     pub fn from_env() -> Result<Self> {
         let _ = dotenvy::dotenv();
 
-        let api_key = env::var("EMBEDDING_API_KEY")
-            .or_else(|_| env::var("OPENAI_API_KEY"))
-            .context("EMBEDDING_API_KEY or OPENAI_API_KEY not set")?;
-
         let model =
             env::var("EMBEDDING_MODEL").unwrap_or_else(|_| "text-embedding-3-small".to_string());
 
@@ -48,10 +44,20 @@ impl RemoteEmbedder {
         let provider_str = env::var("EMBEDDING_PROVIDER")
             .unwrap_or_default()
             .to_lowercase();
+
         let provider = if provider_str.contains("ollama") || base_url.contains("ollama") {
             Provider::Ollama
         } else {
             Provider::OpenAI
+        };
+
+        let api_key = match provider {
+            Provider::OpenAI => env::var("EMBEDDING_API_KEY")
+                .or_else(|_| env::var("OPENAI_API_KEY"))
+                .context("EMBEDDING_API_KEY or OPENAI_API_KEY not set")?,
+            Provider::Ollama => env::var("EMBEDDING_API_KEY")
+                .or_else(|_| env::var("OPENAI_API_KEY"))
+                .unwrap_or_default(), // Ollama doesn't require a key usually
         };
 
         Ok(Self::new(api_key, model, base_url, provider))

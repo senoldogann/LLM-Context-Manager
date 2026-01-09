@@ -132,6 +132,9 @@ pub async fn index_directory(path: &str, db_path: Option<&str>) -> Result<IndexS
             || file_path_str.contains("/target/")
             || file_path_str.contains("/node_modules/")
             || file_path_str.contains("/.git/")
+            || file_path_str.contains("/dist/")
+            || file_path_str.contains("/build/")
+            || file_path_str.contains("/.next/")
         {
             continue;
         }
