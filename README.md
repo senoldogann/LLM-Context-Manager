@@ -147,6 +147,27 @@ The AI has three main tools to understand your code:
 *   **`read_graph`**: Structural navigation ("Who calls this function?").
 *   **`get_context`**: Intelligent code reading.
 
+---
+
+## 🎯 Best Practices & Prompting
+
+To get the most out of CCM, follow the **Search → Navigate → Read** workflow.
+
+### 💡 Pro Tips for Users
+If the AI gives a "Node not found" error, it's likely trying to guess IDs. Guide it with these prompts:
+
+**Good Sample Prompts:**
+*   "First, **search for code** related to repository management in the `mywebsiterepo` project. Then, pick the most relevant service and **read its graph** to show me its callers."
+*   "Analyze the `authService.ts` file. Show me its internal structure and then find where these methods are used across the project."
+*   "Find all implementations of the `ImpactAnalysis` interface and explain how they connect to the main dashboard."
+
+### 🔧 For AI Agents (Guidelines)
+1.  **Never Guess IDs:** Always use `search_code` first to retrieve valid `node_id`s from the results.
+2.  **Explicit Paths:** When the user has multiple projects open, always include the `project_path` in your tool calls.
+3.  **Context Mapping:** Use `read_graph` to understand *why* a piece of code exists (who depends on it) before suggesting changes.
+
+---
+
 **Pro-Tip: Multi-Project Workflows**
 The tools automatically detect the current project context from your editor. If you are working across multiple repositories, the AI can query any indexed project by path.
 
