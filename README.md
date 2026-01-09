@@ -151,6 +151,19 @@ graph TD
 
 ---
 
+## ❓ Troubleshooting
+
+### "No context found" Error
+If `get_context` returns no results:
+1.  **Index Your Codebase:** Run `ccm-cli index --path .` at least once.
+2.  **Check Empty Lines:** CCM maps functions/classes. Querying a blank line (e.g., between functions) returns nothing by design.
+3.  **Project Root:** Ensure the `CCM_PROJECT_ROOT` in your MCP config matches the directory you indexed.
+
+### "Semantic Match" Generic Titles
+If search results lack function names:
+*   Ensure you are using the latest version (v0.1.0+). Older versions had an ID-mismatch bug.
+
+
 ## 📄 License
 
 Designed for the community. Open source under the **MIT License**.
