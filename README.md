@@ -35,6 +35,7 @@ Projeniz 1000 dosya da olsa, CCM **sadece o anki sorunuzla ilgili** olan 2-3 dos
 - **🆕 Auto-Indexing:** MCP server automatically indexes the codebase on startup (no manual CLI commands needed).
 - **🆕 Chunk-Based Indexing:** Large files are split into overlapping chunks for complete semantic coverage.
 - **🆕 Persistent Memory:** Code graph is saved to disk and survives restarts.
+- **🆕 Batch Embedding:** Processes 32 chunks per API call for ~10x faster indexing.
 
 ---
 

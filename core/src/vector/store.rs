@@ -83,14 +83,22 @@ impl LanceDbStore {
             }
         }
 
-        // 1. Generate Embeddings one at a time
+        // 1. Generate Embeddings in batches for performance
+        const BATCH_SIZE: usize = 32;
         let mut embeddings: Vec<Vec<f32>> = Vec::with_capacity(all_chunks.len());
-        for (i, chunk) in all_chunks.iter().enumerate() {
-            eprintln!("Embedding chunk {}/{}", i + 1, all_chunks.len());
-            let single_embedding = embedder.embed(vec![chunk.clone()]).await?;
-            if let Some(emb) = single_embedding.into_iter().next() {
-                embeddings.push(emb);
-            }
+
+        let total_batches = all_chunks.len().div_ceil(BATCH_SIZE);
+        for (batch_idx, batch) in all_chunks.chunks(BATCH_SIZE).enumerate() {
+            eprintln!(
+                "Embedding batch {}/{} ({} chunks)",
+                batch_idx + 1,
+                total_batches,
+                batch.len()
+            );
+
+            let batch_texts: Vec<String> = batch.to_vec();
+            let batch_embeddings = embedder.embed(batch_texts).await?;
+            embeddings.extend(batch_embeddings);
         }
 
         // Use all_chunks and all_chunk_ids for storage
