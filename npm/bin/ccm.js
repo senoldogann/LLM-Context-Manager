@@ -103,7 +103,7 @@ async function getBinary() {
         process.exit(0);
     }
 
-    const binFilename = `${commandName}-${target}`;
+    const binFilename = `${commandName}-v${VERSION}-${target}`;
     const binPath = path.join(BIN_DIR, binFilename);
 
     if (fs.existsSync(binPath)) {
