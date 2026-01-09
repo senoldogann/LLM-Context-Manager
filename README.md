@@ -44,6 +44,7 @@ Built entirely in **Rust** for blazing speed.
 Fully implements the **Model Context Protocol (MCP)**.
 *   **Plug & Play:** Works instantly with **Antigravity**, **Claude Desktop**, **Zed**, and any MCP-compliant agent.
 *   **Auto-Indexing:** Just open your project. CCM handles the rest in the background.
+*   **Zero-Config:** Automatically detects your project root from the current working directory. Explicit configuration is optional.
 
 ---
 
@@ -227,6 +228,7 @@ If `get_context` returns no results:
 1.  **Index Your Codebase:** Run `ccm-cli index --path .` at least once.
 2.  **Check Empty Lines:** CCM maps functions/classes. Querying a blank line (e.g., between functions) returns nothing by design.
 3.  **Project Root:** Ensure the `CCM_PROJECT_ROOT` in your MCP config matches the directory you indexed.
+4.  **Path Mismatch:** If you are using an older version, absolute paths might fail. **Update to v0.1.7+** (or use the latest dev build) which includes automatic path normalization.
 
 ### "Semantic Match" Generic Titles
 If search results lack function names:

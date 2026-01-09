@@ -30,21 +30,35 @@ pub async fn get_context(engine: &Arc<RetrievalEngine>, args: &Value) -> Result<
         anyhow::anyhow!("Missing or invalid 'line' argument (must be a positive integer)")
     })? as usize;
 
+    let project_path = args.get("project_path").and_then(|v| v.as_str());
+    let normalized_file = try_normalize_path(file, project_path);
+
+    // Try with normalized path first
     let cursor = CursorPosition {
-        file_path: file.to_string(),
+        file_path: normalized_file.clone(),
         line,
         column: 0,
     };
 
-    let suggestions = engine.predict_context(&cursor).await?;
+    let mut suggestions = engine.predict_context(&cursor).await?;
+
+    // If no suggestions, try with original file path (fallback)
+    if suggestions.is_empty() && normalized_file != file {
+        let cursor_original = CursorPosition {
+            file_path: file.to_string(),
+            line,
+            column: 0,
+        };
+        suggestions = engine.predict_context(&cursor_original).await?;
+    }
 
     if suggestions.is_empty() {
         return Ok(ToolResult {
             content: vec![ToolResultContent {
                 content_type: "text".to_string(),
                 text: format!(
-                    "No context found for {}:{}\n\nThe code graph may not be indexed yet. Try indexing the project first.",
-                    file, line
+                    "No context found for {}:{} (Normalized: {})\n\nThe code graph may not be indexed yet. Try indexing the project first.",
+                    file, line, normalized_file
                 ),
             }],
             is_error: None,
@@ -129,14 +143,26 @@ pub async fn read_graph(engine: &Arc<RetrievalEngine>, args: &Value) -> Result<T
         .and_then(|v| v.as_str())
         .ok_or_else(|| anyhow::anyhow!("Missing node_id argument"))?;
 
-    if let Some(node) = engine.get_node_by_id(node_id) {
+    let project_path = args.get("project_path").and_then(|v| v.as_str());
+    let normalized_id = try_normalize_path(node_id, project_path);
+
+    // Try finding by normalized ID first, then raw ID
+    let node_opt = engine
+        .get_node_by_id(&normalized_id)
+        .or_else(|| engine.get_node_by_id(node_id));
+
+    if let Some(node) = node_opt {
         let mut output = format!(
             "## Node Details: {}\n\n**Type:** {:?}\n**ID:** {}\n**Range:** Lines {}-{}\n\n```\n{}\n```",
             node.name, node.node_type, node.id, node.start_line, node.end_line, node.content
         );
 
         // Append neighbors if available (Graph Navigator)
-        if let Some(neighbors) = engine.get_node_neighbors(node_id) {
+        // Try getting neighbors with both IDs as well
+        if let Some(neighbors) = engine
+            .get_node_neighbors(&node.id)
+            .or_else(|| engine.get_node_neighbors(node_id))
+        {
             output.push_str("\n\n### 🔗 Graph Connections\n");
 
             if !neighbors.calls.is_empty() {
@@ -174,9 +200,36 @@ pub async fn read_graph(engine: &Arc<RetrievalEngine>, args: &Value) -> Result<T
         Ok(ToolResult {
             content: vec![ToolResultContent {
                 content_type: "text".to_string(),
-                text: format!("Node not found with ID: {}", node_id),
+                text: format!(
+                    "Node not found with ID: {} (Normalized: {})",
+                    node_id, normalized_id
+                ),
             }],
             is_error: Some(true),
         })
     }
+}
+
+/// Helper: Normalizes a file path to match graph conventions (relative, starts with ./)
+fn try_normalize_path(path_str: &str, project_path: Option<&str>) -> String {
+    // 1. Try stripping project root if absolute
+    if let Some(root) = project_path {
+        let path = std::path::Path::new(path_str);
+        if path.is_absolute() {
+            if let Ok(stripped) = path.strip_prefix(root) {
+                let s = stripped.to_string_lossy();
+                if s.starts_with("./") {
+                    return s.to_string();
+                }
+                return format!("./{}", s);
+            }
+        }
+    }
+
+    // 2. If relative but missing ./ prefix, add it
+    if !path_str.starts_with("./") && !path_str.starts_with("/") {
+        return format!("./{}", path_str);
+    }
+
+    path_str.to_string()
 }
