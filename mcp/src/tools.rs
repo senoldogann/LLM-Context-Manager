@@ -130,10 +130,38 @@ pub async fn read_graph(engine: &Arc<RetrievalEngine>, args: &Value) -> Result<T
         .ok_or_else(|| anyhow::anyhow!("Missing node_id argument"))?;
 
     if let Some(node) = engine.get_node_by_id(node_id) {
-        let output = format!(
+        let mut output = format!(
             "## Node Details: {}\n\n**Type:** {:?}\n**ID:** {}\n**Range:** Lines {}-{}\n\n```\n{}\n```",
             node.name, node.node_type, node.id, node.start_line, node.end_line, node.content
         );
+
+        // Append neighbors if available (Graph Navigator)
+        if let Some(neighbors) = engine.get_node_neighbors(node_id) {
+            output.push_str("\n\n### 🔗 Graph Connections\n");
+
+            if !neighbors.calls.is_empty() {
+                output.push_str(&format!("**Calls:** {}\n", neighbors.calls.join(", ")));
+            }
+            if !neighbors.called_by.is_empty() {
+                output.push_str(&format!(
+                    "**Called By:** {}\n",
+                    neighbors.called_by.join(", ")
+                ));
+            }
+            if !neighbors.contains.is_empty() {
+                output.push_str(&format!(
+                    "**Contains:** {}\n",
+                    neighbors.contains.join(", ")
+                ));
+            }
+
+            if neighbors.calls.is_empty()
+                && neighbors.called_by.is_empty()
+                && neighbors.contains.is_empty()
+            {
+                output.push_str("_(No direct connections found)_");
+            }
+        }
 
         Ok(ToolResult {
             content: vec![ToolResultContent {

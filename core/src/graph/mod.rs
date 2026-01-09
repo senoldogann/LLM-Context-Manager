@@ -114,6 +114,13 @@ impl CodeGraph {
         self.graph.node_weights().find(|node| node.id == id)
     }
 
+    pub fn find_node_index_by_id(&self, id: &str) -> Option<NodeIndex> {
+        self.graph.node_indices().find(|&idx| {
+            let node = &self.graph[idx];
+            node.id == id
+        })
+    }
+
     /// Saves the graph to a JSON file.
     pub fn save_to_file(&self, path: &str) -> anyhow::Result<()> {
         let file = std::fs::File::create(path)?;

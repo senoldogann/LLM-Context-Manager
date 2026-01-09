@@ -1,6 +1,7 @@
 use crate::graph::{CodeGraph, CodeNode, NodeType};
 use crate::vector::store::LanceDbStore;
 use anyhow::Result;
+use petgraph::visit::EdgeRef;
 
 /// Represents the user's cursor position in the editor.
 #[derive(Debug, Clone)]
@@ -17,6 +18,14 @@ pub struct SuggestedContext {
     pub content: String,
     pub relevance_score: f32,
     pub reason: String,
+}
+
+/// Neighbors of a node in the code graph, categorized by relationship.
+#[derive(Debug, Clone, Default)]
+pub struct NodeNeighbors {
+    pub calls: Vec<String>,     // Functions this node calls
+    pub called_by: Vec<String>, // Functions that call this node
+    pub contains: Vec<String>,  // Child nodes (for files/classes)
 }
 
 use std::sync::Arc;
@@ -86,6 +95,52 @@ impl RetrievalEngine {
     /// Retrieves a node from the graph by its ID.
     pub fn get_node_by_id(&self, id: &str) -> Option<&CodeNode> {
         self.graph.find_node_by_id(id)
+    }
+
+    /// Retrieves neighbors of a node, categorized by relationship type.
+    /// Returns (calls: nodes this function calls, called_by: nodes that call this function)
+    pub fn get_node_neighbors(&self, id: &str) -> Option<NodeNeighbors> {
+        use crate::graph::EdgeType;
+        use petgraph::Direction;
+
+        let node_idx = self.graph.find_node_index_by_id(id)?;
+
+        let mut calls = Vec::new();
+        let mut called_by = Vec::new();
+        let mut contains = Vec::new();
+
+        // Outgoing edges: This node CALLS others
+        for edge in self
+            .graph
+            .graph
+            .edges_directed(node_idx, Direction::Outgoing)
+        {
+            let target_node = &self.graph.graph[edge.target()];
+            match edge.weight() {
+                EdgeType::Calls => calls.push(target_node.name.clone()),
+                EdgeType::Contains => contains.push(target_node.name.clone()),
+                _ => {}
+            }
+        }
+
+        // Incoming edges: Others CALL this node
+        for edge in self
+            .graph
+            .graph
+            .edges_directed(node_idx, Direction::Incoming)
+        {
+            let source_node = &self.graph.graph[edge.source()];
+            match edge.weight() {
+                EdgeType::Calls => called_by.push(source_node.name.clone()),
+                _ => {}
+            }
+        }
+
+        Some(NodeNeighbors {
+            calls,
+            called_by,
+            contains,
+        })
     }
 
     /// Predicts relevant code context based on the user's cursor position.
