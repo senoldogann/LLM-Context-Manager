@@ -25,7 +25,7 @@ Projeniz 1000 dosya da olsa, CCM **sadece o anki sorunuzla ilgili** olan 2-3 dos
 
 ---
 
-## 🌟 Features
+## Features
 
 - **Dual Intelligence Engine:** Combines **Code Property Graphs (CPG)** for structural understanding with **Vector Embeddings** for semantic retrieval.
 - **Universal Context Provider (MCP):** Fully implements the **Model Context Protocol (MCP)** to serve context to any MCP-compliant client (Claude Desktop, Antigravity, Zed, Custom Agents).
@@ -39,9 +39,9 @@ Projeniz 1000 dosya da olsa, CCM **sadece o anki sorunuzla ilgili** olan 2-3 dos
 
 ---
 
-## 📦 Installation
+## Installation
 
-### ⚡ One-Click Install (Recommended)
+### One-Click Install (Recommended)
 
 The fastest way to get started. This script automatically:
 - Installs Rust (if needed)
@@ -83,7 +83,7 @@ cargo build --release
 
 ---
 
-## ⚙️ Configuration
+## Configuration
 
 ### 1. Environment Setup
 
@@ -116,7 +116,7 @@ ollama pull mxbai-embed-large
 
 ---
 
-## 🤖 Integrating with AI Agents (Claude / Cursor)
+## Integrating with AI Agents
 
 CCM empowers your AI editor with deep codebase understanding. Instead of manually pasting code, the AI can "search" and "read" your project autonomously.
 
@@ -138,7 +138,7 @@ As shown in advanced context management strategies:
 
 > **Note:** Once installed, your AI editor (Claude, Antigravity, etc.) will automatically detect the `context-manager` tools and use them whenever you ask a question about your code.
 
-## 🗂️ Indexing Your Codebase
+## Indexing Your Codebase
 
 Before using semantic search, you need to index your codebase. This parses all supported files and creates vector embeddings.
 
@@ -186,44 +186,29 @@ Indexing Complete!
 
 ---
 
-## 🔌 MCP Integration (AI Editors)
+---
 
-CCM provides an MCP server that can be integrated with any MCP-compliant AI editor like **Antigravity**, **Claude Desktop**, or **Zed**.
+## 🔌 Integration with AI Clients
 
-### Step 1: Create Wrapper Script
+CCM exposes a standard **Model Context Protocol (MCP)** server, making it compatible with any MCP-compliant AI editor or agent (e.g., Antigravity, Claude Desktop, Zed, etc).
 
-The MCP server is configured via a wrapper script that handles environment setup:
+### 1. Configure the Wrapper
 
-```bash
-# File: ccm-mcp-wrapper.sh (already included in repo)
-chmod +x ccm-mcp-wrapper.sh
-```
+The installation script creates a helper script at `~/.ccm/ccm-mcp-wrapper.sh`. This script manages the environment variables and points to the correct binary.
 
-**Wrapper Script Contents:**
-```bash
-#!/bin/bash
-cd /path/to/context-manager
-export EMBEDDING_PROVIDER=ollama
-export EMBEDDING_HOST=http://127.0.0.1:11434
-export EMBEDDING_MODEL=mxbai-embed-large
-export CCM_DB_PATH=/path/to/context-manager/data/ccm_db
-export CCM_PROJECT_ROOT=/path/to/your/project  # Auto-indexes this directory on startup!
-exec ./target/release/ccm-mcp
-```
+Ensure `CCM_PROJECT_ROOT` points to the folder you want to index.
 
-### Step 2: Add to MCP Config
+### 2. Add to MCP Configuration
 
-Add the following to your MCP configuration file:
+Locate your editor's MCP configuration file and add the following entry.
 
-**For Antigravity:** `~/.gemini/antigravity/mcp_config.json`
-
-**For Claude Desktop:** `~/Library/Application Support/Claude/claude_desktop_config.json`
+**Example Configuration:**
 
 ```json
 {
   "mcpServers": {
     "context-manager": {
-      "command": "/absolute/path/to/context-manager/ccm-mcp-wrapper.sh",
+      "command": "/Users/YOUR_USER/.ccm/ccm-mcp-wrapper.sh",
       "args": [],
       "env": {}
     }
@@ -231,13 +216,18 @@ Add the following to your MCP configuration file:
 }
 ```
 
-### Step 3: Restart Your Editor
+> **Note:** The configuration file location varies by editor:
+> - **Antigravity:** `~/.gemini/antigravity/mcp_config.json`
+> - **Claude Desktop:** `~/Library/Application Support/Claude/claude_desktop_config.json`
+> - **Other Clients:** Refer to your client's documentation.
 
-After adding the configuration, restart your AI editor. The CCM tools should appear in the MCP tools list.
+### 3. Restart Client
+
+Save the configuration and restart your AI client. The client should now recognize `context-manager` and its tools.
 
 ---
 
-## 🛠️ Available MCP Tools
+## Available Using Tools
 
 | Tool | Description | Parameters |
 |------|-------------|------------|
@@ -259,7 +249,7 @@ The AI will automatically use the appropriate CCM tool to answer.
 
 ---
 
-## 🧪 Testing
+## Testing
 
 ### Manual MCP Test
 
@@ -290,7 +280,7 @@ cargo run -p ccm-cli -- index /path/to/codebase
 
 ---
 
-## 🏗️ Architecture
+## Architecture
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
