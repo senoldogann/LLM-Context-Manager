@@ -43,6 +43,8 @@ jobs:
           targets: ${{ matrix.target }}
 
       - name: Build Binary
+        env:
+          RUSTFLAGS: ${{ matrix.target == 'x86_64-apple-darwin' && '-C target-feature=-avx,-avx2,-avx512f,-f16c,-fma' || '' }}
         run: cargo build --release --target ${{ matrix.target }}
 
       - name: Package (CLI)
