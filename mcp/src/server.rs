@@ -26,15 +26,34 @@ impl ServerState {
     pub async fn new() -> Result<Self> {
         eprintln!("Initializing CCM Core Engine for MCP...");
 
-        // Use CCM_DB_PATH env var if available, or default to data/ccm_mcp_db
-        let db_path =
-            std::env::var("CCM_DB_PATH").unwrap_or_else(|_| "data/ccm_mcp_db".to_string());
+        // Use CCM_DB_PATH env var if available
+        let db_path = if let Ok(path) = std::env::var("CCM_DB_PATH") {
+            path
+        } else {
+            // Default to absolute path in home dir to avoid read-only CWD issues
+            let home = std::env::var("HOME")
+                .or_else(|_| std::env::var("USERPROFILE"))
+                .unwrap_or_else(|_| ".".to_string());
+            let path = std::path::PathBuf::from(home)
+                .join(".ccm")
+                .join("mcp")
+                .join("data")
+                .join("ccm_mcp_db");
+            // Ensure directory exists
+            let _ = std::fs::create_dir_all(&path);
+            path.to_string_lossy().to_string()
+        };
 
         // Use CCM_PROJECT_ROOT env var if available, otherwise default to CWD
         let project_root = std::env::var("CCM_PROJECT_ROOT").ok().or_else(|| {
-            std::env::current_dir()
-                .ok()
-                .map(|p| p.to_string_lossy().to_string())
+            // If we are in / (root), don't default to it as it's often read-only
+            if let Ok(cwd) = std::env::current_dir() {
+                if cwd.to_string_lossy() == "/" {
+                    return None;
+                }
+                return Some(cwd.to_string_lossy().to_string());
+            }
+            None
         });
 
         eprintln!("Using Vector DB Path: {}", db_path);

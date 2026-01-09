@@ -37,8 +37,16 @@ impl RemoteEmbedder {
 
         // Load global config from ~/.ccm/.env if it exists
         if let Ok(home) = env::var("HOME") {
-            let global_config = PathBuf::from(home).join(".ccm").join(".env");
-            let _ = dotenvy::from_path(global_config);
+            let global_config = PathBuf::from(&home).join(".ccm").join(".env");
+            if global_config.exists() {
+                // eprintln!("Loading global config from: {:?}", global_config);
+                let _ = dotenvy::from_path(&global_config);
+            }
+        } else if let Ok(user_profile) = env::var("USERPROFILE") {
+            let global_config = PathBuf::from(&user_profile).join(".ccm").join(".env");
+            if global_config.exists() {
+                let _ = dotenvy::from_path(&global_config);
+            }
         }
 
         let model =
