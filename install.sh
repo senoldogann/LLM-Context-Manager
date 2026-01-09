@@ -238,6 +238,64 @@ add_to_path() {
 }
 
 # ============================================
+# Step 9: Interactive Project Indexing
+# ============================================
+index_project() {
+    echo ""
+    echo -e "${YELLOW}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+    echo -e "${BLUE}📂 Project Indexing${NC}"
+    echo -e "${YELLOW}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+    echo ""
+    echo "CCM needs to index your codebase to provide intelligent context."
+    echo ""
+    
+    # Ask if user wants to index now
+    read -p "Would you like to index a project now? (y/n): " INDEX_NOW
+    
+    if [[ "$INDEX_NOW" =~ ^[Yy]$ ]]; then
+        # Get project path
+        echo ""
+        read -p "Enter the full path to your project: " PROJECT_PATH
+        
+        # Expand ~ to $HOME
+        PROJECT_PATH="${PROJECT_PATH/#\~/$HOME}"
+        
+        # Validate path
+        if [ ! -d "$PROJECT_PATH" ]; then
+            warn "Directory not found: $PROJECT_PATH"
+            warn "You can index later with: ccm-cli index --path /your/project"
+            return
+        fi
+        
+        info "Indexing project: $PROJECT_PATH"
+        echo ""
+        
+        # Source env for cargo
+        source "$HOME/.cargo/env" 2>/dev/null || true
+        
+        # Run indexing
+        if "$INSTALL_DIR/target/release/ccm-cli" index --path "$PROJECT_PATH"; then
+            success "Project indexed successfully!"
+            
+            # Update wrapper with project root for auto-indexing
+            WRAPPER_FILE="$INSTALL_DIR/ccm-mcp-wrapper.sh"
+            if grep -q "CCM_PROJECT_ROOT" "$WRAPPER_FILE" 2>/dev/null; then
+                # Update existing PROJECT_ROOT
+                sed -i.bak "s|export CCM_PROJECT_ROOT=.*|export CCM_PROJECT_ROOT=\"$PROJECT_PATH\"|" "$WRAPPER_FILE" 2>/dev/null || \
+                sed -i '' "s|export CCM_PROJECT_ROOT=.*|export CCM_PROJECT_ROOT=\"$PROJECT_PATH\"|" "$WRAPPER_FILE"
+            fi
+            success "MCP wrapper configured with project root"
+        else
+            warn "Indexing failed. You can retry later with:"
+            echo "    ccm-cli index --path $PROJECT_PATH"
+        fi
+    else
+        info "Skipping indexing. You can index later with:"
+        echo "    $INSTALL_DIR/target/release/ccm-cli index --path /your/project"
+    fi
+}
+
+# ============================================
 # Print Final Instructions
 # ============================================
 print_success() {
@@ -286,6 +344,7 @@ main() {
     create_env
     setup_wrapper
     add_to_path
+    index_project
     
     print_success
 }
