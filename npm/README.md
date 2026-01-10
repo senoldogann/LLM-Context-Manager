@@ -10,6 +10,12 @@ This is the Node.js wrapper for the **Cognitive Codebase Matrix (CCM)**. It allo
 > **Prerequisite:** This tool relies on local AI models. You must have **[Ollama](https://ollama.com)** installed and running.
 > CCM will **automatically pull** the required embedding model (`nomic-embed-text`) if missing, but the Ollama engine itself is required.
 
+### 🔒 Privacy by Default
+CCM uses a **Local-First** architecture by default. This means:
+*   Your code is **never** sent to 3rd party servers (OpenAI, Anthropic, etc.).
+*   All vector operations (Embedding) happen on your local machine.
+*   You can safely use it for internal or confidential projects.
+
 The easiest way to get started. This will automatically add CCM to your Claude or Antigravity configuration:
 ```bash
 npx @senoldogann/context-manager install
