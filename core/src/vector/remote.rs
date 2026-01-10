@@ -157,7 +157,14 @@ impl RemoteEmbedder {
             .header("Content-Type", "application/json")
             .json(&json!({
                 "model": self.model,
-                "input": texts
+                "input": texts.iter().map(|t| {
+                    if t.len() > 6000 {
+                        // Safe char boundary truncation
+                        t.chars().take(6000).collect::<String>()
+                    } else {
+                        t.clone()
+                    }
+                }).collect::<Vec<String>>()
             }))
             .send()
             .await

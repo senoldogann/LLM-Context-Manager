@@ -1,6 +1,6 @@
 {
     "name": "@senoldogann/context-manager",
-    "version": "0.1.12",
+    "version": "0.1.13",
     "description": "LLM Context Manager MCP Server & CLI wrapper using npx",
     "main": "bin/ccm.js",
     "bin": {

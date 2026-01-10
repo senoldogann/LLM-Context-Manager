@@ -45,10 +45,14 @@ impl LanceDbStore {
             return Ok(());
         }
 
-        let embedder = self
-            .embedder
-            .as_ref()
-            .ok_or_else(|| anyhow::anyhow!("Embedder not initialized"))?;
+        let embedder = match self.embedder.as_ref() {
+            Some(e) => e,
+            None => {
+                // Determine if we should warn or just skip
+                // Ideally, we just skip vector indexing if semantic search is disabled.
+                return Ok(());
+            }
+        };
 
         const MAX_CHARS: usize = 1000;
         const OVERLAP: usize = 200;
