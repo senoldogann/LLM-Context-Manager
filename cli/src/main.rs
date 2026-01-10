@@ -93,7 +93,19 @@ async fn main() -> anyhow::Result<()> {
                                 // Simple filter for interesting extensions
                                 let is_relevant = event.paths.iter().any(|p| {
                                     if let Some(ext) = p.extension().and_then(|e| e.to_str()) {
-                                        matches!(ext, "rs" | "py" | "ts" | "js" | "tsx" | "jsx")
+                                        matches!(
+                                            ext,
+                                            "rs" | "py"
+                                                | "ts"
+                                                | "js"
+                                                | "tsx"
+                                                | "jsx"
+                                                | "md"
+                                                | "json"
+                                                | "yaml"
+                                                | "yml"
+                                                | "toml"
+                                        )
                                     } else {
                                         false
                                     }

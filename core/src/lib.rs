@@ -135,7 +135,10 @@ pub async fn index_directory(path: &str, db_path: Option<&str>) -> Result<IndexS
 
         // Check if file is supported
         let extension = file_path.extension().and_then(|e| e.to_str()).unwrap_or("");
-        let is_supported = matches!(extension, "rs" | "py" | "ts" | "js" | "tsx" | "jsx");
+        let is_supported = matches!(
+            extension,
+            "rs" | "py" | "ts" | "js" | "tsx" | "jsx" | "md" | "json" | "yaml" | "yml" | "toml"
+        );
 
         // Robust ignore check using path components
         let should_ignore = file_path.components().any(|c| {
@@ -229,9 +232,33 @@ fn populate_graph_for_file(graph: &mut CodeGraph, file_path: &str) -> Result<()>
         || file_path.ends_with(".jsx")
     {
         SupportedLanguage::TypeScript
+    } else if file_path.ends_with(".md")
+        || file_path.ends_with(".json")
+        || file_path.ends_with(".yaml")
+        || file_path.ends_with(".yml")
+        || file_path.ends_with(".toml")
+    {
+        SupportedLanguage::Data
     } else {
         return Ok(());
     };
+
+    // If it's a Data file, we bypass the AST parser and just create a file-level node
+    if matches!(lang, SupportedLanguage::Data) {
+        use crate::graph::CodeNode;
+        use crate::graph::NodeType;
+
+        let node = CodeNode {
+            id: file_path.to_string(),
+            node_type: NodeType::File,
+            name: file_path.to_string(),
+            content: content.clone(),
+            start_line: 1,
+            end_line: content.lines().count(),
+        };
+        graph.add_node(node);
+        return Ok(());
+    }
 
     // Parse AST
     let mut parser = CodeParser::new();

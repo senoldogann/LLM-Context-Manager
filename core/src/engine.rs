@@ -49,8 +49,11 @@ impl RetrievalEngine {
 
         // Iterate over all nodes in the graph
         for node in self.graph.graph.node_weights() {
-            // Only index Functions and Classes, skip Files (too large) or Variables (too small)
-            if matches!(node.node_type, NodeType::Function | NodeType::Class) {
+            // Index Functions, Classes, and Files (Files now include MD, JSON etc.)
+            if matches!(
+                node.node_type,
+                NodeType::Function | NodeType::Class | NodeType::File
+            ) {
                 // Combine name and content for better embedding context
                 let text_representation = format!("{}\n{}", node.name, node.content);
 

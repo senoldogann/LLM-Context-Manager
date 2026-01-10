@@ -212,11 +212,14 @@ graph TD
 
 ## 🧩 Supported Languages
 
-| Language | Extensions | Features |
-|:---|:---|:---|
-| **Rust** | `.rs` | Full AST, Call Graph, Struct/Impl |
-| **Python** | `.py` | Classes, Functions, Imports |
-| **TypeScript** | `.ts`, `.tsx` | Interfaces, Types, Functions |
+| Language | Extension | Analysis Depth |
+| :--- | :--- | :--- |
+| **Rust** | `.rs` | Full AST (Functions, Structs, Impls) |
+| **Python** | `.py` | Full AST (Functions, Classes) |
+| **TypeScript / JS** | `.ts, .js, .tsx, .jsx` | Full AST (Classes, Functions) |
+| **Markdown** | `.md` | Full File Indexing |
+| **JSON** | `.json` | Full File Indexing |
+| **YAML / TOML** | `.yaml, .yml, .toml` | Full File Indexing |
 | **JavaScript** | `.js`, `.jsx` | Functions, ES6 Classes |
 
 ---

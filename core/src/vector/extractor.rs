@@ -110,6 +110,7 @@ impl Extractor {
             SupportedLanguage::Rust => self.classify_rust_node(node, kind),
             SupportedLanguage::Python => self.classify_python_node(node, kind),
             SupportedLanguage::TypeScript => self.classify_typescript_node(node, kind),
+            SupportedLanguage::Data => None, // Data files don't have sub-nodes via AST
         }
     }
 
@@ -249,6 +250,7 @@ impl Extractor {
             SupportedLanguage::Rust => kind == "call_expression",
             SupportedLanguage::Python => kind == "call",
             SupportedLanguage::TypeScript => kind == "call_expression",
+            SupportedLanguage::Data => false,
         };
 
         if is_call {

@@ -6,6 +6,7 @@ pub enum SupportedLanguage {
     Rust,
     Python,
     TypeScript,
+    Data, // New variant for non-code files (JSON, MD, etc.)
 }
 
 pub struct CodeParser {
@@ -40,6 +41,9 @@ impl CodeParser {
             SupportedLanguage::Rust => tree_sitter_rust::LANGUAGE.into(),
             SupportedLanguage::Python => tree_sitter_python::LANGUAGE.into(),
             SupportedLanguage::TypeScript => tree_sitter_typescript::LANGUAGE_TYPESCRIPT.into(),
+            SupportedLanguage::Data => {
+                return Err(anyhow!("Data files do not support AST parsing"))
+            }
         };
 
         self.parser.set_language(&language)?;

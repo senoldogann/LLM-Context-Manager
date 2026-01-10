@@ -67,3 +67,26 @@ See [README.md](README.md) for detailed instructions.
 - [ ] Incremental indexing (file watchers)
 - [ ] More language support (Go, Java, C++)
 - [ ] LSP integration for real-time updates
+
+---
+
+---
+
+## v0.1.8 - Multi-Language Support & Robustness (2026-01-10)
+
+This release significantly expands CCM's capabilities to include non-code files and improves the reliability of the installation process.
+
+### ✨ Multi-Language Support
+- **Full File Indexing:** Added support for `.md`, `.json`, `.yaml`, `.yml`, and `.toml`.
+- **Intelligent Data Parsing:** These formats bypass AST extraction and are indexed as whole-file nodes, making them semantically searchable.
+- **Project Context:** AI agents now have full visibility into configuration and documentation files.
+
+### 🛠️ Robustness & Fixes
+- **Atomic Downloads:** The `npm` wrapper now uses `.tmp` files for binary downloads to prevent corrupted installations.
+- **Guaranteed Permissions:** Explicit `chmod` calls ensure binaries always have execute permissions on Unix-like systems.
+- **Simultaneous Binary Install:** Running `install` now proactively downloads both `ccm-cli` and `ccm-mcp` to ensure local availability.
+- **Watch Mode:** Updated the CLI watch filter to include new supported extensions.
+
+### 📦 Upgrading
+- Run `npx @senoldogann/context-manager install` to update.
+- Re-index your project to pick up new file types: `npx @senoldogann/context-manager index --path .`
