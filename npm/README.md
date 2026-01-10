@@ -36,6 +36,25 @@ If you prefer to configure your AI editor manually without the `install` command
 }
 ```
 
+## 💡 Pro-Tip: Enforcing CCM Usage
+To ensure your AI agent (Claude, Cursor, etc.) always uses CCM for deep analysis, add this to your **Custom Instructions** or **System Prompt**:
+
+> "You are an expert architect. For any question about the codebase, DO NOT guess. Use the `context-manager` tools to explore the Graph and Vector store. Always prioritize `search_code` to find entry points and `read_graph` to navigate dependencies before proposing any code changes."
+
+---
+
+## 🇹🇷 Türkçe Özet
+
+Bu paket, **Cognitive Codebase Matrix (CCM)** için Node.js wrapper'ıdır. Rust kurulumuna gerek kalmadan CCM araçlarını kullanmanızı sağlar.
+
+**Hızlı Kurulum:**
+```bash
+npx @senoldogann/context-manager install
+npx @senoldogann/context-manager index --path .
+```
+
+---
+
 ## 📦 What this package does
 This package is a lightweight wrapper that:
 1. Detects your OS and CPU architecture.
@@ -44,7 +63,9 @@ This package is a lightweight wrapper that:
 
 For more details, visit the [Main Repository](https://github.com/senoldogann/LLM-Context-Manager).
 
-### 🆕 v0.1.7 Updates
-*   **Zero-Config:** Automatically detects project root.
-*   **Fixes:** Resolved context retrieval issues with absolute paths.
+### 🆕 v0.1.8 Updates
+*   **Multi-Language Support:** Full indexing for `.md`, `.json`, `.yaml`, `.toml` and more.
+*   **Zero-Config:** Improved project root detection.
+*   **Resilient Downloads:** Fixed binary download issues with atomic file creation.
 
+Built with ❤️ in **Rust**.

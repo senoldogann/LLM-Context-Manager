@@ -18,12 +18,13 @@ Modern AI coding assistants (Claude, Cursor, Windsurf) are powerful, but they su
 2.  **Hallucination:** Without structure, they guess dependencies and imports.
 3.  **Lost in Translation:** Traditional vector search finds *similar words*, not *connected logic*.
 
-**CCM gives your AI a map.**
-Instead of feeding raw text, CCM provides a **Dual-Intelligence Engine**:
-*   **Vector Search (Semantic):** "Find code related to authentication."
-*   **Graph Navigator (Structural):** "Who calls `login()`? What does it return? Show me the interface."
-
 It turns your AI from a *text predictor* into a **Senior Architect**.
+
+### 🛠️ The "Agent-First" Difference
+Unlike other tools that just dump raw code, CCM injects **AI-Optimized Context**. Every piece of code retrieved includes:
+*   **Logical Reasoning:** CCM explains *why* it picked that code (e.g., "Structurally related to your cursor" or "Caller of the current function").
+*   **Relational Edges:** It maps how different files talk to each other, so the AI doesn't have to guess.
+
 
 ---
 
@@ -141,14 +142,18 @@ npx @senoldogann/context-manager install
 This will automatically detect and update your config files for Claude, Antigravity, Cursor, Cline, and Roo Code.
 
 ### 2. Manual Configuration (Advanced)
-If you prefer to configure it manually, add the following entry to your `mcp_config.json`:
+If you prefer to configure it manually, add the following entry to your `mcp_config.json`. This uses `npx` to ensure you always run the version compatible with your project:
 
 ```json
 {
   "mcpServers": {
     "context-manager": {
-      "command": "ccm-mcp",
-      "args": [],
+      "command": "npx",
+      "args": [
+        "-y",
+        "@senoldogann/context-manager",
+        "mcp"
+      ],
       "env": {
         "RUST_LOG": "info"
        }
@@ -156,6 +161,9 @@ If you prefer to configure it manually, add the following entry to your `mcp_con
   }
 }
 ```
+> [!NOTE]
+> If you installed via the shell script or built from source, you can use `"command": "ccm-mcp"` directly if it's in your PATH.
+
 
 ### 3. Usage in AI
 The AI has three main tools to understand your code:
@@ -180,8 +188,17 @@ If the AI gives a "Node not found" error, it's likely trying to guess IDs. Guide
 
 ### 🔧 For AI Agents (Guidelines)
 1.  **Never Guess IDs:** Always use `search_code` first to retrieve valid `node_id`s from the results.
-2.  **Explicit Paths:** When the user has multiple projects open, always include the `project_path` in your tool calls.
-3.  **Context Mapping:** Use `read_graph` to understand *why* a piece of code exists (who depends on it) before suggesting changes.
+2.  **Trust the Reason:** Pay attention to the `Reason` field in the context results—it explains the structural or semantic link.
+3.  **Explicit Paths:** When the user has multiple projects open, always include the `project_path` in your tool calls.
+4.  **Context Mapping:** Use `read_graph` to understand *why* a piece of code exists (who depends on it) before suggesting changes.
+
+---
+
+### 💡 Pro-Tip: Enforcing CCM Usage
+To ensure your AI agent (Claude, Cursor, etc.) always uses CCM for deep analysis, add this to your **Custom Instructions** or **System Prompt**:
+
+> "You are an expert architect. For any question about the codebase, DO NOT guess. Use the `context-manager` tools to explore the Graph and Vector store. Always prioritize `search_code` to find entry points and `read_graph` to navigate dependencies before proposing any code changes."
+
 
 ---
 
@@ -243,3 +260,115 @@ If search results lack function names:
 Designed for the community. Open source under the **MIT License**.
 
 Built with ❤️ in **Rust**.
+
+---
+
+# Cognitive Codebase Matrix (CCM) - Türkçe
+
+> **🧠 Otonom Yapay Zeka Ajanları için Nöral Omurga**
+>
+> **Kod tabanınız ile yapay zeka editörünüz arasındaki boşluğu doldurun.** CCM, statik kaynak kodunu dinamik ve sorgulanabilir bir Bilgi Grafiğine (Knowledge Graph) dönüştürerek yapay zeka ajanlarının projeniz içinde cerrahi bir hassasiyetle gezinmesini, anlamasını ve akıl yürütmesini sağlar.
+
+## 🚀 Neden CCM?
+
+Modern yapay zeka kodlama asistanları (Claude, Cursor, Windsurf) güçlüdür ancak **"görüş kısıtlılığı"** sorunu yaşarlar:
+1.  **Bağlam Limitleri:** 100.000 satırlık projenizin tamamını aynı anda "göremezler".
+2.  **Halüsinasyon:** Yapısal bilgi olmadan, bağımlılıkları ve import'ları tahmin etmeye çalışırlar.
+3.  **Kaybolan Anlam:** Geleneksel vektör araması sadece *benzer kelimeleri* bulur, *bağlantılı mantığı* değil.
+
+**CCM, yapay zekanıza bir harita verir.**
+Yapay zekanızı bir *metin tahmincisi* olmaktan çıkarıp bir **Kıdemli Mimar (Senior Architect)** haline getirir.
+
+### 🛠️ "Ajan Öncelikli" Fark
+CCM, sadece ham kod yığını sunmak yerine **Yapay Zeka için Optimize Edilmiş Bağlam** enjekte eder. Getirilen her kod parçası şunları içerir:
+*   **Mantıksal Muhakeme (Reasoning):** CCM, o kodu neden seçtiğini açıklar (örn. "İmlecinizle yapısal olarak ilgili" veya "Mevcut fonksiyonu çağıran yer").
+*   **İlişkisel Bağlar (Edges):** Farklı dosyaların birbirleriyle nasıl konuştuğunu haritalandırır, böylece yapay zeka tahmin yürütmek zorunda kalmaz.
+
+## ✨ Öne Çıkan Özellikler
+
+### 🧠 Bağlantılı Zeka (Graph Navigator)
+CCM sadece dosyaları okumaz; **ilişkileri** anlar.
+*   **İki Aşamalı Endeksleme:** Fonksiyon tanımlarını otomatik olarak çağrıldıkları yerlere bağlar.
+*   **Derin Gezinme:** "Bunu kim çağırıyor?" veya "Bu nerede tanımlanmış?" diye sorun ve %100 doğru yapısal yanıtlar alın.
+
+### ⚡ Yüksek Performanslı Çekirdek
+Tamamen **Rust** ile geliştirilmiştir.
+*   **Toplu Gömme (Batch Embedding):** Eşzamanlı işleme ile binlerce satırı saniyeler içinde endeksler.
+*   **LanceDB Entegrasyonu:** Milisaniye gecikmeli sorgular için modern vektör depolama.
+*   **Tree-sitter Ayrıştırma:** Rust, Python, TypeScript ve JavaScript için sağlam AST analizi.
+
+### 🔌 Evrensel Uyumluluk (MCP)
+**Model Context Protocol (MCP)** standartlarını tam olarak uygular.
+*   **Tak ve Çalıştır:** Antigravity, Claude Desktop, Zed ve diğer tüm MCP uyumlu ajanlarla anında çalışır.
+*   **Otomatik Endeksleme:** Projenizi açmanız yeterli, CCM arka planda her şeyi halleder.
+*   **Sıfır Yapılandırma:** Proje kök dizinini otomatik olarak algılar.
+
+## 📦 Kurulum
+
+### ⚡ Otomatik Kurulum (npx ile) - *Önerilen*
+Node.js yüklüyse, başlamanın en kolay yolu budur. Binary'leri otomatik indirir ve editörünüzü yapılandırır.
+```bash
+# 1. AI Editörünüzü (Claude, Antigravity, Cursor, Cline, etc.) otomatik yapılandırın
+npx @senoldogann/context-manager install
+
+# 2. Mevcut projenizi endeksleyin
+npx @senoldogann/context-manager index --path .
+```
+
+## 🚀 İş Akışı: Projeleri Endeksleme
+
+Yapay zekanın bir projeyi "görebilmesi" için önce onu endekslemeniz gerekir. Bu, projenin içinde yerel bir `data/` klasörü oluşturur.
+
+```bash
+npx @senoldogann/context-manager index --path .
+```
+
+### 👀 İzleme Modu (Otomatik Yeniden Endeksleme)
+Dosya her kaydedildiğinde CCM'in endeksi otomatik olarak güncellemesini istiyorsanız `--watch` bayrağını kullanın:
+```bash
+npx @senoldogann/context-manager index --path . --watch
+```
+
+## 🤖 Entegrasyon Rehberi (MCP)
+
+### 1. Kullanım
+Yapay zeka, kodunuzu anlamak için üç ana araca sahiptir:
+*   **`search_code`**: Semantik arama ("Auth nerede işleniyor bul").
+*   **`read_graph`**: Yapısal gezinme ("Bu fonksiyonu kimler çağırıyor?").
+*   **`get_context`**: Akıllı kod okuma.
+
+### 2. Manuel Yapılandırma (Gelişmiş)
+Eğer manuel yapılandırmayı tercih ederseniz, `mcp_config.json` dosyanıza aşağıdaki girişi ekleyin. Bu yöntem `npx` kullanarak her zaman projenizle uyumlu versiyonun çalışmasını sağlar:
+
+```json
+{
+  "mcpServers": {
+    "context-manager": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@senoldogann/context-manager",
+        "mcp"
+      ],
+      "env": {
+        "RUST_LOG": "info"
+       }
+    }
+  }
+}
+```
+> [!NOTE]
+> Eğer binary'leri bir shell betiği ile kurduysanız veya kaynaktan derlediyseniz ve PATH'inizde mevcutsa, doğrudan `"command": "ccm-mcp"` kullanabilirsiniz.
+
+### 💡 İpucu: CCM Kullanımını Zorunlu Kılma
+AI asistanınızın (Claude, Cursor vb.) derin analiz için her zaman CCM kullanmasını sağlamak için bunu **Özel Talimatlarınıza (Custom Instructions)** veya **Sistem Komutunuza (System Prompt)** ekleyin:
+
+> "Sen uzman bir mimarsın. Kod tabanı hakkındaki hiçbir soru için tahmin yürütme. Grafiği ve Vektör deposunu keşfetmek için `context-manager` araçlarını kullan. Herhangi bir kod değişikliği önermeden önce her zaman giriş noktalarını bulmak için `search_code` ve bağımlılıkları anlamak için `read_graph` araçlarına öncelik ver."
+
+## 🧩 Desteklenen Diller
+Rust (.rs), Python (.py), TypeScript/JS (.ts, .js, .tsx, .jsx), Markdown (.md), JSON (.json), YAML/TOML (.yaml, .yml, .toml).
+
+## 📄 Lisans
+Topluluk için tasarlandı. **MIT Lisansı** altında açık kaynaktır.
+
+Rust ile ❤️ kullanılarak inşa edildi.
