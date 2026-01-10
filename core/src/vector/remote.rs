@@ -143,103 +143,102 @@ impl RemoteEmbedder {
 
         let url = if self.base_url.ends_with("/api/embed") {
             self.base_url.clone()
+        } else if self.base_url.ends_with("/api/embeddings") {
+            self.base_url.replace("/api/embeddings", "/api/embed")
         } else {
-            // Check if user accidentally put /api/embeddings and fix it, or just append /api/embed
-            if self.base_url.ends_with("/api/embeddings") {
-                self.base_url.replace("/api/embeddings", "/api/embed")
-            } else {
-                format!("{}/api/embed", self.base_url.trim_end_matches('/'))
-            }
+            format!("{}/api/embed", self.base_url.trim_end_matches('/'))
         };
 
-        let response = self
-            .client
-            .post(&url)
-            .header("Authorization", format!("Bearer {}", self.api_key))
-            .header("Content-Type", "application/json")
-            .json(&json!({
-                "model": self.model,
-                "input": texts.iter().map(|t| {
-                    if t.len() > 6000 {
-                        // Safe char boundary truncation
-                        t.chars().take(6000).collect::<String>()
-                    } else {
-                        t.clone()
-                    }
-                }).collect::<Vec<String>>()
-            }))
-            .send()
-            .await
-            .context("Failed to send embedding request (Ollama /api/embed)")?;
-
-        if !response.status().is_success() {
-            let error_text = response.text().await?;
-
-            // Auto-recovery: If model not found, try to pull it
-            if error_text.contains("model") && error_text.contains("not found") {
-                eprintln!(
-                    "⚠️  Model '{}' not found in Ollama. Attempting to pull it automatically...",
-                    self.model
-                );
-
-                let pull_url = format!("{}/api/pull", self.base_url.trim_end_matches('/'));
-                let pull_res = self
-                    .client
-                    .post(&pull_url)
-                    .json(&json!({ "name": self.model }))
-                    .send()
-                    .await;
-
-                match pull_res {
-                    Ok(res) => {
-                        if res.status().is_success() {
-                            eprintln!(
-                                "✅ Model '{}' pulled successfully. Retrying embedding...",
-                                self.model
-                            );
-                            // Retry the original request recursively (once)
-                            // Note: Be careful about infinite recursion, but here strictly conditioned on "not found"
-                            return Box::pin(self.embed_ollama(texts)).await;
+        // Retry logic loop (max 1 retry for auto-pull)
+        for attempt in 0..2 {
+            let response = self
+                .client
+                .post(&url)
+                .header("Authorization", format!("Bearer {}", self.api_key))
+                .header("Content-Type", "application/json")
+                .json(&json!({
+                    "model": self.model,
+                    "input": texts.iter().map(|t| {
+                        if t.len() > 6000 {
+                            // Safe char boundary truncation
+                            t.chars().take(6000).collect::<String>()
                         } else {
-                            eprintln!("❌ Failed to auto-pull model: {}", res.status());
+                            t.clone()
                         }
+                    }).collect::<Vec<String>>()
+                }))
+                .send()
+                .await
+                .context("Failed to send embedding request (Ollama /api/embed)")?;
+
+            if !response.status().is_success() {
+                let error_text = response.text().await?;
+
+                // Auto-recovery: If it's the first attempt and model not found, try to pull it
+                if attempt == 0 && error_text.contains("model") && error_text.contains("not found")
+                {
+                    eprintln!("⚠️  Model '{}' not found in Ollama. Attempting to pull it automatically...", self.model);
+
+                    let pull_url = format!("{}/api/pull", self.base_url.trim_end_matches('/'));
+                    let pull_res = self
+                        .client
+                        .post(&pull_url)
+                        .json(&json!({ "name": self.model }))
+                        .send()
+                        .await;
+
+                    match pull_res {
+                        Ok(res) => {
+                            if res.status().is_success() {
+                                eprintln!(
+                                    "✅ Model '{}' pulled successfully. Retrying embedding...",
+                                    self.model
+                                );
+                                // Continue to next loop iteration (retry)
+                                continue;
+                            } else {
+                                eprintln!("❌ Failed to auto-pull model: {}", res.status());
+                            }
+                        }
+                        Err(e) => eprintln!("❌ Failed to connect to Ollama for pull: {}", e),
                     }
-                    Err(e) => eprintln!("❌ Failed to connect to Ollama for pull: {}", e),
                 }
+
+                return Err(anyhow::anyhow!("Ollama API Error: {}", error_text));
             }
 
-            return Err(anyhow::anyhow!("Ollama API Error: {}", error_text));
-        }
+            let body: serde_json::Value = response.json().await?;
 
-        let body: serde_json::Value = response.json().await?;
-
-        // Response format: { "embeddings": [[...], [...]] }
-        if let Some(embeddings_arr) = body.get("embeddings").and_then(|e| e.as_array()) {
-            let mut result_embeddings = Vec::new();
-            for item in embeddings_arr {
-                if let Some(vec_vals) = item.as_array() {
-                    let vec: Vec<f32> = vec_vals
+            // Response format: { "embeddings": [[...], [...]] }
+            if let Some(embeddings_arr) = body.get("embeddings").and_then(|e| e.as_array()) {
+                let mut result_embeddings = Vec::new();
+                for item in embeddings_arr {
+                    if let Some(vec_vals) = item.as_array() {
+                        let vec: Vec<f32> = vec_vals
+                            .iter()
+                            .filter_map(|v| v.as_f64().map(|f| f as f32))
+                            .collect();
+                        result_embeddings.push(vec);
+                    }
+                }
+                return Ok(result_embeddings);
+            } else {
+                // Fallback for older API or single errors?
+                // Try "embedding" field just in case single input was treated differently
+                if let Some(embedding_val) = body.get("embedding").and_then(|e| e.as_array()) {
+                    let vec: Vec<f32> = embedding_val
                         .iter()
                         .filter_map(|v| v.as_f64().map(|f| f as f32))
                         .collect();
-                    result_embeddings.push(vec);
+                    return Ok(vec![vec]);
+                } else {
+                    return Err(anyhow::anyhow!(
+                        "Invalid response format from Ollama API (expected 'embeddings')"
+                    ));
                 }
             }
-            Ok(result_embeddings)
-        } else {
-            // Fallback for older API or single errors?
-            // Try "embedding" field just in case single input was treated differently
-            if let Some(embedding_val) = body.get("embedding").and_then(|e| e.as_array()) {
-                let vec: Vec<f32> = embedding_val
-                    .iter()
-                    .filter_map(|v| v.as_f64().map(|f| f as f32))
-                    .collect();
-                Ok(vec![vec])
-            } else {
-                Err(anyhow::anyhow!(
-                    "Invalid response format from Ollama API (expected 'embeddings')"
-                ))
-            }
         }
+
+        Err(anyhow::anyhow!("Failed after retries"))
     }
 }
