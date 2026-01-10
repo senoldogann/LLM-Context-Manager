@@ -151,7 +151,7 @@ impl RemoteEmbedder {
 
         // Retry logic loop (max 1 retry for auto-pull)
         for attempt in 0..2 {
-            let response = self
+            let response_res = self
                 .client
                 .post(&url)
                 .header("Authorization", format!("Bearer {}", self.api_key))
