@@ -194,6 +194,7 @@ impl RemoteEmbedder {
                 if attempt == 0 && error_text.contains("model") && error_text.contains("not found")
                 {
                     eprintln!("⚠️  Model '{}' not found in Ollama. Attempting to pull it automatically...", self.model);
+                    eprintln!("   This may take a few minutes depending on model size and your internet speed.");
 
                     let pull_url = format!("{}/api/pull", self.base_url.trim_end_matches('/'));
                     let pull_res = self
@@ -206,12 +207,26 @@ impl RemoteEmbedder {
                     match pull_res {
                         Ok(res) => {
                             if res.status().is_success() {
-                                eprintln!(
-                                    "✅ Model '{}' pulled successfully. Retrying embedding...",
-                                    self.model
-                                );
-                                // Continue to next loop iteration (retry)
-                                continue;
+                                // CRITICAL: Ollama returns a STREAMING response for pull.
+                                // We MUST consume the entire body to wait for download to complete.
+                                let body = res.text().await.unwrap_or_default();
+
+                                // Check if last line contains "success" or download completed
+                                if body.contains("\"status\":\"success\"")
+                                    || body.contains("pulling")
+                                {
+                                    eprintln!(
+                                        "✅ Model '{}' pulled successfully. Retrying embedding...",
+                                        self.model
+                                    );
+                                    // Continue to next loop iteration (retry)
+                                    continue;
+                                } else {
+                                    eprintln!(
+                                        "❌ Pull completed but may have failed. Response: {}",
+                                        body.lines().last().unwrap_or("empty")
+                                    );
+                                }
                             } else {
                                 eprintln!("❌ Failed to auto-pull model: {}", res.status());
                             }
