@@ -144,6 +144,12 @@ This will automatically detect and update your config files for Claude, Antigrav
 ### 2. Manual Configuration (Advanced)
 If you prefer to configure it manually, add the following entry to your `mcp_config.json`. This uses `npx` to ensure you always run the version compatible with your project:
 
+### 🔒 Privacy by Default
+CCM uses a **Local-First** architecture by default. This means:
+*   Your code is **never** sent to 3rd party servers (OpenAI, Anthropic, etc.).
+*   All vector operations (Embedding) happen on your local machine using Ollama.
+*   You can safely use it for internal or confidential projects.
+
 ```json
 {
   "mcpServers": {
