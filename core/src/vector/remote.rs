@@ -49,21 +49,23 @@ impl RemoteEmbedder {
             }
         }
 
-        let model =
-            env::var("EMBEDDING_MODEL").unwrap_or_else(|_| "text-embedding-3-small".to_string());
-
         let base_url =
-            env::var("EMBEDDING_HOST").unwrap_or_else(|_| "https://api.openai.com/v1".to_string());
+            env::var("EMBEDDING_HOST").unwrap_or_else(|_| "http://127.0.0.1:11434".to_string());
 
-        // Detect provider from URL or explicit generic env
+        // Default model: nomic-embed-text is robust and standard for local RAG
+        let model = env::var("EMBEDDING_MODEL").unwrap_or_else(|_| "nomic-embed-text".to_string());
+
+        // Detect provider: If explicit, use it. If base_url looks like Ollama, use it.
+        // OTHERWISE DEFAULT TO OLLAMA (Local First approach).
         let provider_str = env::var("EMBEDDING_PROVIDER")
             .unwrap_or_default()
             .to_lowercase();
 
-        let provider = if provider_str.contains("ollama") || base_url.contains("ollama") {
-            Provider::Ollama
-        } else {
+        let provider = if provider_str.contains("openai") || base_url.contains("api.openai.com") {
             Provider::OpenAI
+        } else {
+            // Default to Ollama for privacy/local-first
+            Provider::Ollama
         };
 
         let api_key = match provider {
@@ -72,7 +74,7 @@ impl RemoteEmbedder {
                 .context("EMBEDDING_API_KEY or OPENAI_API_KEY not set")?,
             Provider::Ollama => env::var("EMBEDDING_API_KEY")
                 .or_else(|_| env::var("OPENAI_API_KEY"))
-                .unwrap_or_default(), // Ollama doesn't require a key usually
+                .unwrap_or_else(|_| "ollama".to_string()), // Default dummy key
         };
 
         Ok(Self::new(api_key, model, base_url, provider))
@@ -172,6 +174,40 @@ impl RemoteEmbedder {
 
         if !response.status().is_success() {
             let error_text = response.text().await?;
+
+            // Auto-recovery: If model not found, try to pull it
+            if error_text.contains("model") && error_text.contains("not found") {
+                eprintln!(
+                    "⚠️  Model '{}' not found in Ollama. Attempting to pull it automatically...",
+                    self.model
+                );
+
+                let pull_url = format!("{}/api/pull", self.base_url.trim_end_matches('/'));
+                let pull_res = self
+                    .client
+                    .post(&pull_url)
+                    .json(&json!({ "name": self.model }))
+                    .send()
+                    .await;
+
+                match pull_res {
+                    Ok(res) => {
+                        if res.status().is_success() {
+                            eprintln!(
+                                "✅ Model '{}' pulled successfully. Retrying embedding...",
+                                self.model
+                            );
+                            // Retry the original request recursively (once)
+                            // Note: Be careful about infinite recursion, but here strictly conditioned on "not found"
+                            return Box::pin(self.embed_ollama(texts)).await;
+                        } else {
+                            eprintln!("❌ Failed to auto-pull model: {}", res.status());
+                        }
+                    }
+                    Err(e) => eprintln!("❌ Failed to connect to Ollama for pull: {}", e),
+                }
+            }
+
             return Err(anyhow::anyhow!("Ollama API Error: {}", error_text));
         }
 
