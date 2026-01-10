@@ -126,8 +126,8 @@ async function getBinary() {
 
 function downloadFile(url, dest) {
     return new Promise((resolve, reject) => {
-        const file = fs.createWriteStream(dest);
         https.get(url, (response) => {
+            // Handle redirects BEFORE creating file
             if (response.statusCode === 302 || response.statusCode === 301) {
                 downloadFile(response.headers.location, dest).then(resolve).catch(reject);
                 return;
@@ -136,9 +136,15 @@ function downloadFile(url, dest) {
                 reject(new Error(`Failed to download: ${response.statusCode}`));
                 return;
             }
+            // Only create file after we know we have a valid response
+            const file = fs.createWriteStream(dest);
             response.pipe(file);
             file.on('finish', () => {
                 file.close(resolve);
+            });
+            file.on('error', (err) => {
+                fs.unlink(dest, () => { });
+                reject(err);
             });
         }).on('error', (err) => {
             fs.unlink(dest, () => { });
