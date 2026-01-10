@@ -168,8 +168,24 @@ impl RemoteEmbedder {
                     }).collect::<Vec<String>>()
                 }))
                 .send()
-                .await
-                .context("Failed to send embedding request (Ollama /api/embed)")?;
+                .await;
+
+            // Handle network errors first to give friendly advice
+            let response = match response_res {
+                Ok(resp) => resp,
+                Err(e) => {
+                    let msg = e.to_string();
+                    if msg.contains("connect") || msg.contains("refused") {
+                        return Err(anyhow::anyhow!(
+                            "\n❌ Could not connect to Ollama at {}.\n\
+                            👉 Is Ollama running? Run `ollama serve` in a terminal.\n\
+                            👉 Not installed? Download it from https://ollama.com\n",
+                            self.base_url
+                        ));
+                    }
+                    return Err(anyhow::anyhow!("Failed to connect to Ollama: {}", e));
+                }
+            };
 
             if !response.status().is_success() {
                 let error_text = response.text().await?;
