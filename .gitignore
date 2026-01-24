@@ -1,73 +1,19 @@
-# ========================================
-# CCM (Cognitive Codebase Matrix) .gitignore
-# ========================================
-
-# ----------------
-# Rust / Cargo
-# ----------------
-/target/
+# Rust
+target/
 **/*.rs.bk
-Cargo.lock
 
-# ----------------
-# IDE & Editor
-# ----------------
-.idea/
-.vscode/
-*.swp
-*.swo
-*~
-.DS_Store
-
-# ----------------
-# LanceDB Data
-# ----------------
-data/
-*.lance/
-*.lancedb/
-
-# ----------------
-# Logs & Debug
-# ----------------
-*.log
-debug/
-logs/
-
-# ----------------
-# Environment
-# ----------------
+# Node/JS
+node_modules/
+dist/
 .env
-.env.local
-.env.*.local
 
-# ----------------
-# Test Artifacts
-# ----------------
-*.profraw
-coverage/
-lcov.info
+# Agent & Context Manager Data
+.agent/
+docs copy/
+data/
+.ccm/
+*.log
 
-# ----------------
-# Build Artifacts
-# ----------------
-*.o
-*.a
-*.so
-*.dylib
-*.dll
-/dist/
-/npm/bin/*.bak
-
-# ----------------
-# OS Generated
-# ----------------
+# System
 .DS_Store
-.DS_Store?
-._*
-.Spotlight-V100
-.Trashes
-ehthumbs.db
 Thumbs.db
-npm_recovery_codes.txt
-ccm-cli-aarch64-apple-darwin
-ccm-mcp-aarch64-apple-darwin

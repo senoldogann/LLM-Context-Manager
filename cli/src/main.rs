@@ -41,16 +41,41 @@ enum Commands {
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
+    // Initialize structured logging (to stdout for CLI)
+    tracing_subscriber::fmt::init();
+
     let args = Args::parse();
 
     match args.cmd {
         Commands::Start { port } => {
-            println!("Starting CCM Server on port {}...", port);
+            tracing::info!(port = port, "Starting CCM Server");
             server::start_server(port).await?;
         }
         Commands::Query { text } => {
-            if let Err(e) = ccm_core::run_query(&text).await {
-                eprintln!("Query failed: {}", e);
+            // For CLI query, assume current directory is project root
+            let project_path = std::env::current_dir()?.to_string_lossy().to_string();
+
+            match ccm_core::run_query(&text, &project_path).await {
+                Ok(results) => {
+                    if results.is_empty() {
+                        println!("No results found.");
+                    } else {
+                        for (i, res) in results.iter().enumerate() {
+                            println!(
+                                "\n#{}: {} (Score: {:.2})",
+                                i + 1,
+                                res.title,
+                                res.relevance_score
+                            );
+                            println!("Reason: {}", res.reason);
+                            println!(
+                                "Content Snippet:\n{}\n...",
+                                res.content.lines().take(5).collect::<Vec<_>>().join("\n")
+                            );
+                        }
+                    }
+                }
+                Err(e) => tracing::error!("Query failed: {}", e),
             }
         }
         Commands::Index {
@@ -58,27 +83,23 @@ async fn main() -> anyhow::Result<()> {
             db_path,
             watch,
         } => {
-            println!("╔══════════════════════════════════════╗");
-            println!("║     CCM - Codebase Indexer           ║");
-            println!("╚══════════════════════════════════════╝");
+            tracing::info!("Starting Indexer CLI");
 
             let path_str = path.to_string_lossy();
             let db_path_str = db_path.as_ref().map(|p| p.to_string_lossy().to_string());
 
             // Initial Indexing
             if let Err(e) = ccm_core::index_directory(&path_str, db_path_str.as_deref()).await {
-                eprintln!("Initial indexing failed: {}", e);
+                tracing::error!("Initial indexing failed: {}", e);
                 if !watch {
                     std::process::exit(1);
                 }
             } else {
-                println!("\n═══════════════════════════════════════");
-                println!("Initial Indexing Complete!");
-                println!("═══════════════════════════════════════");
+                tracing::info!("Initial Indexing Complete");
             }
 
             if watch {
-                println!("\n👀 Watching for changes in: {}", path.display());
+                tracing::info!(path = %path.display(), "Watching for changes");
                 use notify::{RecursiveMode, Watcher};
                 use std::time::Duration;
                 use tokio::sync::mpsc;
@@ -115,7 +136,7 @@ async fn main() -> anyhow::Result<()> {
                                     let _ = tx.blocking_send(());
                                 }
                             }
-                            Err(e) => eprintln!("Watch error: {:?}", e),
+                            Err(e) => tracing::error!("Watch error: {:?}", e),
                         }
                     })?;
 
@@ -128,13 +149,13 @@ async fn main() -> anyhow::Result<()> {
                     // Flush any other events that came properly
                     while rx.try_recv().is_ok() {}
 
-                    println!("\n🔄 Change detected. Waiting for settle...");
+                    tracing::info!("Change detected. Waiting for settle...");
                     tokio::time::sleep(Duration::from_secs(2)).await;
 
                     // Flush again
                     while rx.try_recv().is_ok() {}
 
-                    println!("🚀 Re-indexing...");
+                    tracing::info!("Re-indexing...");
                     let _ = ccm_core::index_directory(&path_str, db_path_str.as_deref()).await;
                 }
             }

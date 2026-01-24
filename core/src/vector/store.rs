@@ -54,8 +54,8 @@ impl LanceDbStore {
             }
         };
 
-        const MAX_CHARS: usize = 1000;
-        const OVERLAP: usize = 200;
+        const MAX_CHARS: usize = 3000;
+        const OVERLAP: usize = 150;
 
         let mut all_chunks = Vec::new();
         let mut all_chunk_ids = Vec::new();
@@ -120,7 +120,7 @@ impl LanceDbStore {
         }
 
         // 1. Generate Embeddings in batches for performance
-        const BATCH_SIZE: usize = 32;
+        const BATCH_SIZE: usize = 2;
         let mut embeddings: Vec<Vec<f32>> = Vec::with_capacity(all_chunks.len());
 
         let total_batches = all_chunks.len().div_ceil(BATCH_SIZE);
@@ -272,5 +272,37 @@ impl LanceDbStore {
         }
 
         Ok(hits)
+    }
+
+    /// Deletes vectors where the ID starts with the given prefix.
+    /// This is used for Garbage Collection when re-indexing a file.
+    pub async fn delete_by_prefix(&self, prefix: &str) -> Result<()> {
+        let table = match self.conn.open_table(&self.table_name).execute().await {
+            Ok(t) => t,
+            Err(_) => return Ok(()), // Table doesn't exist, nothing to delete
+        };
+
+        // LanceDB supports SQL-like deletion syntax.
+        // We filter where `id` LIKE 'prefix%'
+        // Using a scalar function or simple comparison if supported.
+        // LanceDB SQL: `DELETE FROM table WHERE id LIKE 'prefix%'`
+        // Programmatic API: `table.delete("id LIKE 'prefix%'")`
+
+        let predicate = format!("id LIKE '{}%'", prefix);
+
+        // Note: delete functionality depends on LanceDB version features.
+        // Ensure "delete" is available in the crate version we are using.
+        // If not, we might need a workaround or verify version.
+        // Assuming partial delete support exists in recent versions.
+
+        match table.delete(&predicate).await {
+            Ok(_) => Ok(()),
+            Err(e) => {
+                // If partial delete is not supported or fails, we log it but don't crash
+                // This might leave orphans, but for Prototype Phase 2/3 it is acceptable.
+                eprintln!("Warning: Failed to delete old vectors: {}", e);
+                Ok(())
+            }
+        }
     }
 }

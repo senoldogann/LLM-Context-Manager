@@ -5,6 +5,7 @@ use crate::vector::store::LanceDbStore;
 use axum::{routing::get, Router};
 use std::net::SocketAddr;
 use std::sync::Arc;
+use tokio::sync::RwLock;
 use tokio::try_join;
 use tonic::transport::Server;
 
@@ -18,7 +19,7 @@ pub async fn start_server(http_port: u16) -> anyhow::Result<()> {
     let graph = CodeGraph::new();
     // Use a persistent path for the vector store
     let store = LanceDbStore::new("data/ccm_db", "code_vectors").await?;
-    let engine = Arc::new(RetrievalEngine::new(Arc::new(graph), store));
+    let engine = Arc::new(RetrievalEngine::new(Arc::new(RwLock::new(graph)), store));
 
     // 1. HTTP Server (Health Check & Debug)
     let app = Router::new().route("/", get(|| async { "CCM Core is Running" }));

@@ -28,7 +28,6 @@ impl Extractor {
         }
     }
 
-    /// Extracts code elements from the given AST tree and populates the graph.
     pub fn extract(
         &mut self,
         tree: &Tree,
@@ -36,6 +35,8 @@ impl Extractor {
         file_id: &str,
     ) -> Result<NodeIndex> {
         // Create File node as root
+        // Note: For Phase 3 Optimization, we want the File node to be a "container"
+        // but not necessarily the primary embedding target unless specifically asked.
         let file_node = CodeNode {
             id: file_id.to_string(),
             node_type: NodeType::File,
@@ -48,7 +49,7 @@ impl Extractor {
         self.node_map.insert(file_id.to_string(), file_idx);
 
         // Walk the AST and extract elements
-        self.walk_node(tree.root_node(), graph, file_idx)?;
+        self.walk_node(tree.root_node(), graph, file_idx, file_id)?;
 
         Ok(file_idx)
     }
@@ -58,30 +59,53 @@ impl Extractor {
         node: Node,
         graph: &mut CodeGraph,
         parent_idx: NodeIndex,
+        file_id: &str,
     ) -> Result<()> {
         let kind = node.kind();
 
         // Determine if this node is semantically significant
         if let Some((node_type, name)) = self.classify_node(&node) {
+            // PHASE 3: Capture Docstring (Preceding comments)
+            let docstring = self.find_docstring(&node);
+
+            // Enriched Content: "Docstring\nCode"
+            // We store the RAW code in `content` for display accuracy.
+            // But we might prepend the docstring if it's outside the node range?
+            // Usually docstrings are *inside* or *immediately before*.
+            // Tree-sitter node range usually includes internal docstrings (Python).
+            // But Rust doc comments `///` are separate nodes *before* the function.
+
+            // If we found an external docstring, we should update content to include it,
+            // OR store it separately. `CodeNode` doesn't have a `metadata` field yet.
+            // For now, let's prepend it to `content` if it exists and isn't already inside.
+
+            let raw_content = self.get_node_text(&node);
+            let final_content = if let Some(doc) = docstring {
+                format!("{}\n{}", doc, raw_content)
+            } else {
+                raw_content
+            };
+
+            // ID Generation: Prefix with file_id for global uniqueness and GC
+            let id = format!(
+                "{}:{}:{}:{}",
+                file_id,
+                node.kind(),
+                node.start_position().row,
+                node.start_position().column
+            );
+
             let code_node = CodeNode {
-                id: format!(
-                    "{}:{}:{}",
-                    node.kind(),
-                    node.start_position().row,
-                    node.start_position().column
-                ),
+                id: id.clone(),
                 node_type,
                 name,
-                content: self.get_node_text(&node),
+                content: final_content,
                 start_line: node.start_position().row + 1, // 1-indexed
                 end_line: node.end_position().row + 1,
             };
 
             let current_idx = graph.add_node(code_node);
-            self.node_map.insert(
-                format!("{}:{}", kind, node.start_position().row),
-                current_idx,
-            );
+            self.node_map.insert(id, current_idx);
 
             // Create CONTAINS edge from parent -> this node
             graph.add_edge(parent_idx, current_idx, EdgeType::Contains);
@@ -89,17 +113,52 @@ impl Extractor {
             // Walk children with this node as parent
             let mut cursor = node.walk();
             for child in node.children(&mut cursor) {
-                self.walk_node(child, graph, current_idx)?;
+                self.walk_node(child, graph, current_idx, file_id)?;
             }
         } else {
             // Not a semantic node, continue walking with same parent
             let mut cursor = node.walk();
             for child in node.children(&mut cursor) {
-                self.walk_node(child, graph, parent_idx)?;
+                self.walk_node(child, graph, parent_idx, file_id)?;
             }
         }
 
         Ok(())
+    }
+
+    /// Heuristic to find docstrings/comments immediately preceding a node.
+    fn find_docstring(&self, node: &Node) -> Option<String> {
+        // Look at previous sibling. If it's a comment, that's our docstring.
+        // We might need to look back multiple siblings if there are multiple comment lines.
+
+        let mut doc_lines = Vec::new();
+        let mut current_node = *node;
+
+        // Safety limit to look back 5 nodes max
+        for _ in 0..5 {
+            if let Some(prev) = current_node.prev_sibling() {
+                let kind = prev.kind();
+                if kind == "line_comment" || kind == "block_comment" || kind == "comment" {
+                    doc_lines.push(self.get_node_text(&prev));
+                    current_node = prev;
+                } else {
+                    // Check if whitespace? Tree-sitter usually ignores pure whitespace nodes
+                    // unless configured otherwise, but sometimes they appear.
+                    // Assuming standard behavior where comments are siblings.
+                    break;
+                }
+            } else {
+                break;
+            }
+        }
+
+        if doc_lines.is_empty() {
+            None
+        } else {
+            // We traversed backwards, so reverse lines
+            doc_lines.reverse();
+            Some(doc_lines.join("\n"))
+        }
     }
 
     /// Classifies an AST node into a semantic NodeType, returning None if not significant.

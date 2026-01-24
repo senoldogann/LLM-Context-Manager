@@ -44,7 +44,7 @@ Built entirely in **Rust** for blazing speed.
 ### 🔌 Universal Compatibility (MCP)
 Fully implements the **Model Context Protocol (MCP)**.
 *   **Plug & Play:** Works instantly with **Antigravity**, **Claude Desktop**, **Zed**, and any MCP-compliant agent.
-*   **Auto-Indexing:** Just open your project. CCM handles the rest in the background.
+*   **On-Demand Indexing:** Automatically indexes your project on the first query if no index exists. Zero manual setup required.
 *   **Zero-Config:** Automatically detects your project root from the current working directory. Explicit configuration is optional.
 
 ---
@@ -65,12 +65,12 @@ npx @senoldogann/context-manager index --path .
 
 ---
 
-### One-Click Shell Setup (Legacy)
-Installs binaries globally to your system via Cargo.
+### One-Click Shell Setup (Rust Native)
+Installs binaries globally to your system via Cargo (faster than npx).
 ```bash
 curl -sSL https://raw.githubusercontent.com/senoldogann/LLM-Context-Manager/main/install.sh | bash
 ```
-*(Requires macOS or Linux. Windows users via WSL.)*
+*(Requires macOS or Linux. Windows users use WSL or npx.)*
 
 ### Manual Build (Development)
 ```bash
@@ -111,9 +111,9 @@ CCM uses a global configuration file. You don't need to configure it per project
 
 ## 🚀 Workflow: Indexing Your Projects
 
-Before your AI can "see" a project, you must index it. This creates a local `data/` folder inside that project.
+Before your AI can "see" a project, it must be indexed. CCM now implements **Lazy Indexing**, meaning it will automatically index your project the first time you (or your AI agent) run a query if no index is found.
 
-**To index a new project:**
+**To manually index (Optional):**
 
 ```bash
 npx @senoldogann/context-manager index --path .
@@ -240,10 +240,8 @@ graph TD
 | **Rust** | `.rs` | Full AST (Functions, Structs, Impls) |
 | **Python** | `.py` | Full AST (Functions, Classes) |
 | **TypeScript / JS** | `.ts, .js, .tsx, .jsx` | Full AST (Classes, Functions) |
-| **Markdown** | `.md` | Full File Indexing |
-| **JSON** | `.json` | Full File Indexing |
-| **YAML / TOML** | `.yaml, .yml, .toml` | Full File Indexing |
-| **JavaScript** | `.js`, `.jsx` | Functions, ES6 Classes |
+| **Text / Data** | `.md, .json, .yaml, .toml, .txt, etc.` | Full File Indexing |
+| **Universal Fallback** | *Any extension* | Generic Text Support |
 
 ---
 
@@ -306,7 +304,7 @@ Tamamen **Rust** ile geliştirilmiştir.
 ### 🔌 Evrensel Uyumluluk (MCP)
 **Model Context Protocol (MCP)** standartlarını tam olarak uygular.
 *   **Tak ve Çalıştır:** Antigravity, Claude Desktop, Zed ve diğer tüm MCP uyumlu ajanlarla anında çalışır.
-*   **Otomatik Endeksleme:** Projenizi açmanız yeterli, CCM arka planda her şeyi halleder.
+*   **Talep Üzerine Endeksleme (Lazy Indexing):** Eğer endeks yoksa, ilk sorguda projenizi otomatik olarak endeksler. Manuel kurulum gerektirmez.
 *   **Sıfır Yapılandırma:** Proje kök dizinini otomatik olarak algılar.
 
 ## 📦 Kurulum

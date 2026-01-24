@@ -147,9 +147,11 @@ pub async fn read_graph(engine: &Arc<RetrievalEngine>, args: &Value) -> Result<T
     let normalized_id = try_normalize_path(node_id, project_path);
 
     // Try finding by normalized ID first, then raw ID
-    let node_opt = engine
-        .get_node_by_id(&normalized_id)
-        .or_else(|| engine.get_node_by_id(node_id));
+    // Try finding by normalized ID first, then raw ID
+    let mut node_opt = engine.get_node_by_id(&normalized_id).await;
+    if node_opt.is_none() {
+        node_opt = engine.get_node_by_id(node_id).await;
+    }
 
     if let Some(node) = node_opt {
         let mut output = format!(
@@ -159,10 +161,12 @@ pub async fn read_graph(engine: &Arc<RetrievalEngine>, args: &Value) -> Result<T
 
         // Append neighbors if available (Graph Navigator)
         // Try getting neighbors with both IDs as well
-        if let Some(neighbors) = engine
-            .get_node_neighbors(&node.id)
-            .or_else(|| engine.get_node_neighbors(node_id))
-        {
+        let mut neighbors_opt = engine.get_node_neighbors(&node.id).await;
+        if neighbors_opt.is_none() {
+            neighbors_opt = engine.get_node_neighbors(node_id).await;
+        }
+
+        if let Some(neighbors) = neighbors_opt {
             output.push_str("\n\n### 🔗 Graph Connections\n");
 
             if !neighbors.calls.is_empty() {
@@ -232,4 +236,51 @@ fn try_normalize_path(path_str: &str, project_path: Option<&str>) -> String {
     }
 
     path_str.to_string()
+}
+
+/// Tool: index_project
+/// Manually triggers a re-index of the specified project.
+pub async fn index_project(args: &Value) -> Result<ToolResult> {
+    let project_path = args
+        .get("project_path")
+        .and_then(|v| v.as_str())
+        .ok_or_else(|| anyhow::anyhow!("Missing 'project_path' argument"))?;
+
+    eprintln!(
+        "[Tool: index_project] Starting manual index for: {}",
+        project_path
+    );
+
+    // Default db path relative to project
+    let db_path = std::path::Path::new(project_path)
+        .join("data/ccm_mcp_db") // Use mcp specific db folder to separate from CLI
+        .to_string_lossy()
+        .to_string();
+
+    match ccm_core::index_directory(project_path, Some(&db_path)).await {
+        Ok(stats) => {
+            let message = format!(
+                "Debugging: Indexing completed successfully.\n\nStats:\n- Files Indexed: {}\n- Files Failed: {}\n- Nodes Created: {}\n\nThe project is now ready for semantic search and graph navigation.",
+                stats.files_indexed, stats.files_failed, stats.nodes_created
+            );
+            Ok(ToolResult {
+                content: vec![ToolResultContent {
+                    content_type: "text".to_string(),
+                    text: message,
+                }],
+                is_error: None,
+            })
+        }
+        Err(e) => {
+            let error_msg = format!("Indexing failed: {}", e);
+            eprintln!("[Tool: index_project] Error: {}", error_msg);
+            Ok(ToolResult {
+                content: vec![ToolResultContent {
+                    content_type: "text".to_string(),
+                    text: error_msg,
+                }],
+                is_error: Some(true),
+            })
+        }
+    }
 }

@@ -21,8 +21,10 @@ The easiest way to get started. This will automatically add CCM to your Claude o
 npx @senoldogann/context-manager install
 ```
 
-### 2. Index your Project
-Run the indexer in your project root:
+### 2. Index your Project (Automatic)
+CCM now implements **Lazy Indexing**. You don't actually need to run this command; the MCP server will automatically index your project the first time you or your AI agent run a query.
+
+If you still want to index manually:
 ```bash
 npx @senoldogann/context-manager index --path .
 ```
@@ -72,9 +74,9 @@ This package is a lightweight wrapper that:
 
 For more details, visit the [Main Repository](https://github.com/senoldogann/LLM-Context-Manager).
 
-### 🆕 v0.1.8 Updates
-*   **Multi-Language Support:** Full indexing for `.md`, `.json`, `.yaml`, `.toml` and more.
-*   **Zero-Config:** Improved project root detection.
-*   **Resilient Downloads:** Fixed binary download issues with atomic file creation.
+### 🆕 v0.1.15 Updates
+*   **Lazy Indexing:** Automatic project indexing on first query. No background hogging.
+*   **Universal Support:** Falls back to generic text indexing for ALL file types.
+*   **Zero-Config:** Improved project root detection and cross-platform binary handling.
 
 Built with ❤️ in **Rust**.

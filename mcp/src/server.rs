@@ -58,27 +58,12 @@ impl ServerState {
 
         eprintln!("Using Vector DB Path: {}", db_path);
 
-        // Auto-Index if project root is provided
+        // Auto-indexing removed to allow agentic control.
         if let Some(root) = &project_root {
-            eprintln!("Auto-indexing enabled for: {}", root);
-            let root_clone = root.clone();
-            let db_path_clone = db_path.clone();
-
-            // Spawn background indexing task
-            tokio::spawn(async move {
-                eprintln!("[Auto-Index] Starting background indexing...");
-                match ccm_core::index_directory(&root_clone, Some(&db_path_clone)).await {
-                    Ok(stats) => {
-                        eprintln!(
-                            "[Auto-Index] Complete! Indexed {} nodes.",
-                            stats.nodes_created
-                        );
-                    }
-                    Err(e) => {
-                        eprintln!("[Auto-Index] Failed: {}", e);
-                    }
-                }
-            });
+            eprintln!(
+                "Project root detected: {}. Indexing is available on demand.",
+                root
+            );
         }
 
         // Initialize Graph (Load from disk if available)
@@ -105,7 +90,7 @@ impl ServerState {
         }
 
         let store = LanceDbStore::new(&db_path, "code_vectors").await?;
-        let default_engine = Arc::new(RetrievalEngine::new(Arc::new(graph), store));
+        let default_engine = Arc::new(RetrievalEngine::new(Arc::new(RwLock::new(graph)), store));
 
         Ok(Self {
             default_engine,
@@ -138,15 +123,31 @@ impl ServerState {
 
         eprintln!("Loading context for project: {}", path);
         // Assume db at path/data/ccm_db
-        let db_path = format!("{}/data/ccm_db", path);
+        // Use the MCP specific DB path
+        let db_path = format!("{}/data/ccm_mcp_db", path);
 
-        // Sanity check
+        // Sanity check & Lazy Indexing
         if !std::path::Path::new(&db_path).exists() {
-            // Suggest indexing if missing
-            return Err(anyhow::anyhow!(
-                "No CCM index found at {}. Please run 'ccm-cli index' in that directory first.",
+            eprintln!(
+                "⚠ Index not found at {}. Triggering Lazy Indexing...",
                 db_path
-            ));
+            );
+
+            // LAZY INDEXING: Index specifically for this request
+            match ccm_core::index_directory(path, Some(&db_path)).await {
+                Ok(stats) => {
+                    eprintln!(
+                        "✓ Lazy Indexing Complete. Indexed {} nodes.",
+                        stats.nodes_created
+                    );
+                }
+                Err(e) => {
+                    return Err(anyhow::anyhow!(
+                        "Failed to auto-index project: {}. Please fix the project path or permissions.",
+                        e
+                    ));
+                }
+            }
         }
 
         let graph_path = format!("{}/data/ccm_graph.json", path);
@@ -163,7 +164,7 @@ impl ServerState {
         }
 
         let store = LanceDbStore::new(&db_path, "code_vectors").await?;
-        let engine = Arc::new(RetrievalEngine::new(Arc::new(graph), store));
+        let engine = Arc::new(RetrievalEngine::new(Arc::new(RwLock::new(graph)), store));
 
         write.insert(path.to_string(), engine.clone());
         Ok(engine)
@@ -264,6 +265,17 @@ fn handle_list_tools(id: Option<Value>) -> Result<JsonRpcResponse> {
                 "required": ["node_id"]
             }),
         },
+        ToolDefinition {
+            name: "index_project".to_string(),
+            description: Some("Trigger a full re-index of the project. Use this when you start working on a project or when massive changes happen.".to_string()),
+            input_schema: serde_json::json!({
+                "type": "object",
+                "properties": {
+                    "project_path": { "type": "string", "description": "Absolute path to the project root to index." }
+                },
+                "required": ["project_path"]
+            }),
+        },
     ];
 
     Ok(create_success_response(id, json!({ "tools": tools_list })))
@@ -300,6 +312,7 @@ async fn handle_call_tool(
         "get_context" => tools::get_context(&engine, &arguments).await?,
         "search_code" => tools::search_code(&engine, &arguments).await?,
         "read_graph" => tools::read_graph(&engine, &arguments).await?,
+        "index_project" => tools::index_project(&arguments).await?,
         _ => {
             return Ok(create_error_response(
                 id,
