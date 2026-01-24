@@ -1252,7 +1252,7 @@ dependencies = [
 
 [[package]]
 name = "ccm-cli"
-version = "0.1.15"
+version = "0.1.16"
 dependencies = [
  "anyhow",
  "ccm-core",
@@ -1265,7 +1265,7 @@ dependencies = [
 
 [[package]]
 name = "ccm-core"
-version = "0.1.15"
+version = "0.1.16"
 dependencies = [
  "anyhow",
  "arrow-array",
@@ -1300,7 +1300,7 @@ dependencies = [
 
 [[package]]
 name = "ccm-mcp"
-version = "0.1.15"
+version = "0.1.16"
 dependencies = [
  "anyhow",
  "async-trait",

@@ -61,8 +61,6 @@ impl Extractor {
         parent_idx: NodeIndex,
         file_id: &str,
     ) -> Result<()> {
-        let kind = node.kind();
-
         // Determine if this node is semantically significant
         if let Some((node_type, name)) = self.classify_node(&node) {
             // PHASE 3: Capture Docstring (Preceding comments)

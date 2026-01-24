@@ -41,7 +41,9 @@ pub async fn run_query(query: &str, project_path: &str) -> Result<Vec<ContextSug
 
     // Check if DB exists
     if !db_path.exists() {
-        return Err(anyhow::anyhow!("Index not found. Please run indexing first.").into());
+        return Err(anyhow::anyhow!(
+            "Index not found. Please run indexing first."
+        ));
     }
 
     // Load graph (for simplicity in this prototype refactor we create new,
@@ -74,7 +76,7 @@ pub async fn run_query(query: &str, project_path: &str) -> Result<Vec<ContextSug
                     line,
                     column: 0,
                 };
-                return Ok(engine.predict_context(&cursor).await?);
+                return engine.predict_context(&cursor).await;
             }
         }
     }

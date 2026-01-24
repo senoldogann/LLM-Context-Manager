@@ -6,7 +6,7 @@ use crate::parser::CodeParser;
 use crate::parser::SupportedLanguage;
 use crate::vector::extractor::Extractor;
 use crate::vector::store::LanceDbStore;
-use anyhow::{Context, Result};
+use anyhow::Result;
 use petgraph::visit::EdgeRef;
 
 use tokio::sync::RwLock;
@@ -43,6 +43,7 @@ use std::sync::Arc;
 pub struct RetrievalEngine {
     pub graph: Arc<RwLock<CodeGraph>>,
     store: LanceDbStore,
+    #[allow(dead_code)]
     cache: Arc<SpeculativeCache>,
 }
 
@@ -151,11 +152,11 @@ impl RetrievalEngine {
             // Parse File
             if let Ok(content) = std::fs::read_to_string(&abs_path) {
                 // Detect language
-                let lang = if path.extension().map_or(false, |e| e == "rs") {
+                let lang = if path.extension().is_some_and(|e| e == "rs") {
                     SupportedLanguage::Rust
-                } else if path.extension().map_or(false, |e| e == "py") {
+                } else if path.extension().is_some_and(|e| e == "py") {
                     SupportedLanguage::Python
-                } else if path.extension().map_or(false, |e| e == "ts") {
+                } else if path.extension().is_some_and(|e| e == "ts") {
                     SupportedLanguage::TypeScript
                 } else {
                     SupportedLanguage::Data
