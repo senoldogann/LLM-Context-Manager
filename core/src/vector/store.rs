@@ -54,8 +54,8 @@ impl LanceDbStore {
             }
         };
 
-        const MAX_CHARS: usize = 3000;
-        const OVERLAP: usize = 150;
+        const MAX_CHARS: usize = 1000;
+        const OVERLAP: usize = 100;
 
         let mut all_chunks = Vec::new();
         let mut all_chunk_ids = Vec::new();
