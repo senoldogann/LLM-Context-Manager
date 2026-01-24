@@ -6,7 +6,7 @@ const fs = require('fs');
 const os = require('os');
 const https = require('https');
 
-const VERSION = "0.1.15";
+const VERSION = "0.1.18";
 const REPO = 'senoldogann/LLM-Context-Manager';
 const BIN_DIR = path.join(os.homedir(), '.ccm', 'bin');
 
