@@ -125,12 +125,14 @@ impl LanceDbStore {
 
         let total_batches = all_chunks.len().div_ceil(BATCH_SIZE);
         for (batch_idx, batch) in all_chunks.chunks(BATCH_SIZE).enumerate() {
-            eprintln!(
-                "Embedding batch {}/{} ({} chunks)",
-                batch_idx + 1,
-                total_batches,
-                batch.len()
-            );
+            if batch_idx % 20 == 0 || (batch_idx + 1) == total_batches {
+                eprintln!(
+                    "Embedding batch {}/{} ({} chunks)",
+                    batch_idx + 1,
+                    total_batches,
+                    batch.len()
+                );
+            }
 
             let batch_texts: Vec<String> = batch.to_vec();
             let batch_embeddings = embedder.embed(batch_texts).await?;

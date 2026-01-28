@@ -111,8 +111,22 @@ async fn main() -> anyhow::Result<()> {
                     notify::recommended_watcher(move |res: notify::Result<notify::Event>| {
                         match res {
                             Ok(event) => {
-                                // Simple filter for interesting extensions
+                                // Filter out ignored directories and relevant extensions
                                 let is_relevant = event.paths.iter().any(|p| {
+                                    // Skip common ignored directories
+                                    for component in p.components() {
+                                        let s = component.as_os_str().to_string_lossy();
+                                        if s == "data"
+                                            || s == ".ccm"
+                                            || s == "node_modules"
+                                            || s == "target"
+                                            || s == ".git"
+                                            || s == ".agent"
+                                        {
+                                            return false;
+                                        }
+                                    }
+
                                     if let Some(ext) = p.extension().and_then(|e| e.to_str()) {
                                         matches!(
                                             ext,
@@ -156,7 +170,14 @@ async fn main() -> anyhow::Result<()> {
                     while rx.try_recv().is_ok() {}
 
                     tracing::info!("Re-indexing...");
-                    let _ = ccm_core::index_directory(&path_str, db_path_str.as_deref()).await;
+                    if let Err(e) = ccm_core::update_index(&path_str, db_path_str.as_deref()).await
+                    {
+                        tracing::warn!(
+                            "Incremental indexing failed: {}. Falling back to full index.",
+                            e
+                        );
+                        let _ = ccm_core::index_directory(&path_str, db_path_str.as_deref()).await;
+                    }
                 }
             }
         }

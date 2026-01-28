@@ -177,6 +177,57 @@ pub async fn index_directory(path: &str, db_path: Option<&str>) -> Result<IndexS
     Ok(stats)
 }
 
+/// Updates an existing index incrementally (using Git).
+/// If the index or graph does not exist, it falls back to a full index.
+pub async fn update_index(path: &str, db_path: Option<&str>) -> Result<()> {
+    use tracing::{info, warn};
+
+    // Determine paths
+    let default_db_path = std::path::Path::new(path).join("data/ccm_db");
+    let db_path_buf = db_path
+        .map(std::path::PathBuf::from)
+        .unwrap_or(default_db_path);
+    let db_path_str = db_path_buf.to_string_lossy().to_string();
+
+    let parent_dir = db_path_buf.parent().ok_or_else(|| {
+        anyhow::anyhow!(
+            "Invalid DB path '{}': cannot determine parent directory",
+            db_path_str
+        )
+    })?;
+
+    let graph_path = parent_dir.join("ccm_graph.json");
+
+    if !graph_path.exists() {
+        info!(
+            "Graph not found at {}, performing full index",
+            graph_path.display()
+        );
+        index_directory(path, db_path).await?;
+        return Ok(());
+    }
+
+    // Load graph
+    let graph = CodeGraph::from_file(&graph_path.to_string_lossy())?;
+    let store = LanceDbStore::new(&db_path_str, "code_vectors").await?;
+    let graph_arc = std::sync::Arc::new(tokio::sync::RwLock::new(graph));
+
+    let engine = RetrievalEngine::new(graph_arc.clone(), store);
+
+    // Run incremental index
+    info!("Starting incremental indexing for {}", path);
+    engine.incremental_index(path).await?;
+
+    // Save graph back to disk
+    let updated_graph = graph_arc.read().await;
+    match updated_graph.save_to_file(&graph_path.to_string_lossy()) {
+        Ok(_) => info!(path = %graph_path.display(), "Graph updated on disk"),
+        Err(e) => warn!(error = %e, "Failed to save updated graph"),
+    }
+
+    Ok(())
+}
+
 /// Statistics from an indexing operation
 #[derive(Debug, Default)]
 pub struct IndexStats {
