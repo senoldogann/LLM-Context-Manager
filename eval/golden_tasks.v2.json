@@ -1,0 +1,2730 @@
+{
+  "schema_version": 1,
+  "tasks": [
+    {
+      "id": "ccm-read-graph-001",
+      "repo": {
+        "name": "LLM-Context-Manager",
+        "path": ".",
+        "languages": [
+          "rust",
+          "typescript",
+          "javascript",
+          "python"
+        ]
+      },
+      "query": {
+        "type": "read_graph",
+        "node_id": "./cli/src/main.rs:function_item:42:0"
+      },
+      "expected": {
+        "node_ids": [
+          "./cli/src/main.rs:function_item:42:0"
+        ],
+        "min_recall": 1,
+        "max_rank": 5
+      },
+      "tags": [
+        "read_graph",
+        "structural"
+      ],
+      "priority": 1,
+      "notes": "Node type Function, name main"
+    },
+    {
+      "id": "ccm-read-graph-002",
+      "repo": {
+        "name": "LLM-Context-Manager",
+        "path": ".",
+        "languages": [
+          "rust",
+          "typescript",
+          "javascript",
+          "python"
+        ]
+      },
+      "query": {
+        "type": "read_graph",
+        "node_id": "./cli/src/main.rs:struct_item:6:0"
+      },
+      "expected": {
+        "node_ids": [
+          "./cli/src/main.rs:struct_item:6:0"
+        ],
+        "min_recall": 1,
+        "max_rank": 5
+      },
+      "tags": [
+        "read_graph",
+        "structural"
+      ],
+      "priority": 1,
+      "notes": "Node type Struct, name Args"
+    },
+    {
+      "id": "ccm-read-graph-003",
+      "repo": {
+        "name": "LLM-Context-Manager",
+        "path": ".",
+        "languages": [
+          "rust",
+          "typescript",
+          "javascript",
+          "python"
+        ]
+      },
+      "query": {
+        "type": "read_graph",
+        "node_id": "./core/build.rs:function_item:0:0"
+      },
+      "expected": {
+        "node_ids": [
+          "./core/build.rs:function_item:0:0"
+        ],
+        "min_recall": 1,
+        "max_rank": 5
+      },
+      "tags": [
+        "read_graph",
+        "structural"
+      ],
+      "priority": 1,
+      "notes": "Node type Function, name main"
+    },
+    {
+      "id": "ccm-read-graph-004",
+      "repo": {
+        "name": "LLM-Context-Manager",
+        "path": ".",
+        "languages": [
+          "rust",
+          "typescript",
+          "javascript",
+          "python"
+        ]
+      },
+      "query": {
+        "type": "read_graph",
+        "node_id": "./core/src/engine.rs:function_item:104:4"
+      },
+      "expected": {
+        "node_ids": [
+          "./core/src/engine.rs:function_item:104:4"
+        ],
+        "min_recall": 1,
+        "max_rank": 5
+      },
+      "tags": [
+        "read_graph",
+        "structural"
+      ],
+      "priority": 1,
+      "notes": "Node type Function, name incremental_index"
+    },
+    {
+      "id": "ccm-read-graph-005",
+      "repo": {
+        "name": "LLM-Context-Manager",
+        "path": ".",
+        "languages": [
+          "rust",
+          "typescript",
+          "javascript",
+          "python"
+        ]
+      },
+      "query": {
+        "type": "read_graph",
+        "node_id": "./core/src/engine.rs:function_item:113:4"
+      },
+      "expected": {
+        "node_ids": [
+          "./core/src/engine.rs:function_item:113:4"
+        ],
+        "min_recall": 1,
+        "max_rank": 5
+      },
+      "tags": [
+        "read_graph",
+        "structural"
+      ],
+      "priority": 1,
+      "notes": "Node type Function, name incremental_index_paths"
+    },
+    {
+      "id": "ccm-read-graph-006",
+      "repo": {
+        "name": "LLM-Context-Manager",
+        "path": ".",
+        "languages": [
+          "rust",
+          "typescript",
+          "javascript",
+          "python"
+        ]
+      },
+      "query": {
+        "type": "read_graph",
+        "node_id": "./core/src/engine.rs:function_item:257:4"
+      },
+      "expected": {
+        "node_ids": [
+          "./core/src/engine.rs:function_item:257:4"
+        ],
+        "min_recall": 1,
+        "max_rank": 5
+      },
+      "tags": [
+        "read_graph",
+        "structural"
+      ],
+      "priority": 1,
+      "notes": "Node type Function, name search_code"
+    },
+    {
+      "id": "ccm-read-graph-007",
+      "repo": {
+        "name": "LLM-Context-Manager",
+        "path": ".",
+        "languages": [
+          "rust",
+          "typescript",
+          "javascript",
+          "python"
+        ]
+      },
+      "query": {
+        "type": "read_graph",
+        "node_id": "./core/src/engine.rs:function_item:287:4"
+      },
+      "expected": {
+        "node_ids": [
+          "./core/src/engine.rs:function_item:287:4"
+        ],
+        "min_recall": 1,
+        "max_rank": 5
+      },
+      "tags": [
+        "read_graph",
+        "structural"
+      ],
+      "priority": 1,
+      "notes": "Node type Function, name get_node_by_id"
+    },
+    {
+      "id": "ccm-read-graph-008",
+      "repo": {
+        "name": "LLM-Context-Manager",
+        "path": ".",
+        "languages": [
+          "rust",
+          "typescript",
+          "javascript",
+          "python"
+        ]
+      },
+      "query": {
+        "type": "read_graph",
+        "node_id": "./core/src/engine.rs:function_item:293:4"
+      },
+      "expected": {
+        "node_ids": [
+          "./core/src/engine.rs:function_item:293:4"
+        ],
+        "min_recall": 1,
+        "max_rank": 5
+      },
+      "tags": [
+        "read_graph",
+        "structural"
+      ],
+      "priority": 1,
+      "notes": "Node type Function, name get_node_neighbors"
+    },
+    {
+      "id": "ccm-read-graph-009",
+      "repo": {
+        "name": "LLM-Context-Manager",
+        "path": ".",
+        "languages": [
+          "rust",
+          "typescript",
+          "javascript",
+          "python"
+        ]
+      },
+      "query": {
+        "type": "read_graph",
+        "node_id": "./core/src/engine.rs:function_item:348:4"
+      },
+      "expected": {
+        "node_ids": [
+          "./core/src/engine.rs:function_item:348:4"
+        ],
+        "min_recall": 1,
+        "max_rank": 5
+      },
+      "tags": [
+        "read_graph",
+        "structural"
+      ],
+      "priority": 1,
+      "notes": "Node type Function, name predict_context"
+    },
+    {
+      "id": "ccm-read-graph-010",
+      "repo": {
+        "name": "LLM-Context-Manager",
+        "path": ".",
+        "languages": [
+          "rust",
+          "typescript",
+          "javascript",
+          "python"
+        ]
+      },
+      "query": {
+        "type": "read_graph",
+        "node_id": "./core/src/engine.rs:function_item:52:4"
+      },
+      "expected": {
+        "node_ids": [
+          "./core/src/engine.rs:function_item:52:4"
+        ],
+        "min_recall": 1,
+        "max_rank": 5
+      },
+      "tags": [
+        "read_graph",
+        "structural"
+      ],
+      "priority": 1,
+      "notes": "Node type Function, name new"
+    },
+    {
+      "id": "ccm-read-graph-011",
+      "repo": {
+        "name": "LLM-Context-Manager",
+        "path": ".",
+        "languages": [
+          "rust",
+          "typescript",
+          "javascript",
+          "python"
+        ]
+      },
+      "query": {
+        "type": "read_graph",
+        "node_id": "./core/src/engine.rs:function_item:62:4"
+      },
+      "expected": {
+        "node_ids": [
+          "./core/src/engine.rs:function_item:62:4"
+        ],
+        "min_recall": 1,
+        "max_rank": 5
+      },
+      "tags": [
+        "read_graph",
+        "structural"
+      ],
+      "priority": 1,
+      "notes": "Node type Function, name index_graph"
+    },
+    {
+      "id": "ccm-read-graph-012",
+      "repo": {
+        "name": "LLM-Context-Manager",
+        "path": ".",
+        "languages": [
+          "rust",
+          "typescript",
+          "javascript",
+          "python"
+        ]
+      },
+      "query": {
+        "type": "read_graph",
+        "node_id": "./core/src/engine.rs:impl_item:51:0"
+      },
+      "expected": {
+        "node_ids": [
+          "./core/src/engine.rs:impl_item:51:0"
+        ],
+        "min_recall": 1,
+        "max_rank": 5
+      },
+      "tags": [
+        "read_graph",
+        "structural"
+      ],
+      "priority": 1,
+      "notes": "Node type Class, name RetrievalEngine"
+    },
+    {
+      "id": "ccm-read-graph-013",
+      "repo": {
+        "name": "LLM-Context-Manager",
+        "path": ".",
+        "languages": [
+          "rust",
+          "typescript",
+          "javascript",
+          "python"
+        ]
+      },
+      "query": {
+        "type": "read_graph",
+        "node_id": "./core/src/engine.rs:struct_item:16:0"
+      },
+      "expected": {
+        "node_ids": [
+          "./core/src/engine.rs:struct_item:16:0"
+        ],
+        "min_recall": 1,
+        "max_rank": 5
+      },
+      "tags": [
+        "read_graph",
+        "structural"
+      ],
+      "priority": 1,
+      "notes": "Node type Struct, name CursorPosition"
+    },
+    {
+      "id": "ccm-read-graph-014",
+      "repo": {
+        "name": "LLM-Context-Manager",
+        "path": ".",
+        "languages": [
+          "rust",
+          "typescript",
+          "javascript",
+          "python"
+        ]
+      },
+      "query": {
+        "type": "read_graph",
+        "node_id": "./core/src/engine.rs:struct_item:24:0"
+      },
+      "expected": {
+        "node_ids": [
+          "./core/src/engine.rs:struct_item:24:0"
+        ],
+        "min_recall": 1,
+        "max_rank": 5
+      },
+      "tags": [
+        "read_graph",
+        "structural"
+      ],
+      "priority": 1,
+      "notes": "Node type Struct, name ContextSuggestion"
+    },
+    {
+      "id": "ccm-read-graph-015",
+      "repo": {
+        "name": "LLM-Context-Manager",
+        "path": ".",
+        "languages": [
+          "rust",
+          "typescript",
+          "javascript",
+          "python"
+        ]
+      },
+      "query": {
+        "type": "read_graph",
+        "node_id": "./core/src/engine.rs:struct_item:33:0"
+      },
+      "expected": {
+        "node_ids": [
+          "./core/src/engine.rs:struct_item:33:0"
+        ],
+        "min_recall": 1,
+        "max_rank": 5
+      },
+      "tags": [
+        "read_graph",
+        "structural"
+      ],
+      "priority": 1,
+      "notes": "Node type Struct, name NodeNeighbors"
+    },
+    {
+      "id": "ccm-read-graph-016",
+      "repo": {
+        "name": "LLM-Context-Manager",
+        "path": ".",
+        "languages": [
+          "rust",
+          "typescript",
+          "javascript",
+          "python"
+        ]
+      },
+      "query": {
+        "type": "read_graph",
+        "node_id": "./core/src/engine.rs:struct_item:44:0"
+      },
+      "expected": {
+        "node_ids": [
+          "./core/src/engine.rs:struct_item:44:0"
+        ],
+        "min_recall": 1,
+        "max_rank": 5
+      },
+      "tags": [
+        "read_graph",
+        "structural"
+      ],
+      "priority": 1,
+      "notes": "Node type Struct, name RetrievalEngine"
+    },
+    {
+      "id": "ccm-read-graph-017",
+      "repo": {
+        "name": "LLM-Context-Manager",
+        "path": ".",
+        "languages": [
+          "rust",
+          "typescript",
+          "javascript",
+          "python"
+        ]
+      },
+      "query": {
+        "type": "read_graph",
+        "node_id": "./core/src/engine/predictive.rs:function_item:11:4"
+      },
+      "expected": {
+        "node_ids": [
+          "./core/src/engine/predictive.rs:function_item:11:4"
+        ],
+        "min_recall": 1,
+        "max_rank": 5
+      },
+      "tags": [
+        "read_graph",
+        "structural"
+      ],
+      "priority": 1,
+      "notes": "Node type Function, name new"
+    },
+    {
+      "id": "ccm-read-graph-018",
+      "repo": {
+        "name": "LLM-Context-Manager",
+        "path": ".",
+        "languages": [
+          "rust",
+          "typescript",
+          "javascript",
+          "python"
+        ]
+      },
+      "query": {
+        "type": "read_graph",
+        "node_id": "./core/src/engine/predictive.rs:function_item:19:4"
+      },
+      "expected": {
+        "node_ids": [
+          "./core/src/engine/predictive.rs:function_item:19:4"
+        ],
+        "min_recall": 1,
+        "max_rank": 5
+      },
+      "tags": [
+        "read_graph",
+        "structural"
+      ],
+      "priority": 1,
+      "notes": "Node type Function, name put"
+    },
+    {
+      "id": "ccm-read-graph-019",
+      "repo": {
+        "name": "LLM-Context-Manager",
+        "path": ".",
+        "languages": [
+          "rust",
+          "typescript",
+          "javascript",
+          "python"
+        ]
+      },
+      "query": {
+        "type": "read_graph",
+        "node_id": "./core/src/engine/predictive.rs:function_item:26:4"
+      },
+      "expected": {
+        "node_ids": [
+          "./core/src/engine/predictive.rs:function_item:26:4"
+        ],
+        "min_recall": 1,
+        "max_rank": 5
+      },
+      "tags": [
+        "read_graph",
+        "structural"
+      ],
+      "priority": 1,
+      "notes": "Node type Function, name get"
+    },
+    {
+      "id": "ccm-read-graph-020",
+      "repo": {
+        "name": "LLM-Context-Manager",
+        "path": ".",
+        "languages": [
+          "rust",
+          "typescript",
+          "javascript",
+          "python"
+        ]
+      },
+      "query": {
+        "type": "read_graph",
+        "node_id": "./core/src/engine/predictive.rs:impl_item:10:0"
+      },
+      "expected": {
+        "node_ids": [
+          "./core/src/engine/predictive.rs:impl_item:10:0"
+        ],
+        "min_recall": 1,
+        "max_rank": 5
+      },
+      "tags": [
+        "read_graph",
+        "structural"
+      ],
+      "priority": 1,
+      "notes": "Node type Class, name SpeculativeCache"
+    },
+    {
+      "id": "ccm-read-graph-021",
+      "repo": {
+        "name": "LLM-Context-Manager",
+        "path": ".",
+        "languages": [
+          "rust",
+          "typescript",
+          "javascript",
+          "python"
+        ]
+      },
+      "query": {
+        "type": "read_graph",
+        "node_id": "./core/src/engine/predictive.rs:struct_item:6:0"
+      },
+      "expected": {
+        "node_ids": [
+          "./core/src/engine/predictive.rs:struct_item:6:0"
+        ],
+        "min_recall": 1,
+        "max_rank": 5
+      },
+      "tags": [
+        "read_graph",
+        "structural"
+      ],
+      "priority": 1,
+      "notes": "Node type Struct, name SpeculativeCache"
+    },
+    {
+      "id": "ccm-read-graph-022",
+      "repo": {
+        "name": "LLM-Context-Manager",
+        "path": ".",
+        "languages": [
+          "rust",
+          "typescript",
+          "javascript",
+          "python"
+        ]
+      },
+      "query": {
+        "type": "read_graph",
+        "node_id": "./core/src/git/mod.rs:function_item:11:4"
+      },
+      "expected": {
+        "node_ids": [
+          "./core/src/git/mod.rs:function_item:11:4"
+        ],
+        "min_recall": 1,
+        "max_rank": 5
+      },
+      "tags": [
+        "read_graph",
+        "structural"
+      ],
+      "priority": 1,
+      "notes": "Node type Function, name new"
+    },
+    {
+      "id": "ccm-read-graph-023",
+      "repo": {
+        "name": "LLM-Context-Manager",
+        "path": ".",
+        "languages": [
+          "rust",
+          "typescript",
+          "javascript",
+          "python"
+        ]
+      },
+      "query": {
+        "type": "read_graph",
+        "node_id": "./core/src/git/mod.rs:function_item:18:4"
+      },
+      "expected": {
+        "node_ids": [
+          "./core/src/git/mod.rs:function_item:18:4"
+        ],
+        "min_recall": 1,
+        "max_rank": 5
+      },
+      "tags": [
+        "read_graph",
+        "structural"
+      ],
+      "priority": 1,
+      "notes": "Node type Function, name get_changed_files"
+    },
+    {
+      "id": "ccm-read-graph-024",
+      "repo": {
+        "name": "LLM-Context-Manager",
+        "path": ".",
+        "languages": [
+          "rust",
+          "typescript",
+          "javascript",
+          "python"
+        ]
+      },
+      "query": {
+        "type": "read_graph",
+        "node_id": "./core/src/git/mod.rs:function_item:65:4"
+      },
+      "expected": {
+        "node_ids": [
+          "./core/src/git/mod.rs:function_item:65:4"
+        ],
+        "min_recall": 1,
+        "max_rank": 5
+      },
+      "tags": [
+        "read_graph",
+        "structural"
+      ],
+      "priority": 1,
+      "notes": "Node type Function, name get_changed_ranges"
+    },
+    {
+      "id": "ccm-read-graph-025",
+      "repo": {
+        "name": "LLM-Context-Manager",
+        "path": ".",
+        "languages": [
+          "rust",
+          "typescript",
+          "javascript",
+          "python"
+        ]
+      },
+      "query": {
+        "type": "read_graph",
+        "node_id": "./core/src/git/mod.rs:impl_item:9:0"
+      },
+      "expected": {
+        "node_ids": [
+          "./core/src/git/mod.rs:impl_item:9:0"
+        ],
+        "min_recall": 1,
+        "max_rank": 5
+      },
+      "tags": [
+        "read_graph",
+        "structural"
+      ],
+      "priority": 1,
+      "notes": "Node type Class, name GitIntegrator"
+    },
+    {
+      "id": "ccm-get-context-001",
+      "repo": {
+        "name": "LLM-Context-Manager",
+        "path": ".",
+        "languages": [
+          "rust",
+          "typescript",
+          "javascript",
+          "python"
+        ]
+      },
+      "query": {
+        "type": "get_context",
+        "file_path": "./core/src/git/mod.rs",
+        "line": 6
+      },
+      "expected": {
+        "file_paths": [
+          "./core/src/git/mod.rs"
+        ],
+        "min_recall": 1,
+        "max_rank": 5
+      },
+      "tags": [
+        "get_context",
+        "structural"
+      ],
+      "priority": 2,
+      "notes": "Node type Struct, name GitIntegrator"
+    },
+    {
+      "id": "ccm-get-context-002",
+      "repo": {
+        "name": "LLM-Context-Manager",
+        "path": ".",
+        "languages": [
+          "rust",
+          "typescript",
+          "javascript",
+          "python"
+        ]
+      },
+      "query": {
+        "type": "get_context",
+        "file_path": "./core/src/graph/mod.rs",
+        "line": 135
+      },
+      "expected": {
+        "file_paths": [
+          "./core/src/graph/mod.rs"
+        ],
+        "min_recall": 1,
+        "max_rank": 5
+      },
+      "tags": [
+        "get_context",
+        "structural"
+      ],
+      "priority": 2,
+      "notes": "Node type Function, name find_node_by_id"
+    },
+    {
+      "id": "ccm-get-context-003",
+      "repo": {
+        "name": "LLM-Context-Manager",
+        "path": ".",
+        "languages": [
+          "rust",
+          "typescript",
+          "javascript",
+          "python"
+        ]
+      },
+      "query": {
+        "type": "get_context",
+        "file_path": "./core/src/graph/mod.rs",
+        "line": 151
+      },
+      "expected": {
+        "file_paths": [
+          "./core/src/graph/mod.rs"
+        ],
+        "min_recall": 1,
+        "max_rank": 5
+      },
+      "tags": [
+        "get_context",
+        "structural"
+      ],
+      "priority": 2,
+      "notes": "Node type Function, name get_outgoing_edges"
+    },
+    {
+      "id": "ccm-get-context-004",
+      "repo": {
+        "name": "LLM-Context-Manager",
+        "path": ".",
+        "languages": [
+          "rust",
+          "typescript",
+          "javascript",
+          "python"
+        ]
+      },
+      "query": {
+        "type": "get_context",
+        "file_path": "./core/src/graph/mod.rs",
+        "line": 175
+      },
+      "expected": {
+        "file_paths": [
+          "./core/src/graph/mod.rs"
+        ],
+        "min_recall": 1,
+        "max_rank": 5
+      },
+      "tags": [
+        "get_context",
+        "structural"
+      ],
+      "priority": 2,
+      "notes": "Node type Function, name find_node_index_by_id"
+    },
+    {
+      "id": "ccm-get-context-005",
+      "repo": {
+        "name": "LLM-Context-Manager",
+        "path": ".",
+        "languages": [
+          "rust",
+          "typescript",
+          "javascript",
+          "python"
+        ]
+      },
+      "query": {
+        "type": "get_context",
+        "file_path": "./core/src/graph/mod.rs",
+        "line": 183
+      },
+      "expected": {
+        "file_paths": [
+          "./core/src/graph/mod.rs"
+        ],
+        "min_recall": 1,
+        "max_rank": 5
+      },
+      "tags": [
+        "get_context",
+        "structural"
+      ],
+      "priority": 2,
+      "notes": "Node type Function, name save_to_file"
+    },
+    {
+      "id": "ccm-get-context-006",
+      "repo": {
+        "name": "LLM-Context-Manager",
+        "path": ".",
+        "languages": [
+          "rust",
+          "typescript",
+          "javascript",
+          "python"
+        ]
+      },
+      "query": {
+        "type": "get_context",
+        "file_path": "./core/src/graph/mod.rs",
+        "line": 191
+      },
+      "expected": {
+        "file_paths": [
+          "./core/src/graph/mod.rs"
+        ],
+        "min_recall": 1,
+        "max_rank": 5
+      },
+      "tags": [
+        "get_context",
+        "structural"
+      ],
+      "priority": 2,
+      "notes": "Node type Function, name load_from_file"
+    },
+    {
+      "id": "ccm-get-context-007",
+      "repo": {
+        "name": "LLM-Context-Manager",
+        "path": ".",
+        "languages": [
+          "rust",
+          "typescript",
+          "javascript",
+          "python"
+        ]
+      },
+      "query": {
+        "type": "get_context",
+        "file_path": "./core/src/graph/mod.rs",
+        "line": 202
+      },
+      "expected": {
+        "file_paths": [
+          "./core/src/graph/mod.rs"
+        ],
+        "min_recall": 1,
+        "max_rank": 5
+      },
+      "tags": [
+        "get_context",
+        "structural"
+      ],
+      "priority": 2,
+      "notes": "Node type Function, name from_file"
+    },
+    {
+      "id": "ccm-get-context-008",
+      "repo": {
+        "name": "LLM-Context-Manager",
+        "path": ".",
+        "languages": [
+          "rust",
+          "typescript",
+          "javascript",
+          "python"
+        ]
+      },
+      "query": {
+        "type": "get_context",
+        "file_path": "./core/src/graph/mod.rs",
+        "line": 210
+      },
+      "expected": {
+        "file_paths": [
+          "./core/src/graph/mod.rs"
+        ],
+        "min_recall": 1,
+        "max_rank": 5
+      },
+      "tags": [
+        "get_context",
+        "structural"
+      ],
+      "priority": 2,
+      "notes": "Node type Function, name remove_file_nodes"
+    },
+    {
+      "id": "ccm-get-context-009",
+      "repo": {
+        "name": "LLM-Context-Manager",
+        "path": ".",
+        "languages": [
+          "rust",
+          "typescript",
+          "javascript",
+          "python"
+        ]
+      },
+      "query": {
+        "type": "get_context",
+        "file_path": "./core/src/graph/mod.rs",
+        "line": 267
+      },
+      "expected": {
+        "file_paths": [
+          "./core/src/graph/mod.rs"
+        ],
+        "min_recall": 1,
+        "max_rank": 5
+      },
+      "tags": [
+        "get_context",
+        "structural"
+      ],
+      "priority": 2,
+      "notes": "Node type Function, name test_add_node"
+    },
+    {
+      "id": "ccm-get-context-010",
+      "repo": {
+        "name": "LLM-Context-Manager",
+        "path": ".",
+        "languages": [
+          "rust",
+          "typescript",
+          "javascript",
+          "python"
+        ]
+      },
+      "query": {
+        "type": "get_context",
+        "file_path": "./core/src/graph/mod.rs",
+        "line": 47
+      },
+      "expected": {
+        "file_paths": [
+          "./core/src/graph/mod.rs"
+        ],
+        "min_recall": 1,
+        "max_rank": 5
+      },
+      "tags": [
+        "get_context",
+        "structural"
+      ],
+      "priority": 2,
+      "notes": "Node type Function, name default"
+    },
+    {
+      "id": "ccm-get-context-011",
+      "repo": {
+        "name": "LLM-Context-Manager",
+        "path": ".",
+        "languages": [
+          "rust",
+          "typescript",
+          "javascript",
+          "python"
+        ]
+      },
+      "query": {
+        "type": "get_context",
+        "file_path": "./core/src/graph/mod.rs",
+        "line": 56
+      },
+      "expected": {
+        "file_paths": [
+          "./core/src/graph/mod.rs"
+        ],
+        "min_recall": 1,
+        "max_rank": 5
+      },
+      "tags": [
+        "get_context",
+        "structural"
+      ],
+      "priority": 2,
+      "notes": "Node type Function, name new"
+    },
+    {
+      "id": "ccm-get-context-012",
+      "repo": {
+        "name": "LLM-Context-Manager",
+        "path": ".",
+        "languages": [
+          "rust",
+          "typescript",
+          "javascript",
+          "python"
+        ]
+      },
+      "query": {
+        "type": "get_context",
+        "file_path": "./core/src/graph/mod.rs",
+        "line": 60
+      },
+      "expected": {
+        "file_paths": [
+          "./core/src/graph/mod.rs"
+        ],
+        "min_recall": 1,
+        "max_rank": 5
+      },
+      "tags": [
+        "get_context",
+        "structural"
+      ],
+      "priority": 2,
+      "notes": "Node type Function, name with_storage"
+    },
+    {
+      "id": "ccm-get-context-013",
+      "repo": {
+        "name": "LLM-Context-Manager",
+        "path": ".",
+        "languages": [
+          "rust",
+          "typescript",
+          "javascript",
+          "python"
+        ]
+      },
+      "query": {
+        "type": "get_context",
+        "file_path": "./core/src/graph/mod.rs",
+        "line": 65
+      },
+      "expected": {
+        "file_paths": [
+          "./core/src/graph/mod.rs"
+        ],
+        "min_recall": 1,
+        "max_rank": 5
+      },
+      "tags": [
+        "get_context",
+        "structural"
+      ],
+      "priority": 2,
+      "notes": "Node type Function, name add_node"
+    },
+    {
+      "id": "ccm-get-context-014",
+      "repo": {
+        "name": "LLM-Context-Manager",
+        "path": ".",
+        "languages": [
+          "rust",
+          "typescript",
+          "javascript",
+          "python"
+        ]
+      },
+      "query": {
+        "type": "get_context",
+        "file_path": "./core/src/graph/mod.rs",
+        "line": 74
+      },
+      "expected": {
+        "file_paths": [
+          "./core/src/graph/mod.rs"
+        ],
+        "min_recall": 1,
+        "max_rank": 5
+      },
+      "tags": [
+        "get_context",
+        "structural"
+      ],
+      "priority": 2,
+      "notes": "Node type Function, name add_edge"
+    },
+    {
+      "id": "ccm-get-context-015",
+      "repo": {
+        "name": "LLM-Context-Manager",
+        "path": ".",
+        "languages": [
+          "rust",
+          "typescript",
+          "javascript",
+          "python"
+        ]
+      },
+      "query": {
+        "type": "get_context",
+        "file_path": "./core/src/graph/mod.rs",
+        "line": 86
+      },
+      "expected": {
+        "file_paths": [
+          "./core/src/graph/mod.rs"
+        ],
+        "min_recall": 1,
+        "max_rank": 5
+      },
+      "tags": [
+        "get_context",
+        "structural"
+      ],
+      "priority": 2,
+      "notes": "Node type Function, name find_file_node"
+    },
+    {
+      "id": "ccm-get-context-016",
+      "repo": {
+        "name": "LLM-Context-Manager",
+        "path": ".",
+        "languages": [
+          "rust",
+          "typescript",
+          "javascript",
+          "python"
+        ]
+      },
+      "query": {
+        "type": "get_context",
+        "file_path": "./core/src/graph/mod.rs",
+        "line": 94
+      },
+      "expected": {
+        "file_paths": [
+          "./core/src/graph/mod.rs"
+        ],
+        "min_recall": 1,
+        "max_rank": 5
+      },
+      "tags": [
+        "get_context",
+        "structural"
+      ],
+      "priority": 2,
+      "notes": "Node type Function, name find_node_in_file"
+    },
+    {
+      "id": "ccm-get-context-017",
+      "repo": {
+        "name": "LLM-Context-Manager",
+        "path": ".",
+        "languages": [
+          "rust",
+          "typescript",
+          "javascript",
+          "python"
+        ]
+      },
+      "query": {
+        "type": "get_context",
+        "file_path": "./core/src/graph/mod.rs",
+        "line": 46
+      },
+      "expected": {
+        "file_paths": [
+          "./core/src/graph/mod.rs"
+        ],
+        "min_recall": 1,
+        "max_rank": 5
+      },
+      "tags": [
+        "get_context",
+        "structural"
+      ],
+      "priority": 2,
+      "notes": "Node type Class, name Default"
+    },
+    {
+      "id": "ccm-get-context-018",
+      "repo": {
+        "name": "LLM-Context-Manager",
+        "path": ".",
+        "languages": [
+          "rust",
+          "typescript",
+          "javascript",
+          "python"
+        ]
+      },
+      "query": {
+        "type": "get_context",
+        "file_path": "./core/src/graph/mod.rs",
+        "line": 55
+      },
+      "expected": {
+        "file_paths": [
+          "./core/src/graph/mod.rs"
+        ],
+        "min_recall": 1,
+        "max_rank": 5
+      },
+      "tags": [
+        "get_context",
+        "structural"
+      ],
+      "priority": 2,
+      "notes": "Node type Class, name CodeGraph"
+    },
+    {
+      "id": "ccm-get-context-019",
+      "repo": {
+        "name": "LLM-Context-Manager",
+        "path": ".",
+        "languages": [
+          "rust",
+          "typescript",
+          "javascript",
+          "python"
+        ]
+      },
+      "query": {
+        "type": "get_context",
+        "file_path": "./core/src/graph/mod.rs",
+        "line": 20
+      },
+      "expected": {
+        "file_paths": [
+          "./core/src/graph/mod.rs"
+        ],
+        "min_recall": 1,
+        "max_rank": 5
+      },
+      "tags": [
+        "get_context",
+        "structural"
+      ],
+      "priority": 2,
+      "notes": "Node type Struct, name CodeNode"
+    },
+    {
+      "id": "ccm-get-context-020",
+      "repo": {
+        "name": "LLM-Context-Manager",
+        "path": ".",
+        "languages": [
+          "rust",
+          "typescript",
+          "javascript",
+          "python"
+        ]
+      },
+      "query": {
+        "type": "get_context",
+        "file_path": "./core/src/graph/mod.rs",
+        "line": 41
+      },
+      "expected": {
+        "file_paths": [
+          "./core/src/graph/mod.rs"
+        ],
+        "min_recall": 1,
+        "max_rank": 5
+      },
+      "tags": [
+        "get_context",
+        "structural"
+      ],
+      "priority": 2,
+      "notes": "Node type Struct, name CodeGraph"
+    },
+    {
+      "id": "ccm-get-context-021",
+      "repo": {
+        "name": "LLM-Context-Manager",
+        "path": ".",
+        "languages": [
+          "rust",
+          "typescript",
+          "javascript",
+          "python"
+        ]
+      },
+      "query": {
+        "type": "get_context",
+        "file_path": "./core/src/lib.rs",
+        "line": 102
+      },
+      "expected": {
+        "file_paths": [
+          "./core/src/lib.rs"
+        ],
+        "min_recall": 1,
+        "max_rank": 5
+      },
+      "tags": [
+        "get_context",
+        "structural"
+      ],
+      "priority": 2,
+      "notes": "Node type Function, name index_directory"
+    },
+    {
+      "id": "ccm-get-context-022",
+      "repo": {
+        "name": "LLM-Context-Manager",
+        "path": ".",
+        "languages": [
+          "rust",
+          "typescript",
+          "javascript",
+          "python"
+        ]
+      },
+      "query": {
+        "type": "get_context",
+        "file_path": "./core/src/lib.rs",
+        "line": 210
+      },
+      "expected": {
+        "file_paths": [
+          "./core/src/lib.rs"
+        ],
+        "min_recall": 1,
+        "max_rank": 5
+      },
+      "tags": [
+        "get_context",
+        "structural"
+      ],
+      "priority": 2,
+      "notes": "Node type Function, name update_index"
+    },
+    {
+      "id": "ccm-get-context-023",
+      "repo": {
+        "name": "LLM-Context-Manager",
+        "path": ".",
+        "languages": [
+          "rust",
+          "typescript",
+          "javascript",
+          "python"
+        ]
+      },
+      "query": {
+        "type": "get_context",
+        "file_path": "./core/src/lib.rs",
+        "line": 23
+      },
+      "expected": {
+        "file_paths": [
+          "./core/src/lib.rs"
+        ],
+        "min_recall": 1,
+        "max_rank": 5
+      },
+      "tags": [
+        "get_context",
+        "structural"
+      ],
+      "priority": 2,
+      "notes": "Node type Function, name init"
+    },
+    {
+      "id": "ccm-get-context-024",
+      "repo": {
+        "name": "LLM-Context-Manager",
+        "path": ".",
+        "languages": [
+          "rust",
+          "typescript",
+          "javascript",
+          "python"
+        ]
+      },
+      "query": {
+        "type": "get_context",
+        "file_path": "./core/src/lib.rs",
+        "line": 32
+      },
+      "expected": {
+        "file_paths": [
+          "./core/src/lib.rs"
+        ],
+        "min_recall": 1,
+        "max_rank": 5
+      },
+      "tags": [
+        "get_context",
+        "structural"
+      ],
+      "priority": 2,
+      "notes": "Node type Function, name run_query"
+    },
+    {
+      "id": "ccm-get-context-025",
+      "repo": {
+        "name": "LLM-Context-Manager",
+        "path": ".",
+        "languages": [
+          "rust",
+          "typescript",
+          "javascript",
+          "python"
+        ]
+      },
+      "query": {
+        "type": "get_context",
+        "file_path": "./core/src/lib.rs",
+        "line": 352
+      },
+      "expected": {
+        "file_paths": [
+          "./core/src/lib.rs"
+        ],
+        "min_recall": 1,
+        "max_rank": 5
+      },
+      "tags": [
+        "get_context",
+        "structural"
+      ],
+      "priority": 2,
+      "notes": "Node type Function, name populate_graph_for_file"
+    },
+    {
+      "id": "tokio-read-graph-001",
+      "repo": {
+        "name": "tokio",
+        "path": "/tmp/tokio-stress-test",
+        "languages": [
+          "rust"
+        ]
+      },
+      "query": {
+        "type": "read_graph",
+        "node_id": "./tokio/src/runtime/scheduler/multi_thread/handle/taskdump.rs:function_item:5:4"
+      },
+      "expected": {
+        "node_ids": [
+          "./tokio/src/runtime/scheduler/multi_thread/handle/taskdump.rs:function_item:5:4"
+        ],
+        "min_recall": 1,
+        "max_rank": 5
+      },
+      "tags": [
+        "read_graph",
+        "structural",
+        "tokio",
+        "rust"
+      ],
+      "priority": 2,
+      "notes": "Node type Function, name dump"
+    },
+    {
+      "id": "tokio-read-graph-002",
+      "repo": {
+        "name": "tokio",
+        "path": "/tmp/tokio-stress-test",
+        "languages": [
+          "rust"
+        ]
+      },
+      "query": {
+        "type": "read_graph",
+        "node_id": "./tokio/src/runtime/scheduler/multi_thread/handle/taskdump.rs:impl_item:4:0"
+      },
+      "expected": {
+        "node_ids": [
+          "./tokio/src/runtime/scheduler/multi_thread/handle/taskdump.rs:impl_item:4:0"
+        ],
+        "min_recall": 1,
+        "max_rank": 5
+      },
+      "tags": [
+        "read_graph",
+        "structural",
+        "tokio",
+        "rust"
+      ],
+      "priority": 2,
+      "notes": "Node type Class, name Handle"
+    },
+    {
+      "id": "tokio-read-graph-003",
+      "repo": {
+        "name": "tokio",
+        "path": "/tmp/tokio-stress-test",
+        "languages": [
+          "rust"
+        ]
+      },
+      "query": {
+        "type": "read_graph",
+        "node_id": "./tokio/src/runtime/scheduler/multi_thread/worker/taskdump.rs:function_item:10:4"
+      },
+      "expected": {
+        "node_ids": [
+          "./tokio/src/runtime/scheduler/multi_thread/worker/taskdump.rs:function_item:10:4"
+        ],
+        "min_recall": 1,
+        "max_rank": 5
+      },
+      "tags": [
+        "read_graph",
+        "structural",
+        "tokio",
+        "rust"
+      ],
+      "priority": 2,
+      "notes": "Node type Function, name trace_core"
+    },
+    {
+      "id": "tokio-read-graph-004",
+      "repo": {
+        "name": "tokio",
+        "path": "/tmp/tokio-stress-test",
+        "languages": [
+          "rust"
+        ]
+      },
+      "query": {
+        "type": "read_graph",
+        "node_id": "./tokio/src/runtime/scheduler/multi_thread/worker/taskdump.rs:function_item:61:4"
+      },
+      "expected": {
+        "node_ids": [
+          "./tokio/src/runtime/scheduler/multi_thread/worker/taskdump.rs:function_item:61:4"
+        ],
+        "min_recall": 1,
+        "max_rank": 5
+      },
+      "tags": [
+        "read_graph",
+        "structural",
+        "tokio",
+        "rust"
+      ],
+      "priority": 2,
+      "notes": "Node type Function, name steal_all"
+    },
+    {
+      "id": "tokio-read-graph-005",
+      "repo": {
+        "name": "tokio",
+        "path": "/tmp/tokio-stress-test",
+        "languages": [
+          "rust"
+        ]
+      },
+      "query": {
+        "type": "read_graph",
+        "node_id": "./tokio/src/runtime/scheduler/multi_thread/worker/taskdump.rs:impl_item:59:0"
+      },
+      "expected": {
+        "node_ids": [
+          "./tokio/src/runtime/scheduler/multi_thread/worker/taskdump.rs:impl_item:59:0"
+        ],
+        "min_recall": 1,
+        "max_rank": 5
+      },
+      "tags": [
+        "read_graph",
+        "structural",
+        "tokio",
+        "rust"
+      ],
+      "priority": 2,
+      "notes": "Node type Class, name Shared"
+    },
+    {
+      "id": "tokio-read-graph-006",
+      "repo": {
+        "name": "tokio",
+        "path": "/tmp/tokio-stress-test",
+        "languages": [
+          "rust"
+        ]
+      },
+      "query": {
+        "type": "read_graph",
+        "node_id": "./tokio/src/runtime/scheduler/multi_thread/worker/taskdump.rs:impl_item:9:0"
+      },
+      "expected": {
+        "node_ids": [
+          "./tokio/src/runtime/scheduler/multi_thread/worker/taskdump.rs:impl_item:9:0"
+        ],
+        "min_recall": 1,
+        "max_rank": 5
+      },
+      "tags": [
+        "read_graph",
+        "structural",
+        "tokio",
+        "rust"
+      ],
+      "priority": 2,
+      "notes": "Node type Class, name Handle"
+    },
+    {
+      "id": "tokio-read-graph-007",
+      "repo": {
+        "name": "tokio",
+        "path": "/tmp/tokio-stress-test",
+        "languages": [
+          "rust"
+        ]
+      },
+      "query": {
+        "type": "read_graph",
+        "node_id": "./tokio/src/runtime/scheduler/multi_thread/worker/taskdump_mock.rs:function_item:3:4"
+      },
+      "expected": {
+        "node_ids": [
+          "./tokio/src/runtime/scheduler/multi_thread/worker/taskdump_mock.rs:function_item:3:4"
+        ],
+        "min_recall": 1,
+        "max_rank": 5
+      },
+      "tags": [
+        "read_graph",
+        "structural",
+        "tokio",
+        "rust"
+      ],
+      "priority": 2,
+      "notes": "Node type Function, name trace_core"
+    },
+    {
+      "id": "tokio-read-graph-008",
+      "repo": {
+        "name": "tokio",
+        "path": "/tmp/tokio-stress-test",
+        "languages": [
+          "rust"
+        ]
+      },
+      "query": {
+        "type": "read_graph",
+        "node_id": "./tokio/src/runtime/scheduler/multi_thread/worker/taskdump_mock.rs:impl_item:2:0"
+      },
+      "expected": {
+        "node_ids": [
+          "./tokio/src/runtime/scheduler/multi_thread/worker/taskdump_mock.rs:impl_item:2:0"
+        ],
+        "min_recall": 1,
+        "max_rank": 5
+      },
+      "tags": [
+        "read_graph",
+        "structural",
+        "tokio",
+        "rust"
+      ],
+      "priority": 2,
+      "notes": "Node type Class, name Handle"
+    },
+    {
+      "id": "tokio-read-graph-009",
+      "repo": {
+        "name": "tokio",
+        "path": "/tmp/tokio-stress-test",
+        "languages": [
+          "rust"
+        ]
+      },
+      "query": {
+        "type": "read_graph",
+        "node_id": "./tokio/src/runtime/blocking/task.rs:function_item:11:4"
+      },
+      "expected": {
+        "node_ids": [
+          "./tokio/src/runtime/blocking/task.rs:function_item:11:4"
+        ],
+        "min_recall": 1,
+        "max_rank": 5
+      },
+      "tags": [
+        "read_graph",
+        "structural",
+        "tokio",
+        "rust"
+      ],
+      "priority": 2,
+      "notes": "Node type Function, name new"
+    },
+    {
+      "id": "tokio-read-graph-010",
+      "repo": {
+        "name": "tokio",
+        "path": "/tmp/tokio-stress-test",
+        "languages": [
+          "rust"
+        ]
+      },
+      "query": {
+        "type": "read_graph",
+        "node_id": "./tokio/src/runtime/blocking/task.rs:function_item:26:4"
+      },
+      "expected": {
+        "node_ids": [
+          "./tokio/src/runtime/blocking/task.rs:function_item:26:4"
+        ],
+        "min_recall": 1,
+        "max_rank": 5
+      },
+      "tags": [
+        "read_graph",
+        "structural",
+        "tokio",
+        "rust"
+      ],
+      "priority": 2,
+      "notes": "Node type Function, name poll"
+    },
+    {
+      "id": "tokio-get-context-001",
+      "repo": {
+        "name": "tokio",
+        "path": "/tmp/tokio-stress-test",
+        "languages": [
+          "rust"
+        ]
+      },
+      "query": {
+        "type": "get_context",
+        "file_path": "./tokio/src/runtime/blocking/task.rs",
+        "line": 18
+      },
+      "expected": {
+        "file_paths": [
+          "./tokio/src/runtime/blocking/task.rs"
+        ],
+        "min_recall": 1,
+        "max_rank": 5
+      },
+      "tags": [
+        "get_context",
+        "structural",
+        "tokio",
+        "rust"
+      ],
+      "priority": 2,
+      "notes": "Node type Class, name Unpin"
+    },
+    {
+      "id": "tokio-get-context-002",
+      "repo": {
+        "name": "tokio",
+        "path": "/tmp/tokio-stress-test",
+        "languages": [
+          "rust"
+        ]
+      },
+      "query": {
+        "type": "get_context",
+        "file_path": "./tokio/src/runtime/blocking/task.rs",
+        "line": 20
+      },
+      "expected": {
+        "file_paths": [
+          "./tokio/src/runtime/blocking/task.rs"
+        ],
+        "min_recall": 1,
+        "max_rank": 5
+      },
+      "tags": [
+        "get_context",
+        "structural",
+        "tokio",
+        "rust"
+      ],
+      "priority": 2,
+      "notes": "Node type Class, name Future"
+    },
+    {
+      "id": "tokio-get-context-003",
+      "repo": {
+        "name": "tokio",
+        "path": "/tmp/tokio-stress-test",
+        "languages": [
+          "rust"
+        ]
+      },
+      "query": {
+        "type": "get_context",
+        "file_path": "./tokio/src/runtime/blocking/task.rs",
+        "line": 10
+      },
+      "expected": {
+        "file_paths": [
+          "./tokio/src/runtime/blocking/task.rs"
+        ],
+        "min_recall": 1,
+        "max_rank": 5
+      },
+      "tags": [
+        "get_context",
+        "structural",
+        "tokio",
+        "rust"
+      ],
+      "priority": 2,
+      "notes": "Node type Class, name anonymous_impl"
+    },
+    {
+      "id": "tokio-get-context-004",
+      "repo": {
+        "name": "tokio",
+        "path": "/tmp/tokio-stress-test",
+        "languages": [
+          "rust"
+        ]
+      },
+      "query": {
+        "type": "get_context",
+        "file_path": "./tokio/src/runtime/blocking/task.rs",
+        "line": 6
+      },
+      "expected": {
+        "file_paths": [
+          "./tokio/src/runtime/blocking/task.rs"
+        ],
+        "min_recall": 1,
+        "max_rank": 5
+      },
+      "tags": [
+        "get_context",
+        "structural",
+        "tokio",
+        "rust"
+      ],
+      "priority": 2,
+      "notes": "Node type Struct, name BlockingTask"
+    },
+    {
+      "id": "tokio-get-context-005",
+      "repo": {
+        "name": "tokio",
+        "path": "/tmp/tokio-stress-test",
+        "languages": [
+          "rust"
+        ]
+      },
+      "query": {
+        "type": "get_context",
+        "file_path": "./tokio/src/runtime/metrics/scheduler.rs",
+        "line": 19
+      },
+      "expected": {
+        "file_paths": [
+          "./tokio/src/runtime/metrics/scheduler.rs"
+        ],
+        "min_recall": 1,
+        "max_rank": 5
+      },
+      "tags": [
+        "get_context",
+        "structural",
+        "tokio",
+        "rust"
+      ],
+      "priority": 2,
+      "notes": "Node type Function, name new"
+    },
+    {
+      "id": "tokio-get-context-006",
+      "repo": {
+        "name": "tokio",
+        "path": "/tmp/tokio-stress-test",
+        "languages": [
+          "rust"
+        ]
+      },
+      "query": {
+        "type": "get_context",
+        "file_path": "./tokio/src/runtime/metrics/scheduler.rs",
+        "line": 27
+      },
+      "expected": {
+        "file_paths": [
+          "./tokio/src/runtime/metrics/scheduler.rs"
+        ],
+        "min_recall": 1,
+        "max_rank": 5
+      },
+      "tags": [
+        "get_context",
+        "structural",
+        "tokio",
+        "rust"
+      ],
+      "priority": 2,
+      "notes": "Node type Function, name inc_remote_schedule_count"
+    },
+    {
+      "id": "tokio-get-context-007",
+      "repo": {
+        "name": "tokio",
+        "path": "/tmp/tokio-stress-test",
+        "languages": [
+          "rust"
+        ]
+      },
+      "query": {
+        "type": "get_context",
+        "file_path": "./tokio/src/runtime/metrics/scheduler.rs",
+        "line": 32
+      },
+      "expected": {
+        "file_paths": [
+          "./tokio/src/runtime/metrics/scheduler.rs"
+        ],
+        "min_recall": 1,
+        "max_rank": 5
+      },
+      "tags": [
+        "get_context",
+        "structural",
+        "tokio",
+        "rust"
+      ],
+      "priority": 2,
+      "notes": "Node type Function, name inc_budget_forced_yield_count"
+    },
+    {
+      "id": "tokio-get-context-008",
+      "repo": {
+        "name": "tokio",
+        "path": "/tmp/tokio-stress-test",
+        "languages": [
+          "rust"
+        ]
+      },
+      "query": {
+        "type": "get_context",
+        "file_path": "./tokio/src/runtime/metrics/scheduler.rs",
+        "line": 18
+      },
+      "expected": {
+        "file_paths": [
+          "./tokio/src/runtime/metrics/scheduler.rs"
+        ],
+        "min_recall": 1,
+        "max_rank": 5
+      },
+      "tags": [
+        "get_context",
+        "structural",
+        "tokio",
+        "rust"
+      ],
+      "priority": 2,
+      "notes": "Node type Class, name SchedulerMetrics"
+    },
+    {
+      "id": "tokio-get-context-009",
+      "repo": {
+        "name": "tokio",
+        "path": "/tmp/tokio-stress-test",
+        "languages": [
+          "rust"
+        ]
+      },
+      "query": {
+        "type": "get_context",
+        "file_path": "./tokio/src/runtime/metrics/scheduler.rs",
+        "line": 12
+      },
+      "expected": {
+        "file_paths": [
+          "./tokio/src/runtime/metrics/scheduler.rs"
+        ],
+        "min_recall": 1,
+        "max_rank": 5
+      },
+      "tags": [
+        "get_context",
+        "structural",
+        "tokio",
+        "rust"
+      ],
+      "priority": 2,
+      "notes": "Node type Struct, name SchedulerMetrics"
+    },
+    {
+      "id": "tokio-get-context-010",
+      "repo": {
+        "name": "tokio",
+        "path": "/tmp/tokio-stress-test",
+        "languages": [
+          "rust"
+        ]
+      },
+      "query": {
+        "type": "get_context",
+        "file_path": "./tokio/src/runtime/scheduler/block_in_place.rs",
+        "line": 4
+      },
+      "expected": {
+        "file_paths": [
+          "./tokio/src/runtime/scheduler/block_in_place.rs"
+        ],
+        "min_recall": 1,
+        "max_rank": 5
+      },
+      "tags": [
+        "get_context",
+        "structural",
+        "tokio",
+        "rust"
+      ],
+      "priority": 2,
+      "notes": "Node type Function, name block_in_place"
+    },
+    {
+      "id": "express-read-graph-001",
+      "repo": {
+        "name": "express",
+        "path": "/tmp/express-stress-test",
+        "languages": [
+          "javascript",
+          "typescript"
+        ]
+      },
+      "query": {
+        "type": "read_graph",
+        "node_id": "./examples/route-middleware/index.js:function_declaration:24:0"
+      },
+      "expected": {
+        "node_ids": [
+          "./examples/route-middleware/index.js:function_declaration:24:0"
+        ],
+        "min_recall": 1,
+        "max_rank": 5
+      },
+      "tags": [
+        "read_graph",
+        "structural",
+        "express",
+        "node"
+      ],
+      "priority": 2,
+      "notes": "Node type Function, name loadUser"
+    },
+    {
+      "id": "express-read-graph-002",
+      "repo": {
+        "name": "express",
+        "path": "/tmp/express-stress-test",
+        "languages": [
+          "javascript",
+          "typescript"
+        ]
+      },
+      "query": {
+        "type": "read_graph",
+        "node_id": "./examples/route-middleware/index.js:function_declaration:35:0"
+      },
+      "expected": {
+        "node_ids": [
+          "./examples/route-middleware/index.js:function_declaration:35:0"
+        ],
+        "min_recall": 1,
+        "max_rank": 5
+      },
+      "tags": [
+        "read_graph",
+        "structural",
+        "express",
+        "node"
+      ],
+      "priority": 2,
+      "notes": "Node type Function, name andRestrictToSelf"
+    },
+    {
+      "id": "express-read-graph-003",
+      "repo": {
+        "name": "express",
+        "path": "/tmp/express-stress-test",
+        "languages": [
+          "javascript",
+          "typescript"
+        ]
+      },
+      "query": {
+        "type": "read_graph",
+        "node_id": "./examples/route-middleware/index.js:function_declaration:49:0"
+      },
+      "expected": {
+        "node_ids": [
+          "./examples/route-middleware/index.js:function_declaration:49:0"
+        ],
+        "min_recall": 1,
+        "max_rank": 5
+      },
+      "tags": [
+        "read_graph",
+        "structural",
+        "express",
+        "node"
+      ],
+      "priority": 2,
+      "notes": "Node type Function, name andRestrictTo"
+    },
+    {
+      "id": "express-read-graph-004",
+      "repo": {
+        "name": "express",
+        "path": "/tmp/express-stress-test",
+        "languages": [
+          "javascript",
+          "typescript"
+        ]
+      },
+      "query": {
+        "type": "read_graph",
+        "node_id": "./lib/application.js:function_declaration:614:0"
+      },
+      "expected": {
+        "node_ids": [
+          "./lib/application.js:function_declaration:614:0"
+        ],
+        "min_recall": 1,
+        "max_rank": 5
+      },
+      "tags": [
+        "read_graph",
+        "structural",
+        "express",
+        "node"
+      ],
+      "priority": 2,
+      "notes": "Node type Function, name logerror"
+    },
+    {
+      "id": "express-read-graph-005",
+      "repo": {
+        "name": "express",
+        "path": "/tmp/express-stress-test",
+        "languages": [
+          "javascript",
+          "typescript"
+        ]
+      },
+      "query": {
+        "type": "read_graph",
+        "node_id": "./lib/application.js:function_declaration:624:0"
+      },
+      "expected": {
+        "node_ids": [
+          "./lib/application.js:function_declaration:624:0"
+        ],
+        "min_recall": 1,
+        "max_rank": 5
+      },
+      "tags": [
+        "read_graph",
+        "structural",
+        "express",
+        "node"
+      ],
+      "priority": 2,
+      "notes": "Node type Function, name tryRender"
+    },
+    {
+      "id": "express-read-graph-006",
+      "repo": {
+        "name": "express",
+        "path": "/tmp/express-stress-test",
+        "languages": [
+          "javascript",
+          "typescript"
+        ]
+      },
+      "query": {
+        "type": "read_graph",
+        "node_id": "./lib/request.js:function_declaration:520:0"
+      },
+      "expected": {
+        "node_ids": [
+          "./lib/request.js:function_declaration:520:0"
+        ],
+        "min_recall": 1,
+        "max_rank": 5
+      },
+      "tags": [
+        "read_graph",
+        "structural",
+        "express",
+        "node"
+      ],
+      "priority": 2,
+      "notes": "Node type Function, name defineGetter"
+    },
+    {
+      "id": "express-read-graph-007",
+      "repo": {
+        "name": "express",
+        "path": "/tmp/express-stress-test",
+        "languages": [
+          "javascript",
+          "typescript"
+        ]
+      },
+      "query": {
+        "type": "read_graph",
+        "node_id": "./lib/response.js:function_declaration:1022:0"
+      },
+      "expected": {
+        "node_ids": [
+          "./lib/response.js:function_declaration:1022:0"
+        ],
+        "min_recall": 1,
+        "max_rank": 5
+      },
+      "tags": [
+        "read_graph",
+        "structural",
+        "express",
+        "node"
+      ],
+      "priority": 2,
+      "notes": "Node type Function, name stringify"
+    },
+    {
+      "id": "express-read-graph-008",
+      "repo": {
+        "name": "express",
+        "path": "/tmp/express-stress-test",
+        "languages": [
+          "javascript",
+          "typescript"
+        ]
+      },
+      "query": {
+        "type": "read_graph",
+        "node_id": "./lib/response.js:function_declaration:920:0"
+      },
+      "expected": {
+        "node_ids": [
+          "./lib/response.js:function_declaration:920:0"
+        ],
+        "min_recall": 1,
+        "max_rank": 5
+      },
+      "tags": [
+        "read_graph",
+        "structural",
+        "express",
+        "node"
+      ],
+      "priority": 2,
+      "notes": "Node type Function, name sendfile"
+    },
+    {
+      "id": "express-read-graph-009",
+      "repo": {
+        "name": "express",
+        "path": "/tmp/express-stress-test",
+        "languages": [
+          "javascript",
+          "typescript"
+        ]
+      },
+      "query": {
+        "type": "read_graph",
+        "node_id": "./lib/response.js:function_declaration:925:2"
+      },
+      "expected": {
+        "node_ids": [
+          "./lib/response.js:function_declaration:925:2"
+        ],
+        "min_recall": 1,
+        "max_rank": 5
+      },
+      "tags": [
+        "read_graph",
+        "structural",
+        "express",
+        "node"
+      ],
+      "priority": 2,
+      "notes": "Node type Function, name onaborted"
+    },
+    {
+      "id": "express-read-graph-010",
+      "repo": {
+        "name": "express",
+        "path": "/tmp/express-stress-test",
+        "languages": [
+          "javascript",
+          "typescript"
+        ]
+      },
+      "query": {
+        "type": "read_graph",
+        "node_id": "./lib/response.js:function_declaration:935:2"
+      },
+      "expected": {
+        "node_ids": [
+          "./lib/response.js:function_declaration:935:2"
+        ],
+        "min_recall": 1,
+        "max_rank": 5
+      },
+      "tags": [
+        "read_graph",
+        "structural",
+        "express",
+        "node"
+      ],
+      "priority": 2,
+      "notes": "Node type Function, name ondirectory"
+    },
+    {
+      "id": "express-get-context-001",
+      "repo": {
+        "name": "express",
+        "path": "/tmp/express-stress-test",
+        "languages": [
+          "javascript",
+          "typescript"
+        ]
+      },
+      "query": {
+        "type": "get_context",
+        "file_path": "./lib/response.js",
+        "line": 946
+      },
+      "expected": {
+        "file_paths": [
+          "./lib/response.js"
+        ],
+        "min_recall": 1,
+        "max_rank": 5
+      },
+      "tags": [
+        "get_context",
+        "structural",
+        "express",
+        "node"
+      ],
+      "priority": 2,
+      "notes": "Node type Function, name onerror"
+    },
+    {
+      "id": "express-get-context-002",
+      "repo": {
+        "name": "express",
+        "path": "/tmp/express-stress-test",
+        "languages": [
+          "javascript",
+          "typescript"
+        ]
+      },
+      "query": {
+        "type": "get_context",
+        "file_path": "./lib/response.js",
+        "line": 953
+      },
+      "expected": {
+        "file_paths": [
+          "./lib/response.js"
+        ],
+        "min_recall": 1,
+        "max_rank": 5
+      },
+      "tags": [
+        "get_context",
+        "structural",
+        "express",
+        "node"
+      ],
+      "priority": 2,
+      "notes": "Node type Function, name onend"
+    },
+    {
+      "id": "express-get-context-003",
+      "repo": {
+        "name": "express",
+        "path": "/tmp/express-stress-test",
+        "languages": [
+          "javascript",
+          "typescript"
+        ]
+      },
+      "query": {
+        "type": "get_context",
+        "file_path": "./lib/response.js",
+        "line": 960
+      },
+      "expected": {
+        "file_paths": [
+          "./lib/response.js"
+        ],
+        "min_recall": 1,
+        "max_rank": 5
+      },
+      "tags": [
+        "get_context",
+        "structural",
+        "express",
+        "node"
+      ],
+      "priority": 2,
+      "notes": "Node type Function, name onfile"
+    },
+    {
+      "id": "express-get-context-004",
+      "repo": {
+        "name": "express",
+        "path": "/tmp/express-stress-test",
+        "languages": [
+          "javascript",
+          "typescript"
+        ]
+      },
+      "query": {
+        "type": "get_context",
+        "file_path": "./lib/response.js",
+        "line": 965
+      },
+      "expected": {
+        "file_paths": [
+          "./lib/response.js"
+        ],
+        "min_recall": 1,
+        "max_rank": 5
+      },
+      "tags": [
+        "get_context",
+        "structural",
+        "express",
+        "node"
+      ],
+      "priority": 2,
+      "notes": "Node type Function, name onfinish"
+    },
+    {
+      "id": "express-get-context-005",
+      "repo": {
+        "name": "express",
+        "path": "/tmp/express-stress-test",
+        "languages": [
+          "javascript",
+          "typescript"
+        ]
+      },
+      "query": {
+        "type": "get_context",
+        "file_path": "./lib/response.js",
+        "line": 983
+      },
+      "expected": {
+        "file_paths": [
+          "./lib/response.js"
+        ],
+        "min_recall": 1,
+        "max_rank": 5
+      },
+      "tags": [
+        "get_context",
+        "structural",
+        "express",
+        "node"
+      ],
+      "priority": 2,
+      "notes": "Node type Function, name onstream"
+    },
+    {
+      "id": "express-get-context-006",
+      "repo": {
+        "name": "express",
+        "path": "/tmp/express-stress-test",
+        "languages": [
+          "javascript",
+          "typescript"
+        ]
+      },
+      "query": {
+        "type": "get_context",
+        "file_path": "./test/Router.js",
+        "line": 463
+      },
+      "expected": {
+        "file_paths": [
+          "./test/Router.js"
+        ],
+        "min_recall": 1,
+        "max_rank": 5
+      },
+      "tags": [
+        "get_context",
+        "structural",
+        "express",
+        "node"
+      ],
+      "priority": 2,
+      "notes": "Node type Function, name no"
+    },
+    {
+      "id": "express-get-context-007",
+      "repo": {
+        "name": "express",
+        "path": "/tmp/express-stress-test",
+        "languages": [
+          "javascript",
+          "typescript"
+        ]
+      },
+      "query": {
+        "type": "get_context",
+        "file_path": "./test/Router.js",
+        "line": 481
+      },
+      "expected": {
+        "file_paths": [
+          "./test/Router.js"
+        ],
+        "min_recall": 1,
+        "max_rank": 5
+      },
+      "tags": [
+        "get_context",
+        "structural",
+        "express",
+        "node"
+      ],
+      "priority": 2,
+      "notes": "Node type Function, name fn1"
+    },
+    {
+      "id": "express-get-context-008",
+      "repo": {
+        "name": "express",
+        "path": "/tmp/express-stress-test",
+        "languages": [
+          "javascript",
+          "typescript"
+        ]
+      },
+      "query": {
+        "type": "get_context",
+        "file_path": "./test/Router.js",
+        "line": 486
+      },
+      "expected": {
+        "file_paths": [
+          "./test/Router.js"
+        ],
+        "min_recall": 1,
+        "max_rank": 5
+      },
+      "tags": [
+        "get_context",
+        "structural",
+        "express",
+        "node"
+      ],
+      "priority": 2,
+      "notes": "Node type Function, name fn2"
+    },
+    {
+      "id": "express-get-context-009",
+      "repo": {
+        "name": "express",
+        "path": "/tmp/express-stress-test",
+        "languages": [
+          "javascript",
+          "typescript"
+        ]
+      },
+      "query": {
+        "type": "get_context",
+        "file_path": "./test/app.router.js",
+        "line": 1210
+      },
+      "expected": {
+        "file_paths": [
+          "./test/app.router.js"
+        ],
+        "min_recall": 1,
+        "max_rank": 5
+      },
+      "tags": [
+        "get_context",
+        "structural",
+        "express",
+        "node"
+      ],
+      "priority": 2,
+      "notes": "Node type Function, name supportsRegexp"
+    },
+    {
+      "id": "express-get-context-010",
+      "repo": {
+        "name": "express",
+        "path": "/tmp/express-stress-test",
+        "languages": [
+          "javascript",
+          "typescript"
+        ]
+      },
+      "query": {
+        "type": "get_context",
+        "file_path": "./test/app.router.js",
+        "line": 16
+      },
+      "expected": {
+        "file_paths": [
+          "./test/app.router.js"
+        ],
+        "min_recall": 1,
+        "max_rank": 5
+      },
+      "tags": [
+        "get_context",
+        "structural",
+        "express",
+        "node"
+      ],
+      "priority": 2,
+      "notes": "Node type Function, name handler1"
+    }
+  ]
+}

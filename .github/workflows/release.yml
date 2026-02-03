@@ -3,7 +3,7 @@ name: Release
 on:
   push:
     tags:
-      - "v*.*.*"
+      - "v*"
   workflow_dispatch:
 
 permissions:
@@ -11,65 +11,68 @@ permissions:
 
 jobs:
   build:
-    name: Build ${{ matrix.target }}
+    name: Build (${{ matrix.target }})
     runs-on: ${{ matrix.os }}
     strategy:
+      fail-fast: false
       matrix:
         include:
-          - target: x86_64-unknown-linux-gnu
-            os: ubuntu-latest
-            name: linux-x86_64
-          - target: aarch64-apple-darwin
-            os: macos-latest
-            name: macos-arm64
-
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            ext: ""
+          - os: macos-13
+            target: x86_64-apple-darwin
+            ext: ""
+          - os: macos-14
+            target: aarch64-apple-darwin
+            ext: ""
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+            ext: ".exe"
 
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install Protoc (Linux)
-        if: runner.os == 'Linux'
-        run: sudo apt-get install -y protobuf-compiler
-
-      - name: Install Protoc (macOS)
-        if: runner.os == 'macOS'
-        run: brew install protobuf
-
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
-        with:
-          targets: ${{ matrix.target }}
 
-      - name: Build Binary
-        env:
-          RUSTFLAGS: ${{ matrix.target == 'x86_64-apple-darwin' && '-C target-feature=-avx,-avx2,-avx512f,-f16c,-fma' || '' }}
-        run: cargo build --release --target ${{ matrix.target }}
+      - name: Build binaries
+        run: cargo build --release -p ccm-cli -p ccm-mcp
 
-      - name: Prepare Binaries
+      - name: Prepare artifacts
+        shell: bash
         run: |
-          cd target/${{ matrix.target }}/release
-          mv ccm-cli ccm-cli-${{ matrix.target }}
-          mv ccm-mcp ccm-mcp-${{ matrix.target }}
+          mkdir -p dist
+          cp "target/release/ccm-cli${{ matrix.ext }}" "dist/ccm-cli-${{ matrix.target }}${{ matrix.ext }}"
+          cp "target/release/ccm-mcp${{ matrix.ext }}" "dist/ccm-mcp-${{ matrix.target }}${{ matrix.ext }}"
 
-      - name: Upload Artifacts
+      - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: binaries-${{ matrix.name }}
-          path: |
-            target/${{ matrix.target }}/release/ccm-cli-${{ matrix.target }}
-            target/${{ matrix.target }}/release/ccm-mcp-${{ matrix.target }}
+          name: ccm-${{ matrix.target }}
+          path: dist/*
 
-  create-release:
-    name: Create Release
-    needs: build
+  release:
+    name: Attach Release Assets
     runs-on: ubuntu-latest
-    steps:
-      - uses: actions/download-artifact@v4
-        with:
-          path: artifacts
+    needs: build
 
-      - name: Create Release
-        uses: softprops/action-gh-release@v1
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
         with:
-          files: artifacts/**/*
-          generate_release_notes: true
+          path: dist
+
+      - name: Collect artifacts
+        shell: bash
+        run: |
+          mkdir -p release
+          find dist -type f -maxdepth 2 -print -exec cp {} release/ \;
+          scripts/generate_checksums.sh release release/checksums.txt
+
+      - name: Upload release assets
+        uses: softprops/action-gh-release@v2
+        with:
+          files: release/*

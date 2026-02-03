@@ -102,11 +102,7 @@ pub async fn search_code(engine: &Arc<RetrievalEngine>, args: &Value) -> Result<
     }
 
     let hits = engine.search_code(query, 5).await?;
-    eprintln!(
-        "[DEBUG] search_code found {} hits for query: '{}'",
-        hits.len(),
-        query
-    );
+    tracing::debug!(hits = hits.len(), query = %query, "search_code results");
 
     if hits.is_empty() {
         return Ok(ToolResult {
@@ -246,10 +242,7 @@ pub async fn index_project(args: &Value) -> Result<ToolResult> {
         .and_then(|v| v.as_str())
         .ok_or_else(|| anyhow::anyhow!("Missing 'project_path' argument"))?;
 
-    eprintln!(
-        "[Tool: index_project] Starting manual index for: {}",
-        project_path
-    );
+    tracing::info!(path = %project_path, "Starting manual index");
 
     // Default db path relative to project
     let db_path = std::path::Path::new(project_path)
@@ -273,7 +266,7 @@ pub async fn index_project(args: &Value) -> Result<ToolResult> {
         }
         Err(e) => {
             let error_msg = format!("Indexing failed: {}", e);
-            eprintln!("[Tool: index_project] Error: {}", error_msg);
+            tracing::warn!(error = %e, "Indexing failed");
             Ok(ToolResult {
                 content: vec![ToolResultContent {
                     content_type: "text".to_string(),

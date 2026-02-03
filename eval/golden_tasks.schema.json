@@ -1,0 +1,119 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "ccm://eval/golden_tasks.schema.json",
+  "title": "CCM Golden Tasks",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "tasks": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 3
+          },
+          "repo": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "name": { "type": "string" },
+              "path": { "type": "string" },
+              "commit": { "type": "string" },
+              "languages": {
+                "type": "array",
+                "items": { "type": "string" }
+              }
+            },
+            "required": ["name", "path"]
+          },
+          "query": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": ["search_code", "read_graph", "get_context"]
+              },
+              "text": { "type": "string" },
+              "node_id": { "type": "string" },
+              "file_path": { "type": "string" },
+              "line": { "type": "integer", "minimum": 1 },
+              "column": { "type": "integer", "minimum": 0 }
+            },
+            "required": ["type"]
+          },
+          "expected": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "node_ids": {
+                "type": "array",
+                "items": { "type": "string" }
+              },
+              "file_paths": {
+                "type": "array",
+                "items": { "type": "string" }
+              },
+              "min_recall": { "type": "integer", "minimum": 1 },
+              "max_rank": { "type": "integer", "minimum": 1 },
+              "reason_contains": {
+                "type": "array",
+                "items": { "type": "string" }
+              }
+            },
+            "required": ["min_recall"]
+          },
+          "tags": {
+            "type": "array",
+            "items": { "type": "string" }
+          },
+          "priority": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 3
+          },
+          "notes": { "type": "string" }
+        },
+        "required": ["id", "repo", "query", "expected"],
+        "allOf": [
+          {
+            "if": {
+              "properties": { "query": { "properties": { "type": { "const": "search_code" } } } },
+              "required": ["query"]
+            },
+            "then": {
+              "properties": { "query": { "required": ["text"] } }
+            }
+          },
+          {
+            "if": {
+              "properties": { "query": { "properties": { "type": { "const": "read_graph" } } } },
+              "required": ["query"]
+            },
+            "then": {
+              "properties": { "query": { "required": ["node_id"] } }
+            }
+          },
+          {
+            "if": {
+              "properties": { "query": { "properties": { "type": { "const": "get_context" } } } },
+              "required": ["query"]
+            },
+            "then": {
+              "properties": { "query": { "required": ["file_path", "line"] } }
+            }
+          }
+        ]
+      }
+    }
+  },
+  "required": ["schema_version", "tasks"]
+}

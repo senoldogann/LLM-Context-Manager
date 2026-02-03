@@ -15,7 +15,7 @@ use tonic::transport::Server;
 /// * `http_port` - The port number for the HTTP server (Health Check)
 pub async fn start_server(http_port: u16) -> anyhow::Result<()> {
     // Shared State Initialization
-    println!("Initializing CCM Core Engine...");
+    tracing::info!("Initializing CCM Core Engine...");
     let graph = CodeGraph::new();
     // Use a persistent path for the vector store
     let store = LanceDbStore::new("data/ccm_db", "code_vectors").await?;
@@ -24,19 +24,19 @@ pub async fn start_server(http_port: u16) -> anyhow::Result<()> {
     // 1. HTTP Server (Health Check & Debug)
     let app = Router::new().route("/", get(|| async { "CCM Core is Running" }));
     let http_addr = SocketAddr::from(([127, 0, 0, 1], http_port));
-    println!("HTTP Server listening on {}", http_addr);
+    tracing::info!(addr = %http_addr, "HTTP server listening");
 
     let http_server = axum::serve(tokio::net::TcpListener::bind(http_addr).await?, app);
 
     // 2. gRPC Server (Main Data Channel)
     let grpc_addr = "[::1]:50051".parse()?;
-    println!("gRPC Server listening on {}", grpc_addr);
+    tracing::info!(addr = %grpc_addr, "gRPC server listening");
 
     let grpc_service = rpc::create_service(engine.clone());
     let grpc_server = Server::builder().add_service(grpc_service).serve(grpc_addr);
 
     // Run both concurrently
-    println!("CCM Sidecar is ready to accept connections.");
+    tracing::info!("CCM Sidecar is ready to accept connections.");
 
     try_join!(
         async move {

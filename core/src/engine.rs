@@ -1,7 +1,11 @@
+pub mod hybrid;
 pub mod predictive;
 
+use crate::engine::hybrid::HybridScorer;
+use crate::fs_utils::{detect_language, read_text_file_limited};
 use crate::git::GitIntegrator;
-use crate::graph::{CodeGraph, CodeNode, NodeType};
+use crate::graph::{CodeGraph, CodeNode, EdgeType, NodeType};
+use crate::normalize_file_id;
 use crate::parser::CodeParser;
 use crate::parser::SupportedLanguage;
 use crate::vector::extractor::Extractor;
@@ -37,6 +41,8 @@ pub struct NodeNeighbors {
 }
 
 use crate::engine::predictive::SpeculativeCache;
+use std::collections::{HashMap, HashSet};
+use std::path::PathBuf;
 use std::sync::Arc;
 
 /// The main intelligence engine for speculative retrieval.
@@ -45,6 +51,13 @@ pub struct RetrievalEngine {
     store: LanceDbStore,
     #[allow(dead_code)]
     cache: Arc<SpeculativeCache>,
+}
+
+struct HybridCandidate {
+    id: String,
+    graph_score: f32,
+    semantic_score: f32,
+    combined_score: f32,
 }
 
 impl RetrievalEngine {
@@ -61,6 +74,7 @@ impl RetrievalEngine {
     pub async fn index_graph(&self) -> Result<()> {
         let mut ids = Vec::new();
         let mut texts = Vec::new();
+        let embed_data_files = embed_data_files_enabled();
 
         let graph = self.graph.read().await;
 
@@ -72,7 +86,8 @@ impl RetrievalEngine {
             if matches!(
                 node.node_type,
                 NodeType::Function | NodeType::Method | NodeType::Class | NodeType::Struct
-            ) {
+            ) || (embed_data_files && matches!(node.node_type, NodeType::DataFile))
+            {
                 // Combine name, type, and content for better embedding context
                 // Format: "Type: Name \n Content"
                 // Content already includes Docstring from Extractor.
@@ -83,7 +98,11 @@ impl RetrievalEngine {
                 // If node is > 8000 chars (~2k tokens), we might want to split it further or truncated?
                 // For Phase 3, we index it but log a warning if extremely large.
                 if text_representation.len() > 8000 {
-                    eprintln!("Warning: Node {} is very large ({} chars). Retrieval accuracy might degrade.", node.id, text_representation.len());
+                    tracing::warn!(
+                        node = %node.id,
+                        len = text_representation.len(),
+                        "Node is very large; retrieval accuracy might degrade"
+                    );
                 }
 
                 ids.push(node.id.clone());
@@ -92,7 +111,7 @@ impl RetrievalEngine {
         }
 
         if !ids.is_empty() {
-            eprintln!("Indexing {} nodes into vector store...", ids.len());
+            tracing::info!(count = ids.len(), "Indexing nodes into vector store");
             self.store.add_documents(ids, texts).await?;
         }
 
@@ -104,41 +123,57 @@ impl RetrievalEngine {
         let git = GitIntegrator::new(project_root)?;
         let changed_files = git.get_changed_files()?;
 
+        self.incremental_index_paths(project_root, &changed_files)
+            .await
+    }
+
+    /// Performs incremental indexing using a provided list of changed files.
+    pub async fn incremental_index_paths(
+        &self,
+        project_root: &str,
+        changed_files: &[PathBuf],
+    ) -> Result<()> {
         if changed_files.is_empty() {
-            eprintln!("No changes detected.");
+            tracing::info!("No changes detected.");
             return Ok(());
         }
 
-        eprintln!(
-            "Incremental Indexing: Found {} changed files.",
-            changed_files.len()
+        tracing::info!(
+            count = changed_files.len(),
+            "Incremental indexing: changed files detected."
         );
 
         let mut parser = CodeParser::new();
         let mut nodes_to_index = Vec::new(); // Collect new nodes for vector DB
+        let mut indexed_node_ids = HashSet::new();
+        let embed_data_files = embed_data_files_enabled();
 
         let root_path = std::fs::canonicalize(project_root)
             .unwrap_or_else(|_| std::path::PathBuf::from(project_root));
 
         for path in changed_files {
             // Canonicalize file path to ensure it matches root
-            let abs_path = std::fs::canonicalize(&path).unwrap_or(path.clone());
+            let abs_path = if path.is_absolute() {
+                path.clone()
+            } else {
+                root_path.join(path)
+            };
+            let abs_path = std::fs::canonicalize(&abs_path).unwrap_or(abs_path);
 
-            let relative_path = abs_path
-                .strip_prefix(&root_path)
-                .unwrap_or_else(|_| abs_path.strip_prefix(project_root).unwrap_or(&abs_path))
-                .to_string_lossy()
-                .to_string();
+            let Some(relative_path) = normalize_file_id(&root_path, &abs_path) else {
+                continue;
+            };
 
-            eprintln!("Processing: {}", relative_path);
+            tracing::debug!(path = %relative_path, "Processing file");
 
             // 1. GARBAGE COLLECTION: Delete old vectors for this file
-            // Now that Extractor uses file-prefixed IDs ("path/to/file:kind:row..."),
+            // Now that Extractor uses file-prefixed IDs ("./path/to/file:kind:row..."),
             // we can safely delete all vectors belonging to this file.
             if let Err(e) = self.store.delete_by_prefix(&relative_path).await {
-                eprintln!(
-                    "Warning: Failed to perform vector GC for {}: {}",
-                    relative_path, e
+                tracing::warn!(
+                    path = %relative_path,
+                    error = %e,
+                    "Failed to perform vector GC for file"
                 );
             }
 
@@ -149,60 +184,112 @@ impl RetrievalEngine {
                 graph.remove_file_nodes(&relative_path);
             }
 
-            // Parse File
-            if let Ok(content) = std::fs::read_to_string(&abs_path) {
-                // Detect language
-                let lang = if path.extension().is_some_and(|e| e == "rs") {
-                    SupportedLanguage::Rust
-                } else if path.extension().is_some_and(|e| e == "py") {
-                    SupportedLanguage::Python
-                } else if path.extension().is_some_and(|e| e == "ts") {
-                    SupportedLanguage::TypeScript
-                } else {
-                    SupportedLanguage::Data
+            // Parse File (skip if deleted)
+            if !abs_path.exists() {
+                continue;
+            }
+
+            let content = match read_text_file_limited(&abs_path) {
+                Ok(content) => content,
+                Err(e) => {
+                    tracing::warn!(
+                        path = %relative_path,
+                        error = %e,
+                        "Skipping file during incremental indexing"
+                    );
+                    continue;
+                }
+            };
+
+            let lang = detect_language(&abs_path);
+
+            if matches!(lang, SupportedLanguage::Data) {
+                let mut graph = self.graph.write().await;
+                let end_line = content.lines().count().max(1);
+                let node = CodeNode {
+                    id: relative_path.clone(),
+                    node_type: NodeType::DataFile,
+                    name: relative_path.clone(),
+                    content,
+                    start_line: 1,
+                    end_line,
                 };
+                let idx = graph.add_node(node);
+                if embed_data_files {
+                    let node = &graph.graph[idx];
+                    if indexed_node_ids.insert(node.id.clone()) {
+                        nodes_to_index.push(node.clone());
+                    }
+                }
+                continue;
+            }
 
-                if let Ok(tree) = parser.parse_tree(&content, lang) {
-                    let mut extractor = Extractor::new(content.clone(), lang);
+            let tree = match parser.parse_tree(&content, lang) {
+                Ok(tree) => tree,
+                Err(e) => {
+                    tracing::warn!(
+                        path = %relative_path,
+                        error = %e,
+                        "Skipping file due to parse error"
+                    );
+                    continue;
+                }
+            };
 
-                    // Write Lock Scope: Update Graph
-                    let mut graph = self.graph.write().await;
+            let mut extractor = Extractor::new(content.clone(), lang);
 
-                    if let Ok(_file_idx) = extractor.extract(&tree, &mut graph, &relative_path) {
-                        // Collect ALL new nodes for this file
-                        // Extractor doesn't return them. We have to query them back or maintain state.
-                        // Or simply scan the graph for nodes belonging to this file?
+            // Write Lock Scope: Update Graph
+            let mut graph = self.graph.write().await;
 
-                        // Efficient scan:
-                        if let Some(file_node_idx) = graph.find_file_node(&relative_path) {
-                            // DFS to find children
-                            // This duplicates `remove_file_nodes` logic but for collection.
-                            let mut stack = vec![file_node_idx];
-                            while let Some(idx) = stack.pop() {
-                                let node = &graph.graph[idx];
+            if extractor.extract(&tree, &mut graph, &relative_path).is_ok() {
+                match extractor.extract_references(&tree, &mut graph) {
+                    Ok(edges_created) => {
+                        if edges_created > 0 {
+                            tracing::debug!(
+                                path = %relative_path,
+                                edges = edges_created,
+                                "Linked call edges"
+                            );
+                        }
+                    }
+                    Err(e) => {
+                        tracing::warn!(
+                            path = %relative_path,
+                            error = %e,
+                            "Failed to extract references during incremental indexing"
+                        );
+                    }
+                }
 
-                                // Filter for semantic nodes
-                                if matches!(
-                                    node.node_type,
-                                    NodeType::Function
-                                        | NodeType::Method
-                                        | NodeType::Class
-                                        | NodeType::Struct
-                                ) {
-                                    nodes_to_index.push(node.clone());
-                                }
+                // Collect ALL new nodes for this file
+                if let Some(file_node_idx) = graph.find_file_node(&relative_path) {
+                    let mut stack = vec![file_node_idx];
+                    let mut visited = HashSet::new();
+                    visited.insert(file_node_idx);
 
-                                // Children
-                                let neighbors = graph.graph.neighbors(idx);
-                                for n in neighbors {
-                                    // Only follow Contains edges?
-                                    // Graph neighbors iterator includes all outgoing edges.
-                                    // We need to filter edge type.
-                                    // Getting edge weight requires `edges_directed`.
-                                    // Simpler: Just rely on the fact we just added them?
-                                    // Or use `Recurse` logic.
-                                    stack.push(n);
-                                    // Warning: Infinite loop if cycles. CodeGraph (AST) is a Tree (DAG), so OK.
+                    while let Some(idx) = stack.pop() {
+                        let node = &graph.graph[idx];
+
+                        if (matches!(
+                            node.node_type,
+                            NodeType::Function
+                                | NodeType::Method
+                                | NodeType::Class
+                                | NodeType::Struct
+                        ) || (embed_data_files && matches!(node.node_type, NodeType::DataFile)))
+                            && indexed_node_ids.insert(node.id.clone())
+                        {
+                            nodes_to_index.push(node.clone());
+                        }
+
+                        for edge in graph
+                            .graph
+                            .edges_directed(idx, petgraph::Direction::Outgoing)
+                        {
+                            if matches!(edge.weight(), EdgeType::Contains) {
+                                let neighbor_idx = edge.target();
+                                if visited.insert(neighbor_idx) {
+                                    stack.push(neighbor_idx);
                                 }
                             }
                         }
@@ -217,9 +304,9 @@ impl RetrievalEngine {
 
         // Batch Index New Nodes
         if !nodes_to_index.is_empty() {
-            eprintln!(
-                "Incremental: Indexing {} new semantic nodes...",
-                nodes_to_index.len()
+            tracing::info!(
+                count = nodes_to_index.len(),
+                "Incremental: indexing semantic nodes"
             );
             let ids: Vec<String> = nodes_to_index.iter().map(|n| n.id.clone()).collect();
             let texts: Vec<String> = nodes_to_index
@@ -232,7 +319,7 @@ impl RetrievalEngine {
             self.store.add_documents(ids, texts).await?;
         }
 
-        eprintln!("Incremental update complete.");
+        tracing::info!("Incremental update complete.");
 
         Ok(())
     }
@@ -262,6 +349,129 @@ impl RetrievalEngine {
                 relevance_score: 1.0 - score, // Rough normalization
                 reason: format!("Vector Similarity (Dist: {:.4})", score),
             });
+        }
+
+        Ok(results)
+    }
+
+    /// Performs a hybrid search by combining semantic vector hits with structural graph neighbors.
+    pub async fn search_code_hybrid(
+        &self,
+        query: &str,
+        limit: usize,
+    ) -> Result<Vec<ContextSuggestion>> {
+        let seed_limit = limit.saturating_mul(3).max(limit);
+        let hits = self.store.search(query, seed_limit).await?;
+        let include_data_files = embed_data_files_enabled();
+
+        if hits.is_empty() {
+            return Ok(Vec::new());
+        }
+
+        let scorer = HybridScorer::default();
+        let mut semantic_scores: HashMap<String, f32> = HashMap::new();
+        let mut semantic_content: HashMap<String, String> = HashMap::new();
+
+        for (id, content, distance) in hits {
+            let node_id = normalize_node_id(&id);
+            let sem_score = HybridScorer::semantic_score(distance);
+
+            match semantic_scores.get_mut(&node_id) {
+                Some(existing) => {
+                    if sem_score > *existing {
+                        *existing = sem_score;
+                        semantic_content.insert(node_id.clone(), content);
+                    }
+                }
+                None => {
+                    semantic_scores.insert(node_id.clone(), sem_score);
+                    semantic_content.insert(node_id, content);
+                }
+            }
+        }
+
+        let seed_ids: Vec<String> = semantic_scores.keys().cloned().collect();
+        let graph = self.graph.read().await;
+        let graph_scores = scorer.collect_graph_scores(&graph, &seed_ids);
+
+        let mut candidate_ids: HashSet<String> = HashSet::new();
+        candidate_ids.extend(semantic_scores.keys().cloned());
+        candidate_ids.extend(graph_scores.keys().cloned());
+
+        let mut candidates = Vec::with_capacity(candidate_ids.len());
+        for id in candidate_ids {
+            let graph_score = graph_scores.get(&id).copied().unwrap_or(0.0);
+            let semantic_score = semantic_scores.get(&id).copied().unwrap_or(0.0);
+            let combined_score = scorer.combine(graph_score, semantic_score, 0.0, 0.0);
+            candidates.push(HybridCandidate {
+                id,
+                graph_score,
+                semantic_score,
+                combined_score,
+            });
+        }
+
+        candidates.sort_by(|a, b| {
+            b.combined_score
+                .partial_cmp(&a.combined_score)
+                .unwrap_or(std::cmp::Ordering::Equal)
+        });
+
+        let mut top_scores = Vec::new();
+        for candidate in &candidates {
+            if let Some(node) = graph.find_node_by_id(&candidate.id) {
+                let is_file_node = matches!(node.node_type, NodeType::File);
+                let is_data_node = matches!(node.node_type, NodeType::DataFile);
+                if !is_file_node && (include_data_files || !is_data_node) {
+                    top_scores.push(candidate.combined_score);
+                }
+            } else if semantic_content.contains_key(&candidate.id) {
+                top_scores.push(candidate.combined_score);
+            }
+
+            if top_scores.len() >= 2 {
+                break;
+            }
+        }
+
+        let top1 = top_scores.first().copied().unwrap_or(0.0);
+        let top2 = top_scores.get(1).copied().unwrap_or(0.0);
+
+        let mut results = Vec::new();
+        for candidate in candidates {
+            if results.len() >= limit {
+                break;
+            }
+
+            if let Some(node) = graph.find_node_by_id(&candidate.id) {
+                if node.node_type == NodeType::File
+                    || (!include_data_files && node.node_type == NodeType::DataFile)
+                {
+                    continue;
+                }
+
+                let confidence = scorer.confidence(candidate.combined_score, top1, top2);
+                results.push(ContextSuggestion {
+                    title: format!("{:?}: {}", node.node_type, node.name),
+                    content: node.content.clone(),
+                    relevance_score: candidate.combined_score,
+                    reason: format!(
+                        "Hybrid (graph {:.2}, semantic {:.2}, conf {:.2})",
+                        candidate.graph_score, candidate.semantic_score, confidence
+                    ),
+                });
+            } else if let Some(content) = semantic_content.get(&candidate.id) {
+                let confidence = scorer.confidence(candidate.combined_score, top1, top2);
+                results.push(ContextSuggestion {
+                    title: "Semantic Match".to_string(),
+                    content: content.clone(),
+                    relevance_score: candidate.combined_score,
+                    reason: format!(
+                        "Hybrid (semantic {:.2}, conf {:.2})",
+                        candidate.semantic_score, confidence
+                    ),
+                });
+            }
         }
 
         Ok(results)
@@ -355,7 +565,7 @@ impl RetrievalEngine {
             for neighbor_idx in neighbors {
                 let neighbor = &graph.graph[neighbor_idx];
 
-                if neighbor.node_type == NodeType::File {
+                if matches!(neighbor.node_type, NodeType::File | NodeType::DataFile) {
                     continue;
                 }
 
@@ -382,4 +592,15 @@ impl RetrievalEngine {
 
         Ok(suggestions)
     }
+}
+
+fn normalize_node_id(id: &str) -> String {
+    id.split('#').next().unwrap_or(id).to_string()
+}
+
+fn embed_data_files_enabled() -> bool {
+    std::env::var("CCM_EMBED_DATA_FILES")
+        .or_else(|_| std::env::var("CCM_EMBED_DATA"))
+        .map(|val| matches!(val.to_lowercase().as_str(), "1" | "true" | "yes"))
+        .unwrap_or(false)
 }

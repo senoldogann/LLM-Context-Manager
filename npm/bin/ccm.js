@@ -5,10 +5,18 @@ const path = require('path');
 const fs = require('fs');
 const os = require('os');
 const https = require('https');
+const crypto = require('crypto');
 
-const VERSION = "0.1.20";
+const VERSION = "0.1.21";
 const REPO = 'senoldogann/LLM-Context-Manager';
 const BIN_DIR = path.join(os.homedir(), '.ccm', 'bin');
+const CHECKSUMS_FILE = 'checksums.txt';
+let checksumCache = null;
+
+function allowUnverifiedBinaries() {
+    const raw = process.env.CCM_ALLOW_UNVERIFIED_BINARIES || process.env.CCM_SKIP_CHECKSUM || '';
+    return ['1', 'true', 'yes'].includes(raw.toLowerCase());
+}
 
 async function installMcp() {
     const configPaths = [];
@@ -88,6 +96,7 @@ async function getBinaryFor(commandName) {
 
     const binFilename = `${commandName}-v${VERSION}-${target}`;
     const binPath = path.join(BIN_DIR, binFilename);
+    const remoteFilename = `${commandName}-${target}`;
 
     // If file exists, ensure it is executable
     if (fs.existsSync(binPath)) {
@@ -110,6 +119,7 @@ async function getBinaryFor(commandName) {
 
     try {
         await downloadFile(url, tmpPath);
+        await verifyChecksum(tmpPath, [remoteFilename, binFilename]);
         fs.chmodSync(tmpPath, '755');
         fs.renameSync(tmpPath, binPath);
     } catch (err) {
@@ -161,6 +171,91 @@ function downloadFile(url, dest) {
             reject(err);
         });
     });
+}
+
+function downloadText(url) {
+    return new Promise((resolve, reject) => {
+        https.get(url, (response) => {
+            if (response.statusCode === 302 || response.statusCode === 301) {
+                return downloadText(response.headers.location).then(resolve).catch(reject);
+            }
+            if (response.statusCode !== 200) {
+                return reject(new Error(`Failed to download: ${response.statusCode}`));
+            }
+            let data = '';
+            response.setEncoding('utf8');
+            response.on('data', (chunk) => {
+                data += chunk;
+            });
+            response.on('end', () => resolve(data));
+        }).on('error', reject);
+    });
+}
+
+async function getChecksums() {
+    if (checksumCache) return checksumCache;
+
+    const url = `https://github.com/${REPO}/releases/download/v${VERSION}/${CHECKSUMS_FILE}`;
+    try {
+        const text = await downloadText(url);
+        checksumCache = parseChecksums(text);
+        return checksumCache;
+    } catch (err) {
+        return null;
+    }
+}
+
+function parseChecksums(text) {
+    const map = new Map();
+    for (const line of text.split('\n')) {
+        const trimmed = line.trim();
+        if (!trimmed) continue;
+        const parts = trimmed.split(/\s+/);
+        if (parts.length < 2) continue;
+        const hash = parts[0].toLowerCase();
+        const filename = parts[parts.length - 1].replace(/^\*/, '');
+        map.set(filename, hash);
+    }
+    return map;
+}
+
+function sha256File(filePath) {
+    return new Promise((resolve, reject) => {
+        const hash = crypto.createHash('sha256');
+        const stream = fs.createReadStream(filePath);
+        stream.on('error', reject);
+        stream.on('data', (data) => hash.update(data));
+        stream.on('end', () => resolve(hash.digest('hex')));
+    });
+}
+
+async function verifyChecksum(filePath, candidates) {
+    const checksums = await getChecksums();
+    if (!checksums) {
+        if (allowUnverifiedBinaries()) {
+            console.warn('[CCM] Checksum manifest not found. Proceeding without verification.');
+            return;
+        }
+        throw new Error('Checksum manifest not found. Set CCM_ALLOW_UNVERIFIED_BINARIES=1 to bypass.');
+    }
+
+    const expected = candidates
+        .map((name) => [name, `${name}.exe`])
+        .flat()
+        .map((name) => checksums.get(name))
+        .find(Boolean);
+    if (!expected) {
+        if (allowUnverifiedBinaries()) {
+            console.warn('[CCM] Checksum not found for binary. Proceeding without verification.');
+            return;
+        }
+        throw new Error('Checksum not found for binary. Set CCM_ALLOW_UNVERIFIED_BINARIES=1 to bypass.');
+    }
+
+    const actual = await sha256File(filePath);
+    if (actual !== expected) {
+        throw new Error(`Checksum mismatch. Expected ${expected}, got ${actual}`);
+    }
 }
 
 async function main() {

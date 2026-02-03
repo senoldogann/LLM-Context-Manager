@@ -1,6 +1,6 @@
 {
     "name": "@senoldogann/context-manager",
-    "version": "0.1.20",
+    "version": "0.1.21",
     "description": "LLM Context Manager MCP Server & CLI wrapper using npx",
     "main": "bin/ccm.js",
     "bin": {
@@ -20,9 +20,7 @@
     ],
     "author": "dogan",
     "license": "MIT",
-    "dependencies": {
-        "node-fetch": "^3.3.1"
-    },
+    "dependencies": {},
     "engines": {
         "node": ">=16.0.0"
     }

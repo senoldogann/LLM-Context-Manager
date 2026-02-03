@@ -15,7 +15,7 @@ impl GitIntegrator {
     }
 
     /// Returns a list of files that have changed since HEAD (staged or unstaged).
-    /// Returns absolute paths.
+    /// Returns absolute paths (including deleted files).
     pub fn get_changed_files(&self) -> Result<Vec<PathBuf>> {
         let mut opts = StatusOptions::new();
         opts.include_untracked(true).recurse_untracked_dirs(true);
@@ -39,13 +39,19 @@ impl GitIntegrator {
 
             if status.contains(Status::INDEX_NEW)
                 || status.contains(Status::INDEX_MODIFIED)
+                || status.contains(Status::INDEX_RENAMED)
+                || status.contains(Status::INDEX_DELETED)
                 || status.contains(Status::WT_NEW)
                 || status.contains(Status::WT_MODIFIED)
                 || status.contains(Status::WT_RENAMED)
+                || status.contains(Status::WT_DELETED)
             {
                 if let Some(path_str) = entry.path() {
                     let full_path = workdir.join(path_str);
-                    if full_path.exists() {
+                    if full_path.exists()
+                        || status.contains(Status::WT_DELETED)
+                        || status.contains(Status::INDEX_DELETED)
+                    {
                         changed_files.push(full_path);
                     }
                 }

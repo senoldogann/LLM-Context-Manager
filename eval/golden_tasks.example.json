@@ -1,0 +1,102 @@
+{
+  "schema_version": 1,
+  "tasks": [
+    {
+      "id": "ccm-engine-incremental-indexing",
+      "repo": {
+        "name": "LLM-Context-Manager",
+        "path": ".",
+        "languages": ["rust", "typescript"]
+      },
+      "query": {
+        "type": "search_code",
+        "text": "incremental indexing"
+      },
+      "expected": {
+        "file_paths": ["./core/src/engine.rs"],
+        "min_recall": 1,
+        "max_rank": 5
+      },
+      "tags": ["indexing", "engine"],
+      "priority": 1,
+      "notes": "Should surface RetrievalEngine::incremental_index or incremental_index_paths."
+    },
+    {
+      "id": "ccm-vector-delete-by-prefix",
+      "repo": {
+        "name": "LLM-Context-Manager",
+        "path": ".",
+        "languages": ["rust"]
+      },
+      "query": {
+        "type": "search_code",
+        "text": "delete_by_prefix"
+      },
+      "expected": {
+        "file_paths": ["./core/src/vector/store.rs"],
+        "min_recall": 1,
+        "max_rank": 5
+      },
+      "tags": ["vector", "gc"],
+      "priority": 1
+    },
+    {
+      "id": "ccm-index-directory",
+      "repo": {
+        "name": "LLM-Context-Manager",
+        "path": ".",
+        "languages": ["rust"]
+      },
+      "query": {
+        "type": "search_code",
+        "text": "index_directory"
+      },
+      "expected": {
+        "file_paths": ["./core/src/lib.rs"],
+        "min_recall": 1,
+        "max_rank": 5
+      },
+      "tags": ["indexing"],
+      "priority": 2
+    },
+    {
+      "id": "ccm-read-graph-delete-by-prefix",
+      "repo": {
+        "name": "LLM-Context-Manager",
+        "path": ".",
+        "languages": ["rust"]
+      },
+      "query": {
+        "type": "read_graph",
+        "node_id": "./core/src/vector/store.rs:function_item:301:4"
+      },
+      "expected": {
+        "file_paths": ["./core/src/vector/store.rs"],
+        "min_recall": 1
+      },
+      "tags": ["graph", "read_graph"],
+      "priority": 1,
+      "notes": "Should find the delete_by_prefix function in the graph."
+    },
+    {
+      "id": "ccm-get-context-delete-by-prefix",
+      "repo": {
+        "name": "LLM-Context-Manager",
+        "path": ".",
+        "languages": ["rust"]
+      },
+      "query": {
+        "type": "get_context",
+        "file_path": "./core/src/vector/store.rs",
+        "line": 300
+      },
+      "expected": {
+        "file_paths": ["./core/src/vector/store.rs"],
+        "min_recall": 1
+      },
+      "tags": ["context", "get_context"],
+      "priority": 1,
+      "notes": "Should find context around delete_by_prefix function at line 300."
+    }
+  ]
+}

@@ -1,0 +1,35 @@
+name: eval
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+    branches: ["main"]
+  workflow_dispatch:
+
+jobs:
+  eval:
+    runs-on: ubuntu-latest
+    env:
+      EMBEDDING_PROVIDER: openai
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Build (release)
+        run: cargo build --release
+
+      - name: Index (structural-only)
+        run: ./target/release/ccm-cli index --path .
+
+      - name: Eval (structural-only)
+        run: ./target/release/ccm-cli eval --tasks eval/golden_tasks.v1.json --report eval/report.json
+
+      - name: Upload eval report
+        uses: actions/upload-artifact@v4
+        with:
+          name: eval-report
+          path: eval/report.json

@@ -37,12 +37,28 @@ enum Commands {
         #[arg(short, long)]
         watch: bool,
     },
+    /// Evaluate golden tasks for retrieval quality
+    Eval {
+        /// Path to golden tasks JSON
+        #[arg(short, long, default_value = "eval/golden_tasks.example.json")]
+        tasks: PathBuf,
+
+        /// Write JSON report to file (defaults to stdout)
+        #[arg(short, long)]
+        report: Option<PathBuf>,
+
+        /// Compare structural vs hybrid evaluation
+        #[arg(long, alias = "structural")]
+        compare: bool,
+    },
 }
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    // Initialize structured logging (to stdout for CLI)
-    tracing_subscriber::fmt::init();
+    let filter = std::env::var("RUST_LOG").unwrap_or_else(|_| "info".to_string());
+    let env_filter = tracing_subscriber::EnvFilter::try_new(filter)
+        .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new("info"));
+    tracing_subscriber::fmt().with_env_filter(env_filter).init();
 
     let args = Args::parse();
 
@@ -178,6 +194,49 @@ async fn main() -> anyhow::Result<()> {
                         );
                         let _ = ccm_core::index_directory(&path_str, db_path_str.as_deref()).await;
                     }
+                }
+            }
+        }
+        Commands::Eval {
+            tasks,
+            report,
+            compare,
+        } => {
+            if compare {
+                let report_data = ccm_core::eval::evaluate_comparison_from_path(&tasks).await?;
+                if let Some(path) = report {
+                    let file = std::fs::File::create(&path)?;
+                    let writer = std::io::BufWriter::new(file);
+                    ccm_core::eval::write_comparison_report(writer, &report_data)?;
+                    println!("Report written to {}", path.display());
+                    let summary = ccm_core::eval::summarize_comparison_report(
+                        &report_data,
+                        Some(&path.to_string_lossy()),
+                    );
+                    println!("{}", summary);
+                } else {
+                    let stdout = std::io::stdout();
+                    let handle = stdout.lock();
+                    ccm_core::eval::write_comparison_report(handle, &report_data)?;
+                    println!();
+                }
+            } else {
+                let report_data = ccm_core::eval::evaluate_from_path(&tasks).await?;
+                if let Some(path) = report {
+                    let file = std::fs::File::create(&path)?;
+                    let writer = std::io::BufWriter::new(file);
+                    ccm_core::eval::write_report(writer, &report_data)?;
+                    println!("Report written to {}", path.display());
+                    let summary = ccm_core::eval::summarize_report(
+                        &report_data,
+                        Some(&path.to_string_lossy()),
+                    );
+                    println!("{}", summary);
+                } else {
+                    let stdout = std::io::stdout();
+                    let handle = stdout.lock();
+                    ccm_core::eval::write_report(handle, &report_data)?;
+                    println!();
                 }
             }
         }

@@ -1,0 +1,25 @@
+{
+  "repos": [
+    {
+      "name": "LLM-Context-Manager",
+      "path": ".",
+      "languages": ["rust", "typescript"],
+      "size_hint": "small",
+      "notes": "Use this repo as the baseline example."
+    },
+    {
+      "name": "tokio",
+      "path": "/tmp/tokio-stress-test",
+      "languages": ["rust"],
+      "size_hint": "large",
+      "notes": "Rust async runtime for scale testing."
+    },
+    {
+      "name": "express",
+      "path": "/tmp/express-stress-test",
+      "languages": ["typescript", "javascript"],
+      "size_hint": "medium",
+      "notes": "Express.js for routing/middleware stress testing."
+    }
+  ]
+}

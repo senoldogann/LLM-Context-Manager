@@ -2,11 +2,13 @@ use crate::storage::GraphStorage;
 use petgraph::graph::{DiGraph, NodeIndex};
 use petgraph::visit::EdgeRef;
 use serde::{Deserialize, Serialize};
+use std::collections::HashSet;
 use std::sync::Arc;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub enum NodeType {
     File,
+    DataFile,
     Module,
     Class,
     Function,
@@ -65,7 +67,7 @@ impl CodeGraph {
     pub fn add_node(&mut self, node: CodeNode) -> NodeIndex {
         if let Some(storage) = &self.storage {
             if let Err(e) = storage.save_node(&node) {
-                eprintln!("Failed to save node to storage: {}", e);
+                tracing::warn!(error = %e, "Failed to save node to storage");
             }
         }
         self.graph.add_node(node)
@@ -76,7 +78,7 @@ impl CodeGraph {
             let source_node = &self.graph[source];
             let target_node = &self.graph[target];
             if let Err(e) = storage.save_edge(&source_node.id, &target_node.id, weight.clone()) {
-                eprintln!("Failed to save edge to storage: {}", e);
+                tracing::warn!(error = %e, "Failed to save edge to storage");
             }
         }
         self.graph.add_edge(source, target, weight);
@@ -86,7 +88,7 @@ impl CodeGraph {
     pub fn find_file_node(&self, file_path: &str) -> Option<NodeIndex> {
         self.graph.node_indices().find(|&idx| {
             let node = &self.graph[idx];
-            node.node_type == NodeType::File && node.name == file_path
+            matches!(node.node_type, NodeType::File | NodeType::DataFile) && node.name == file_path
         })
     }
 
@@ -215,11 +217,11 @@ impl CodeGraph {
         };
 
         // 2. Collect all descendants via "Contains" edges (DFS)
-        let mut to_remove = Vec::new();
+        let mut to_remove = HashSet::new();
         let mut stack = vec![file_node_idx];
 
         // We include the file node itself in the removal
-        to_remove.push(file_node_idx);
+        to_remove.insert(file_node_idx);
 
         while let Some(idx) = stack.pop() {
             let neighbors = self
@@ -230,7 +232,7 @@ impl CodeGraph {
                 if let Some(edge_idx) = edge {
                     if let Some(weight) = self.graph.edge_weight(edge_idx) {
                         if matches!(weight, EdgeType::Contains) {
-                            to_remove.push(neighbor_idx);
+                            to_remove.insert(neighbor_idx);
                             stack.push(neighbor_idx);
                         }
                     }
@@ -238,24 +240,8 @@ impl CodeGraph {
             }
         }
 
-        // 3. Remove nodes in reverse order (children first usually better but petgraph handles it)
-        // Note: Removing a node invalidates indices if we are not careful.
-        // Stack removal in petgraph (retain_nodes) is safer or sorting indices
-        // But simply iterating and calling removed_node might panic if indices shift?
-        // Petgraph's remove_node shifts indices for `Graph` but `StableGraph` keeps them.
-        // We are using `DiGraph` which is `Graph`. Removing node N swaps last node into N.
-        // So all stored indices >= N might be invalid or swapped.
-
-        // Strategy: Filter function `retain_nodes`.
-        // We build a HashSet of indices to remove?
-        // Or simpler: Sort indices descending and remove?
-
-        to_remove.sort_by(|a, b| b.cmp(a)); // Descending sort
-        to_remove.dedup(); // Ensure unique
-
-        for idx in to_remove {
-            self.graph.remove_node(idx);
-        }
+        // 3. Remove nodes using retain_nodes to avoid index swaps.
+        self.graph.retain_nodes(|_, idx| !to_remove.contains(&idx));
     }
 }
 
@@ -276,5 +262,55 @@ mod tests {
         };
         let index = graph.add_node(node);
         assert_eq!(index.index(), 0);
+    }
+
+    #[test]
+    fn remove_file_nodes_only_removes_target_file() {
+        let mut graph = CodeGraph::new();
+
+        let file_a_idx = graph.add_node(CodeNode {
+            id: "./a.rs".to_string(),
+            node_type: NodeType::File,
+            name: "./a.rs".to_string(),
+            content: "fn foo() {}".to_string(),
+            start_line: 1,
+            end_line: 1,
+        });
+        let func_a_idx = graph.add_node(CodeNode {
+            id: "./a.rs:func:foo".to_string(),
+            node_type: NodeType::Function,
+            name: "foo".to_string(),
+            content: "fn foo() {}".to_string(),
+            start_line: 1,
+            end_line: 1,
+        });
+        graph.add_edge(file_a_idx, func_a_idx, EdgeType::Contains);
+
+        let file_b_idx = graph.add_node(CodeNode {
+            id: "./b.rs".to_string(),
+            node_type: NodeType::File,
+            name: "./b.rs".to_string(),
+            content: "fn bar() {}".to_string(),
+            start_line: 1,
+            end_line: 1,
+        });
+        let func_b_idx = graph.add_node(CodeNode {
+            id: "./b.rs:func:bar".to_string(),
+            node_type: NodeType::Function,
+            name: "bar".to_string(),
+            content: "fn bar() {}".to_string(),
+            start_line: 1,
+            end_line: 1,
+        });
+        graph.add_edge(file_b_idx, func_b_idx, EdgeType::Contains);
+
+        graph.remove_file_nodes("./a.rs");
+
+        assert!(graph.find_file_node("./a.rs").is_none());
+        assert!(graph.find_file_node("./b.rs").is_some());
+        assert!(graph
+            .graph
+            .node_weights()
+            .all(|node| !node.id.starts_with("./a.rs")));
     }
 }

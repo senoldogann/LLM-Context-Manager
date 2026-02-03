@@ -1,5 +1,21 @@
 # Release Notes
 
+## v0.1.21 - Production Hardening (2026-02-03)
+
+### ✅ Security & Release Integrity
+- GitHub Release artifacts now include `checksums.txt` for binary verification.
+- MCP allowlist support with `CCM_ALLOWED_ROOTS` and optional enforcement via `CCM_REQUIRE_ALLOWED_ROOTS`.
+
+### ⚙️ Operational Improvements
+- MCP and CLI now honor `RUST_LOG` via structured logging setup.
+- Data files (`.md`, `.json`, `.yaml`) can be embedded when `CCM_EMBED_DATA_FILES=1`.
+
+### 🧪 Test Coverage
+- New CLI integration test (index + file:line query).
+- New MCP integration tests (index flow + allowlist rejection).
+
+---
+
 ## v0.1.0 - Initial Release (2026-01-08)
 
 ### 🎉 First Public Release

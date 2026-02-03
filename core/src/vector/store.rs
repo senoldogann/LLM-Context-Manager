@@ -19,16 +19,26 @@ impl LanceDbStore {
     pub async fn new(uri: &str, table_name: &str) -> Result<Self> {
         let conn = connect(uri).execute().await?;
 
+        let embedder_disabled = std::env::var("CCM_DISABLE_EMBEDDER")
+            .or_else(|_| std::env::var("EMBEDDING_DISABLED"))
+            .map(|v| matches!(v.to_lowercase().as_str(), "1" | "true" | "yes"))
+            .unwrap_or(false);
+
         // Try to initialize Remote embedder from environment.
         // If it fails (no API key), we operate in "no-vector" mode or warn.
-        let embedder = match RemoteEmbedder::from_env() {
-            Ok(e) => Some(e),
-            Err(e) => {
-                eprintln!(
-                    "Warning: Remote Embedder init failed: {}. Semantic search will be disabled.",
-                    e
-                );
-                None
+        let embedder = if embedder_disabled {
+            tracing::warn!("Embedder disabled via environment. Semantic search will be disabled.");
+            None
+        } else {
+            match RemoteEmbedder::from_env() {
+                Ok(e) => Some(e),
+                Err(e) => {
+                    tracing::warn!(
+                        error = %e,
+                        "Remote Embedder init failed. Semantic search will be disabled."
+                    );
+                    None
+                }
             }
         };
 
@@ -37,6 +47,28 @@ impl LanceDbStore {
             table_name: table_name.to_string(),
             embedder,
         })
+    }
+
+    /// Drops the existing table (if any) to prevent duplicate vectors on full re-index.
+    pub async fn reset_table(&self) -> Result<()> {
+        let table_exists = self
+            .conn
+            .open_table(&self.table_name)
+            .execute()
+            .await
+            .is_ok();
+
+        if table_exists {
+            if let Err(e) = self.conn.drop_table(&self.table_name, &[]).await {
+                tracing::warn!(
+                    table = %self.table_name,
+                    error = %e,
+                    "Failed to drop table"
+                );
+            }
+        }
+
+        Ok(())
     }
 
     /// Embeds texts and inserts them into the LanceDB table.
@@ -126,11 +158,11 @@ impl LanceDbStore {
         let total_batches = all_chunks.len().div_ceil(BATCH_SIZE);
         for (batch_idx, batch) in all_chunks.chunks(BATCH_SIZE).enumerate() {
             if batch_idx % 20 == 0 || (batch_idx + 1) == total_batches {
-                eprintln!(
-                    "Embedding batch {}/{} ({} chunks)",
-                    batch_idx + 1,
-                    total_batches,
-                    batch.len()
+                tracing::info!(
+                    batch = batch_idx + 1,
+                    total = total_batches,
+                    chunks = batch.len(),
+                    "Embedding batch progress"
                 );
             }
 
@@ -221,7 +253,17 @@ impl LanceDbStore {
 
         // 1. Embed Query
         let query_vecs = embedder.embed(vec![query.to_string()]).await?;
-        let query_embedding = query_vecs[0].clone();
+        let query_embedding = match query_vecs.into_iter().next() {
+            Some(vec) if !vec.is_empty() => vec,
+            Some(_) => {
+                tracing::warn!("Embedder returned an empty query vector");
+                return Ok(vec![]);
+            }
+            None => {
+                tracing::warn!("Embedder returned no query vectors");
+                return Ok(vec![]);
+            }
+        };
 
         // 2. Open Table
         let table = match self.conn.open_table(&self.table_name).execute().await {
@@ -284,26 +326,39 @@ impl LanceDbStore {
             Err(_) => return Ok(()), // Table doesn't exist, nothing to delete
         };
 
+        let escaped = prefix.replace('\'', "''");
+        let like_allowed = !escaped.contains('%') && !escaped.contains('_');
+
         // LanceDB supports SQL-like deletion syntax.
         // We filter where `id` LIKE 'prefix%'
-        // Using a scalar function or simple comparison if supported.
-        // LanceDB SQL: `DELETE FROM table WHERE id LIKE 'prefix%'`
-        // Programmatic API: `table.delete("id LIKE 'prefix%'")`
+        if like_allowed {
+            let predicate = format!("id LIKE '{}%'", escaped);
+            match table.delete(&predicate).await {
+                Ok(_) => return Ok(()),
+                Err(e) => {
+                    tracing::warn!(
+                        error = %e,
+                        "Failed to delete old vectors with LIKE predicate"
+                    );
+                }
+            }
+        }
 
-        let predicate = format!("id LIKE '{}%'", prefix);
-
-        // Note: delete functionality depends on LanceDB version features.
-        // Ensure "delete" is available in the crate version we are using.
-        // If not, we might need a workaround or verify version.
-        // Assuming partial delete support exists in recent versions.
-
-        match table.delete(&predicate).await {
+        // Fallback: range delete for prefix matches
+        let upper = format!("{}{}", escaped, "\u{10FFFF}");
+        let range_predicate = format!("id >= '{}' AND id < '{}'", escaped, upper);
+        match table.delete(&range_predicate).await {
             Ok(_) => Ok(()),
             Err(e) => {
-                // If partial delete is not supported or fails, we log it but don't crash
-                // This might leave orphans, but for Prototype Phase 2/3 it is acceptable.
-                eprintln!("Warning: Failed to delete old vectors: {}", e);
-                Ok(())
+                tracing::warn!(
+                    error = %e,
+                    "Failed to delete old vectors with range predicate"
+                );
+                Err(anyhow::anyhow!(
+                    "Failed to delete vectors by prefix '{}': {}",
+                    prefix,
+                    e
+                ))
             }
         }
     }

@@ -1,0 +1,2424 @@
+{
+  "schema_version": 1,
+  "generated_at": 1770126562,
+  "structural": {
+    "schema_version": 1,
+    "generated_at": 1770126551,
+    "totals": {
+      "tasks": 102,
+      "scored": 89,
+      "passed": 83,
+      "failed": 19,
+      "skipped": 0
+    },
+    "results": [
+      {
+        "id": "ccm-read-graph-001",
+        "query_type": "read_graph",
+        "status": "fail",
+        "detail": "Node not found in graph",
+        "matches": 0,
+        "expected_min_recall": 1,
+        "max_rank": 5,
+        "matched_items": []
+      },
+      {
+        "id": "ccm-read-graph-002",
+        "query_type": "read_graph",
+        "status": "pass",
+        "detail": "Recall threshold met",
+        "matches": 1,
+        "expected_min_recall": 1,
+        "max_rank": 5,
+        "matched_items": [
+          "./cli/src/main.rs:struct_item:6:0"
+        ]
+      },
+      {
+        "id": "ccm-read-graph-003",
+        "query_type": "read_graph",
+        "status": "pass",
+        "detail": "Recall threshold met",
+        "matches": 1,
+        "expected_min_recall": 1,
+        "max_rank": 5,
+        "matched_items": [
+          "./core/build.rs:function_item:0:0"
+        ]
+      },
+      {
+        "id": "ccm-read-graph-004",
+        "query_type": "read_graph",
+        "status": "fail",
+        "detail": "Node not found in graph",
+        "matches": 0,
+        "expected_min_recall": 1,
+        "max_rank": 5,
+        "matched_items": []
+      },
+      {
+        "id": "ccm-read-graph-005",
+        "query_type": "read_graph",
+        "status": "fail",
+        "detail": "Node not found in graph",
+        "matches": 0,
+        "expected_min_recall": 1,
+        "max_rank": 5,
+        "matched_items": []
+      },
+      {
+        "id": "ccm-read-graph-006",
+        "query_type": "read_graph",
+        "status": "fail",
+        "detail": "Node not found in graph",
+        "matches": 0,
+        "expected_min_recall": 1,
+        "max_rank": 5,
+        "matched_items": []
+      },
+      {
+        "id": "ccm-read-graph-007",
+        "query_type": "read_graph",
+        "status": "fail",
+        "detail": "Node not found in graph",
+        "matches": 0,
+        "expected_min_recall": 1,
+        "max_rank": 5,
+        "matched_items": []
+      },
+      {
+        "id": "ccm-read-graph-008",
+        "query_type": "read_graph",
+        "status": "fail",
+        "detail": "Node not found in graph",
+        "matches": 0,
+        "expected_min_recall": 1,
+        "max_rank": 5,
+        "matched_items": []
+      },
+      {
+        "id": "ccm-read-graph-009",
+        "query_type": "read_graph",
+        "status": "fail",
+        "detail": "Node not found in graph",
+        "matches": 0,
+        "expected_min_recall": 1,
+        "max_rank": 5,
+        "matched_items": []
+      },
+      {
+        "id": "ccm-read-graph-010",
+        "query_type": "read_graph",
+        "status": "fail",
+        "detail": "Node not found in graph",
+        "matches": 0,
+        "expected_min_recall": 1,
+        "max_rank": 5,
+        "matched_items": []
+      },
+      {
+        "id": "ccm-read-graph-011",
+        "query_type": "read_graph",
+        "status": "pass",
+        "detail": "Recall threshold met",
+        "matches": 1,
+        "expected_min_recall": 1,
+        "max_rank": 5,
+        "matched_items": [
+          "./core/src/engine.rs:function_item:62:4"
+        ]
+      },
+      {
+        "id": "ccm-read-graph-012",
+        "query_type": "read_graph",
+        "status": "fail",
+        "detail": "Node not found in graph",
+        "matches": 0,
+        "expected_min_recall": 1,
+        "max_rank": 5,
+        "matched_items": []
+      },
+      {
+        "id": "ccm-read-graph-013",
+        "query_type": "read_graph",
+        "status": "fail",
+        "detail": "Node not found in graph",
+        "matches": 0,
+        "expected_min_recall": 1,
+        "max_rank": 5,
+        "matched_items": []
+      },
+      {
+        "id": "ccm-read-graph-014",
+        "query_type": "read_graph",
+        "status": "fail",
+        "detail": "Node not found in graph",
+        "matches": 0,
+        "expected_min_recall": 1,
+        "max_rank": 5,
+        "matched_items": []
+      },
+      {
+        "id": "ccm-read-graph-015",
+        "query_type": "read_graph",
+        "status": "fail",
+        "detail": "Node not found in graph",
+        "matches": 0,
+        "expected_min_recall": 1,
+        "max_rank": 5,
+        "matched_items": []
+      },
+      {
+        "id": "ccm-read-graph-016",
+        "query_type": "read_graph",
+        "status": "fail",
+        "detail": "Node not found in graph",
+        "matches": 0,
+        "expected_min_recall": 1,
+        "max_rank": 5,
+        "matched_items": []
+      },
+      {
+        "id": "ccm-read-graph-017",
+        "query_type": "read_graph",
+        "status": "pass",
+        "detail": "Recall threshold met",
+        "matches": 1,
+        "expected_min_recall": 1,
+        "max_rank": 5,
+        "matched_items": [
+          "./core/src/engine/predictive.rs:function_item:11:4"
+        ]
+      },
+      {
+        "id": "ccm-read-graph-018",
+        "query_type": "read_graph",
+        "status": "pass",
+        "detail": "Recall threshold met",
+        "matches": 1,
+        "expected_min_recall": 1,
+        "max_rank": 5,
+        "matched_items": [
+          "./core/src/engine/predictive.rs:function_item:19:4"
+        ]
+      },
+      {
+        "id": "ccm-read-graph-019",
+        "query_type": "read_graph",
+        "status": "pass",
+        "detail": "Recall threshold met",
+        "matches": 1,
+        "expected_min_recall": 1,
+        "max_rank": 5,
+        "matched_items": [
+          "./core/src/engine/predictive.rs:function_item:26:4"
+        ]
+      },
+      {
+        "id": "ccm-read-graph-020",
+        "query_type": "read_graph",
+        "status": "pass",
+        "detail": "Recall threshold met",
+        "matches": 1,
+        "expected_min_recall": 1,
+        "max_rank": 5,
+        "matched_items": [
+          "./core/src/engine/predictive.rs:impl_item:10:0"
+        ]
+      },
+      {
+        "id": "ccm-read-graph-021",
+        "query_type": "read_graph",
+        "status": "pass",
+        "detail": "Recall threshold met",
+        "matches": 1,
+        "expected_min_recall": 1,
+        "max_rank": 5,
+        "matched_items": [
+          "./core/src/engine/predictive.rs:struct_item:6:0"
+        ]
+      },
+      {
+        "id": "ccm-read-graph-022",
+        "query_type": "read_graph",
+        "status": "pass",
+        "detail": "Recall threshold met",
+        "matches": 1,
+        "expected_min_recall": 1,
+        "max_rank": 5,
+        "matched_items": [
+          "./core/src/git/mod.rs:function_item:11:4"
+        ]
+      },
+      {
+        "id": "ccm-read-graph-023",
+        "query_type": "read_graph",
+        "status": "pass",
+        "detail": "Recall threshold met",
+        "matches": 1,
+        "expected_min_recall": 1,
+        "max_rank": 5,
+        "matched_items": [
+          "./core/src/git/mod.rs:function_item:18:4"
+        ]
+      },
+      {
+        "id": "ccm-read-graph-024",
+        "query_type": "read_graph",
+        "status": "pass",
+        "detail": "Recall threshold met",
+        "matches": 1,
+        "expected_min_recall": 1,
+        "max_rank": 5,
+        "matched_items": [
+          "./core/src/git/mod.rs:function_item:65:4"
+        ]
+      },
+      {
+        "id": "ccm-read-graph-025",
+        "query_type": "read_graph",
+        "status": "pass",
+        "detail": "Recall threshold met",
+        "matches": 1,
+        "expected_min_recall": 1,
+        "max_rank": 5,
+        "matched_items": [
+          "./core/src/git/mod.rs:impl_item:9:0"
+        ]
+      },
+      {
+        "id": "ccm-get-context-001",
+        "query_type": "get_context",
+        "status": "pass",
+        "detail": "Recall threshold met",
+        "matches": 1,
+        "expected_min_recall": 1,
+        "max_rank": 5,
+        "matched_items": [
+          "./core/src/git/mod.rs"
+        ]
+      },
+      {
+        "id": "ccm-get-context-002",
+        "query_type": "get_context",
+        "status": "pass",
+        "detail": "Recall threshold met",
+        "matches": 1,
+        "expected_min_recall": 1,
+        "max_rank": 5,
+        "matched_items": [
+          "./core/src/graph/mod.rs"
+        ]
+      },
+      {
+        "id": "ccm-get-context-003",
+        "query_type": "get_context",
+        "status": "pass",
+        "detail": "Recall threshold met",
+        "matches": 1,
+        "expected_min_recall": 1,
+        "max_rank": 5,
+        "matched_items": [
+          "./core/src/graph/mod.rs"
+        ]
+      },
+      {
+        "id": "ccm-get-context-004",
+        "query_type": "get_context",
+        "status": "pass",
+        "detail": "Recall threshold met",
+        "matches": 1,
+        "expected_min_recall": 1,
+        "max_rank": 5,
+        "matched_items": [
+          "./core/src/graph/mod.rs"
+        ]
+      },
+      {
+        "id": "ccm-get-context-005",
+        "query_type": "get_context",
+        "status": "pass",
+        "detail": "Recall threshold met",
+        "matches": 1,
+        "expected_min_recall": 1,
+        "max_rank": 5,
+        "matched_items": [
+          "./core/src/graph/mod.rs"
+        ]
+      },
+      {
+        "id": "ccm-get-context-006",
+        "query_type": "get_context",
+        "status": "pass",
+        "detail": "Recall threshold met",
+        "matches": 1,
+        "expected_min_recall": 1,
+        "max_rank": 5,
+        "matched_items": [
+          "./core/src/graph/mod.rs"
+        ]
+      },
+      {
+        "id": "ccm-get-context-007",
+        "query_type": "get_context",
+        "status": "pass",
+        "detail": "Recall threshold met",
+        "matches": 1,
+        "expected_min_recall": 1,
+        "max_rank": 5,
+        "matched_items": [
+          "./core/src/graph/mod.rs"
+        ]
+      },
+      {
+        "id": "ccm-get-context-008",
+        "query_type": "get_context",
+        "status": "pass",
+        "detail": "Recall threshold met",
+        "matches": 1,
+        "expected_min_recall": 1,
+        "max_rank": 5,
+        "matched_items": [
+          "./core/src/graph/mod.rs"
+        ]
+      },
+      {
+        "id": "ccm-get-context-009",
+        "query_type": "get_context",
+        "status": "pass",
+        "detail": "Recall threshold met",
+        "matches": 1,
+        "expected_min_recall": 1,
+        "max_rank": 5,
+        "matched_items": [
+          "./core/src/graph/mod.rs"
+        ]
+      },
+      {
+        "id": "ccm-get-context-010",
+        "query_type": "get_context",
+        "status": "pass",
+        "detail": "Recall threshold met",
+        "matches": 1,
+        "expected_min_recall": 1,
+        "max_rank": 5,
+        "matched_items": [
+          "./core/src/graph/mod.rs"
+        ]
+      },
+      {
+        "id": "ccm-get-context-011",
+        "query_type": "get_context",
+        "status": "pass",
+        "detail": "Recall threshold met",
+        "matches": 1,
+        "expected_min_recall": 1,
+        "max_rank": 5,
+        "matched_items": [
+          "./core/src/graph/mod.rs"
+        ]
+      },
+      {
+        "id": "ccm-get-context-012",
+        "query_type": "get_context",
+        "status": "pass",
+        "detail": "Recall threshold met",
+        "matches": 1,
+        "expected_min_recall": 1,
+        "max_rank": 5,
+        "matched_items": [
+          "./core/src/graph/mod.rs"
+        ]
+      },
+      {
+        "id": "ccm-get-context-013",
+        "query_type": "get_context",
+        "status": "pass",
+        "detail": "Recall threshold met",
+        "matches": 1,
+        "expected_min_recall": 1,
+        "max_rank": 5,
+        "matched_items": [
+          "./core/src/graph/mod.rs"
+        ]
+      },
+      {
+        "id": "ccm-get-context-014",
+        "query_type": "get_context",
+        "status": "pass",
+        "detail": "Recall threshold met",
+        "matches": 1,
+        "expected_min_recall": 1,
+        "max_rank": 5,
+        "matched_items": [
+          "./core/src/graph/mod.rs"
+        ]
+      },
+      {
+        "id": "ccm-get-context-015",
+        "query_type": "get_context",
+        "status": "pass",
+        "detail": "Recall threshold met",
+        "matches": 1,
+        "expected_min_recall": 1,
+        "max_rank": 5,
+        "matched_items": [
+          "./core/src/graph/mod.rs"
+        ]
+      },
+      {
+        "id": "ccm-get-context-016",
+        "query_type": "get_context",
+        "status": "pass",
+        "detail": "Recall threshold met",
+        "matches": 1,
+        "expected_min_recall": 1,
+        "max_rank": 5,
+        "matched_items": [
+          "./core/src/graph/mod.rs"
+        ]
+      },
+      {
+        "id": "ccm-get-context-017",
+        "query_type": "get_context",
+        "status": "pass",
+        "detail": "Recall threshold met",
+        "matches": 1,
+        "expected_min_recall": 1,
+        "max_rank": 5,
+        "matched_items": [
+          "./core/src/graph/mod.rs"
+        ]
+      },
+      {
+        "id": "ccm-get-context-018",
+        "query_type": "get_context",
+        "status": "pass",
+        "detail": "Recall threshold met",
+        "matches": 1,
+        "expected_min_recall": 1,
+        "max_rank": 5,
+        "matched_items": [
+          "./core/src/graph/mod.rs"
+        ]
+      },
+      {
+        "id": "ccm-get-context-019",
+        "query_type": "get_context",
+        "status": "pass",
+        "detail": "Recall threshold met",
+        "matches": 1,
+        "expected_min_recall": 1,
+        "max_rank": 5,
+        "matched_items": [
+          "./core/src/graph/mod.rs"
+        ]
+      },
+      {
+        "id": "ccm-get-context-020",
+        "query_type": "get_context",
+        "status": "pass",
+        "detail": "Recall threshold met",
+        "matches": 1,
+        "expected_min_recall": 1,
+        "max_rank": 5,
+        "matched_items": [
+          "./core/src/graph/mod.rs"
+        ]
+      },
+      {
+        "id": "ccm-get-context-021",
+        "query_type": "get_context",
+        "status": "pass",
+        "detail": "Recall threshold met",
+        "matches": 1,
+        "expected_min_recall": 1,
+        "max_rank": 5,
+        "matched_items": [
+          "./core/src/lib.rs"
+        ]
+      },
+      {
+        "id": "ccm-get-context-022",
+        "query_type": "get_context",
+        "status": "pass",
+        "detail": "Recall threshold met",
+        "matches": 1,
+        "expected_min_recall": 1,
+        "max_rank": 5,
+        "matched_items": [
+          "./core/src/lib.rs"
+        ]
+      },
+      {
+        "id": "ccm-get-context-023",
+        "query_type": "get_context",
+        "status": "pass",
+        "detail": "Recall threshold met",
+        "matches": 1,
+        "expected_min_recall": 1,
+        "max_rank": 5,
+        "matched_items": [
+          "./core/src/lib.rs"
+        ]
+      },
+      {
+        "id": "ccm-get-context-024",
+        "query_type": "get_context",
+        "status": "pass",
+        "detail": "Recall threshold met",
+        "matches": 1,
+        "expected_min_recall": 1,
+        "max_rank": 5,
+        "matched_items": [
+          "./core/src/lib.rs"
+        ]
+      },
+      {
+        "id": "ccm-get-context-025",
+        "query_type": "get_context",
+        "status": "pass",
+        "detail": "Recall threshold met",
+        "matches": 1,
+        "expected_min_recall": 1,
+        "max_rank": 5,
+        "matched_items": [
+          "./core/src/lib.rs"
+        ]
+      },
+      {
+        "id": "tokio-read-graph-001",
+        "query_type": "read_graph",
+        "status": "pass",
+        "detail": "Recall threshold met",
+        "matches": 1,
+        "expected_min_recall": 1,
+        "max_rank": 5,
+        "matched_items": [
+          "./tokio/src/runtime/scheduler/multi_thread/handle/taskdump.rs:function_item:5:4"
+        ]
+      },
+      {
+        "id": "tokio-read-graph-002",
+        "query_type": "read_graph",
+        "status": "pass",
+        "detail": "Recall threshold met",
+        "matches": 1,
+        "expected_min_recall": 1,
+        "max_rank": 5,
+        "matched_items": [
+          "./tokio/src/runtime/scheduler/multi_thread/handle/taskdump.rs:impl_item:4:0"
+        ]
+      },
+      {
+        "id": "tokio-read-graph-003",
+        "query_type": "read_graph",
+        "status": "pass",
+        "detail": "Recall threshold met",
+        "matches": 1,
+        "expected_min_recall": 1,
+        "max_rank": 5,
+        "matched_items": [
+          "./tokio/src/runtime/scheduler/multi_thread/worker/taskdump.rs:function_item:10:4"
+        ]
+      },
+      {
+        "id": "tokio-read-graph-004",
+        "query_type": "read_graph",
+        "status": "pass",
+        "detail": "Recall threshold met",
+        "matches": 1,
+        "expected_min_recall": 1,
+        "max_rank": 5,
+        "matched_items": [
+          "./tokio/src/runtime/scheduler/multi_thread/worker/taskdump.rs:function_item:61:4"
+        ]
+      },
+      {
+        "id": "tokio-read-graph-005",
+        "query_type": "read_graph",
+        "status": "pass",
+        "detail": "Recall threshold met",
+        "matches": 1,
+        "expected_min_recall": 1,
+        "max_rank": 5,
+        "matched_items": [
+          "./tokio/src/runtime/scheduler/multi_thread/worker/taskdump.rs:impl_item:59:0"
+        ]
+      },
+      {
+        "id": "tokio-read-graph-006",
+        "query_type": "read_graph",
+        "status": "pass",
+        "detail": "Recall threshold met",
+        "matches": 1,
+        "expected_min_recall": 1,
+        "max_rank": 5,
+        "matched_items": [
+          "./tokio/src/runtime/scheduler/multi_thread/worker/taskdump.rs:impl_item:9:0"
+        ]
+      },
+      {
+        "id": "tokio-read-graph-007",
+        "query_type": "read_graph",
+        "status": "pass",
+        "detail": "Recall threshold met",
+        "matches": 1,
+        "expected_min_recall": 1,
+        "max_rank": 5,
+        "matched_items": [
+          "./tokio/src/runtime/scheduler/multi_thread/worker/taskdump_mock.rs:function_item:3:4"
+        ]
+      },
+      {
+        "id": "tokio-read-graph-008",
+        "query_type": "read_graph",
+        "status": "pass",
+        "detail": "Recall threshold met",
+        "matches": 1,
+        "expected_min_recall": 1,
+        "max_rank": 5,
+        "matched_items": [
+          "./tokio/src/runtime/scheduler/multi_thread/worker/taskdump_mock.rs:impl_item:2:0"
+        ]
+      },
+      {
+        "id": "tokio-read-graph-009",
+        "query_type": "read_graph",
+        "status": "pass",
+        "detail": "Recall threshold met",
+        "matches": 1,
+        "expected_min_recall": 1,
+        "max_rank": 5,
+        "matched_items": [
+          "./tokio/src/runtime/blocking/task.rs:function_item:11:4"
+        ]
+      },
+      {
+        "id": "tokio-read-graph-010",
+        "query_type": "read_graph",
+        "status": "pass",
+        "detail": "Recall threshold met",
+        "matches": 1,
+        "expected_min_recall": 1,
+        "max_rank": 5,
+        "matched_items": [
+          "./tokio/src/runtime/blocking/task.rs:function_item:26:4"
+        ]
+      },
+      {
+        "id": "tokio-get-context-001",
+        "query_type": "get_context",
+        "status": "pass",
+        "detail": "Recall threshold met",
+        "matches": 1,
+        "expected_min_recall": 1,
+        "max_rank": 5,
+        "matched_items": [
+          "./tokio/src/runtime/blocking/task.rs"
+        ]
+      },
+      {
+        "id": "tokio-get-context-002",
+        "query_type": "get_context",
+        "status": "pass",
+        "detail": "Recall threshold met",
+        "matches": 1,
+        "expected_min_recall": 1,
+        "max_rank": 5,
+        "matched_items": [
+          "./tokio/src/runtime/blocking/task.rs"
+        ]
+      },
+      {
+        "id": "tokio-get-context-003",
+        "query_type": "get_context",
+        "status": "pass",
+        "detail": "Recall threshold met",
+        "matches": 1,
+        "expected_min_recall": 1,
+        "max_rank": 5,
+        "matched_items": [
+          "./tokio/src/runtime/blocking/task.rs"
+        ]
+      },
+      {
+        "id": "tokio-get-context-004",
+        "query_type": "get_context",
+        "status": "pass",
+        "detail": "Recall threshold met",
+        "matches": 1,
+        "expected_min_recall": 1,
+        "max_rank": 5,
+        "matched_items": [
+          "./tokio/src/runtime/blocking/task.rs"
+        ]
+      },
+      {
+        "id": "tokio-get-context-005",
+        "query_type": "get_context",
+        "status": "pass",
+        "detail": "Recall threshold met",
+        "matches": 1,
+        "expected_min_recall": 1,
+        "max_rank": 5,
+        "matched_items": [
+          "./tokio/src/runtime/metrics/scheduler.rs"
+        ]
+      },
+      {
+        "id": "tokio-get-context-006",
+        "query_type": "get_context",
+        "status": "pass",
+        "detail": "Recall threshold met",
+        "matches": 1,
+        "expected_min_recall": 1,
+        "max_rank": 5,
+        "matched_items": [
+          "./tokio/src/runtime/metrics/scheduler.rs"
+        ]
+      },
+      {
+        "id": "tokio-get-context-007",
+        "query_type": "get_context",
+        "status": "pass",
+        "detail": "Recall threshold met",
+        "matches": 1,
+        "expected_min_recall": 1,
+        "max_rank": 5,
+        "matched_items": [
+          "./tokio/src/runtime/metrics/scheduler.rs"
+        ]
+      },
+      {
+        "id": "tokio-get-context-008",
+        "query_type": "get_context",
+        "status": "pass",
+        "detail": "Recall threshold met",
+        "matches": 1,
+        "expected_min_recall": 1,
+        "max_rank": 5,
+        "matched_items": [
+          "./tokio/src/runtime/metrics/scheduler.rs"
+        ]
+      },
+      {
+        "id": "tokio-get-context-009",
+        "query_type": "get_context",
+        "status": "pass",
+        "detail": "Recall threshold met",
+        "matches": 1,
+        "expected_min_recall": 1,
+        "max_rank": 5,
+        "matched_items": [
+          "./tokio/src/runtime/metrics/scheduler.rs"
+        ]
+      },
+      {
+        "id": "tokio-get-context-010",
+        "query_type": "get_context",
+        "status": "pass",
+        "detail": "Recall threshold met",
+        "matches": 1,
+        "expected_min_recall": 1,
+        "max_rank": 5,
+        "matched_items": [
+          "./tokio/src/runtime/scheduler/block_in_place.rs"
+        ]
+      },
+      {
+        "id": "express-read-graph-001",
+        "query_type": "read_graph",
+        "status": "pass",
+        "detail": "Recall threshold met",
+        "matches": 1,
+        "expected_min_recall": 1,
+        "max_rank": 5,
+        "matched_items": [
+          "./examples/route-middleware/index.js:function_declaration:24:0"
+        ]
+      },
+      {
+        "id": "express-read-graph-002",
+        "query_type": "read_graph",
+        "status": "pass",
+        "detail": "Recall threshold met",
+        "matches": 1,
+        "expected_min_recall": 1,
+        "max_rank": 5,
+        "matched_items": [
+          "./examples/route-middleware/index.js:function_declaration:35:0"
+        ]
+      },
+      {
+        "id": "express-read-graph-003",
+        "query_type": "read_graph",
+        "status": "pass",
+        "detail": "Recall threshold met",
+        "matches": 1,
+        "expected_min_recall": 1,
+        "max_rank": 5,
+        "matched_items": [
+          "./examples/route-middleware/index.js:function_declaration:49:0"
+        ]
+      },
+      {
+        "id": "express-read-graph-004",
+        "query_type": "read_graph",
+        "status": "pass",
+        "detail": "Recall threshold met",
+        "matches": 1,
+        "expected_min_recall": 1,
+        "max_rank": 5,
+        "matched_items": [
+          "./lib/application.js:function_declaration:614:0"
+        ]
+      },
+      {
+        "id": "express-read-graph-005",
+        "query_type": "read_graph",
+        "status": "pass",
+        "detail": "Recall threshold met",
+        "matches": 1,
+        "expected_min_recall": 1,
+        "max_rank": 5,
+        "matched_items": [
+          "./lib/application.js:function_declaration:624:0"
+        ]
+      },
+      {
+        "id": "express-read-graph-006",
+        "query_type": "read_graph",
+        "status": "pass",
+        "detail": "Recall threshold met",
+        "matches": 1,
+        "expected_min_recall": 1,
+        "max_rank": 5,
+        "matched_items": [
+          "./lib/request.js:function_declaration:520:0"
+        ]
+      },
+      {
+        "id": "express-read-graph-007",
+        "query_type": "read_graph",
+        "status": "pass",
+        "detail": "Recall threshold met",
+        "matches": 1,
+        "expected_min_recall": 1,
+        "max_rank": 5,
+        "matched_items": [
+          "./lib/response.js:function_declaration:1022:0"
+        ]
+      },
+      {
+        "id": "express-read-graph-008",
+        "query_type": "read_graph",
+        "status": "pass",
+        "detail": "Recall threshold met",
+        "matches": 1,
+        "expected_min_recall": 1,
+        "max_rank": 5,
+        "matched_items": [
+          "./lib/response.js:function_declaration:920:0"
+        ]
+      },
+      {
+        "id": "express-read-graph-009",
+        "query_type": "read_graph",
+        "status": "pass",
+        "detail": "Recall threshold met",
+        "matches": 1,
+        "expected_min_recall": 1,
+        "max_rank": 5,
+        "matched_items": [
+          "./lib/response.js:function_declaration:925:2"
+        ]
+      },
+      {
+        "id": "express-read-graph-010",
+        "query_type": "read_graph",
+        "status": "pass",
+        "detail": "Recall threshold met",
+        "matches": 1,
+        "expected_min_recall": 1,
+        "max_rank": 5,
+        "matched_items": [
+          "./lib/response.js:function_declaration:935:2"
+        ]
+      },
+      {
+        "id": "express-get-context-001",
+        "query_type": "get_context",
+        "status": "pass",
+        "detail": "Recall threshold met",
+        "matches": 1,
+        "expected_min_recall": 1,
+        "max_rank": 5,
+        "matched_items": [
+          "./lib/response.js"
+        ]
+      },
+      {
+        "id": "express-get-context-002",
+        "query_type": "get_context",
+        "status": "pass",
+        "detail": "Recall threshold met",
+        "matches": 1,
+        "expected_min_recall": 1,
+        "max_rank": 5,
+        "matched_items": [
+          "./lib/response.js"
+        ]
+      },
+      {
+        "id": "express-get-context-003",
+        "query_type": "get_context",
+        "status": "pass",
+        "detail": "Recall threshold met",
+        "matches": 1,
+        "expected_min_recall": 1,
+        "max_rank": 5,
+        "matched_items": [
+          "./lib/response.js"
+        ]
+      },
+      {
+        "id": "express-get-context-004",
+        "query_type": "get_context",
+        "status": "pass",
+        "detail": "Recall threshold met",
+        "matches": 1,
+        "expected_min_recall": 1,
+        "max_rank": 5,
+        "matched_items": [
+          "./lib/response.js"
+        ]
+      },
+      {
+        "id": "express-get-context-005",
+        "query_type": "get_context",
+        "status": "pass",
+        "detail": "Recall threshold met",
+        "matches": 1,
+        "expected_min_recall": 1,
+        "max_rank": 5,
+        "matched_items": [
+          "./lib/response.js"
+        ]
+      },
+      {
+        "id": "express-get-context-006",
+        "query_type": "get_context",
+        "status": "pass",
+        "detail": "Recall threshold met",
+        "matches": 1,
+        "expected_min_recall": 1,
+        "max_rank": 5,
+        "matched_items": [
+          "./test/Router.js"
+        ]
+      },
+      {
+        "id": "express-get-context-007",
+        "query_type": "get_context",
+        "status": "pass",
+        "detail": "Recall threshold met",
+        "matches": 1,
+        "expected_min_recall": 1,
+        "max_rank": 5,
+        "matched_items": [
+          "./test/Router.js"
+        ]
+      },
+      {
+        "id": "express-get-context-008",
+        "query_type": "get_context",
+        "status": "pass",
+        "detail": "Recall threshold met",
+        "matches": 1,
+        "expected_min_recall": 1,
+        "max_rank": 5,
+        "matched_items": [
+          "./test/Router.js"
+        ]
+      },
+      {
+        "id": "express-get-context-009",
+        "query_type": "get_context",
+        "status": "pass",
+        "detail": "Recall threshold met",
+        "matches": 1,
+        "expected_min_recall": 1,
+        "max_rank": 5,
+        "matched_items": [
+          "./test/app.router.js"
+        ]
+      },
+      {
+        "id": "express-get-context-010",
+        "query_type": "get_context",
+        "status": "pass",
+        "detail": "Recall threshold met",
+        "matches": 1,
+        "expected_min_recall": 1,
+        "max_rank": 5,
+        "matched_items": [
+          "./test/app.router.js"
+        ]
+      },
+      {
+        "id": "ccm-search-001",
+        "query_type": "search_code",
+        "status": "pass",
+        "detail": "Recall threshold met",
+        "matches": 1,
+        "expected_min_recall": 1,
+        "max_rank": 5,
+        "matched_items": [
+          "./core/src/engine/hybrid.rs"
+        ]
+      },
+      {
+        "id": "ccm-search-002",
+        "query_type": "search_code",
+        "status": "pass",
+        "detail": "Recall threshold met",
+        "matches": 1,
+        "expected_min_recall": 1,
+        "max_rank": 5,
+        "matched_items": [
+          "./core/src/eval.rs"
+        ]
+      },
+      {
+        "id": "ccm-search-003",
+        "query_type": "search_code",
+        "status": "pass",
+        "detail": "Recall threshold met",
+        "matches": 1,
+        "expected_min_recall": 1,
+        "max_rank": 5,
+        "matched_items": [
+          "./core/src/vector/store.rs"
+        ]
+      },
+      {
+        "id": "ccm-search-004",
+        "query_type": "search_code",
+        "status": "pass",
+        "detail": "Recall threshold met",
+        "matches": 1,
+        "expected_min_recall": 1,
+        "max_rank": 5,
+        "matched_items": [
+          "./core/src/rpc.rs"
+        ]
+      },
+      {
+        "id": "ccm-search-005",
+        "query_type": "search_code",
+        "status": "pass",
+        "detail": "Recall threshold met",
+        "matches": 1,
+        "expected_min_recall": 1,
+        "max_rank": 5,
+        "matched_items": [
+          "./core/src/lib.rs"
+        ]
+      },
+      {
+        "id": "ccm-search-006",
+        "query_type": "search_code",
+        "status": "pass",
+        "detail": "Recall threshold met",
+        "matches": 1,
+        "expected_min_recall": 1,
+        "max_rank": 5,
+        "matched_items": [
+          "./core/src/eval.rs"
+        ]
+      },
+      {
+        "id": "tokio-search-001",
+        "query_type": "search_code",
+        "status": "fail",
+        "detail": "Recall below threshold",
+        "matches": 0,
+        "expected_min_recall": 1,
+        "max_rank": 5,
+        "matched_items": []
+      },
+      {
+        "id": "tokio-search-002",
+        "query_type": "search_code",
+        "status": "fail",
+        "detail": "Recall below threshold",
+        "matches": 0,
+        "expected_min_recall": 1,
+        "max_rank": 5,
+        "matched_items": []
+      },
+      {
+        "id": "tokio-search-003",
+        "query_type": "search_code",
+        "status": "fail",
+        "detail": "Recall below threshold",
+        "matches": 0,
+        "expected_min_recall": 1,
+        "max_rank": 5,
+        "matched_items": []
+      },
+      {
+        "id": "express-search-001",
+        "query_type": "search_code",
+        "status": "fail",
+        "detail": "Recall below threshold",
+        "matches": 0,
+        "expected_min_recall": 1,
+        "max_rank": 5,
+        "matched_items": []
+      },
+      {
+        "id": "express-search-002",
+        "query_type": "search_code",
+        "status": "fail",
+        "detail": "Recall below threshold",
+        "matches": 0,
+        "expected_min_recall": 1,
+        "max_rank": 5,
+        "matched_items": []
+      },
+      {
+        "id": "express-search-003",
+        "query_type": "search_code",
+        "status": "fail",
+        "detail": "Recall below threshold",
+        "matches": 0,
+        "expected_min_recall": 1,
+        "max_rank": 5,
+        "matched_items": []
+      }
+    ]
+  },
+  "hybrid": {
+    "schema_version": 1,
+    "generated_at": 1770126562,
+    "totals": {
+      "tasks": 102,
+      "scored": 89,
+      "passed": 83,
+      "failed": 19,
+      "skipped": 0
+    },
+    "results": [
+      {
+        "id": "ccm-read-graph-001",
+        "query_type": "read_graph",
+        "status": "fail",
+        "detail": "Node not found in graph",
+        "matches": 0,
+        "expected_min_recall": 1,
+        "max_rank": 5,
+        "matched_items": []
+      },
+      {
+        "id": "ccm-read-graph-002",
+        "query_type": "read_graph",
+        "status": "pass",
+        "detail": "Recall threshold met",
+        "matches": 1,
+        "expected_min_recall": 1,
+        "max_rank": 5,
+        "matched_items": [
+          "./cli/src/main.rs:struct_item:6:0"
+        ]
+      },
+      {
+        "id": "ccm-read-graph-003",
+        "query_type": "read_graph",
+        "status": "pass",
+        "detail": "Recall threshold met",
+        "matches": 1,
+        "expected_min_recall": 1,
+        "max_rank": 5,
+        "matched_items": [
+          "./core/build.rs:function_item:0:0"
+        ]
+      },
+      {
+        "id": "ccm-read-graph-004",
+        "query_type": "read_graph",
+        "status": "fail",
+        "detail": "Node not found in graph",
+        "matches": 0,
+        "expected_min_recall": 1,
+        "max_rank": 5,
+        "matched_items": []
+      },
+      {
+        "id": "ccm-read-graph-005",
+        "query_type": "read_graph",
+        "status": "fail",
+        "detail": "Node not found in graph",
+        "matches": 0,
+        "expected_min_recall": 1,
+        "max_rank": 5,
+        "matched_items": []
+      },
+      {
+        "id": "ccm-read-graph-006",
+        "query_type": "read_graph",
+        "status": "fail",
+        "detail": "Node not found in graph",
+        "matches": 0,
+        "expected_min_recall": 1,
+        "max_rank": 5,
+        "matched_items": []
+      },
+      {
+        "id": "ccm-read-graph-007",
+        "query_type": "read_graph",
+        "status": "fail",
+        "detail": "Node not found in graph",
+        "matches": 0,
+        "expected_min_recall": 1,
+        "max_rank": 5,
+        "matched_items": []
+      },
+      {
+        "id": "ccm-read-graph-008",
+        "query_type": "read_graph",
+        "status": "fail",
+        "detail": "Node not found in graph",
+        "matches": 0,
+        "expected_min_recall": 1,
+        "max_rank": 5,
+        "matched_items": []
+      },
+      {
+        "id": "ccm-read-graph-009",
+        "query_type": "read_graph",
+        "status": "fail",
+        "detail": "Node not found in graph",
+        "matches": 0,
+        "expected_min_recall": 1,
+        "max_rank": 5,
+        "matched_items": []
+      },
+      {
+        "id": "ccm-read-graph-010",
+        "query_type": "read_graph",
+        "status": "fail",
+        "detail": "Node not found in graph",
+        "matches": 0,
+        "expected_min_recall": 1,
+        "max_rank": 5,
+        "matched_items": []
+      },
+      {
+        "id": "ccm-read-graph-011",
+        "query_type": "read_graph",
+        "status": "pass",
+        "detail": "Recall threshold met",
+        "matches": 1,
+        "expected_min_recall": 1,
+        "max_rank": 5,
+        "matched_items": [
+          "./core/src/engine.rs:function_item:62:4"
+        ]
+      },
+      {
+        "id": "ccm-read-graph-012",
+        "query_type": "read_graph",
+        "status": "fail",
+        "detail": "Node not found in graph",
+        "matches": 0,
+        "expected_min_recall": 1,
+        "max_rank": 5,
+        "matched_items": []
+      },
+      {
+        "id": "ccm-read-graph-013",
+        "query_type": "read_graph",
+        "status": "fail",
+        "detail": "Node not found in graph",
+        "matches": 0,
+        "expected_min_recall": 1,
+        "max_rank": 5,
+        "matched_items": []
+      },
+      {
+        "id": "ccm-read-graph-014",
+        "query_type": "read_graph",
+        "status": "fail",
+        "detail": "Node not found in graph",
+        "matches": 0,
+        "expected_min_recall": 1,
+        "max_rank": 5,
+        "matched_items": []
+      },
+      {
+        "id": "ccm-read-graph-015",
+        "query_type": "read_graph",
+        "status": "fail",
+        "detail": "Node not found in graph",
+        "matches": 0,
+        "expected_min_recall": 1,
+        "max_rank": 5,
+        "matched_items": []
+      },
+      {
+        "id": "ccm-read-graph-016",
+        "query_type": "read_graph",
+        "status": "fail",
+        "detail": "Node not found in graph",
+        "matches": 0,
+        "expected_min_recall": 1,
+        "max_rank": 5,
+        "matched_items": []
+      },
+      {
+        "id": "ccm-read-graph-017",
+        "query_type": "read_graph",
+        "status": "pass",
+        "detail": "Recall threshold met",
+        "matches": 1,
+        "expected_min_recall": 1,
+        "max_rank": 5,
+        "matched_items": [
+          "./core/src/engine/predictive.rs:function_item:11:4"
+        ]
+      },
+      {
+        "id": "ccm-read-graph-018",
+        "query_type": "read_graph",
+        "status": "pass",
+        "detail": "Recall threshold met",
+        "matches": 1,
+        "expected_min_recall": 1,
+        "max_rank": 5,
+        "matched_items": [
+          "./core/src/engine/predictive.rs:function_item:19:4"
+        ]
+      },
+      {
+        "id": "ccm-read-graph-019",
+        "query_type": "read_graph",
+        "status": "pass",
+        "detail": "Recall threshold met",
+        "matches": 1,
+        "expected_min_recall": 1,
+        "max_rank": 5,
+        "matched_items": [
+          "./core/src/engine/predictive.rs:function_item:26:4"
+        ]
+      },
+      {
+        "id": "ccm-read-graph-020",
+        "query_type": "read_graph",
+        "status": "pass",
+        "detail": "Recall threshold met",
+        "matches": 1,
+        "expected_min_recall": 1,
+        "max_rank": 5,
+        "matched_items": [
+          "./core/src/engine/predictive.rs:impl_item:10:0"
+        ]
+      },
+      {
+        "id": "ccm-read-graph-021",
+        "query_type": "read_graph",
+        "status": "pass",
+        "detail": "Recall threshold met",
+        "matches": 1,
+        "expected_min_recall": 1,
+        "max_rank": 5,
+        "matched_items": [
+          "./core/src/engine/predictive.rs:struct_item:6:0"
+        ]
+      },
+      {
+        "id": "ccm-read-graph-022",
+        "query_type": "read_graph",
+        "status": "pass",
+        "detail": "Recall threshold met",
+        "matches": 1,
+        "expected_min_recall": 1,
+        "max_rank": 5,
+        "matched_items": [
+          "./core/src/git/mod.rs:function_item:11:4"
+        ]
+      },
+      {
+        "id": "ccm-read-graph-023",
+        "query_type": "read_graph",
+        "status": "pass",
+        "detail": "Recall threshold met",
+        "matches": 1,
+        "expected_min_recall": 1,
+        "max_rank": 5,
+        "matched_items": [
+          "./core/src/git/mod.rs:function_item:18:4"
+        ]
+      },
+      {
+        "id": "ccm-read-graph-024",
+        "query_type": "read_graph",
+        "status": "pass",
+        "detail": "Recall threshold met",
+        "matches": 1,
+        "expected_min_recall": 1,
+        "max_rank": 5,
+        "matched_items": [
+          "./core/src/git/mod.rs:function_item:65:4"
+        ]
+      },
+      {
+        "id": "ccm-read-graph-025",
+        "query_type": "read_graph",
+        "status": "pass",
+        "detail": "Recall threshold met",
+        "matches": 1,
+        "expected_min_recall": 1,
+        "max_rank": 5,
+        "matched_items": [
+          "./core/src/git/mod.rs:impl_item:9:0"
+        ]
+      },
+      {
+        "id": "ccm-get-context-001",
+        "query_type": "get_context",
+        "status": "pass",
+        "detail": "Recall threshold met",
+        "matches": 1,
+        "expected_min_recall": 1,
+        "max_rank": 5,
+        "matched_items": [
+          "./core/src/git/mod.rs"
+        ]
+      },
+      {
+        "id": "ccm-get-context-002",
+        "query_type": "get_context",
+        "status": "pass",
+        "detail": "Recall threshold met",
+        "matches": 1,
+        "expected_min_recall": 1,
+        "max_rank": 5,
+        "matched_items": [
+          "./core/src/graph/mod.rs"
+        ]
+      },
+      {
+        "id": "ccm-get-context-003",
+        "query_type": "get_context",
+        "status": "pass",
+        "detail": "Recall threshold met",
+        "matches": 1,
+        "expected_min_recall": 1,
+        "max_rank": 5,
+        "matched_items": [
+          "./core/src/graph/mod.rs"
+        ]
+      },
+      {
+        "id": "ccm-get-context-004",
+        "query_type": "get_context",
+        "status": "pass",
+        "detail": "Recall threshold met",
+        "matches": 1,
+        "expected_min_recall": 1,
+        "max_rank": 5,
+        "matched_items": [
+          "./core/src/graph/mod.rs"
+        ]
+      },
+      {
+        "id": "ccm-get-context-005",
+        "query_type": "get_context",
+        "status": "pass",
+        "detail": "Recall threshold met",
+        "matches": 1,
+        "expected_min_recall": 1,
+        "max_rank": 5,
+        "matched_items": [
+          "./core/src/graph/mod.rs"
+        ]
+      },
+      {
+        "id": "ccm-get-context-006",
+        "query_type": "get_context",
+        "status": "pass",
+        "detail": "Recall threshold met",
+        "matches": 1,
+        "expected_min_recall": 1,
+        "max_rank": 5,
+        "matched_items": [
+          "./core/src/graph/mod.rs"
+        ]
+      },
+      {
+        "id": "ccm-get-context-007",
+        "query_type": "get_context",
+        "status": "pass",
+        "detail": "Recall threshold met",
+        "matches": 1,
+        "expected_min_recall": 1,
+        "max_rank": 5,
+        "matched_items": [
+          "./core/src/graph/mod.rs"
+        ]
+      },
+      {
+        "id": "ccm-get-context-008",
+        "query_type": "get_context",
+        "status": "pass",
+        "detail": "Recall threshold met",
+        "matches": 1,
+        "expected_min_recall": 1,
+        "max_rank": 5,
+        "matched_items": [
+          "./core/src/graph/mod.rs"
+        ]
+      },
+      {
+        "id": "ccm-get-context-009",
+        "query_type": "get_context",
+        "status": "pass",
+        "detail": "Recall threshold met",
+        "matches": 1,
+        "expected_min_recall": 1,
+        "max_rank": 5,
+        "matched_items": [
+          "./core/src/graph/mod.rs"
+        ]
+      },
+      {
+        "id": "ccm-get-context-010",
+        "query_type": "get_context",
+        "status": "pass",
+        "detail": "Recall threshold met",
+        "matches": 1,
+        "expected_min_recall": 1,
+        "max_rank": 5,
+        "matched_items": [
+          "./core/src/graph/mod.rs"
+        ]
+      },
+      {
+        "id": "ccm-get-context-011",
+        "query_type": "get_context",
+        "status": "pass",
+        "detail": "Recall threshold met",
+        "matches": 1,
+        "expected_min_recall": 1,
+        "max_rank": 5,
+        "matched_items": [
+          "./core/src/graph/mod.rs"
+        ]
+      },
+      {
+        "id": "ccm-get-context-012",
+        "query_type": "get_context",
+        "status": "pass",
+        "detail": "Recall threshold met",
+        "matches": 1,
+        "expected_min_recall": 1,
+        "max_rank": 5,
+        "matched_items": [
+          "./core/src/graph/mod.rs"
+        ]
+      },
+      {
+        "id": "ccm-get-context-013",
+        "query_type": "get_context",
+        "status": "pass",
+        "detail": "Recall threshold met",
+        "matches": 1,
+        "expected_min_recall": 1,
+        "max_rank": 5,
+        "matched_items": [
+          "./core/src/graph/mod.rs"
+        ]
+      },
+      {
+        "id": "ccm-get-context-014",
+        "query_type": "get_context",
+        "status": "pass",
+        "detail": "Recall threshold met",
+        "matches": 1,
+        "expected_min_recall": 1,
+        "max_rank": 5,
+        "matched_items": [
+          "./core/src/graph/mod.rs"
+        ]
+      },
+      {
+        "id": "ccm-get-context-015",
+        "query_type": "get_context",
+        "status": "pass",
+        "detail": "Recall threshold met",
+        "matches": 1,
+        "expected_min_recall": 1,
+        "max_rank": 5,
+        "matched_items": [
+          "./core/src/graph/mod.rs"
+        ]
+      },
+      {
+        "id": "ccm-get-context-016",
+        "query_type": "get_context",
+        "status": "pass",
+        "detail": "Recall threshold met",
+        "matches": 1,
+        "expected_min_recall": 1,
+        "max_rank": 5,
+        "matched_items": [
+          "./core/src/graph/mod.rs"
+        ]
+      },
+      {
+        "id": "ccm-get-context-017",
+        "query_type": "get_context",
+        "status": "pass",
+        "detail": "Recall threshold met",
+        "matches": 1,
+        "expected_min_recall": 1,
+        "max_rank": 5,
+        "matched_items": [
+          "./core/src/graph/mod.rs"
+        ]
+      },
+      {
+        "id": "ccm-get-context-018",
+        "query_type": "get_context",
+        "status": "pass",
+        "detail": "Recall threshold met",
+        "matches": 1,
+        "expected_min_recall": 1,
+        "max_rank": 5,
+        "matched_items": [
+          "./core/src/graph/mod.rs"
+        ]
+      },
+      {
+        "id": "ccm-get-context-019",
+        "query_type": "get_context",
+        "status": "pass",
+        "detail": "Recall threshold met",
+        "matches": 1,
+        "expected_min_recall": 1,
+        "max_rank": 5,
+        "matched_items": [
+          "./core/src/graph/mod.rs"
+        ]
+      },
+      {
+        "id": "ccm-get-context-020",
+        "query_type": "get_context",
+        "status": "pass",
+        "detail": "Recall threshold met",
+        "matches": 1,
+        "expected_min_recall": 1,
+        "max_rank": 5,
+        "matched_items": [
+          "./core/src/graph/mod.rs"
+        ]
+      },
+      {
+        "id": "ccm-get-context-021",
+        "query_type": "get_context",
+        "status": "pass",
+        "detail": "Recall threshold met",
+        "matches": 1,
+        "expected_min_recall": 1,
+        "max_rank": 5,
+        "matched_items": [
+          "./core/src/lib.rs"
+        ]
+      },
+      {
+        "id": "ccm-get-context-022",
+        "query_type": "get_context",
+        "status": "pass",
+        "detail": "Recall threshold met",
+        "matches": 1,
+        "expected_min_recall": 1,
+        "max_rank": 5,
+        "matched_items": [
+          "./core/src/lib.rs"
+        ]
+      },
+      {
+        "id": "ccm-get-context-023",
+        "query_type": "get_context",
+        "status": "pass",
+        "detail": "Recall threshold met",
+        "matches": 1,
+        "expected_min_recall": 1,
+        "max_rank": 5,
+        "matched_items": [
+          "./core/src/lib.rs"
+        ]
+      },
+      {
+        "id": "ccm-get-context-024",
+        "query_type": "get_context",
+        "status": "pass",
+        "detail": "Recall threshold met",
+        "matches": 1,
+        "expected_min_recall": 1,
+        "max_rank": 5,
+        "matched_items": [
+          "./core/src/lib.rs"
+        ]
+      },
+      {
+        "id": "ccm-get-context-025",
+        "query_type": "get_context",
+        "status": "pass",
+        "detail": "Recall threshold met",
+        "matches": 1,
+        "expected_min_recall": 1,
+        "max_rank": 5,
+        "matched_items": [
+          "./core/src/lib.rs"
+        ]
+      },
+      {
+        "id": "tokio-read-graph-001",
+        "query_type": "read_graph",
+        "status": "pass",
+        "detail": "Recall threshold met",
+        "matches": 1,
+        "expected_min_recall": 1,
+        "max_rank": 5,
+        "matched_items": [
+          "./tokio/src/runtime/scheduler/multi_thread/handle/taskdump.rs:function_item:5:4"
+        ]
+      },
+      {
+        "id": "tokio-read-graph-002",
+        "query_type": "read_graph",
+        "status": "pass",
+        "detail": "Recall threshold met",
+        "matches": 1,
+        "expected_min_recall": 1,
+        "max_rank": 5,
+        "matched_items": [
+          "./tokio/src/runtime/scheduler/multi_thread/handle/taskdump.rs:impl_item:4:0"
+        ]
+      },
+      {
+        "id": "tokio-read-graph-003",
+        "query_type": "read_graph",
+        "status": "pass",
+        "detail": "Recall threshold met",
+        "matches": 1,
+        "expected_min_recall": 1,
+        "max_rank": 5,
+        "matched_items": [
+          "./tokio/src/runtime/scheduler/multi_thread/worker/taskdump.rs:function_item:10:4"
+        ]
+      },
+      {
+        "id": "tokio-read-graph-004",
+        "query_type": "read_graph",
+        "status": "pass",
+        "detail": "Recall threshold met",
+        "matches": 1,
+        "expected_min_recall": 1,
+        "max_rank": 5,
+        "matched_items": [
+          "./tokio/src/runtime/scheduler/multi_thread/worker/taskdump.rs:function_item:61:4"
+        ]
+      },
+      {
+        "id": "tokio-read-graph-005",
+        "query_type": "read_graph",
+        "status": "pass",
+        "detail": "Recall threshold met",
+        "matches": 1,
+        "expected_min_recall": 1,
+        "max_rank": 5,
+        "matched_items": [
+          "./tokio/src/runtime/scheduler/multi_thread/worker/taskdump.rs:impl_item:59:0"
+        ]
+      },
+      {
+        "id": "tokio-read-graph-006",
+        "query_type": "read_graph",
+        "status": "pass",
+        "detail": "Recall threshold met",
+        "matches": 1,
+        "expected_min_recall": 1,
+        "max_rank": 5,
+        "matched_items": [
+          "./tokio/src/runtime/scheduler/multi_thread/worker/taskdump.rs:impl_item:9:0"
+        ]
+      },
+      {
+        "id": "tokio-read-graph-007",
+        "query_type": "read_graph",
+        "status": "pass",
+        "detail": "Recall threshold met",
+        "matches": 1,
+        "expected_min_recall": 1,
+        "max_rank": 5,
+        "matched_items": [
+          "./tokio/src/runtime/scheduler/multi_thread/worker/taskdump_mock.rs:function_item:3:4"
+        ]
+      },
+      {
+        "id": "tokio-read-graph-008",
+        "query_type": "read_graph",
+        "status": "pass",
+        "detail": "Recall threshold met",
+        "matches": 1,
+        "expected_min_recall": 1,
+        "max_rank": 5,
+        "matched_items": [
+          "./tokio/src/runtime/scheduler/multi_thread/worker/taskdump_mock.rs:impl_item:2:0"
+        ]
+      },
+      {
+        "id": "tokio-read-graph-009",
+        "query_type": "read_graph",
+        "status": "pass",
+        "detail": "Recall threshold met",
+        "matches": 1,
+        "expected_min_recall": 1,
+        "max_rank": 5,
+        "matched_items": [
+          "./tokio/src/runtime/blocking/task.rs:function_item:11:4"
+        ]
+      },
+      {
+        "id": "tokio-read-graph-010",
+        "query_type": "read_graph",
+        "status": "pass",
+        "detail": "Recall threshold met",
+        "matches": 1,
+        "expected_min_recall": 1,
+        "max_rank": 5,
+        "matched_items": [
+          "./tokio/src/runtime/blocking/task.rs:function_item:26:4"
+        ]
+      },
+      {
+        "id": "tokio-get-context-001",
+        "query_type": "get_context",
+        "status": "pass",
+        "detail": "Recall threshold met",
+        "matches": 1,
+        "expected_min_recall": 1,
+        "max_rank": 5,
+        "matched_items": [
+          "./tokio/src/runtime/blocking/task.rs"
+        ]
+      },
+      {
+        "id": "tokio-get-context-002",
+        "query_type": "get_context",
+        "status": "pass",
+        "detail": "Recall threshold met",
+        "matches": 1,
+        "expected_min_recall": 1,
+        "max_rank": 5,
+        "matched_items": [
+          "./tokio/src/runtime/blocking/task.rs"
+        ]
+      },
+      {
+        "id": "tokio-get-context-003",
+        "query_type": "get_context",
+        "status": "pass",
+        "detail": "Recall threshold met",
+        "matches": 1,
+        "expected_min_recall": 1,
+        "max_rank": 5,
+        "matched_items": [
+          "./tokio/src/runtime/blocking/task.rs"
+        ]
+      },
+      {
+        "id": "tokio-get-context-004",
+        "query_type": "get_context",
+        "status": "pass",
+        "detail": "Recall threshold met",
+        "matches": 1,
+        "expected_min_recall": 1,
+        "max_rank": 5,
+        "matched_items": [
+          "./tokio/src/runtime/blocking/task.rs"
+        ]
+      },
+      {
+        "id": "tokio-get-context-005",
+        "query_type": "get_context",
+        "status": "pass",
+        "detail": "Recall threshold met",
+        "matches": 1,
+        "expected_min_recall": 1,
+        "max_rank": 5,
+        "matched_items": [
+          "./tokio/src/runtime/metrics/scheduler.rs"
+        ]
+      },
+      {
+        "id": "tokio-get-context-006",
+        "query_type": "get_context",
+        "status": "pass",
+        "detail": "Recall threshold met",
+        "matches": 1,
+        "expected_min_recall": 1,
+        "max_rank": 5,
+        "matched_items": [
+          "./tokio/src/runtime/metrics/scheduler.rs"
+        ]
+      },
+      {
+        "id": "tokio-get-context-007",
+        "query_type": "get_context",
+        "status": "pass",
+        "detail": "Recall threshold met",
+        "matches": 1,
+        "expected_min_recall": 1,
+        "max_rank": 5,
+        "matched_items": [
+          "./tokio/src/runtime/metrics/scheduler.rs"
+        ]
+      },
+      {
+        "id": "tokio-get-context-008",
+        "query_type": "get_context",
+        "status": "pass",
+        "detail": "Recall threshold met",
+        "matches": 1,
+        "expected_min_recall": 1,
+        "max_rank": 5,
+        "matched_items": [
+          "./tokio/src/runtime/metrics/scheduler.rs"
+        ]
+      },
+      {
+        "id": "tokio-get-context-009",
+        "query_type": "get_context",
+        "status": "pass",
+        "detail": "Recall threshold met",
+        "matches": 1,
+        "expected_min_recall": 1,
+        "max_rank": 5,
+        "matched_items": [
+          "./tokio/src/runtime/metrics/scheduler.rs"
+        ]
+      },
+      {
+        "id": "tokio-get-context-010",
+        "query_type": "get_context",
+        "status": "pass",
+        "detail": "Recall threshold met",
+        "matches": 1,
+        "expected_min_recall": 1,
+        "max_rank": 5,
+        "matched_items": [
+          "./tokio/src/runtime/scheduler/block_in_place.rs"
+        ]
+      },
+      {
+        "id": "express-read-graph-001",
+        "query_type": "read_graph",
+        "status": "pass",
+        "detail": "Recall threshold met",
+        "matches": 1,
+        "expected_min_recall": 1,
+        "max_rank": 5,
+        "matched_items": [
+          "./examples/route-middleware/index.js:function_declaration:24:0"
+        ]
+      },
+      {
+        "id": "express-read-graph-002",
+        "query_type": "read_graph",
+        "status": "pass",
+        "detail": "Recall threshold met",
+        "matches": 1,
+        "expected_min_recall": 1,
+        "max_rank": 5,
+        "matched_items": [
+          "./examples/route-middleware/index.js:function_declaration:35:0"
+        ]
+      },
+      {
+        "id": "express-read-graph-003",
+        "query_type": "read_graph",
+        "status": "pass",
+        "detail": "Recall threshold met",
+        "matches": 1,
+        "expected_min_recall": 1,
+        "max_rank": 5,
+        "matched_items": [
+          "./examples/route-middleware/index.js:function_declaration:49:0"
+        ]
+      },
+      {
+        "id": "express-read-graph-004",
+        "query_type": "read_graph",
+        "status": "pass",
+        "detail": "Recall threshold met",
+        "matches": 1,
+        "expected_min_recall": 1,
+        "max_rank": 5,
+        "matched_items": [
+          "./lib/application.js:function_declaration:614:0"
+        ]
+      },
+      {
+        "id": "express-read-graph-005",
+        "query_type": "read_graph",
+        "status": "pass",
+        "detail": "Recall threshold met",
+        "matches": 1,
+        "expected_min_recall": 1,
+        "max_rank": 5,
+        "matched_items": [
+          "./lib/application.js:function_declaration:624:0"
+        ]
+      },
+      {
+        "id": "express-read-graph-006",
+        "query_type": "read_graph",
+        "status": "pass",
+        "detail": "Recall threshold met",
+        "matches": 1,
+        "expected_min_recall": 1,
+        "max_rank": 5,
+        "matched_items": [
+          "./lib/request.js:function_declaration:520:0"
+        ]
+      },
+      {
+        "id": "express-read-graph-007",
+        "query_type": "read_graph",
+        "status": "pass",
+        "detail": "Recall threshold met",
+        "matches": 1,
+        "expected_min_recall": 1,
+        "max_rank": 5,
+        "matched_items": [
+          "./lib/response.js:function_declaration:1022:0"
+        ]
+      },
+      {
+        "id": "express-read-graph-008",
+        "query_type": "read_graph",
+        "status": "pass",
+        "detail": "Recall threshold met",
+        "matches": 1,
+        "expected_min_recall": 1,
+        "max_rank": 5,
+        "matched_items": [
+          "./lib/response.js:function_declaration:920:0"
+        ]
+      },
+      {
+        "id": "express-read-graph-009",
+        "query_type": "read_graph",
+        "status": "pass",
+        "detail": "Recall threshold met",
+        "matches": 1,
+        "expected_min_recall": 1,
+        "max_rank": 5,
+        "matched_items": [
+          "./lib/response.js:function_declaration:925:2"
+        ]
+      },
+      {
+        "id": "express-read-graph-010",
+        "query_type": "read_graph",
+        "status": "pass",
+        "detail": "Recall threshold met",
+        "matches": 1,
+        "expected_min_recall": 1,
+        "max_rank": 5,
+        "matched_items": [
+          "./lib/response.js:function_declaration:935:2"
+        ]
+      },
+      {
+        "id": "express-get-context-001",
+        "query_type": "get_context",
+        "status": "pass",
+        "detail": "Recall threshold met",
+        "matches": 1,
+        "expected_min_recall": 1,
+        "max_rank": 5,
+        "matched_items": [
+          "./lib/response.js"
+        ]
+      },
+      {
+        "id": "express-get-context-002",
+        "query_type": "get_context",
+        "status": "pass",
+        "detail": "Recall threshold met",
+        "matches": 1,
+        "expected_min_recall": 1,
+        "max_rank": 5,
+        "matched_items": [
+          "./lib/response.js"
+        ]
+      },
+      {
+        "id": "express-get-context-003",
+        "query_type": "get_context",
+        "status": "pass",
+        "detail": "Recall threshold met",
+        "matches": 1,
+        "expected_min_recall": 1,
+        "max_rank": 5,
+        "matched_items": [
+          "./lib/response.js"
+        ]
+      },
+      {
+        "id": "express-get-context-004",
+        "query_type": "get_context",
+        "status": "pass",
+        "detail": "Recall threshold met",
+        "matches": 1,
+        "expected_min_recall": 1,
+        "max_rank": 5,
+        "matched_items": [
+          "./lib/response.js"
+        ]
+      },
+      {
+        "id": "express-get-context-005",
+        "query_type": "get_context",
+        "status": "pass",
+        "detail": "Recall threshold met",
+        "matches": 1,
+        "expected_min_recall": 1,
+        "max_rank": 5,
+        "matched_items": [
+          "./lib/response.js"
+        ]
+      },
+      {
+        "id": "express-get-context-006",
+        "query_type": "get_context",
+        "status": "pass",
+        "detail": "Recall threshold met",
+        "matches": 1,
+        "expected_min_recall": 1,
+        "max_rank": 5,
+        "matched_items": [
+          "./test/Router.js"
+        ]
+      },
+      {
+        "id": "express-get-context-007",
+        "query_type": "get_context",
+        "status": "pass",
+        "detail": "Recall threshold met",
+        "matches": 1,
+        "expected_min_recall": 1,
+        "max_rank": 5,
+        "matched_items": [
+          "./test/Router.js"
+        ]
+      },
+      {
+        "id": "express-get-context-008",
+        "query_type": "get_context",
+        "status": "pass",
+        "detail": "Recall threshold met",
+        "matches": 1,
+        "expected_min_recall": 1,
+        "max_rank": 5,
+        "matched_items": [
+          "./test/Router.js"
+        ]
+      },
+      {
+        "id": "express-get-context-009",
+        "query_type": "get_context",
+        "status": "pass",
+        "detail": "Recall threshold met",
+        "matches": 1,
+        "expected_min_recall": 1,
+        "max_rank": 5,
+        "matched_items": [
+          "./test/app.router.js"
+        ]
+      },
+      {
+        "id": "express-get-context-010",
+        "query_type": "get_context",
+        "status": "pass",
+        "detail": "Recall threshold met",
+        "matches": 1,
+        "expected_min_recall": 1,
+        "max_rank": 5,
+        "matched_items": [
+          "./test/app.router.js"
+        ]
+      },
+      {
+        "id": "ccm-search-001",
+        "query_type": "search_code",
+        "status": "pass",
+        "detail": "Recall threshold met",
+        "matches": 1,
+        "expected_min_recall": 1,
+        "max_rank": 5,
+        "matched_items": [
+          "./core/src/engine/hybrid.rs"
+        ]
+      },
+      {
+        "id": "ccm-search-002",
+        "query_type": "search_code",
+        "status": "pass",
+        "detail": "Recall threshold met",
+        "matches": 1,
+        "expected_min_recall": 1,
+        "max_rank": 5,
+        "matched_items": [
+          "./core/src/eval.rs"
+        ]
+      },
+      {
+        "id": "ccm-search-003",
+        "query_type": "search_code",
+        "status": "pass",
+        "detail": "Recall threshold met",
+        "matches": 1,
+        "expected_min_recall": 1,
+        "max_rank": 5,
+        "matched_items": [
+          "./core/src/vector/store.rs"
+        ]
+      },
+      {
+        "id": "ccm-search-004",
+        "query_type": "search_code",
+        "status": "pass",
+        "detail": "Recall threshold met",
+        "matches": 1,
+        "expected_min_recall": 1,
+        "max_rank": 5,
+        "matched_items": [
+          "./core/src/rpc.rs"
+        ]
+      },
+      {
+        "id": "ccm-search-005",
+        "query_type": "search_code",
+        "status": "pass",
+        "detail": "Recall threshold met",
+        "matches": 1,
+        "expected_min_recall": 1,
+        "max_rank": 5,
+        "matched_items": [
+          "./core/src/lib.rs"
+        ]
+      },
+      {
+        "id": "ccm-search-006",
+        "query_type": "search_code",
+        "status": "pass",
+        "detail": "Recall threshold met",
+        "matches": 1,
+        "expected_min_recall": 1,
+        "max_rank": 5,
+        "matched_items": [
+          "./core/src/eval.rs"
+        ]
+      },
+      {
+        "id": "tokio-search-001",
+        "query_type": "search_code",
+        "status": "fail",
+        "detail": "Recall below threshold",
+        "matches": 0,
+        "expected_min_recall": 1,
+        "max_rank": 5,
+        "matched_items": []
+      },
+      {
+        "id": "tokio-search-002",
+        "query_type": "search_code",
+        "status": "fail",
+        "detail": "Recall below threshold",
+        "matches": 0,
+        "expected_min_recall": 1,
+        "max_rank": 5,
+        "matched_items": []
+      },
+      {
+        "id": "tokio-search-003",
+        "query_type": "search_code",
+        "status": "fail",
+        "detail": "Recall below threshold",
+        "matches": 0,
+        "expected_min_recall": 1,
+        "max_rank": 5,
+        "matched_items": []
+      },
+      {
+        "id": "express-search-001",
+        "query_type": "search_code",
+        "status": "fail",
+        "detail": "Recall below threshold",
+        "matches": 0,
+        "expected_min_recall": 1,
+        "max_rank": 5,
+        "matched_items": []
+      },
+      {
+        "id": "express-search-002",
+        "query_type": "search_code",
+        "status": "fail",
+        "detail": "Recall below threshold",
+        "matches": 0,
+        "expected_min_recall": 1,
+        "max_rank": 5,
+        "matched_items": []
+      },
+      {
+        "id": "express-search-003",
+        "query_type": "search_code",
+        "status": "fail",
+        "detail": "Recall below threshold",
+        "matches": 0,
+        "expected_min_recall": 1,
+        "max_rank": 5,
+        "matched_items": []
+      }
+    ]
+  },
+  "comparison": {
+    "structural_pass_rate": 81.37254901960785,
+    "hybrid_pass_rate": 81.37254901960785,
+    "improvement": 0.0,
+    "by_query_type": {
+      "get_context": {
+        "structural_pass_rate": 100.0,
+        "hybrid_pass_rate": 100.0,
+        "improvement": 0.0
+      },
+      "read_graph": {
+        "structural_pass_rate": 71.11111111111111,
+        "hybrid_pass_rate": 71.11111111111111,
+        "improvement": 0.0
+      },
+      "search_code": {
+        "structural_pass_rate": 50.0,
+        "hybrid_pass_rate": 50.0,
+        "improvement": 0.0
+      }
+    }
+  }
+}

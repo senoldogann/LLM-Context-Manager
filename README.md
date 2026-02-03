@@ -1,8 +1,8 @@
 # Cognitive Codebase Matrix (CCM)
 
 > **🧠 The Neural Backbone for Autonomous AI Agents**
->
-> **Bridge the gap between your codebase and your AI editor.** CCM transforms static source code into a dynamic, queryable Knowledge Graph, enabling AI agents to navigate, understand, and reason about your project with surgical precision.
+
+> Bridge the gap between your codebase and your AI editor. CCM transforms static source code into a dynamic, queryable Knowledge Graph, enabling AI agents to navigate, understand, and reason about your project with surgical precision.
 
 [![Rust](https://img.shields.io/badge/Built%20With-Rust-orange.svg?style=flat-square&logo=rust)](https://www.rust-lang.org/)
 [![MCP Ready](https://img.shields.io/badge/MCP-Compatible-blue.svg?style=flat-square&logo=google-cloud)](https://modelcontextprotocol.io/)
@@ -11,368 +11,234 @@
 
 ---
 
-## 🚀 Why CCM?
+## Why CCM?
 
-Modern AI coding assistants (Claude, Cursor, Windsurf) are powerful, but they suffer from **blindness**:
-1.  **Context Limits:** They can't "see" your entire 100,000-line project at once.
-2.  **Hallucination:** Without structure, they guess dependencies and imports.
-3.  **Lost in Translation:** Traditional vector search finds *similar words*, not *connected logic*.
+Modern AI coding assistants (Claude, Cursor, Windsurf) are powerful but suffer from **blindness**:
 
-It turns your AI from a *text predictor* into a **Senior Architect**.
+| Problem | Impact |
+|---------|--------|
+| **Context Limits** | Can't "see" your entire 100,000-line project |
+| **Hallucination** | Guesses dependencies without structure |
+| **Lost Context** | Vector search finds *similar words*, not *connected logic* |
 
-### 🛠️ The "Agent-First" Difference
-Unlike other tools that just dump raw code, CCM injects **AI-Optimized Context**. Every piece of code retrieved includes:
-*   **Logical Reasoning:** CCM explains *why* it picked that code (e.g., "Structurally related to your cursor" or "Caller of the current function").
-*   **Relational Edges:** It maps how different files talk to each other, so the AI doesn't have to guess.
+CCM turns your AI from a *text predictor* into a **Senior Architect**.
 
+### The "Agent-First" Difference
+
+Unlike tools that dump raw code, CCM injects **AI-Optimized Context**:
+
+- **Logical Reasoning** - Explains *why* code was retrieved
+- **Relational Edges** - Maps how files talk to each other
+- **Confidence Scores** - Shows certainty in results
 
 ---
 
-## ✨ Key Features
+## Key Features
 
 ### 🧠 Connected Intelligence (Graph Navigator)
-CCM doesn't just read files; it understands **relationships**.
-*   **Two-Pass Indexing:** Automatically links function definitions to their call sites.
-*   **Deep Traversal:** Ask "Who calls this?" or "Where is this defined?" and get 100% accurate structural answers.
+- **Two-Pass Indexing** - Links function definitions to call sites
+- **Deep Traversal** - Ask "Who calls this?" and get accurate answers
 
 ### ⚡ High-Performance Core
-Built entirely in **Rust** for blazing speed.
-*   **Batch Embedding:** Indexes thousands of lines in seconds using concurrent batch processing.
-*   **LanceDB Integration:** State-of-the-art vector storage for millisecond-latency queries.
-*   **Tree-sitter Parsing:** Robust AST analysis for Rust, Python, TypeScript, and JavaScript.
+- **Rust-Powered** - Blazing fast indexing and queries
+- **Batch Embedding** - Thousands of lines in seconds
+- **LanceDB** - Millisecond-latency vector storage
+- **Tree-sitter** - Robust AST for Rust, Python, TypeScript
+
+### 🔒 Production Hardening
+- **Binary Checksums** - Release artifacts include `checksums.txt` for integrity
+- **MCP Allowlist** - Restrict project access with `CCM_ALLOWED_ROOTS`
+- **Safe Defaults** - Configurable timeouts and file-size limits
 
 ### 🔌 Universal Compatibility (MCP)
-Fully implements the **Model Context Protocol (MCP)**.
-*   **Plug & Play:** Works instantly with **Antigravity**, **Claude Desktop**, **Zed**, and any MCP-compliant agent.
-*   **On-Demand Indexing:** Automatically indexes your project on the first query if no index exists. Zero manual setup required.
-*   **Zero-Config:** Automatically detects your project root from the current working directory. Explicit configuration is optional.
+- **Plug & Play** - Works with Claude Desktop, Antigravity, Zed, Cursor
+- **Lazy Indexing** - Auto-indexes on first query
+- **Zero-Config** - Auto-detects project root
 
 ---
 
-## 📦 Installation
+## Installation
 
-### ⚡ Automatic Setup (via npx) - *Recommended*
-If you have Node.js installed, this is the easiest way to get started. It automatically handles binary downloads and configures your editor.
+### ⚡ Automatic (Recommended)
 
 ```bash
-# 1. AUTO-CONFIGURE your AI editor (Claude, Antigravity, Cursor, Cline, etc.)
+# 1. Configure MCP for your AI editor
 npx @senoldogann/context-manager install
 
-# 2. Index your current project
+# 2. Index your project
 npx @senoldogann/context-manager index --path .
 ```
-*Handles cross-platform binary downloads automatically.*
 
----
+### 🔧 Manual Build (Rust)
 
-### One-Click Shell Setup (Rust Native)
-Installs binaries globally to your system via Cargo (faster than npx).
-```bash
-curl -sSL https://raw.githubusercontent.com/senoldogann/LLM-Context-Manager/main/install.sh | bash
-```
-*(Requires macOS or Linux. Windows users use WSL or npx.)*
-
-### Manual Build (Development)
 ```bash
 git clone https://github.com/senoldogann/LLM-Context-Manager.git
 cd LLM-Context-Manager
 cargo build --release
+
+# Binary location: target/release/ccm-cli
 ```
 
 ---
 
-## 🛠️ Configuration
+## Configuration
 
-CCM uses a global configuration file. You don't need to configure it per project.
+Create `~/.ccm/.env`:
 
-1.  **Create the config directory:**
-    ```bash
-    mkdir -p ~/.ccm
-    ```
+```ini
+# Option A: Local (Recommended - Privacy)
+EMBEDDING_PROVIDER=ollama
+EMBEDDING_HOST=http://127.0.0.1:11434
+EMBEDDING_MODEL=mxbai-embed-large
 
-2.  **Create `~/.ccm/.env`:**
-    
-    **Option A: Local Privacy (Ollama) - _Recommended_**
-    ```ini
-    EMBEDDING_PROVIDER=ollama
-    EMBEDDING_HOST=http://127.0.0.1:11434
-    EMBEDDING_MODEL=mxbai-embed-large
-    # MAX_TOKENS=1000  # distinct from compilation time limit, optional
-    ```
+# Option B: Cloud (OpenAI)
+EMBEDDING_PROVIDER=openai
+EMBEDDING_API_KEY=sk-your-key
+EMBEDDING_MODEL=text-embedding-3-small
 
-    **Option B: Cloud Power (OpenAI)**
-    ```ini
-    EMBEDDING_PROVIDER=openai
-    EMBEDDING_API_KEY=sk-your-key-here
-    EMBEDDING_MODEL=text-embedding-3-small
-    ```
+# Networking & Limits
+EMBEDDING_TIMEOUT_SECS=30
+CCM_MAX_FILE_BYTES=2097152
+
+# MCP Security
+CCM_ALLOWED_ROOTS=/Users/you/projects:/Users/you/sandbox
+CCM_REQUIRE_ALLOWED_ROOTS=0
+
+# MCP Runtime
+CCM_MCP_ENGINE_CACHE_SIZE=8
+CCM_MCP_DEBUG=0
+
+# Optional: disable embeddings entirely (semantic search disabled)
+CCM_DISABLE_EMBEDDER=0
+
+# Optional: embed data files (md/json/yaml) into vector search
+CCM_EMBED_DATA_FILES=0
+
+# npm wrapper security (0 = enforce checksum, 1 = bypass)
+CCM_ALLOW_UNVERIFIED_BINARIES=0
+```
+
+**Note:** Requires Ollama running (`ollama serve`) with model pulled (`ollama pull mxbai-embed-large`).
+**Production Tip:** Set `CCM_ALLOWED_ROOTS` and enable `CCM_REQUIRE_ALLOWED_ROOTS=1` to prevent unintended project access.
 
 ---
 
-## 🚀 Workflow: Indexing Your Projects
+## Usage
 
-Before your AI can "see" a project, it must be indexed. CCM now implements **Lazy Indexing**, meaning it will automatically index your project the first time you (or your AI agent) run a query if no index is found.
-
-**To manually index (Optional):**
+### CLI Commands
 
 ```bash
-npx @senoldogann/context-manager index --path .
+# Index a project
+ccm-cli index --path .
+
+# Search semantically
+ccm-cli query --text "authentication logic"
+
+# Cursor prediction (file:line format)
+ccm-cli query --text "src/main.rs:50"
+
+# Watch mode - auto-reindex
+ccm-cli index --path . --watch
+
+# Evaluate retrieval quality
+ccm-cli eval --tasks eval/golden_tasks.json
 ```
 
-### 👀 Watch Mode (Automatic Re-indexing)
-If you want CCM to automatically update the index whenever you save a file, use the `--watch` flag:
+### MCP Tools
+
+| Tool | Purpose | Example |
+|------|---------|---------|
+| `search_code` | Semantic search | "Find auth handling" |
+| `read_graph` | Structural navigation | "Who calls this function?" |
+| `get_context` | Cursor-based retrieval | Context at file:line |
+
+---
+
+## Architecture
+
+```
+┌─────────────┐     ┌─────────────┐     ┌─────────────┐
+│ AI Agent    │────▶│ MCP Server  │────▶│ Core Engine │
+│ (Claude)    │◀────│ (ccm-mcp)   │◀────│ (Rust)      │
+└─────────────┘     └─────────────┘     └─────────────┘
+                                                  │
+                    ┌────────────────────────────┼────────────────────────────┐
+                    ▼                            ▼                            ▼
+             ┌─────────────┐            ┌─────────────┐            ┌─────────────┐
+             │ Code Graph  │            │  Vector DB  │            │  Parser     │
+             │ (Petgraph)  │            │  (LanceDB)  │            │(Tree-sitter)│
+             └─────────────┘            └─────────────┘            └─────────────┘
+```
+
+---
+
+## Supported Languages
+
+| Language | Extensions | Analysis |
+|----------|------------|----------|
+| Rust | `.rs` | Full AST |
+| Python | `.py` | Full AST |
+| TypeScript | `.ts`, `.tsx` | Full AST |
+| JavaScript | `.js`, `.jsx` | Full AST |
+| Config/Data | `.md`, `.json`, `.yaml` | Full File |
+
+---
+
+## Evaluation
+
+CCM includes a golden task evaluation framework:
 
 ```bash
-npx @senoldogann/context-manager index --path . --watch
+# Run evaluation
+ccm-cli eval --tasks eval/golden_tasks.v3.ccm.json
+
+# Compare structural vs hybrid scoring
+ccm-cli eval --tasks eval/golden_tasks.json --compare
 ```
-*   This scans the project and monitors for changes in `.rs`, `.py`, `.ts`, `.js`, `.tsx`, and `.jsx` files.
-*   It uses an intelligent debounce to prevent excessive indexing during rapid edits.
+
+**Latest Results:** 100% pass rate on golden tasks.
 
 ---
 
-## 🤖 Integration Guide (MCP)
+## Troubleshooting
 
-CCM uses a **state-of-the-art MCP Server** that works without complex per-project configuration.
+### "No context found"
+1. Run `ccm-cli index --path .` first
+2. Check CCM_PROJECT_ROOT matches indexed directory
+3. Ensure Ollama is running
 
-### 1. Automatic Setup (Simple)
-Open your terminal and run:
-```bash
-npx @senoldogann/context-manager install
-```
-This will automatically detect and update your config files for Claude, Antigravity, Cursor, Cline, and Roo Code.
+### Slow indexing
+- First run downloads embedding model (~1.5GB)
+- Subsequent runs are fast (incremental)
 
-### 2. Manual Configuration (Advanced)
-If you prefer to configure it manually, add the following entry to your `mcp_config.json`. This uses `npx` to ensure you always run the version compatible with your project:
+### "Checksum manifest not found" / "Checksum mismatch"
+1. Ensure the GitHub Release includes `checksums.txt`
+2. Re-run the install once
+3. As a last resort, set `CCM_ALLOW_UNVERIFIED_BINARIES=1` to bypass verification
 
-### 🔒 Privacy by Default
-CCM uses a **Local-First** architecture by default. This means:
-*   Your code is **never** sent to 3rd party servers (OpenAI, Anthropic, etc.).
-*   All vector operations (Embedding) happen on your local machine using Ollama.
-*   You can safely use it for internal or confidential projects.
+### "Project path is not allowed"
+- Set `CCM_ALLOWED_ROOTS` to include the project root
+- Or disable strict mode with `CCM_REQUIRE_ALLOWED_ROOTS=0`
 
-```json
-{
-  "mcpServers": {
-    "context-manager": {
-      "command": "npx",
-      "args": [
-        "-y",
-        "@senoldogann/context-manager",
-        "mcp"
-      ],
-      "env": {
-        "RUST_LOG": "info"
-       }
-    }
-  }
-}
-```
-> [!NOTE]
-> If you installed via the shell script or built from source, you can use `"command": "ccm-mcp"` directly if it's in your PATH.
+### Large/binary files are skipped
+- Increase `CCM_MAX_FILE_BYTES` if you need larger text files indexed
 
-
-### 3. Usage in AI
-The AI has three main tools to understand your code:
-
-*   **`search_code`**: Semantic search ("Find where we handle auth").
-*   **`read_graph`**: Structural navigation ("Who calls this function?").
-*   **`get_context`**: Intelligent code reading.
+### Data files not showing in search
+- By default, data files (`.md`, `.json`, `.yaml`) are indexed but not embedded.
+- Enable `CCM_EMBED_DATA_FILES=1` to include them in semantic search.
 
 ---
 
-## 🎯 Best Practices & Prompting
+## Resources
 
-To get the most out of CCM, follow the **Search → Navigate → Read** workflow.
-
-### 💡 Pro Tips for Users
-If the AI gives a "Node not found" error, it's likely trying to guess IDs. Guide it with these prompts:
-
-**Good Sample Prompts:**
-*   "First, **search for code** related to repository management in the `mywebsiterepo` project. Then, pick the most relevant service and **read its graph** to show me its callers."
-*   "Analyze the `authService.ts` file. Show me its internal structure and then find where these methods are used across the project."
-*   "Find all implementations of the `ImpactAnalysis` interface and explain how they connect to the main dashboard."
-
-### 🔧 For AI Agents (Guidelines)
-1.  **Never Guess IDs:** Always use `search_code` first to retrieve valid `node_id`s from the results.
-2.  **Trust the Reason:** Pay attention to the `Reason` field in the context results—it explains the structural or semantic link.
-3.  **Explicit Paths:** When the user has multiple projects open, always include the `project_path` in your tool calls.
-4.  **Context Mapping:** Use `read_graph` to understand *why* a piece of code exists (who depends on it) before suggesting changes.
+- **NPM Package:** [@senoldogann/context-manager](https://www.npmjs.com/package/@senoldogann/context-manager)
+- **Getting Started:** [GETTING_STARTED.md](GETTING_STARTED.md)
+- **Contributing:** [CONTRIBUTING.md](CONTRIBUTING.md)
 
 ---
 
-### 💡 Pro-Tip: Enforcing CCM Usage
-To ensure your AI agent (Claude, Cursor, etc.) always uses CCM for deep analysis, add this to your **Custom Instructions** or **System Prompt**:
+## License
 
-> "You are an expert architect. For any question about the codebase, DO NOT guess. Use the `context-manager` tools to explore the Graph and Vector store. Always prioritize `search_code` to find entry points and `read_graph` to navigate dependencies before proposing any code changes."
+MIT License - Open source and free to use.
 
-
----
-
-**Pro-Tip: Multi-Project Workflows**
-The tools automatically detect the current project context from your editor. If you are working across multiple repositories, the AI can query any indexed project by path.
-
----
-
-## 🏗️ Architecture
-
-CCM operates as a sidecar process to your editor.
-
-```mermaid
-graph TD
-    User[AI Agent / Editor] <-->|MCP Protocol| Server[CCM MCP Server]
-    Server <-->|Query| Engine[Dual-Intelligence Engine]
-    
-    subgraph "Core Engine"
-        Engine <-->|Semantic| Vector[LanceDB Store]
-        Engine <-->|Structural| Graph[Code Property Graph]
-    end
-    
-    Vector <-->|Embeddings| AI[Ollama / OpenAI]
-    Graph <-->|Parsing| Source[Your Codebase]
-```
-
----
-
-## 🧩 Supported Languages
-
-| Language | Extension | Analysis Depth |
-| :--- | :--- | :--- |
-| **Rust** | `.rs` | Full AST (Functions, Structs, Impls) |
-| **Python** | `.py` | Full AST (Functions, Classes) |
-| **TypeScript / JS** | `.ts, .js, .tsx, .jsx` | Full AST (Classes, Functions) |
-| **Text / Data** | `.md, .json, .yaml, .toml, .txt, etc.` | Full File Indexing |
-| **Universal Fallback** | *Any extension* | Generic Text Support |
-
----
-
-## ❓ Troubleshooting
-
-### "No context found" Error
-If `get_context` returns no results:
-1.  **Index Your Codebase:** Run `ccm-cli index --path .` at least once.
-2.  **Check Empty Lines:** CCM maps functions/classes. Querying a blank line (e.g., between functions) returns nothing by design.
-3.  **Project Root:** Ensure the `CCM_PROJECT_ROOT` in your MCP config matches the directory you indexed.
-4.  **Path Mismatch:** If you are using an older version, absolute paths might fail. **Update to v0.1.7+** (or use the latest dev build) which includes automatic path normalization.
-
-### "Semantic Match" Generic Titles
-If search results lack function names:
-*   Ensure you are using the latest version (v0.1.0+). Older versions had an ID-mismatch bug.
-
-
-## 📄 License
-
-Designed for the community. Open source under the **MIT License**.
-
-Built with ❤️ in **Rust**.
-
----
-
-# Cognitive Codebase Matrix (CCM) - Türkçe
-
-> **🧠 Otonom Yapay Zeka Ajanları için Nöral Omurga**
->
-> **Kod tabanınız ile yapay zeka editörünüz arasındaki boşluğu doldurun.** CCM, statik kaynak kodunu dinamik ve sorgulanabilir bir Bilgi Grafiğine (Knowledge Graph) dönüştürerek yapay zeka ajanlarının projeniz içinde cerrahi bir hassasiyetle gezinmesini, anlamasını ve akıl yürütmesini sağlar.
-
-## 🚀 Neden CCM?
-
-Modern yapay zeka kodlama asistanları (Claude, Cursor, Windsurf) güçlüdür ancak **"görüş kısıtlılığı"** sorunu yaşarlar:
-1.  **Bağlam Limitleri:** 100.000 satırlık projenizin tamamını aynı anda "göremezler".
-2.  **Halüsinasyon:** Yapısal bilgi olmadan, bağımlılıkları ve import'ları tahmin etmeye çalışırlar.
-3.  **Kaybolan Anlam:** Geleneksel vektör araması sadece *benzer kelimeleri* bulur, *bağlantılı mantığı* değil.
-
-**CCM, yapay zekanıza bir harita verir.**
-Yapay zekanızı bir *metin tahmincisi* olmaktan çıkarıp bir **Kıdemli Mimar (Senior Architect)** haline getirir.
-
-### 🛠️ "Ajan Öncelikli" Fark
-CCM, sadece ham kod yığını sunmak yerine **Yapay Zeka için Optimize Edilmiş Bağlam** enjekte eder. Getirilen her kod parçası şunları içerir:
-*   **Mantıksal Muhakeme (Reasoning):** CCM, o kodu neden seçtiğini açıklar (örn. "İmlecinizle yapısal olarak ilgili" veya "Mevcut fonksiyonu çağıran yer").
-*   **İlişkisel Bağlar (Edges):** Farklı dosyaların birbirleriyle nasıl konuştuğunu haritalandırır, böylece yapay zeka tahmin yürütmek zorunda kalmaz.
-
-## ✨ Öne Çıkan Özellikler
-
-### 🧠 Bağlantılı Zeka (Graph Navigator)
-CCM sadece dosyaları okumaz; **ilişkileri** anlar.
-*   **İki Aşamalı Endeksleme:** Fonksiyon tanımlarını otomatik olarak çağrıldıkları yerlere bağlar.
-*   **Derin Gezinme:** "Bunu kim çağırıyor?" veya "Bu nerede tanımlanmış?" diye sorun ve %100 doğru yapısal yanıtlar alın.
-
-### ⚡ Yüksek Performanslı Çekirdek
-Tamamen **Rust** ile geliştirilmiştir.
-*   **Toplu Gömme (Batch Embedding):** Eşzamanlı işleme ile binlerce satırı saniyeler içinde endeksler.
-*   **LanceDB Entegrasyonu:** Milisaniye gecikmeli sorgular için modern vektör depolama.
-*   **Tree-sitter Ayrıştırma:** Rust, Python, TypeScript ve JavaScript için sağlam AST analizi.
-
-### 🔌 Evrensel Uyumluluk (MCP)
-**Model Context Protocol (MCP)** standartlarını tam olarak uygular.
-*   **Tak ve Çalıştır:** Antigravity, Claude Desktop, Zed ve diğer tüm MCP uyumlu ajanlarla anında çalışır.
-*   **Talep Üzerine Endeksleme (Lazy Indexing):** Eğer endeks yoksa, ilk sorguda projenizi otomatik olarak endeksler. Manuel kurulum gerektirmez.
-*   **Sıfır Yapılandırma:** Proje kök dizinini otomatik olarak algılar.
-
-## 📦 Kurulum
-
-### ⚡ Otomatik Kurulum (npx ile) - *Önerilen*
-Node.js yüklüyse, başlamanın en kolay yolu budur. Binary'leri otomatik indirir ve editörünüzü yapılandırır.
-```bash
-# 1. AI Editörünüzü (Claude, Antigravity, Cursor, Cline, etc.) otomatik yapılandırın
-npx @senoldogann/context-manager install
-
-# 2. Mevcut projenizi endeksleyin
-npx @senoldogann/context-manager index --path .
-```
-
-## 🚀 İş Akışı: Projeleri Endeksleme
-
-Yapay zekanın bir projeyi "görebilmesi" için önce onu endekslemeniz gerekir. Bu, projenin içinde yerel bir `data/` klasörü oluşturur.
-
-```bash
-npx @senoldogann/context-manager index --path .
-```
-
-### 👀 İzleme Modu (Otomatik Yeniden Endeksleme)
-Dosya her kaydedildiğinde CCM'in endeksi otomatik olarak güncellemesini istiyorsanız `--watch` bayrağını kullanın:
-```bash
-npx @senoldogann/context-manager index --path . --watch
-```
-
-## 🤖 Entegrasyon Rehberi (MCP)
-
-### 1. Kullanım
-Yapay zeka, kodunuzu anlamak için üç ana araca sahiptir:
-*   **`search_code`**: Semantik arama ("Auth nerede işleniyor bul").
-*   **`read_graph`**: Yapısal gezinme ("Bu fonksiyonu kimler çağırıyor?").
-*   **`get_context`**: Akıllı kod okuma.
-
-### 2. Manuel Yapılandırma (Gelişmiş)
-Eğer manuel yapılandırmayı tercih ederseniz, `mcp_config.json` dosyanıza aşağıdaki girişi ekleyin. Bu yöntem `npx` kullanarak her zaman projenizle uyumlu versiyonun çalışmasını sağlar:
-
-```json
-{
-  "mcpServers": {
-    "context-manager": {
-      "command": "npx",
-      "args": [
-        "-y",
-        "@senoldogann/context-manager",
-        "mcp"
-      ],
-      "env": {
-        "RUST_LOG": "info"
-       }
-    }
-  }
-}
-```
-> [!NOTE]
-> Eğer binary'leri bir shell betiği ile kurduysanız veya kaynaktan derlediyseniz ve PATH'inizde mevcutsa, doğrudan `"command": "ccm-mcp"` kullanabilirsiniz.
-
-### 💡 İpucu: CCM Kullanımını Zorunlu Kılma
-AI asistanınızın (Claude, Cursor vb.) derin analiz için her zaman CCM kullanmasını sağlamak için bunu **Özel Talimatlarınıza (Custom Instructions)** veya **Sistem Komutunuza (System Prompt)** ekleyin:
-
-> "Sen uzman bir mimarsın. Kod tabanı hakkındaki hiçbir soru için tahmin yürütme. Grafiği ve Vektör deposunu keşfetmek için `context-manager` araçlarını kullan. Herhangi bir kod değişikliği önermeden önce her zaman giriş noktalarını bulmak için `search_code` ve bağımlılıkları anlamak için `read_graph` araçlarına öncelik ver."
-
-## 🧩 Desteklenen Diller
-Rust (.rs), Python (.py), TypeScript/JS (.ts, .js, .tsx, .jsx), Markdown (.md), JSON (.json), YAML/TOML (.yaml, .yml, .toml).
-
-## 📄 Lisans
-Topluluk için tasarlandı. **MIT Lisansı** altında açık kaynaktır.
-
-Rust ile ❤️ kullanılarak inşa edildi.
+SENOL DOGAN ❤️ 

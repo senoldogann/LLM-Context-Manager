@@ -2,6 +2,7 @@ use anyhow::{Context, Result};
 use reqwest::Client;
 use serde_json::json;
 use std::env;
+use std::time::Duration;
 
 #[derive(Debug, Clone)]
 pub enum Provider {
@@ -15,19 +16,32 @@ pub struct RemoteEmbedder {
     model: String,
     base_url: String,
     provider: Provider,
+    timeout: Duration,
 }
 
 impl RemoteEmbedder {
     pub fn new(api_key: String, model: String, base_url: String, provider: Provider) -> Self {
+        let timeout_secs = env::var("EMBEDDING_TIMEOUT_SECS")
+            .or_else(|_| env::var("CCM_EMBEDDING_TIMEOUT_SECS"))
+            .ok()
+            .and_then(|val| val.parse::<u64>().ok())
+            .filter(|val| *val > 0)
+            .unwrap_or(30);
+        let timeout = Duration::from_secs(timeout_secs);
+
         Self {
             client: Client::builder()
-                .timeout(std::time::Duration::from_secs(30))
+                .timeout(timeout)
                 .build()
-                .unwrap_or_default(),
+                .unwrap_or_else(|err| {
+                    tracing::warn!(error = %err, "Failed to build HTTP client with timeout");
+                    Client::new()
+                }),
             api_key,
             model,
             base_url,
             provider,
+            timeout,
         }
     }
 
@@ -87,6 +101,42 @@ impl RemoteEmbedder {
         }
     }
 
+    async fn send_with_timeout(
+        &self,
+        request: reqwest::RequestBuilder,
+    ) -> Result<reqwest::Response> {
+        match tokio::time::timeout(self.timeout, request.send()).await {
+            Ok(res) => res.context("Failed to send embedding request"),
+            Err(_) => Err(anyhow::anyhow!(
+                "Embedding request timed out after {}s",
+                self.timeout.as_secs()
+            )),
+        }
+    }
+
+    async fn read_text_with_timeout(&self, response: reqwest::Response) -> Result<String> {
+        match tokio::time::timeout(self.timeout, response.text()).await {
+            Ok(res) => res.context("Failed to read embedding response body"),
+            Err(_) => Err(anyhow::anyhow!(
+                "Embedding response timed out after {}s",
+                self.timeout.as_secs()
+            )),
+        }
+    }
+
+    async fn read_json_with_timeout(
+        &self,
+        response: reqwest::Response,
+    ) -> Result<serde_json::Value> {
+        match tokio::time::timeout(self.timeout, response.json()).await {
+            Ok(res) => res.context("Failed to parse embedding response JSON"),
+            Err(_) => Err(anyhow::anyhow!(
+                "Embedding response timed out after {}s",
+                self.timeout.as_secs()
+            )),
+        }
+    }
+
     async fn embed_openai(&self, texts: Vec<String>) -> Result<Vec<Vec<f32>>> {
         let url = if self.base_url.ends_with("/embeddings") {
             self.base_url.clone()
@@ -95,24 +145,25 @@ impl RemoteEmbedder {
         };
 
         let response = self
-            .client
-            .post(&url)
-            .header("Authorization", format!("Bearer {}", self.api_key))
-            .header("Content-Type", "application/json")
-            .json(&json!({
-                "input": texts,
-                "model": self.model
-            }))
-            .send()
+            .send_with_timeout(
+                self.client
+                    .post(&url)
+                    .header("Authorization", format!("Bearer {}", self.api_key))
+                    .header("Content-Type", "application/json")
+                    .json(&json!({
+                        "input": texts,
+                        "model": self.model
+                    })),
+            )
             .await
             .context("Failed to send embedding request (OpenAI format)")?;
 
         if !response.status().is_success() {
-            let error_text = response.text().await?;
+            let error_text = self.read_text_with_timeout(response).await?;
             return Err(anyhow::anyhow!("Remote API Error: {}", error_text));
         }
 
-        let body: serde_json::Value = response.json().await?;
+        let body = self.read_json_with_timeout(response).await?;
 
         let mut embeddings = Vec::new();
         if let Some(data) = body.get("data").and_then(|d| d.as_array()) {
@@ -152,22 +203,23 @@ impl RemoteEmbedder {
         // Retry logic loop (max 1 retry for auto-pull)
         for attempt in 0..2 {
             let response_res = self
-                .client
-                .post(&url)
-                .header("Authorization", format!("Bearer {}", self.api_key))
-                .header("Content-Type", "application/json")
-                .json(&json!({
-                    "model": self.model,
-                    "input": texts.iter().map(|t| {
-                        if t.len() > 6000 {
-                            // Safe char boundary truncation
-                            t.chars().take(6000).collect::<String>()
-                        } else {
-                            t.clone()
-                        }
-                    }).collect::<Vec<String>>()
-                }))
-                .send()
+                .send_with_timeout(
+                    self.client
+                        .post(&url)
+                        .header("Authorization", format!("Bearer {}", self.api_key))
+                        .header("Content-Type", "application/json")
+                        .json(&json!({
+                            "model": self.model,
+                            "input": texts.iter().map(|t| {
+                                if t.len() > 6000 {
+                                    // Safe char boundary truncation
+                                    t.chars().take(6000).collect::<String>()
+                                } else {
+                                    t.clone()
+                                }
+                            }).collect::<Vec<String>>()
+                        })),
+                )
                 .await;
 
             // Handle network errors first to give friendly advice
@@ -188,20 +240,26 @@ impl RemoteEmbedder {
             };
 
             if !response.status().is_success() {
-                let error_text = response.text().await?;
+                let error_text = self.read_text_with_timeout(response).await?;
 
                 // Auto-recovery: If it's the first attempt and model not found, try to pull it
                 if attempt == 0 && error_text.contains("model") && error_text.contains("not found")
                 {
-                    eprintln!("⚠️  Model '{}' not found in Ollama. Attempting to pull it automatically...", self.model);
-                    eprintln!("   This may take a few minutes depending on model size and your internet speed.");
+                    tracing::warn!(
+                        model = %self.model,
+                        "Model not found in Ollama. Attempting to pull automatically."
+                    );
+                    tracing::info!(
+                        "This may take a few minutes depending on model size and your internet speed."
+                    );
 
                     let pull_url = format!("{}/api/pull", self.base_url.trim_end_matches('/'));
                     let pull_res = self
-                        .client
-                        .post(&pull_url)
-                        .json(&json!({ "name": self.model }))
-                        .send()
+                        .send_with_timeout(
+                            self.client
+                                .post(&pull_url)
+                                .json(&json!({ "name": self.model })),
+                        )
                         .await;
 
                     match pull_res {
@@ -209,36 +267,42 @@ impl RemoteEmbedder {
                             if res.status().is_success() {
                                 // CRITICAL: Ollama returns a STREAMING response for pull.
                                 // We MUST consume the entire body to wait for download to complete.
-                                let body = res.text().await.unwrap_or_default();
+                                let body =
+                                    self.read_text_with_timeout(res).await.unwrap_or_default();
 
                                 // Check if last line contains "success" or download completed
                                 if body.contains("\"status\":\"success\"")
                                     || body.contains("pulling")
                                 {
-                                    eprintln!(
-                                        "✅ Model '{}' pulled successfully. Retrying embedding...",
-                                        self.model
+                                    tracing::info!(
+                                        model = %self.model,
+                                        "Model pulled successfully. Retrying embedding."
                                     );
                                     // Continue to next loop iteration (retry)
                                     continue;
                                 } else {
-                                    eprintln!(
-                                        "❌ Pull completed but may have failed. Response: {}",
-                                        body.lines().last().unwrap_or("empty")
+                                    tracing::warn!(
+                                        response = %body.lines().last().unwrap_or("empty"),
+                                        "Pull completed but may have failed"
                                     );
                                 }
                             } else {
-                                eprintln!("❌ Failed to auto-pull model: {}", res.status());
+                                tracing::warn!(
+                                    status = %res.status(),
+                                    "Failed to auto-pull model"
+                                );
                             }
                         }
-                        Err(e) => eprintln!("❌ Failed to connect to Ollama for pull: {}", e),
+                        Err(e) => {
+                            tracing::warn!(error = %e, "Failed to connect to Ollama for pull")
+                        }
                     }
                 }
 
                 return Err(anyhow::anyhow!("Ollama API Error: {}", error_text));
             }
 
-            let body: serde_json::Value = response.json().await?;
+            let body = self.read_json_with_timeout(response).await?;
 
             // Response format: { "embeddings": [[...], [...]] }
             if let Some(embeddings_arr) = body.get("embeddings").and_then(|e| e.as_array()) {

@@ -1,0 +1,685 @@
+{
+  "schema_version": 1,
+  "generated_at": 1770128066,
+  "totals": {
+    "tasks": 56,
+    "scored": 56,
+    "passed": 56,
+    "failed": 0,
+    "skipped": 0
+  },
+  "results": [
+    {
+      "id": "ccm-read-graph-001",
+      "query_type": "read_graph",
+      "status": "pass",
+      "detail": "Recall threshold met",
+      "matches": 1,
+      "expected_min_recall": 1,
+      "max_rank": 5,
+      "matched_items": [
+        "./cli/src/main.rs:function_item:56:0"
+      ]
+    },
+    {
+      "id": "ccm-read-graph-002",
+      "query_type": "read_graph",
+      "status": "pass",
+      "detail": "Recall threshold met",
+      "matches": 1,
+      "expected_min_recall": 1,
+      "max_rank": 5,
+      "matched_items": [
+        "./cli/src/main.rs:struct_item:6:0"
+      ]
+    },
+    {
+      "id": "ccm-read-graph-003",
+      "query_type": "read_graph",
+      "status": "pass",
+      "detail": "Recall threshold met",
+      "matches": 1,
+      "expected_min_recall": 1,
+      "max_rank": 5,
+      "matched_items": [
+        "./core/build.rs:function_item:0:0"
+      ]
+    },
+    {
+      "id": "ccm-read-graph-004",
+      "query_type": "read_graph",
+      "status": "pass",
+      "detail": "Recall threshold met",
+      "matches": 1,
+      "expected_min_recall": 1,
+      "max_rank": 5,
+      "matched_items": [
+        "./core/src/engine.rs:function_item:114:4"
+      ]
+    },
+    {
+      "id": "ccm-read-graph-005",
+      "query_type": "read_graph",
+      "status": "pass",
+      "detail": "Recall threshold met",
+      "matches": 1,
+      "expected_min_recall": 1,
+      "max_rank": 5,
+      "matched_items": [
+        "./core/src/engine.rs:function_item:123:4"
+      ]
+    },
+    {
+      "id": "ccm-read-graph-006",
+      "query_type": "read_graph",
+      "status": "pass",
+      "detail": "Recall threshold met",
+      "matches": 1,
+      "expected_min_recall": 1,
+      "max_rank": 5,
+      "matched_items": [
+        "./core/src/engine.rs:function_item:267:4"
+      ]
+    },
+    {
+      "id": "ccm-read-graph-007",
+      "query_type": "read_graph",
+      "status": "pass",
+      "detail": "Recall threshold met",
+      "matches": 1,
+      "expected_min_recall": 1,
+      "max_rank": 5,
+      "matched_items": [
+        "./core/src/engine.rs:function_item:411:4"
+      ]
+    },
+    {
+      "id": "ccm-read-graph-008",
+      "query_type": "read_graph",
+      "status": "pass",
+      "detail": "Recall threshold met",
+      "matches": 1,
+      "expected_min_recall": 1,
+      "max_rank": 5,
+      "matched_items": [
+        "./core/src/engine.rs:function_item:417:4"
+      ]
+    },
+    {
+      "id": "ccm-read-graph-009",
+      "query_type": "read_graph",
+      "status": "pass",
+      "detail": "Recall threshold met",
+      "matches": 1,
+      "expected_min_recall": 1,
+      "max_rank": 5,
+      "matched_items": [
+        "./core/src/engine.rs:function_item:472:4"
+      ]
+    },
+    {
+      "id": "ccm-read-graph-010",
+      "query_type": "read_graph",
+      "status": "pass",
+      "detail": "Recall threshold met",
+      "matches": 1,
+      "expected_min_recall": 1,
+      "max_rank": 5,
+      "matched_items": [
+        "./core/src/engine.rs:function_item:62:4"
+      ]
+    },
+    {
+      "id": "ccm-read-graph-011",
+      "query_type": "read_graph",
+      "status": "pass",
+      "detail": "Recall threshold met",
+      "matches": 1,
+      "expected_min_recall": 1,
+      "max_rank": 5,
+      "matched_items": [
+        "./core/src/engine.rs:function_item:72:4"
+      ]
+    },
+    {
+      "id": "ccm-read-graph-012",
+      "query_type": "read_graph",
+      "status": "pass",
+      "detail": "Recall threshold met",
+      "matches": 1,
+      "expected_min_recall": 1,
+      "max_rank": 5,
+      "matched_items": [
+        "./core/src/engine.rs:impl_item:61:0"
+      ]
+    },
+    {
+      "id": "ccm-read-graph-013",
+      "query_type": "read_graph",
+      "status": "pass",
+      "detail": "Recall threshold met",
+      "matches": 1,
+      "expected_min_recall": 1,
+      "max_rank": 5,
+      "matched_items": [
+        "./core/src/engine.rs:struct_item:18:0"
+      ]
+    },
+    {
+      "id": "ccm-read-graph-014",
+      "query_type": "read_graph",
+      "status": "pass",
+      "detail": "Recall threshold met",
+      "matches": 1,
+      "expected_min_recall": 1,
+      "max_rank": 5,
+      "matched_items": [
+        "./core/src/engine.rs:struct_item:26:0"
+      ]
+    },
+    {
+      "id": "ccm-read-graph-015",
+      "query_type": "read_graph",
+      "status": "pass",
+      "detail": "Recall threshold met",
+      "matches": 1,
+      "expected_min_recall": 1,
+      "max_rank": 5,
+      "matched_items": [
+        "./core/src/engine.rs:struct_item:35:0"
+      ]
+    },
+    {
+      "id": "ccm-read-graph-016",
+      "query_type": "read_graph",
+      "status": "pass",
+      "detail": "Recall threshold met",
+      "matches": 1,
+      "expected_min_recall": 1,
+      "max_rank": 5,
+      "matched_items": [
+        "./core/src/engine.rs:struct_item:47:0"
+      ]
+    },
+    {
+      "id": "ccm-read-graph-017",
+      "query_type": "read_graph",
+      "status": "pass",
+      "detail": "Recall threshold met",
+      "matches": 1,
+      "expected_min_recall": 1,
+      "max_rank": 5,
+      "matched_items": [
+        "./core/src/engine/predictive.rs:function_item:11:4"
+      ]
+    },
+    {
+      "id": "ccm-read-graph-018",
+      "query_type": "read_graph",
+      "status": "pass",
+      "detail": "Recall threshold met",
+      "matches": 1,
+      "expected_min_recall": 1,
+      "max_rank": 5,
+      "matched_items": [
+        "./core/src/engine/predictive.rs:function_item:19:4"
+      ]
+    },
+    {
+      "id": "ccm-read-graph-019",
+      "query_type": "read_graph",
+      "status": "pass",
+      "detail": "Recall threshold met",
+      "matches": 1,
+      "expected_min_recall": 1,
+      "max_rank": 5,
+      "matched_items": [
+        "./core/src/engine/predictive.rs:function_item:26:4"
+      ]
+    },
+    {
+      "id": "ccm-read-graph-020",
+      "query_type": "read_graph",
+      "status": "pass",
+      "detail": "Recall threshold met",
+      "matches": 1,
+      "expected_min_recall": 1,
+      "max_rank": 5,
+      "matched_items": [
+        "./core/src/engine/predictive.rs:impl_item:10:0"
+      ]
+    },
+    {
+      "id": "ccm-read-graph-021",
+      "query_type": "read_graph",
+      "status": "pass",
+      "detail": "Recall threshold met",
+      "matches": 1,
+      "expected_min_recall": 1,
+      "max_rank": 5,
+      "matched_items": [
+        "./core/src/engine/predictive.rs:struct_item:6:0"
+      ]
+    },
+    {
+      "id": "ccm-read-graph-022",
+      "query_type": "read_graph",
+      "status": "pass",
+      "detail": "Recall threshold met",
+      "matches": 1,
+      "expected_min_recall": 1,
+      "max_rank": 5,
+      "matched_items": [
+        "./core/src/git/mod.rs:function_item:11:4"
+      ]
+    },
+    {
+      "id": "ccm-read-graph-023",
+      "query_type": "read_graph",
+      "status": "pass",
+      "detail": "Recall threshold met",
+      "matches": 1,
+      "expected_min_recall": 1,
+      "max_rank": 5,
+      "matched_items": [
+        "./core/src/git/mod.rs:function_item:18:4"
+      ]
+    },
+    {
+      "id": "ccm-read-graph-024",
+      "query_type": "read_graph",
+      "status": "pass",
+      "detail": "Recall threshold met",
+      "matches": 1,
+      "expected_min_recall": 1,
+      "max_rank": 5,
+      "matched_items": [
+        "./core/src/git/mod.rs:function_item:65:4"
+      ]
+    },
+    {
+      "id": "ccm-read-graph-025",
+      "query_type": "read_graph",
+      "status": "pass",
+      "detail": "Recall threshold met",
+      "matches": 1,
+      "expected_min_recall": 1,
+      "max_rank": 5,
+      "matched_items": [
+        "./core/src/git/mod.rs:impl_item:9:0"
+      ]
+    },
+    {
+      "id": "ccm-get-context-001",
+      "query_type": "get_context",
+      "status": "pass",
+      "detail": "Recall threshold met",
+      "matches": 1,
+      "expected_min_recall": 1,
+      "max_rank": 5,
+      "matched_items": [
+        "./core/src/git/mod.rs"
+      ]
+    },
+    {
+      "id": "ccm-get-context-002",
+      "query_type": "get_context",
+      "status": "pass",
+      "detail": "Recall threshold met",
+      "matches": 1,
+      "expected_min_recall": 1,
+      "max_rank": 5,
+      "matched_items": [
+        "./core/src/graph/mod.rs"
+      ]
+    },
+    {
+      "id": "ccm-get-context-003",
+      "query_type": "get_context",
+      "status": "pass",
+      "detail": "Recall threshold met",
+      "matches": 1,
+      "expected_min_recall": 1,
+      "max_rank": 5,
+      "matched_items": [
+        "./core/src/graph/mod.rs"
+      ]
+    },
+    {
+      "id": "ccm-get-context-004",
+      "query_type": "get_context",
+      "status": "pass",
+      "detail": "Recall threshold met",
+      "matches": 1,
+      "expected_min_recall": 1,
+      "max_rank": 5,
+      "matched_items": [
+        "./core/src/graph/mod.rs"
+      ]
+    },
+    {
+      "id": "ccm-get-context-005",
+      "query_type": "get_context",
+      "status": "pass",
+      "detail": "Recall threshold met",
+      "matches": 1,
+      "expected_min_recall": 1,
+      "max_rank": 5,
+      "matched_items": [
+        "./core/src/graph/mod.rs"
+      ]
+    },
+    {
+      "id": "ccm-get-context-006",
+      "query_type": "get_context",
+      "status": "pass",
+      "detail": "Recall threshold met",
+      "matches": 1,
+      "expected_min_recall": 1,
+      "max_rank": 5,
+      "matched_items": [
+        "./core/src/graph/mod.rs"
+      ]
+    },
+    {
+      "id": "ccm-get-context-007",
+      "query_type": "get_context",
+      "status": "pass",
+      "detail": "Recall threshold met",
+      "matches": 1,
+      "expected_min_recall": 1,
+      "max_rank": 5,
+      "matched_items": [
+        "./core/src/graph/mod.rs"
+      ]
+    },
+    {
+      "id": "ccm-get-context-008",
+      "query_type": "get_context",
+      "status": "pass",
+      "detail": "Recall threshold met",
+      "matches": 1,
+      "expected_min_recall": 1,
+      "max_rank": 5,
+      "matched_items": [
+        "./core/src/graph/mod.rs"
+      ]
+    },
+    {
+      "id": "ccm-get-context-009",
+      "query_type": "get_context",
+      "status": "pass",
+      "detail": "Recall threshold met",
+      "matches": 1,
+      "expected_min_recall": 1,
+      "max_rank": 5,
+      "matched_items": [
+        "./core/src/graph/mod.rs"
+      ]
+    },
+    {
+      "id": "ccm-get-context-010",
+      "query_type": "get_context",
+      "status": "pass",
+      "detail": "Recall threshold met",
+      "matches": 1,
+      "expected_min_recall": 1,
+      "max_rank": 5,
+      "matched_items": [
+        "./core/src/graph/mod.rs"
+      ]
+    },
+    {
+      "id": "ccm-get-context-011",
+      "query_type": "get_context",
+      "status": "pass",
+      "detail": "Recall threshold met",
+      "matches": 1,
+      "expected_min_recall": 1,
+      "max_rank": 5,
+      "matched_items": [
+        "./core/src/graph/mod.rs"
+      ]
+    },
+    {
+      "id": "ccm-get-context-012",
+      "query_type": "get_context",
+      "status": "pass",
+      "detail": "Recall threshold met",
+      "matches": 1,
+      "expected_min_recall": 1,
+      "max_rank": 5,
+      "matched_items": [
+        "./core/src/graph/mod.rs"
+      ]
+    },
+    {
+      "id": "ccm-get-context-013",
+      "query_type": "get_context",
+      "status": "pass",
+      "detail": "Recall threshold met",
+      "matches": 1,
+      "expected_min_recall": 1,
+      "max_rank": 5,
+      "matched_items": [
+        "./core/src/graph/mod.rs"
+      ]
+    },
+    {
+      "id": "ccm-get-context-014",
+      "query_type": "get_context",
+      "status": "pass",
+      "detail": "Recall threshold met",
+      "matches": 1,
+      "expected_min_recall": 1,
+      "max_rank": 5,
+      "matched_items": [
+        "./core/src/graph/mod.rs"
+      ]
+    },
+    {
+      "id": "ccm-get-context-015",
+      "query_type": "get_context",
+      "status": "pass",
+      "detail": "Recall threshold met",
+      "matches": 1,
+      "expected_min_recall": 1,
+      "max_rank": 5,
+      "matched_items": [
+        "./core/src/graph/mod.rs"
+      ]
+    },
+    {
+      "id": "ccm-get-context-016",
+      "query_type": "get_context",
+      "status": "pass",
+      "detail": "Recall threshold met",
+      "matches": 1,
+      "expected_min_recall": 1,
+      "max_rank": 5,
+      "matched_items": [
+        "./core/src/graph/mod.rs"
+      ]
+    },
+    {
+      "id": "ccm-get-context-017",
+      "query_type": "get_context",
+      "status": "pass",
+      "detail": "Recall threshold met",
+      "matches": 1,
+      "expected_min_recall": 1,
+      "max_rank": 5,
+      "matched_items": [
+        "./core/src/graph/mod.rs"
+      ]
+    },
+    {
+      "id": "ccm-get-context-018",
+      "query_type": "get_context",
+      "status": "pass",
+      "detail": "Recall threshold met",
+      "matches": 1,
+      "expected_min_recall": 1,
+      "max_rank": 5,
+      "matched_items": [
+        "./core/src/graph/mod.rs"
+      ]
+    },
+    {
+      "id": "ccm-get-context-019",
+      "query_type": "get_context",
+      "status": "pass",
+      "detail": "Recall threshold met",
+      "matches": 1,
+      "expected_min_recall": 1,
+      "max_rank": 5,
+      "matched_items": [
+        "./core/src/graph/mod.rs"
+      ]
+    },
+    {
+      "id": "ccm-get-context-020",
+      "query_type": "get_context",
+      "status": "pass",
+      "detail": "Recall threshold met",
+      "matches": 1,
+      "expected_min_recall": 1,
+      "max_rank": 5,
+      "matched_items": [
+        "./core/src/graph/mod.rs"
+      ]
+    },
+    {
+      "id": "ccm-get-context-021",
+      "query_type": "get_context",
+      "status": "pass",
+      "detail": "Recall threshold met",
+      "matches": 1,
+      "expected_min_recall": 1,
+      "max_rank": 5,
+      "matched_items": [
+        "./core/src/lib.rs"
+      ]
+    },
+    {
+      "id": "ccm-get-context-022",
+      "query_type": "get_context",
+      "status": "pass",
+      "detail": "Recall threshold met",
+      "matches": 1,
+      "expected_min_recall": 1,
+      "max_rank": 5,
+      "matched_items": [
+        "./core/src/lib.rs"
+      ]
+    },
+    {
+      "id": "ccm-get-context-023",
+      "query_type": "get_context",
+      "status": "pass",
+      "detail": "Recall threshold met",
+      "matches": 1,
+      "expected_min_recall": 1,
+      "max_rank": 5,
+      "matched_items": [
+        "./core/src/lib.rs"
+      ]
+    },
+    {
+      "id": "ccm-get-context-024",
+      "query_type": "get_context",
+      "status": "pass",
+      "detail": "Recall threshold met",
+      "matches": 1,
+      "expected_min_recall": 1,
+      "max_rank": 5,
+      "matched_items": [
+        "./core/src/lib.rs"
+      ]
+    },
+    {
+      "id": "ccm-get-context-025",
+      "query_type": "get_context",
+      "status": "pass",
+      "detail": "Recall threshold met",
+      "matches": 1,
+      "expected_min_recall": 1,
+      "max_rank": 5,
+      "matched_items": [
+        "./core/src/lib.rs"
+      ]
+    },
+    {
+      "id": "ccm-search-001",
+      "query_type": "search_code",
+      "status": "pass",
+      "detail": "Recall threshold met",
+      "matches": 1,
+      "expected_min_recall": 1,
+      "max_rank": 5,
+      "matched_items": [
+        "./core/src/engine/hybrid.rs"
+      ]
+    },
+    {
+      "id": "ccm-search-002",
+      "query_type": "search_code",
+      "status": "pass",
+      "detail": "Recall threshold met",
+      "matches": 1,
+      "expected_min_recall": 1,
+      "max_rank": 5,
+      "matched_items": [
+        "./core/src/eval.rs"
+      ]
+    },
+    {
+      "id": "ccm-search-003",
+      "query_type": "search_code",
+      "status": "pass",
+      "detail": "Recall threshold met",
+      "matches": 1,
+      "expected_min_recall": 1,
+      "max_rank": 5,
+      "matched_items": [
+        "./core/src/vector/store.rs"
+      ]
+    },
+    {
+      "id": "ccm-search-004",
+      "query_type": "search_code",
+      "status": "pass",
+      "detail": "Recall threshold met",
+      "matches": 1,
+      "expected_min_recall": 1,
+      "max_rank": 5,
+      "matched_items": [
+        "./core/src/rpc.rs"
+      ]
+    },
+    {
+      "id": "ccm-search-005",
+      "query_type": "search_code",
+      "status": "pass",
+      "detail": "Recall threshold met",
+      "matches": 1,
+      "expected_min_recall": 1,
+      "max_rank": 5,
+      "matched_items": [
+        "./core/src/lib.rs"
+      ]
+    },
+    {
+      "id": "ccm-search-006",
+      "query_type": "search_code",
+      "status": "pass",
+      "detail": "Recall threshold met",
+      "matches": 1,
+      "expected_min_recall": 1,
+      "max_rank": 5,
+      "matched_items": [
+        "./core/src/eval.rs"
+      ]
+    }
+  ]
+}

@@ -2,7 +2,8 @@
 
 use anyhow::Result;
 use serde_json::{json, Value};
-use std::collections::HashMap;
+use std::collections::{HashMap, VecDeque};
+use std::path::{Component, Path, PathBuf};
 use std::sync::Arc;
 use tokio::sync::RwLock;
 
@@ -19,12 +20,58 @@ use ccm_core::vector::store::LanceDbStore;
 /// Holds the server's shared state.
 pub struct ServerState {
     pub default_engine: Arc<RetrievalEngine>,
-    pub engines: RwLock<HashMap<String, Arc<RetrievalEngine>>>,
+    engines: RwLock<EngineCache>,
+    allowed_roots: Vec<PathBuf>,
+    require_allowed_roots: bool,
+}
+
+const DEFAULT_ENGINE_CACHE_SIZE: usize = 8;
+
+fn engine_cache_size() -> usize {
+    std::env::var("CCM_MCP_ENGINE_CACHE_SIZE")
+        .ok()
+        .and_then(|val| val.parse::<usize>().ok())
+        .map(|val| val.max(1))
+        .unwrap_or(DEFAULT_ENGINE_CACHE_SIZE)
+}
+
+struct EngineCache {
+    map: HashMap<String, Arc<RetrievalEngine>>,
+    order: VecDeque<String>,
+    max: usize,
+}
+
+impl EngineCache {
+    fn new(max: usize) -> Self {
+        Self {
+            map: HashMap::new(),
+            order: VecDeque::new(),
+            max,
+        }
+    }
+
+    fn get(&self, key: &str) -> Option<Arc<RetrievalEngine>> {
+        self.map.get(key).cloned()
+    }
+
+    fn insert(&mut self, key: String, engine: Arc<RetrievalEngine>) -> Arc<RetrievalEngine> {
+        if !self.map.contains_key(&key) {
+            if self.map.len() >= self.max {
+                if let Some(evict_key) = self.order.pop_front() {
+                    self.map.remove(&evict_key);
+                }
+            }
+            self.order.push_back(key.clone());
+        }
+
+        self.map.insert(key, engine.clone());
+        engine
+    }
 }
 
 impl ServerState {
     pub async fn new() -> Result<Self> {
-        eprintln!("Initializing CCM Core Engine for MCP...");
+        tracing::info!("Initializing CCM Core Engine for MCP...");
 
         // Use CCM_DB_PATH env var if available
         let db_path = if let Ok(path) = std::env::var("CCM_DB_PATH") {
@@ -56,13 +103,13 @@ impl ServerState {
             None
         });
 
-        eprintln!("Using Vector DB Path: {}", db_path);
+        tracing::info!(path = %db_path, "Using Vector DB path");
 
         // Auto-indexing removed to allow agentic control.
         if let Some(root) = &project_root {
-            eprintln!(
-                "Project root detected: {}. Indexing is available on demand.",
-                root
+            tracing::info!(
+                root = %root,
+                "Project root detected. Indexing is available on demand."
             );
         }
 
@@ -71,30 +118,41 @@ impl ServerState {
         let mut graph = CodeGraph::new();
 
         if std::path::Path::new(&graph_path).exists() {
-            eprintln!("Loading CodeGraph from: {}", graph_path);
+            tracing::info!(path = %graph_path, "Loading CodeGraph");
             match CodeGraph::load_from_file(&graph_path) {
                 Ok(g) => {
                     graph = g;
-                    eprintln!(
-                        "✓ Graph loaded successfully. Nodes: {}",
-                        graph.graph.node_count()
+                    tracing::info!(
+                        nodes = graph.graph.node_count(),
+                        "Graph loaded successfully"
                     );
                 }
-                Err(e) => eprintln!("⚠ Failed to load graph: {}", e),
+                Err(e) => tracing::warn!(error = %e, "Failed to load graph"),
             }
         } else {
-            eprintln!(
-                "⚠ No persisted graph found at {}. Starting empty.",
-                graph_path
+            tracing::warn!(
+                path = %graph_path,
+                "No persisted graph found. Starting empty."
             );
         }
 
         let store = LanceDbStore::new(&db_path, "code_vectors").await?;
         let default_engine = Arc::new(RetrievalEngine::new(Arc::new(RwLock::new(graph)), store));
+        let cache_size = engine_cache_size();
+        let require_allowed_roots = require_allowed_roots();
+        let allowed_roots = load_allowed_roots();
+
+        if require_allowed_roots && allowed_roots.is_empty() {
+            tracing::warn!(
+                "CCM_ALLOWED_ROOTS is required but empty. MCP will reject all project paths."
+            );
+        }
 
         Ok(Self {
             default_engine,
-            engines: RwLock::new(HashMap::new()),
+            engines: RwLock::new(EngineCache::new(cache_size)),
+            allowed_roots,
+            require_allowed_roots,
         })
     }
 
@@ -105,6 +163,13 @@ impl ServerState {
             Some(p) => p,
             None => return Ok(self.default_engine.clone()),
         };
+
+        if !self.is_path_allowed(path) {
+            return Err(anyhow::anyhow!(
+                "Project path '{}' is not allowed. Set CCM_ALLOWED_ROOTS to permit access.",
+                path
+            ));
+        }
 
         // Check cache (read)
         {
@@ -121,25 +186,22 @@ impl ServerState {
             return Ok(engine.clone());
         }
 
-        eprintln!("Loading context for project: {}", path);
+        tracing::info!(path = %path, "Loading context for project");
         // Assume db at path/data/ccm_db
         // Use the MCP specific DB path
         let db_path = format!("{}/data/ccm_mcp_db", path);
 
         // Sanity check & Lazy Indexing
         if !std::path::Path::new(&db_path).exists() {
-            eprintln!(
-                "⚠ Index not found at {}. Triggering Lazy Indexing...",
-                db_path
+            tracing::warn!(
+                path = %db_path,
+                "Index not found. Triggering lazy indexing."
             );
 
             // LAZY INDEXING: Index specifically for this request
             match ccm_core::index_directory(path, Some(&db_path)).await {
                 Ok(stats) => {
-                    eprintln!(
-                        "✓ Lazy Indexing Complete. Indexed {} nodes.",
-                        stats.nodes_created
-                    );
+                    tracing::info!(nodes = stats.nodes_created, "Lazy indexing complete");
                 }
                 Err(e) => {
                     return Err(anyhow::anyhow!(
@@ -155,10 +217,10 @@ impl ServerState {
         if std::path::Path::new(&graph_path).exists() {
             if let Ok(g) = CodeGraph::load_from_file(&graph_path) {
                 graph = g;
-                eprintln!(
-                    "Loaded graph for {}: {} nodes",
-                    path,
-                    graph.graph.node_count()
+                tracing::info!(
+                    path = %path,
+                    nodes = graph.graph.node_count(),
+                    "Loaded graph for project"
                 );
             }
         }
@@ -166,9 +228,80 @@ impl ServerState {
         let store = LanceDbStore::new(&db_path, "code_vectors").await?;
         let engine = Arc::new(RetrievalEngine::new(Arc::new(RwLock::new(graph)), store));
 
-        write.insert(path.to_string(), engine.clone());
-        Ok(engine)
+        Ok(write.insert(path.to_string(), engine))
     }
+
+    fn is_path_allowed(&self, path: &str) -> bool {
+        if self.allowed_roots.is_empty() {
+            return !self.require_allowed_roots;
+        }
+        let candidate = canonicalize_project_path(Path::new(path));
+        self.allowed_roots
+            .iter()
+            .any(|root| candidate.starts_with(root))
+    }
+}
+
+fn load_allowed_roots() -> Vec<PathBuf> {
+    let raw = std::env::var("CCM_ALLOWED_ROOTS").unwrap_or_default();
+    let mut roots: Vec<PathBuf> = if raw.trim().is_empty() {
+        Vec::new()
+    } else {
+        let parts: Vec<&str> = if cfg!(windows) {
+            raw.split(';').collect()
+        } else {
+            raw.split([':', ';']).collect()
+        };
+
+        parts
+            .into_iter()
+            .map(|item| item.trim())
+            .filter(|item| !item.is_empty())
+            .map(|item| canonicalize_project_path(Path::new(item)))
+            .collect()
+    };
+
+    if roots.is_empty() {
+        if let Ok(root) = std::env::var("CCM_PROJECT_ROOT") {
+            roots.push(canonicalize_project_path(Path::new(&root)));
+        }
+    }
+
+    roots
+}
+
+fn require_allowed_roots() -> bool {
+    std::env::var("CCM_REQUIRE_ALLOWED_ROOTS")
+        .or_else(|_| std::env::var("CCM_MCP_REQUIRE_ALLOWED_ROOTS"))
+        .map(|val| matches!(val.to_lowercase().as_str(), "1" | "true" | "yes"))
+        .unwrap_or(false)
+}
+
+fn canonicalize_project_path(path: &Path) -> PathBuf {
+    let abs = if path.is_absolute() {
+        path.to_path_buf()
+    } else {
+        std::env::current_dir()
+            .unwrap_or_else(|_| PathBuf::from("."))
+            .join(path)
+    };
+    std::fs::canonicalize(&abs).unwrap_or_else(|_| normalize_path(&abs))
+}
+
+fn normalize_path(path: &Path) -> PathBuf {
+    let mut result = PathBuf::new();
+    for component in path.components() {
+        match component {
+            Component::Prefix(prefix) => result.push(prefix.as_os_str()),
+            Component::RootDir => result.push(std::path::MAIN_SEPARATOR_STR),
+            Component::CurDir => {}
+            Component::ParentDir => {
+                result.pop();
+            }
+            Component::Normal(part) => result.push(part),
+        }
+    }
+    result
 }
 
 /// Main request dispatcher.
@@ -295,6 +428,17 @@ async fn handle_call_tool(
 
     // Extract project_path if present
     let project_path = arguments.get("project_path").and_then(|v| v.as_str());
+
+    if tool_name == "index_project" {
+        let path = project_path.ok_or_else(|| anyhow::anyhow!("Missing project_path"))?;
+        if !state.is_path_allowed(path) {
+            return Ok(create_error_response(
+                id,
+                -32602,
+                "Project path is not allowed. Set CCM_ALLOWED_ROOTS (or disable CCM_REQUIRE_ALLOWED_ROOTS).",
+            ));
+        }
+    }
 
     // Resolve Engine
     let engine = match state.get_engine(project_path).await {
