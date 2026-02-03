@@ -20,7 +20,7 @@ jobs:
           - os: ubuntu-latest
             target: x86_64-unknown-linux-gnu
             ext: ""
-          - os: macos-13
+          - os: macos-14
             target: x86_64-apple-darwin
             ext: ""
           - os: macos-14
@@ -35,6 +35,8 @@ jobs:
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
 
       - name: Install protoc (Linux)
         if: matrix.os == 'ubuntu-latest'
@@ -43,9 +45,8 @@ jobs:
           sudo apt-get install -y protobuf-compiler
 
       - name: Install protoc (macOS)
-        if: matrix.os == 'macos-13' || matrix.os == 'macos-14'
+        if: matrix.os == 'macos-14'
         run: |
-          brew update
           brew install protobuf
 
       - name: Install protoc (Windows)
@@ -53,14 +54,14 @@ jobs:
         run: choco install -y protobuf
 
       - name: Build binaries
-        run: cargo build --release -p ccm-cli -p ccm-mcp
+        run: cargo build --release --target ${{ matrix.target }} -p ccm-cli -p ccm-mcp
 
       - name: Prepare artifacts
         shell: bash
         run: |
           mkdir -p dist
-          cp "target/release/ccm-cli${{ matrix.ext }}" "dist/ccm-cli-${{ matrix.target }}${{ matrix.ext }}"
-          cp "target/release/ccm-mcp${{ matrix.ext }}" "dist/ccm-mcp-${{ matrix.target }}${{ matrix.ext }}"
+          cp "target/${{ matrix.target }}/release/ccm-cli${{ matrix.ext }}" "dist/ccm-cli-${{ matrix.target }}${{ matrix.ext }}"
+          cp "target/${{ matrix.target }}/release/ccm-mcp${{ matrix.ext }}" "dist/ccm-mcp-${{ matrix.target }}${{ matrix.ext }}"
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
