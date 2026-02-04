@@ -20,9 +20,6 @@ jobs:
           - os: ubuntu-latest
             target: x86_64-unknown-linux-gnu
             ext: ""
-          - os: macos-12
-            target: x86_64-apple-darwin
-            ext: ""
           - os: macos-14
             target: aarch64-apple-darwin
             ext: ""
