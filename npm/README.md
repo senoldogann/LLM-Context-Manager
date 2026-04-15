@@ -169,6 +169,7 @@ This package handles:
 - The npm wrapper verifies checksums before using downloaded binaries
 - Redirects are restricted to approved GitHub release hosts
 - Release builds run for Linux, macOS, and Windows before assets are attached
+- npm publishing uses GitHub Actions trusted publishing with OIDC
 - The same smoke path is documented here and in the main repository README
 
 ### ✅ Binary Integrity

@@ -244,6 +244,7 @@ CCM release builds are designed to be reproducible and install-safe:
 - The npm wrapper verifies downloaded binaries before first use
 - MCP transport now enforces request size limits and redacts sensitive debug payloads
 - The release workflow builds Linux, macOS, and Windows artifacts before attaching release assets
+- npm publishing uses GitHub Actions trusted publishing with OIDC
 - The README quick-start now matches the same smoke path we use for first-install checks
 
 For local source builds, `cargo build --release` still requires `protoc` to be installed on your machine.

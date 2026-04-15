@@ -107,14 +107,6 @@ jobs:
           registry-url: https://registry.npmjs.org
           scope: "@senoldogann"
 
-      - name: Publish package with npm token
-        if: ${{ secrets.NPM_TOKEN != '' }}
-        working-directory: npm
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-        run: npm publish --access public --provenance
-
-      - name: Publish package with trusted publishing
-        if: ${{ secrets.NPM_TOKEN == '' }}
+      - name: Publish package
         working-directory: npm
         run: npm publish --access public --provenance
