@@ -8,6 +8,7 @@ on:
 
 permissions:
   contents: write
+  id-token: write
 
 jobs:
   build:
@@ -104,9 +105,16 @@ jobs:
         with:
           node-version: 20
           registry-url: https://registry.npmjs.org
+          scope: "@senoldogann"
 
-      - name: Publish package
+      - name: Publish package with npm token
+        if: ${{ secrets.NPM_TOKEN != '' }}
         working-directory: npm
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-        run: npm publish --access public
+        run: npm publish --access public --provenance
+
+      - name: Publish package with trusted publishing
+        if: ${{ secrets.NPM_TOKEN == '' }}
+        working-directory: npm
+        run: npm publish --access public --provenance
