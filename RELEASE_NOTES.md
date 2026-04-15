@@ -1,5 +1,17 @@
 # Release Notes
 
+## v0.1.25 - Trusted Publishing & Onboarding Clarity (2026-04-15)
+
+### 🚀 Publish Flow
+- Switched npm publishing to GitHub Actions trusted publishing with OIDC.
+- Removed the release workflow dependency on a manually managed `NPM_TOKEN`.
+
+### 📘 Onboarding
+- Added first-run verification steps to the main README and npm README.
+- Documented supported MCP hosts and release reliability expectations more clearly.
+
+---
+
 ## v0.1.24 - Release Pipeline Reliability (2026-04-15)
 
 ### 🚀 Release Workflow

@@ -190,6 +190,10 @@ Enable `CCM_EMBED_DATA_FILES=1` to include them in semantic search.
 
 ## 📝 Changelog
 
+### v0.1.25
+- ✅ npm publish now uses GitHub Actions trusted publishing (OIDC)
+- ✅ Clearer first-run verification and release reliability docs
+
 ### v0.1.24
 - ✅ Native `protoc` installation in GitHub Actions release builds
 - ✅ Updated release workflow actions for newer runner compatibility
