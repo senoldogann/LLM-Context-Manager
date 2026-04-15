@@ -468,10 +468,11 @@ async fn handle_call_tool(
     let engine = match state.get_engine(project_path).await {
         Ok(e) => e,
         Err(e) => {
+            tracing::warn!(error = %e, tool = %tool_name, "Failed to load project context");
             return Ok(create_error_response(
                 id,
                 -32603, // Internal error / Invalid params
-                &format!("Failed to load project context: {}", e),
+                "Failed to load project context. Check project_path, allowlist, and index state.",
             ));
         }
     };

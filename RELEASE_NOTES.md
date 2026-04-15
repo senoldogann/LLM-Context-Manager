@@ -1,5 +1,18 @@
 # Release Notes
 
+## v0.1.23 - MCP Transport Hardening (2026-04-15)
+
+### 🔒 Transport & Input Safety
+- Added a JSON-RPC request size limit to protect the stdio transport from oversized payloads.
+- Redacted sensitive values from MCP debug logs instead of echoing raw request and response payloads.
+- Hardened MCP path normalization to reject parent-directory traversal in `get_context` and `read_graph`.
+
+### 📦 Installer & Release Safety
+- Restricted npm binary download redirects to approved GitHub release hosts only.
+- Removed unused core dependencies to reduce build surface and cleanup legacy protobuf-era wiring.
+
+---
+
 ## v0.1.22 - MCP Compatibility & Eval Reliability (2026-04-15)
 
 ### ✅ Installer Coverage

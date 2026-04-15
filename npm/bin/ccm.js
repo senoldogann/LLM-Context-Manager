@@ -7,7 +7,7 @@ const os = require('os');
 const https = require('https');
 const crypto = require('crypto');
 
-const VERSION = "0.1.22";
+const VERSION = "0.1.23";
 const REPO = 'senoldogann/LLM-Context-Manager';
 const BIN_DIR = path.join(os.homedir(), '.ccm', 'bin');
 const CHECKSUMS_FILE = 'checksums.txt';
@@ -19,6 +19,11 @@ const MCP_ARGS = ['-y', '@senoldogann/context-manager', 'mcp'];
 const MCP_ENV = {
     RUST_LOG: 'info'
 };
+const ALLOWED_REDIRECT_HOSTS = new Set([
+    'github.com',
+    'objects.githubusercontent.com',
+    'release-assets.githubusercontent.com'
+]);
 
 function allowUnverifiedBinaries() {
     const raw = process.env.CCM_ALLOW_UNVERIFIED_BINARIES || process.env.CCM_SKIP_CHECKSUM || '';
@@ -225,7 +230,12 @@ function downloadFile(url, dest) {
     return new Promise((resolve, reject) => {
         https.get(url, (response) => {
             if (response.statusCode === 302 || response.statusCode === 301) {
-                return downloadFile(response.headers.location, dest).then(resolve).catch(reject);
+                try {
+                    const redirectUrl = resolveRedirectUrl(url, response.headers.location);
+                    return downloadFile(redirectUrl, dest).then(resolve).catch(reject);
+                } catch (error) {
+                    return reject(error);
+                }
             }
             if (response.statusCode !== 200) {
                 return reject(new Error(`Failed to download: ${response.statusCode}`));
@@ -250,7 +260,12 @@ function downloadText(url) {
     return new Promise((resolve, reject) => {
         https.get(url, (response) => {
             if (response.statusCode === 302 || response.statusCode === 301) {
-                return downloadText(response.headers.location).then(resolve).catch(reject);
+                try {
+                    const redirectUrl = resolveRedirectUrl(url, response.headers.location);
+                    return downloadText(redirectUrl).then(resolve).catch(reject);
+                } catch (error) {
+                    return reject(error);
+                }
             }
             if (response.statusCode !== 200) {
                 return reject(new Error(`Failed to download: ${response.statusCode}`));
@@ -276,6 +291,22 @@ async function getChecksums() {
     } catch (err) {
         return null;
     }
+}
+
+function resolveRedirectUrl(sourceUrl, location) {
+    if (!location) {
+        throw new Error('Redirect response did not include a Location header');
+    }
+
+    const resolved = new URL(location, sourceUrl);
+    if (resolved.protocol !== 'https:') {
+        throw new Error(`Blocked redirect to non-HTTPS URL: ${resolved.href}`);
+    }
+    if (!ALLOWED_REDIRECT_HOSTS.has(resolved.hostname)) {
+        throw new Error(`Blocked redirect to unexpected host: ${resolved.hostname}`);
+    }
+
+    return resolved.toString();
 }
 
 function parseChecksums(text) {

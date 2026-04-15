@@ -2,6 +2,7 @@
 
 use anyhow::Result;
 use serde_json::Value;
+use std::path::{Component, Path};
 use std::sync::Arc;
 
 use crate::protocol::{ToolResult, ToolResultContent};
@@ -31,26 +32,15 @@ pub async fn get_context(engine: &Arc<RetrievalEngine>, args: &Value) -> Result<
     })? as usize;
 
     let project_path = args.get("project_path").and_then(|v| v.as_str());
-    let normalized_file = try_normalize_path(file, project_path);
+    let normalized_file = normalize_graph_path(file, project_path)?;
 
-    // Try with normalized path first
     let cursor = CursorPosition {
         file_path: normalized_file.clone(),
         line,
         column: 0,
     };
 
-    let mut suggestions = engine.predict_context(&cursor).await?;
-
-    // If no suggestions, try with original file path (fallback)
-    if suggestions.is_empty() && normalized_file != file {
-        let cursor_original = CursorPosition {
-            file_path: file.to_string(),
-            line,
-            column: 0,
-        };
-        suggestions = engine.predict_context(&cursor_original).await?;
-    }
+    let suggestions = engine.predict_context(&cursor).await?;
 
     if suggestions.is_empty() {
         return Ok(ToolResult {
@@ -140,13 +130,9 @@ pub async fn read_graph(engine: &Arc<RetrievalEngine>, args: &Value) -> Result<T
         .ok_or_else(|| anyhow::anyhow!("Missing node_id argument"))?;
 
     let project_path = args.get("project_path").and_then(|v| v.as_str());
-    let normalized_id = try_normalize_path(node_id, project_path);
+    let normalized_id = normalize_graph_node_id(node_id, project_path)?;
 
-    // Try finding by normalized ID first, then raw ID
-    let mut node_opt = engine.get_node_by_id(&normalized_id).await;
-    if node_opt.is_none() {
-        node_opt = engine.get_node_by_id(node_id).await;
-    }
+    let node_opt = engine.get_node_by_id(&normalized_id).await;
 
     if let Some(node) = node_opt {
         let mut output = format!(
@@ -155,13 +141,7 @@ pub async fn read_graph(engine: &Arc<RetrievalEngine>, args: &Value) -> Result<T
         );
 
         // Append neighbors if available (Graph Navigator)
-        // Try getting neighbors with both IDs as well
-        let mut neighbors_opt = engine.get_node_neighbors(&node.id).await;
-        if neighbors_opt.is_none() {
-            neighbors_opt = engine.get_node_neighbors(node_id).await;
-        }
-
-        if let Some(neighbors) = neighbors_opt {
+        if let Some(neighbors) = engine.get_node_neighbors(&node.id).await {
             output.push_str("\n\n### 🔗 Graph Connections\n");
 
             if !neighbors.calls.is_empty() {
@@ -210,27 +190,79 @@ pub async fn read_graph(engine: &Arc<RetrievalEngine>, args: &Value) -> Result<T
 }
 
 /// Helper: Normalizes a file path to match graph conventions (relative, starts with ./)
-fn try_normalize_path(path_str: &str, project_path: Option<&str>) -> String {
-    // 1. Try stripping project root if absolute
-    if let Some(root) = project_path {
-        let path = std::path::Path::new(path_str);
-        if path.is_absolute() {
-            if let Ok(stripped) = path.strip_prefix(root) {
-                let s = stripped.to_string_lossy();
-                if s.starts_with("./") {
-                    return s.to_string();
-                }
-                return format!("./{}", s);
+fn normalize_graph_path(path_str: &str, project_path: Option<&str>) -> Result<String> {
+    if path_str.is_empty() {
+        return Err(anyhow::anyhow!("Path argument cannot be empty"));
+    }
+
+    let normalized_input = path_str.replace('\\', "/");
+    if normalized_input.contains('\0') {
+        return Err(anyhow::anyhow!("Path argument contains invalid null byte"));
+    }
+
+    let path = Path::new(&normalized_input);
+    if path.is_absolute() {
+        let root = project_path.ok_or_else(|| {
+            anyhow::anyhow!("Absolute paths require a matching 'project_path' argument")
+        })?;
+        let stripped = path
+            .strip_prefix(Path::new(root))
+            .map_err(|_| anyhow::anyhow!("Path is outside the provided project root"))?;
+        return normalize_relative_graph_path(stripped);
+    }
+
+    normalize_relative_graph_path(path)
+}
+
+fn normalize_graph_node_id(node_id: &str, project_path: Option<&str>) -> Result<String> {
+    let mut parts = node_id.rsplitn(4, ':');
+    let column = parts.next();
+    let line = parts.next();
+    let kind = parts.next();
+    let path = parts.next();
+
+    match (path, kind, line, column) {
+        (Some(path_part), Some(kind_part), Some(line_part), Some(column_part)) => Ok(format!(
+            "{}:{}:{}:{}",
+            normalize_graph_path(path_part, project_path)?,
+            kind_part,
+            line_part,
+            column_part
+        )),
+        _ => normalize_graph_path(node_id, project_path),
+    }
+}
+
+fn normalize_relative_graph_path(path: &Path) -> Result<String> {
+    let mut parts = Vec::new();
+
+    for component in path.components() {
+        match component {
+            Component::CurDir => {}
+            Component::Normal(segment) => {
+                let text = segment
+                    .to_str()
+                    .ok_or_else(|| anyhow::anyhow!("Path contains non-UTF8 segment"))?;
+                parts.push(text.to_string());
+            }
+            Component::ParentDir => {
+                return Err(anyhow::anyhow!(
+                    "Parent directory segments are not allowed in MCP path arguments"
+                ));
+            }
+            Component::RootDir | Component::Prefix(_) => {
+                return Err(anyhow::anyhow!(
+                    "Absolute paths are not allowed in MCP path arguments"
+                ));
             }
         }
     }
 
-    // 2. If relative but missing ./ prefix, add it
-    if !path_str.starts_with("./") && !path_str.starts_with("/") {
-        return format!("./{}", path_str);
+    if parts.is_empty() {
+        return Err(anyhow::anyhow!("Path must resolve to a file or node path"));
     }
 
-    path_str.to_string()
+    Ok(format!("./{}", parts.join("/")))
 }
 
 /// Tool: index_project
@@ -280,5 +312,28 @@ pub async fn index_project(state: &crate::server::ServerState, args: &Value) -> 
                 is_error: Some(true),
             })
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{normalize_graph_node_id, normalize_graph_path};
+
+    #[test]
+    fn relative_paths_get_graph_prefix() {
+        let normalized = normalize_graph_path("src/lib.rs", None).unwrap();
+        assert_eq!(normalized, "./src/lib.rs");
+    }
+
+    #[test]
+    fn parent_segments_are_rejected() {
+        let error = normalize_graph_path("../secret.txt", None).unwrap_err();
+        assert!(error.to_string().contains("Parent directory"));
+    }
+
+    #[test]
+    fn node_ids_normalize_only_the_path_prefix() {
+        let normalized = normalize_graph_node_id("src/lib.rs:function_item:12:0", None).unwrap();
+        assert_eq!(normalized, "./src/lib.rs:function_item:12:0");
     }
 }

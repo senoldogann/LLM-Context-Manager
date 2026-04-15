@@ -156,6 +156,13 @@ Enable `CCM_EMBED_DATA_FILES=1` to include them in semantic search.
 
 ## 📝 Changelog
 
+### v0.1.23
+- ✅ JSON-RPC request size limit for safer MCP stdio transport
+- ✅ Sensitive value redaction in MCP debug logs
+- ✅ Hardened path normalization for MCP graph and context tools
+- ✅ GitHub release redirect allowlist for binary downloads
+- ✅ Unused core dependency cleanup
+
 ### v0.1.22
 - ✅ Codex installer support via `codex mcp add`
 - ✅ Cursor config support via `~/.cursor/mcp.json`
