@@ -2,6 +2,7 @@ use anyhow::{Context, Result};
 use reqwest::Client;
 use serde_json::json;
 use std::env;
+use std::panic::{catch_unwind, AssertUnwindSafe};
 use std::time::Duration;
 
 #[derive(Debug, Clone)]
@@ -20,7 +21,7 @@ pub struct RemoteEmbedder {
 }
 
 impl RemoteEmbedder {
-    pub fn new(api_key: String, model: String, base_url: String, provider: Provider) -> Self {
+    pub fn new(api_key: String, model: String, base_url: String, provider: Provider) -> Result<Self> {
         let timeout_secs = env::var("EMBEDDING_TIMEOUT_SECS")
             .or_else(|_| env::var("CCM_EMBEDDING_TIMEOUT_SECS"))
             .ok()
@@ -28,21 +29,16 @@ impl RemoteEmbedder {
             .filter(|val| *val > 0)
             .unwrap_or(30);
         let timeout = Duration::from_secs(timeout_secs);
+        let client = build_http_client(timeout)?;
 
-        Self {
-            client: Client::builder()
-                .timeout(timeout)
-                .build()
-                .unwrap_or_else(|err| {
-                    tracing::warn!(error = %err, "Failed to build HTTP client with timeout");
-                    Client::new()
-                }),
+        Ok(Self {
+            client,
             api_key,
             model,
             base_url,
             provider,
             timeout,
-        }
+        })
     }
 
     pub fn from_env() -> Result<Self> {
@@ -91,7 +87,7 @@ impl RemoteEmbedder {
                 .unwrap_or_else(|_| "ollama".to_string()), // Default dummy key
         };
 
-        Ok(Self::new(api_key, model, base_url, provider))
+        Self::new(api_key, model, base_url, provider)
     }
 
     pub async fn embed(&self, texts: Vec<String>) -> Result<Vec<Vec<f32>>> {
@@ -335,5 +331,35 @@ impl RemoteEmbedder {
         }
 
         Err(anyhow::anyhow!("Failed after retries"))
+    }
+}
+
+fn build_http_client(timeout: Duration) -> Result<Client> {
+    match catch_unwind(AssertUnwindSafe(|| Client::builder().timeout(timeout).build())) {
+        Ok(Ok(client)) => return Ok(client),
+        Ok(Err(error)) => {
+            tracing::warn!(
+                error = %error,
+                "Failed to build HTTP client with system proxy settings; retrying with no_proxy"
+            );
+        }
+        Err(_) => {
+            tracing::warn!(
+                "HTTP client builder panicked with system proxy settings; retrying with no_proxy"
+            );
+        }
+    }
+
+    match catch_unwind(AssertUnwindSafe(|| {
+        Client::builder().timeout(timeout).no_proxy().build()
+    })) {
+        Ok(Ok(client)) => Ok(client),
+        Ok(Err(error)) => Err(anyhow::anyhow!(
+            "Failed to build HTTP client in no_proxy mode: {}",
+            error
+        )),
+        Err(_) => Err(anyhow::anyhow!(
+            "HTTP client builder panicked in no_proxy mode"
+        )),
     }
 }

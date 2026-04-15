@@ -7,7 +7,29 @@ const os = require('os');
 const https = require('https');
 const crypto = require('crypto');
 
-const VERSION = "0.1.26";
+function resolvePackageVersion() {
+    if (process.env.CCM_BINARY_VERSION && process.env.CCM_BINARY_VERSION.trim() !== '') {
+        return process.env.CCM_BINARY_VERSION.trim();
+    }
+
+    if (process.env.npm_package_version && process.env.npm_package_version.trim() !== '') {
+        return process.env.npm_package_version.trim();
+    }
+
+    try {
+        const pkgPath = path.join(__dirname, '..', 'package.json');
+        const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8'));
+        if (pkg.version && String(pkg.version).trim() !== '') {
+            return String(pkg.version).trim();
+        }
+    } catch (error) {
+        console.warn('[CCM] Failed to resolve package version from package.json.');
+    }
+
+    throw new Error('Unable to resolve package version for binary download.');
+}
+
+const VERSION = resolvePackageVersion();
 const REPO = 'senoldogann/LLM-Context-Manager';
 const BIN_DIR = path.join(os.homedir(), '.ccm', 'bin');
 const CHECKSUMS_FILE = 'checksums.txt';
