@@ -21,7 +21,12 @@ pub struct RemoteEmbedder {
 }
 
 impl RemoteEmbedder {
-    pub fn new(api_key: String, model: String, base_url: String, provider: Provider) -> Result<Self> {
+    pub fn new(
+        api_key: String,
+        model: String,
+        base_url: String,
+        provider: Provider,
+    ) -> Result<Self> {
         let timeout_secs = env::var("EMBEDDING_TIMEOUT_SECS")
             .or_else(|_| env::var("CCM_EMBEDDING_TIMEOUT_SECS"))
             .ok()
@@ -335,7 +340,9 @@ impl RemoteEmbedder {
 }
 
 fn build_http_client(timeout: Duration) -> Result<Client> {
-    match catch_unwind(AssertUnwindSafe(|| Client::builder().timeout(timeout).build())) {
+    match catch_unwind(AssertUnwindSafe(|| {
+        Client::builder().timeout(timeout).build()
+    })) {
         Ok(Ok(client)) => return Ok(client),
         Ok(Err(error)) => {
             tracing::warn!(
