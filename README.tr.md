@@ -71,6 +71,34 @@ npx @senoldogann/context-manager install
 npx @senoldogann/context-manager index --path .
 ```
 
+### Ilk Calistirma Dogrulamasi
+
+Kurulumdan sonra mutlu yolu hizlica dogrulayin:
+
+```bash
+# CLI cevap veriyor mu kontrol et
+npx @senoldogann/context-manager query --text "src/main.rs:1"
+
+# MCP server'i dogrudan baslat
+npx @senoldogann/context-manager mcp
+```
+
+Beklenen sonuc:
+- Wrapper, isletim sistemi ve mimariye uygun binary'yi indirir
+- `index`, proje icinde `data/ccm_db` olusturur
+- `mcp`, JSON-RPC parse hatasi vermeden stdio uzerinde beklemeye gecer
+
+### Editor Uyumlulugu
+
+| Host | Durum | Kurulum Yolu |
+|------|-------|--------------|
+| Codex | Destekleniyor | Installer ile `codex mcp add ...` |
+| Cursor | Destekleniyor | `~/.cursor/mcp.json` |
+| Claude Desktop | Destekleniyor | Yerel desktop config |
+| Antigravity | Destekleniyor | Yerel host config |
+
+Editor otomatik tespit edilmezse installer'in verdigi manuel MCP config'i kullanabilirsiniz.
+
 ### Manuel Derleme (Rust)
 
 ```bash
@@ -204,6 +232,20 @@ Evaluation index'i yoksa CCM skorlama oncesi otomatik hazirlar.
 Semantik `search_code` gorevleri icin embedder gerekir.
 
 **Kayitli sonuclar:** [`eval/`](./eval) altindaki raporlara bakin.
+
+---
+
+## Release Guvenilirligi
+
+CCM release akisinda kurulum guvenilirligi icin su noktalar yer alir:
+
+- GitHub Releases, platform binary'leri ve `checksums.txt` yayinlar
+- npm wrapper, indirilen binary'leri ilk kullanimdan once dogrular
+- MCP transport request size limit uygular ve debug payload'larda hassas degerleri maskeler
+- Release workflow, asset yuklemeden once Linux, macOS ve Windows build'lerini alir
+- README quick-start adimlari ilk kurulum smoke test akisi ile aynidir
+
+Lokal source build icin `cargo build --release` komutu halen makinenizde `protoc` kurulu olmasini gerektirir.
 
 ---
 

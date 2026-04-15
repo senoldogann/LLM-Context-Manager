@@ -71,6 +71,34 @@ npx @senoldogann/context-manager install
 npx @senoldogann/context-manager index --path .
 ```
 
+### First-Run Verification
+
+After installation, verify the happy path with a clean smoke test:
+
+```bash
+# Check that the CLI responds
+npx @senoldogann/context-manager query --text "src/main.rs:1"
+
+# Start the MCP server directly
+npx @senoldogann/context-manager mcp
+```
+
+Expected outcomes:
+- The wrapper downloads the correct binary for your OS and architecture
+- `index` creates `data/ccm_db` inside the project
+- `mcp` starts without JSON-RPC parse errors and waits on stdio
+
+### Editor Compatibility
+
+| Host | Status | Installation Path |
+|------|--------|-------------------|
+| Codex | Supported | `codex mcp add ...` via installer |
+| Cursor | Supported | `~/.cursor/mcp.json` |
+| Claude Desktop | Supported | Native desktop config |
+| Antigravity | Supported | Native host config |
+
+If your editor is not auto-detected, use the manual MCP config printed by the installer.
+
 ### 🔧 Manual Build (Rust)
 
 ```bash
@@ -205,6 +233,20 @@ If the evaluation index is missing, CCM bootstraps it automatically before scori
 Semantic `search_code` tasks still require a configured embedder.
 
 **Latest Recorded Results:** See the checked-in reports under [`eval/`](./eval).
+
+---
+
+## Release Reliability
+
+CCM release builds are designed to be reproducible and install-safe:
+
+- GitHub Releases publish platform binaries and `checksums.txt`
+- The npm wrapper verifies downloaded binaries before first use
+- MCP transport now enforces request size limits and redacts sensitive debug payloads
+- The release workflow builds Linux, macOS, and Windows artifacts before attaching release assets
+- The README quick-start now matches the same smoke path we use for first-install checks
+
+For local source builds, `cargo build --release` still requires `protoc` to be installed on your machine.
 
 ---
 

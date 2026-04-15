@@ -31,6 +31,20 @@ npx @senoldogann/context-manager index --path .
 
 **That's it!** Restart your AI editor and start asking questions about your code.
 
+### First-Run Verification
+
+Use this quick smoke test after install:
+
+```bash
+# Verify the CLI responds
+npx @senoldogann/context-manager query --text "src/main.rs:1"
+
+# Verify the MCP binary starts
+npx @senoldogann/context-manager mcp
+```
+
+If the wrapper is healthy, the query command should return code context and the MCP process should stay open waiting for stdio messages.
+
 ---
 
 ## 📖 What is CCM?
@@ -54,6 +68,15 @@ The npm wrapper downloads pre-built binaries and passes commands through:
 | `npx @senoldogann/context-manager query --text "..."` | Search codebase |
 | `npx @senoldogann/context-manager mcp` | Run MCP server directly |
 | `npx @senoldogann/context-manager eval --tasks <file>` | Run evaluation tasks |
+
+### Supported Hosts
+
+| Host | Status |
+|------|--------|
+| Codex | Supported |
+| Cursor | Supported |
+| Claude Desktop | Supported |
+| Antigravity | Supported |
 
 ### Options
 
@@ -139,6 +162,14 @@ This package handles:
 1. OS/architecture detection
 2. Binary download from GitHub Releases
 3. Global persistence in `~/.ccm`
+
+### ✅ Release Reliability
+
+- GitHub Releases publish platform binaries plus `checksums.txt`
+- The npm wrapper verifies checksums before using downloaded binaries
+- Redirects are restricted to approved GitHub release hosts
+- Release builds run for Linux, macOS, and Windows before assets are attached
+- The same smoke path is documented here and in the main repository README
 
 ### ✅ Binary Integrity
 
