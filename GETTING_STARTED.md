@@ -18,7 +18,7 @@
 
 ### Step 1: Install
 
-**Option A: For AI Editors (Claude Desktop, Antigravity, Cursor)**
+**Option A: For AI Editors (Codex, Cursor, Claude Desktop, Antigravity)**
 
 ```bash
 npx @senoldogann/context-manager install
@@ -27,6 +27,9 @@ npx @senoldogann/context-manager install
 **Option B: For CLI Development**
 
 ```bash
+# If local source builds fail, install protoc first.
+# macOS: brew install protobuf
+
 cargo build --release
 ./target/release/ccm-cli --help
 ```
@@ -110,6 +113,9 @@ cargo test
 
 # Lint
 cargo fmt && cargo clippy
+
+# Eval (bootstraps missing index automatically)
+cargo run -p ccm-cli -- eval --tasks eval/golden_tasks.v3.ccm.json
 ```
 
 ---

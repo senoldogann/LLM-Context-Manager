@@ -1,4 +1,3 @@
-use ccm_core::server;
 use clap::Parser;
 use std::path::PathBuf;
 
@@ -11,12 +10,6 @@ struct Args {
 
 #[derive(Parser, Debug)]
 enum Commands {
-    /// Start the CCM server
-    Start {
-        /// Port to listen on
-        #[arg(short, long, default_value = "3000")]
-        port: u16,
-    },
     /// Query the knowledge base (semantic search or file:line lookup)
     Query {
         /// Search text or file:line format (e.g., "authentication" or "src/main.rs:50")
@@ -63,10 +56,6 @@ async fn main() -> anyhow::Result<()> {
     let args = Args::parse();
 
     match args.cmd {
-        Commands::Start { port } => {
-            tracing::info!(port = port, "Starting CCM Server");
-            server::start_server(port).await?;
-        }
         Commands::Query { text } => {
             // For CLI query, assume current directory is project root
             let project_path = std::env::current_dir()?.to_string_lossy().to_string();

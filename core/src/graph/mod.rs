@@ -43,6 +43,7 @@ pub enum EdgeType {
 pub struct CodeGraph {
     pub graph: DiGraph<CodeNode, EdgeType>,
     pub storage: Option<Arc<dyn GraphStorage>>,
+    pub id_index: std::collections::HashMap<String, NodeIndex>,
 }
 
 impl Default for CodeGraph {
@@ -50,6 +51,7 @@ impl Default for CodeGraph {
         Self {
             graph: DiGraph::new(),
             storage: None,
+            id_index: std::collections::HashMap::new(),
         }
     }
 }
@@ -70,7 +72,10 @@ impl CodeGraph {
                 tracing::warn!(error = %e, "Failed to save node to storage");
             }
         }
-        self.graph.add_node(node)
+        let id = node.id.clone();
+        let idx = self.graph.add_node(node);
+        self.id_index.insert(id, idx);
+        idx
     }
 
     pub fn add_edge(&mut self, source: NodeIndex, target: NodeIndex, weight: EdgeType) {
@@ -175,10 +180,7 @@ impl CodeGraph {
     }
 
     pub fn find_node_index_by_id(&self, id: &str) -> Option<NodeIndex> {
-        self.graph.node_indices().find(|&idx| {
-            let node = &self.graph[idx];
-            node.id == id
-        })
+        self.id_index.get(id).cloned()
     }
 
     /// Saves the graph to a JSON file.
@@ -194,10 +196,22 @@ impl CodeGraph {
         let file = std::fs::File::open(path)?;
         let reader = std::io::BufReader::new(file);
         let graph: DiGraph<CodeNode, EdgeType> = serde_json::from_reader(reader)?;
-        Ok(Self {
+        let mut g = Self {
             graph,
             storage: None,
-        })
+            id_index: std::collections::HashMap::new(),
+        };
+        g.rebuild_index();
+        Ok(g)
+    }
+
+    /// Rebuilds the HashMap index from the current graph nodes
+    pub fn rebuild_index(&mut self) {
+        self.id_index.clear();
+        for idx in self.graph.node_indices() {
+            let node = &self.graph[idx];
+            self.id_index.insert(node.id.clone(), idx);
+        }
     }
 
     /// Alias for load_from_file to match API conventions
@@ -205,8 +219,6 @@ impl CodeGraph {
         Self::load_from_file(path)
     }
 
-    /// Removes all nodes belonging to a specific file.
-    /// Used for incremental indexing (clearing old state).
     /// Removes all nodes belonging to a specific file.
     /// Used for incremental indexing (clearing old state).
     pub fn remove_file_nodes(&mut self, file_path: &str) {
@@ -241,7 +253,18 @@ impl CodeGraph {
         }
 
         // 3. Remove nodes using retain_nodes to avoid index swaps.
-        self.graph.retain_nodes(|_, idx| !to_remove.contains(&idx));
+        self.graph.retain_nodes(|g, idx| {
+            if to_remove.contains(&idx) {
+                let node = &g[idx];
+                self.id_index.remove(&node.id);
+                false
+            } else {
+                true
+            }
+        });
+
+        // retain_nodes shifts indices! We MUST rebuild the index entirely.
+        self.rebuild_index();
     }
 }
 

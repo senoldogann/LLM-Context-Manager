@@ -1,17 +1,24 @@
 #!/usr/bin/env node
 
-const { spawn } = require('child_process');
+const { spawn, spawnSync } = require('child_process');
 const path = require('path');
 const fs = require('fs');
 const os = require('os');
 const https = require('https');
 const crypto = require('crypto');
 
-const VERSION = "0.1.21";
+const VERSION = "0.1.22";
 const REPO = 'senoldogann/LLM-Context-Manager';
 const BIN_DIR = path.join(os.homedir(), '.ccm', 'bin');
 const CHECKSUMS_FILE = 'checksums.txt';
 let checksumCache = null;
+
+const MCP_SERVER_NAME = 'context-manager';
+const MCP_COMMAND = 'npx';
+const MCP_ARGS = ['-y', '@senoldogann/context-manager', 'mcp'];
+const MCP_ENV = {
+    RUST_LOG: 'info'
+};
 
 function allowUnverifiedBinaries() {
     const raw = process.env.CCM_ALLOW_UNVERIFIED_BINARIES || process.env.CCM_SKIP_CHECKSUM || '';
@@ -19,29 +26,29 @@ function allowUnverifiedBinaries() {
 }
 
 async function installMcp() {
-    const configPaths = [];
     const home = os.homedir();
+    const jsonTargets = [];
 
     if (os.platform() === 'darwin') {
-        configPaths.push(path.join(home, 'Library', 'Application Support', 'Claude', 'claude_desktop_config.json'));
-        configPaths.push(path.join(home, '.gemini', 'antigravity', 'mcp_config.json'));
-        configPaths.push(path.join(home, 'Library', 'Application Support', 'Code', 'User', 'globalStorage', 'saoudrizwan.claude-dev', 'settings', 'cline_mcp_settings.json'));
-        configPaths.push(path.join(home, 'Library', 'Application Support', 'Code', 'User', 'globalStorage', 'rooveterinaryinc.roo-cline', 'settings', 'cline_mcp_settings.json'));
+        jsonTargets.push(path.join(home, 'Library', 'Application Support', 'Claude', 'claude_desktop_config.json'));
+        jsonTargets.push(path.join(home, '.gemini', 'antigravity', 'mcp_config.json'));
+        jsonTargets.push(path.join(home, 'Library', 'Application Support', 'Code', 'User', 'globalStorage', 'saoudrizwan.claude-dev', 'settings', 'cline_mcp_settings.json'));
+        jsonTargets.push(path.join(home, 'Library', 'Application Support', 'Code', 'User', 'globalStorage', 'rooveterinaryinc.roo-cline', 'settings', 'cline_mcp_settings.json'));
     } else if (os.platform() === 'win32') {
         const appData = process.env.APPDATA || '';
-        configPaths.push(path.join(appData, 'Claude', 'claude_desktop_config.json'));
-        configPaths.push(path.join(process.env.USERPROFILE || '', 'AppData', 'Roaming', 'Code', 'User', 'globalStorage', 'saoudrizwan.claude-dev', 'settings', 'cline_mcp_settings.json'));
+        jsonTargets.push(path.join(appData, 'Claude', 'claude_desktop_config.json'));
+        jsonTargets.push(path.join(process.env.USERPROFILE || '', 'AppData', 'Roaming', 'Code', 'User', 'globalStorage', 'saoudrizwan.claude-dev', 'settings', 'cline_mcp_settings.json'));
     } else if (os.platform() === 'linux') {
-        configPaths.push(path.join(home, '.config', 'Claude', 'claude_desktop_config.json'));
-        configPaths.push(path.join(home, '.config', 'Code', 'User', 'globalStorage', 'saoudrizwan.claude-dev', 'settings', 'cline_mcp_settings.json'));
+        jsonTargets.push(path.join(home, '.config', 'Claude', 'claude_desktop_config.json'));
+        jsonTargets.push(path.join(home, '.config', 'Code', 'User', 'globalStorage', 'saoudrizwan.claude-dev', 'settings', 'cline_mcp_settings.json'));
     }
 
+    jsonTargets.push(path.join(home, '.cursor', 'mcp.json'));
+
     const mcpConfig = {
-        "command": "npx",
-        "args": ["-y", "@senoldogann/context-manager", "mcp"],
-        "env": {
-            "RUST_LOG": "info"
-        }
+        command: MCP_COMMAND,
+        args: MCP_ARGS,
+        env: MCP_ENV
     };
 
     console.log("[CCM] Pre-downloading binaries for all tools...");
@@ -49,36 +56,102 @@ async function installMcp() {
     await getBinaryFor('ccm-mcp');
 
     let installedCount = 0;
-    for (const configPath of configPaths) {
-        const dir = path.dirname(configPath);
-        if (fs.existsSync(dir)) {
-            let config = { mcpServers: {} };
-            if (fs.existsSync(configPath)) {
-                try {
-                    const content = fs.readFileSync(configPath, 'utf8');
-                    config = JSON.parse(content);
-                    fs.copyFileSync(configPath, `${configPath}.bak`);
-                } catch (e) {
-                    console.warn(`[CCM] Could not parse ${configPath}, creating backup and starting fresh section.`);
-                }
-            }
 
-            if (!config.mcpServers) config.mcpServers = {};
-            config.mcpServers["context-manager"] = mcpConfig;
-
-            fs.writeFileSync(configPath, JSON.stringify(config, null, 2));
-            console.log(`[CCM] ✓ Successfully updated: ${configPath}`);
+    for (const configPath of jsonTargets) {
+        if (installJsonConfig(configPath, mcpConfig)) {
             installedCount++;
         }
     }
 
+    if (installCodexConfig()) {
+        installedCount++;
+    }
+
     if (installedCount === 0) {
         console.log("[CCM] No supported MCP config directories found.");
-        console.log("[CCM] Please add this to your mcp_config.json manually:");
-        console.log(JSON.stringify({ "context-manager": mcpConfig }, null, 2));
+        console.log("[CCM] Add this server manually:");
+        console.log(JSON.stringify({ [MCP_SERVER_NAME]: mcpConfig }, null, 2));
+        console.log("[CCM] Codex example:");
+        console.log(`codex mcp add ${MCP_SERVER_NAME} --env RUST_LOG=info -- ${MCP_COMMAND} ${MCP_ARGS.join(' ')}`);
     } else {
         console.log("[CCM] Installation complete! Restart your AI editor to see the changes.");
     }
+}
+
+function installJsonConfig(configPath, mcpConfig) {
+    const dir = path.dirname(configPath);
+
+    if (!fs.existsSync(dir)) {
+        return false;
+    }
+
+    let config = { mcpServers: {} };
+    if (fs.existsSync(configPath)) {
+        try {
+            const content = fs.readFileSync(configPath, 'utf8');
+            config = JSON.parse(content);
+            fs.copyFileSync(configPath, `${configPath}.bak`);
+        } catch (e) {
+            console.warn(`[CCM] Could not parse ${configPath}, creating backup and starting fresh section.`);
+        }
+    }
+
+    if (!config.mcpServers || typeof config.mcpServers !== 'object') {
+        config.mcpServers = {};
+    }
+
+    config.mcpServers[MCP_SERVER_NAME] = mcpConfig;
+    fs.writeFileSync(configPath, JSON.stringify(config, null, 2));
+    console.log(`[CCM] ✓ Successfully updated: ${configPath}`);
+    return true;
+}
+
+function installCodexConfig() {
+    const listResult = spawnSync('codex', ['mcp', 'list', '--json'], {
+        encoding: 'utf8'
+    });
+
+    if (listResult.error) {
+        return false;
+    }
+
+    if (listResult.status !== 0) {
+        console.warn(`[CCM] Codex MCP inspection failed: ${listResult.stderr.trim()}`);
+        return false;
+    }
+
+    let existingServers = [];
+    try {
+        existingServers = JSON.parse(listResult.stdout);
+    } catch (error) {
+        console.warn('[CCM] Could not parse Codex MCP list output.');
+        return false;
+    }
+
+    const existing = existingServers.find((server) => server.name === MCP_SERVER_NAME);
+    if (existing) {
+        const removeResult = spawnSync('codex', ['mcp', 'remove', MCP_SERVER_NAME], {
+            encoding: 'utf8'
+        });
+
+        if (removeResult.status !== 0) {
+            console.warn(`[CCM] Codex MCP removal failed: ${removeResult.stderr.trim()}`);
+            return false;
+        }
+    }
+
+    const addArgs = ['mcp', 'add', MCP_SERVER_NAME, '--env', 'RUST_LOG=info', '--', MCP_COMMAND, ...MCP_ARGS];
+    const addResult = spawnSync('codex', addArgs, {
+        encoding: 'utf8'
+    });
+
+    if (addResult.status !== 0) {
+        console.warn(`[CCM] Codex MCP install failed: ${addResult.stderr.trim()}`);
+        return false;
+    }
+
+    console.log('[CCM] ✓ Successfully updated: ~/.codex/config.toml');
+    return true;
 }
 
 async function getBinaryFor(commandName) {

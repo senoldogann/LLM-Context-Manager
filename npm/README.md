@@ -22,7 +22,7 @@
 ### Installation
 
 ```bash
-# 1. Install and configure for Claude Desktop, Antigravity, Cursor, etc.
+# 1. Install and configure for Codex, Cursor, Claude Desktop, Antigravity, etc.
 npx @senoldogann/context-manager install
 
 # 2. Index your project
@@ -155,6 +155,12 @@ Enable `CCM_EMBED_DATA_FILES=1` to include them in semantic search.
 ---
 
 ## 📝 Changelog
+
+### v0.1.22
+- ✅ Codex installer support via `codex mcp add`
+- ✅ Cursor config support via `~/.cursor/mcp.json`
+- ✅ Evaluation bootstraps missing indexes before scoring
+- ✅ Golden tasks refreshed for the current repo layout
 
 ### v0.1.21
 - ✅ Release checksums (`checksums.txt`) for binary integrity

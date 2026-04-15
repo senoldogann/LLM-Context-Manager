@@ -15,11 +15,11 @@
       },
       "query": {
         "type": "read_graph",
-        "node_id": "./cli/src/main.rs:function_item:56:0"
+        "node_id": "./cli/src/main.rs:function_item:49:0"
       },
       "expected": {
         "node_ids": [
-          "./cli/src/main.rs:function_item:56:0"
+          "./cli/src/main.rs:function_item:49:0"
         ],
         "min_recall": 1,
         "max_rank": 5
@@ -45,11 +45,11 @@
       },
       "query": {
         "type": "read_graph",
-        "node_id": "./cli/src/main.rs:struct_item:6:0"
+        "node_id": "./cli/src/main.rs:struct_item:5:0"
       },
       "expected": {
         "node_ids": [
-          "./cli/src/main.rs:struct_item:6:0"
+          "./cli/src/main.rs:struct_item:5:0"
         ],
         "min_recall": 1,
         "max_rank": 5
@@ -75,11 +75,11 @@
       },
       "query": {
         "type": "read_graph",
-        "node_id": "./core/build.rs:function_item:0:0"
+        "node_id": "./core/src/lib.rs:function_item:23:0"
       },
       "expected": {
         "node_ids": [
-          "./core/build.rs:function_item:0:0"
+          "./core/src/lib.rs:function_item:23:0"
         ],
         "min_recall": 1,
         "max_rank": 5
@@ -89,7 +89,7 @@
         "structural"
       ],
       "priority": 1,
-      "notes": "Node type Function, name main"
+      "notes": "Node type Function, name init"
     },
     {
       "id": "ccm-read-graph-004",
@@ -105,11 +105,11 @@
       },
       "query": {
         "type": "read_graph",
-        "node_id": "./core/src/engine.rs:function_item:114:4"
+        "node_id": "./core/src/engine.rs:function_item:116:4"
       },
       "expected": {
         "node_ids": [
-          "./core/src/engine.rs:function_item:114:4"
+          "./core/src/engine.rs:function_item:116:4"
         ],
         "min_recall": 1,
         "max_rank": 5
@@ -135,11 +135,11 @@
       },
       "query": {
         "type": "read_graph",
-        "node_id": "./core/src/engine.rs:function_item:123:4"
+        "node_id": "./core/src/engine.rs:function_item:125:4"
       },
       "expected": {
         "node_ids": [
-          "./core/src/engine.rs:function_item:123:4"
+          "./core/src/engine.rs:function_item:125:4"
         ],
         "min_recall": 1,
         "max_rank": 5
@@ -165,11 +165,11 @@
       },
       "query": {
         "type": "read_graph",
-        "node_id": "./core/src/engine.rs:function_item:267:4"
+        "node_id": "./core/src/engine.rs:function_item:333:4"
       },
       "expected": {
         "node_ids": [
-          "./core/src/engine.rs:function_item:267:4"
+          "./core/src/engine.rs:function_item:333:4"
         ],
         "min_recall": 1,
         "max_rank": 5
@@ -195,11 +195,11 @@
       },
       "query": {
         "type": "read_graph",
-        "node_id": "./core/src/engine.rs:function_item:411:4"
+        "node_id": "./core/src/engine.rs:function_item:486:4"
       },
       "expected": {
         "node_ids": [
-          "./core/src/engine.rs:function_item:411:4"
+          "./core/src/engine.rs:function_item:486:4"
         ],
         "min_recall": 1,
         "max_rank": 5
@@ -225,11 +225,11 @@
       },
       "query": {
         "type": "read_graph",
-        "node_id": "./core/src/engine.rs:function_item:417:4"
+        "node_id": "./core/src/engine.rs:function_item:492:4"
       },
       "expected": {
         "node_ids": [
-          "./core/src/engine.rs:function_item:417:4"
+          "./core/src/engine.rs:function_item:492:4"
         ],
         "min_recall": 1,
         "max_rank": 5
@@ -255,11 +255,11 @@
       },
       "query": {
         "type": "read_graph",
-        "node_id": "./core/src/engine.rs:function_item:472:4"
+        "node_id": "./core/src/engine.rs:function_item:545:4"
       },
       "expected": {
         "node_ids": [
-          "./core/src/engine.rs:function_item:472:4"
+          "./core/src/engine.rs:function_item:545:4"
         ],
         "min_recall": 1,
         "max_rank": 5
@@ -285,11 +285,11 @@
       },
       "query": {
         "type": "read_graph",
-        "node_id": "./core/src/engine.rs:function_item:62:4"
+        "node_id": "./core/src/engine.rs:function_item:59:4"
       },
       "expected": {
         "node_ids": [
-          "./core/src/engine.rs:function_item:62:4"
+          "./core/src/engine.rs:function_item:59:4"
         ],
         "min_recall": 1,
         "max_rank": 5
@@ -315,11 +315,11 @@
       },
       "query": {
         "type": "read_graph",
-        "node_id": "./core/src/engine.rs:function_item:72:4"
+        "node_id": "./core/src/engine.rs:function_item:68:4"
       },
       "expected": {
         "node_ids": [
-          "./core/src/engine.rs:function_item:72:4"
+          "./core/src/engine.rs:function_item:68:4"
         ],
         "min_recall": 1,
         "max_rank": 5
@@ -345,11 +345,11 @@
       },
       "query": {
         "type": "read_graph",
-        "node_id": "./core/src/engine.rs:impl_item:61:0"
+        "node_id": "./core/src/engine.rs:impl_item:58:0"
       },
       "expected": {
         "node_ids": [
-          "./core/src/engine.rs:impl_item:61:0"
+          "./core/src/engine.rs:impl_item:58:0"
         ],
         "min_recall": 1,
         "max_rank": 5
@@ -465,11 +465,11 @@
       },
       "query": {
         "type": "read_graph",
-        "node_id": "./core/src/engine.rs:struct_item:47:0"
+        "node_id": "./core/src/engine.rs:struct_item:46:0"
       },
       "expected": {
         "node_ids": [
-          "./core/src/engine.rs:struct_item:47:0"
+          "./core/src/engine.rs:struct_item:46:0"
         ],
         "min_recall": 1,
         "max_rank": 5
@@ -495,11 +495,11 @@
       },
       "query": {
         "type": "read_graph",
-        "node_id": "./core/src/engine/predictive.rs:function_item:11:4"
+        "node_id": "./core/src/engine.rs:function_item:59:4"
       },
       "expected": {
         "node_ids": [
-          "./core/src/engine/predictive.rs:function_item:11:4"
+          "./core/src/engine.rs:function_item:59:4"
         ],
         "min_recall": 1,
         "max_rank": 5
@@ -525,11 +525,11 @@
       },
       "query": {
         "type": "read_graph",
-        "node_id": "./core/src/engine/predictive.rs:function_item:19:4"
+        "node_id": "./core/src/engine.rs:function_item:68:4"
       },
       "expected": {
         "node_ids": [
-          "./core/src/engine/predictive.rs:function_item:19:4"
+          "./core/src/engine.rs:function_item:68:4"
         ],
         "min_recall": 1,
         "max_rank": 5
@@ -539,7 +539,7 @@
         "structural"
       ],
       "priority": 1,
-      "notes": "Node type Function, name put"
+      "notes": "Node type Function, name index_graph"
     },
     {
       "id": "ccm-read-graph-019",
@@ -555,11 +555,11 @@
       },
       "query": {
         "type": "read_graph",
-        "node_id": "./core/src/engine/predictive.rs:function_item:26:4"
+        "node_id": "./core/src/engine.rs:function_item:116:4"
       },
       "expected": {
         "node_ids": [
-          "./core/src/engine/predictive.rs:function_item:26:4"
+          "./core/src/engine.rs:function_item:116:4"
         ],
         "min_recall": 1,
         "max_rank": 5
@@ -569,7 +569,7 @@
         "structural"
       ],
       "priority": 1,
-      "notes": "Node type Function, name get"
+      "notes": "Node type Function, name incremental_index"
     },
     {
       "id": "ccm-read-graph-020",
@@ -585,11 +585,11 @@
       },
       "query": {
         "type": "read_graph",
-        "node_id": "./core/src/engine/predictive.rs:impl_item:10:0"
+        "node_id": "./core/src/engine.rs:impl_item:58:0"
       },
       "expected": {
         "node_ids": [
-          "./core/src/engine/predictive.rs:impl_item:10:0"
+          "./core/src/engine.rs:impl_item:58:0"
         ],
         "min_recall": 1,
         "max_rank": 5
@@ -599,7 +599,7 @@
         "structural"
       ],
       "priority": 1,
-      "notes": "Node type Class, name SpeculativeCache"
+      "notes": "Node type Class, name RetrievalEngine"
     },
     {
       "id": "ccm-read-graph-021",
@@ -615,11 +615,11 @@
       },
       "query": {
         "type": "read_graph",
-        "node_id": "./core/src/engine/predictive.rs:struct_item:6:0"
+        "node_id": "./core/src/engine.rs:struct_item:46:0"
       },
       "expected": {
         "node_ids": [
-          "./core/src/engine/predictive.rs:struct_item:6:0"
+          "./core/src/engine.rs:struct_item:46:0"
         ],
         "min_recall": 1,
         "max_rank": 5
@@ -629,7 +629,7 @@
         "structural"
       ],
       "priority": 1,
-      "notes": "Node type Struct, name SpeculativeCache"
+      "notes": "Node type Struct, name RetrievalEngine"
     },
     {
       "id": "ccm-read-graph-022",
@@ -1630,11 +1630,11 @@
       },
       "query": {
         "type": "search_code",
-        "text": "ContextManagerServer"
+        "text": "JSON-RPC request schema"
       },
       "expected": {
         "file_paths": [
-          "./core/src/rpc.rs"
+          "./mcp/src/protocol.rs"
         ],
         "min_recall": 1,
         "max_rank": 5
@@ -1644,7 +1644,7 @@
         "semantic"
       ],
       "priority": 2,
-      "notes": "gRPC service wiring"
+      "notes": "MCP protocol request schema"
     },
     {
       "id": "ccm-search-005",

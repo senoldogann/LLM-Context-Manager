@@ -277,6 +277,7 @@ pub async fn evaluate_comparison_from_path(path: &Path) -> Result<ComparisonRepo
 pub async fn evaluate_with_mode(tasks_file: GoldenTasksFile, mode: EvalMode) -> Result<EvalReport> {
     let mut totals = Totals::default();
     let mut results = Vec::new();
+    let mut prepared_repos: HashSet<PathBuf> = HashSet::new();
 
     totals.tasks = tasks_file.tasks.len();
 
@@ -299,8 +300,10 @@ pub async fn evaluate_with_mode(tasks_file: GoldenTasksFile, mode: EvalMode) -> 
             matched_items: Vec::new(),
         };
 
-        if !db_path.exists() {
-            result.detail = format!("Missing index at {}", db_path.display());
+        if let Err(error) =
+            ensure_eval_index(&repo_path, &db_path, &graph_path, &mut prepared_repos).await
+        {
+            result.detail = format!("Failed to prepare index: {}", error);
             totals.skipped += 1;
             results.push(result);
             continue;
@@ -470,6 +473,46 @@ pub async fn evaluate_with_mode(tasks_file: GoldenTasksFile, mode: EvalMode) -> 
     })
 }
 
+async fn ensure_eval_index(
+    repo_path: &Path,
+    db_path: &Path,
+    graph_path: &Path,
+    prepared_repos: &mut HashSet<PathBuf>,
+) -> Result<()> {
+    if db_path.exists() && graph_path.exists() {
+        return Ok(());
+    }
+
+    let repo_key = repo_path.to_path_buf();
+    if prepared_repos.contains(&repo_key) {
+        return Ok(());
+    }
+
+    crate::update_index(
+        &repo_path.to_string_lossy(),
+        Some(&db_path.to_string_lossy()),
+    )
+    .await
+    .with_context(|| {
+        format!(
+            "failed to build evaluation index for {}",
+            repo_path.display()
+        )
+    })?;
+
+    prepared_repos.insert(repo_key);
+
+    if !db_path.exists() {
+        return Err(anyhow::anyhow!("Missing index at {}", db_path.display()));
+    }
+
+    if !graph_path.exists() {
+        return Err(anyhow::anyhow!("Missing graph at {}", graph_path.display()));
+    }
+
+    Ok(())
+}
+
 async fn search_code(db_path: &Path, query: &str, limit: usize) -> Result<Vec<String>> {
     let store = LanceDbStore::new(&db_path.to_string_lossy(), "code_vectors").await?;
     let hits = store.search(query, limit).await?;
@@ -498,7 +541,7 @@ async fn search_code_hybrid(
     let mut semantic_scores: HashMap<String, f32> = HashMap::new();
 
     for (id, _content, distance) in hits {
-        let node_id = normalize_node_id(&id);
+        let node_id = crate::normalize_node_id(&id);
         let score = HybridScorer::semantic_score(distance);
         semantic_scores
             .entry(node_id)
@@ -549,7 +592,7 @@ fn score_hits(expected: &Expected, hits: &[String]) -> (usize, Vec<String>) {
 
     for hit in hits {
         let key = if expected.node_ids.is_some() {
-            normalize_node_id(hit)
+            crate::normalize_node_id(hit)
         } else {
             node_id_to_file_path(hit)
         };
@@ -632,10 +675,6 @@ fn normalize_repo_path(path: &str) -> Result<PathBuf> {
     Ok(cwd.join(raw))
 }
 
-fn normalize_node_id(id: &str) -> String {
-    id.split('#').next().unwrap_or(id).to_string()
-}
-
 fn normalize_task_node_id(repo_path: &Path, node_id: &str) -> String {
     let cleaned = node_id.replace('\\', "/");
     let mut parts = cleaned.rsplitn(4, ':');
@@ -692,7 +731,7 @@ fn gather_context_hits(graph: &CodeGraph, file_path: &str, line: usize) -> Optio
 }
 
 fn node_id_to_file_path(id: &str) -> String {
-    let cleaned = normalize_node_id(id);
+    let cleaned = crate::normalize_node_id(id);
     if let Some((file_path, _)) = cleaned.split_once(':') {
         file_path.to_string()
     } else {

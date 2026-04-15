@@ -235,10 +235,23 @@ impl Extractor {
     fn classify_typescript_node(&self, node: &Node, kind: &str) -> Option<(NodeType, String)> {
         match kind {
             "function_declaration" | "arrow_function" | "method_definition" => {
-                let name = self
+                let mut name_opt = self
                     .find_child_text(node, "identifier")
-                    .or_else(|| self.find_child_text(node, "property_identifier"))
-                    .unwrap_or_else(|| "anonymous".to_string());
+                    .or_else(|| self.find_child_text(node, "property_identifier"));
+
+                // If arrow function is defined via variable `const myFunc = () => {}`
+                if name_opt.is_none() && kind == "arrow_function" {
+                    if let Some(parent) = node.parent() {
+                        if parent.kind() == "variable_declarator" {
+                            name_opt = self.find_child_text(&parent, "identifier");
+                        } else if parent.kind() == "pair" {
+                            // Object literal: `myFunc: () => {}`
+                            name_opt = self.find_child_text(&parent, "property_identifier");
+                        }
+                    }
+                }
+
+                let name = name_opt.unwrap_or_else(|| "anonymous".to_string());
 
                 if kind == "method_definition" {
                     Some((NodeType::Method, name))
@@ -288,9 +301,14 @@ impl Extractor {
 
     /// Second pass: Extract function calls and link them to definitions.
     /// Call this AFTER `extract()` to populate the symbol table.
-    pub fn extract_references(&self, tree: &Tree, graph: &mut CodeGraph) -> Result<usize> {
+    pub fn extract_references(
+        &self,
+        tree: &Tree,
+        graph: &mut CodeGraph,
+        file_id: &str,
+    ) -> Result<usize> {
         let mut edges_created = 0;
-        self.walk_for_calls(tree.root_node(), graph, &mut edges_created)?;
+        self.walk_for_calls(tree.root_node(), graph, &mut edges_created, file_id)?;
         Ok(edges_created)
     }
 
@@ -299,6 +317,7 @@ impl Extractor {
         node: Node,
         graph: &mut CodeGraph,
         edges_created: &mut usize,
+        file_id: &str,
     ) -> Result<()> {
         let kind = node.kind();
 
@@ -312,9 +331,9 @@ impl Extractor {
 
         if is_call {
             if let Some(callee_name) = self.extract_callee_name(&node) {
-                // Find the calling function (parent context)
-                if let Some(caller_idx) = self.find_enclosing_function(&node, graph) {
-                    // Find the called function by name
+                // Find the calling function (parent context) within the same file
+                if let Some(caller_idx) = self.find_enclosing_function(&node, graph, file_id) {
+                    // Find the called function by name (can be anywhere in graph)
                     if let Some(callee_idx) = self.find_function_by_name(graph, &callee_name) {
                         // Don't create self-edges
                         if caller_idx != callee_idx {
@@ -329,7 +348,7 @@ impl Extractor {
         // Recurse into children
         let mut cursor = node.walk();
         for child in node.children(&mut cursor) {
-            self.walk_for_calls(child, graph, edges_created)?;
+            self.walk_for_calls(child, graph, edges_created, file_id)?;
         }
 
         Ok(())
@@ -379,13 +398,27 @@ impl Extractor {
         None
     }
 
-    /// Find the enclosing function node for a given AST node.
-    fn find_enclosing_function(&self, node: &Node, graph: &CodeGraph) -> Option<NodeIndex> {
+    /// Find the enclosing function node for a given AST node within its file.
+    fn find_enclosing_function(
+        &self,
+        node: &Node,
+        graph: &CodeGraph,
+        file_id: &str,
+    ) -> Option<NodeIndex> {
         let line = node.start_position().row + 1; // 1-indexed
+
+        // Pre-compute prefix for fast matching (e.g., "./src/main.rs:")
+        let prefix = format!("{}:", file_id);
 
         // Find the function node that contains this line
         for idx in graph.graph.node_indices() {
             let code_node = &graph.graph[idx];
+
+            // Critical fix: ensure we only match functions in the EXACT same file
+            if !code_node.id.starts_with(&prefix) && code_node.id != file_id {
+                continue;
+            }
+
             if matches!(code_node.node_type, NodeType::Function | NodeType::Method)
                 && code_node.start_line <= line
                 && code_node.end_line >= line

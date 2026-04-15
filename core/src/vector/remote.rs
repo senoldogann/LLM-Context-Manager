@@ -67,7 +67,7 @@ impl RemoteEmbedder {
             env::var("EMBEDDING_HOST").unwrap_or_else(|_| "http://127.0.0.1:11434".to_string());
 
         // Default model: nomic-embed-text is robust and standard for local RAG
-        let model = env::var("EMBEDDING_MODEL").unwrap_or_else(|_| "nomic-embed-text".to_string());
+        let model = env::var("EMBEDDING_MODEL").unwrap_or_else(|_| "mxbai-embed-large".to_string());
 
         // Detect provider: If explicit, use it. If base_url looks like Ollama, use it.
         // OTHERWISE DEFAULT TO OLLAMA (Local First approach).

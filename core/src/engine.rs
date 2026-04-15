@@ -1,5 +1,4 @@
 pub mod hybrid;
-pub mod predictive;
 
 use crate::engine::hybrid::HybridScorer;
 use crate::fs_utils::{detect_language, read_text_file_limited};
@@ -40,7 +39,6 @@ pub struct NodeNeighbors {
     pub contains: Vec<String>,  // Child nodes (for files/classes)
 }
 
-use crate::engine::predictive::SpeculativeCache;
 use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -48,9 +46,7 @@ use std::sync::Arc;
 /// The main intelligence engine for speculative retrieval.
 pub struct RetrievalEngine {
     pub graph: Arc<RwLock<CodeGraph>>,
-    store: LanceDbStore,
-    #[allow(dead_code)]
-    cache: Arc<SpeculativeCache>,
+    pub vector_store: LanceDbStore,
 }
 
 struct HybridCandidate {
@@ -61,11 +57,10 @@ struct HybridCandidate {
 }
 
 impl RetrievalEngine {
-    pub fn new(graph: Arc<RwLock<CodeGraph>>, store: LanceDbStore) -> Self {
+    pub fn new(graph: Arc<RwLock<CodeGraph>>, vector_store: LanceDbStore) -> Self {
         Self {
             graph,
-            store,
-            cache: Arc::new(SpeculativeCache::new(500)),
+            vector_store,
         }
     }
 
@@ -112,14 +107,14 @@ impl RetrievalEngine {
 
         if !ids.is_empty() {
             tracing::info!(count = ids.len(), "Indexing nodes into vector store");
-            self.store.add_documents(ids, texts).await?;
+            self.vector_store.add_documents(ids, texts).await?;
         }
 
         Ok(())
     }
 
     /// Performs incremental indexing using Git status.
-    pub async fn incremental_index(&self, project_root: &str) -> Result<()> {
+    pub async fn incremental_index(&self, project_root: &str) -> Result<crate::IndexStats> {
         let git = GitIntegrator::new(project_root)?;
         let changed_files = git.get_changed_files()?;
 
@@ -132,10 +127,10 @@ impl RetrievalEngine {
         &self,
         project_root: &str,
         changed_files: &[PathBuf],
-    ) -> Result<()> {
+    ) -> Result<crate::IndexStats> {
         if changed_files.is_empty() {
             tracing::info!("No changes detected.");
-            return Ok(());
+            return Ok(crate::IndexStats::default());
         }
 
         tracing::info!(
@@ -147,6 +142,7 @@ impl RetrievalEngine {
         let mut nodes_to_index = Vec::new(); // Collect new nodes for vector DB
         let mut indexed_node_ids = HashSet::new();
         let embed_data_files = embed_data_files_enabled();
+        let mut stats = crate::IndexStats::default();
 
         let root_path = std::fs::canonicalize(project_root)
             .unwrap_or_else(|_| std::path::PathBuf::from(project_root));
@@ -169,7 +165,7 @@ impl RetrievalEngine {
             // 1. GARBAGE COLLECTION: Delete old vectors for this file
             // Now that Extractor uses file-prefixed IDs ("./path/to/file:kind:row..."),
             // we can safely delete all vectors belonging to this file.
-            if let Err(e) = self.store.delete_by_prefix(&relative_path).await {
+            if let Err(e) = self.vector_store.delete_by_prefix(&relative_path).await {
                 tracing::warn!(
                     path = %relative_path,
                     error = %e,
@@ -197,6 +193,7 @@ impl RetrievalEngine {
                         error = %e,
                         "Skipping file during incremental indexing"
                     );
+                    stats.files_failed += 1;
                     continue;
                 }
             };
@@ -232,6 +229,7 @@ impl RetrievalEngine {
                         error = %e,
                         "Skipping file due to parse error"
                     );
+                    stats.files_failed += 1;
                     continue;
                 }
             };
@@ -242,7 +240,7 @@ impl RetrievalEngine {
             let mut graph = self.graph.write().await;
 
             if extractor.extract(&tree, &mut graph, &relative_path).is_ok() {
-                match extractor.extract_references(&tree, &mut graph) {
+                match extractor.extract_references(&tree, &mut graph, &relative_path) {
                     Ok(edges_created) => {
                         if edges_created > 0 {
                             tracing::debug!(
@@ -295,6 +293,9 @@ impl RetrievalEngine {
                         }
                     }
                 }
+                stats.files_indexed += 1;
+            } else {
+                stats.files_failed += 1;
             }
         }
 
@@ -316,17 +317,22 @@ impl RetrievalEngine {
 
             // Deduplicate?
 
-            self.store.add_documents(ids, texts).await?;
+            self.vector_store.add_documents(ids, texts).await?;
         }
 
         tracing::info!("Incremental update complete.");
 
-        Ok(())
+        stats.nodes_created = {
+            let graph = self.graph.read().await;
+            graph.graph.node_count()
+        };
+
+        Ok(stats)
     }
 
     /// Performs a purely semantic search using vectors.
     pub async fn search_code(&self, query: &str, limit: usize) -> Result<Vec<ContextSuggestion>> {
-        let hits = self.store.search(query, limit).await?;
+        let hits = self.vector_store.search(query, limit).await?;
 
         let mut results = Vec::new();
         for (id, content, score) in hits {
@@ -361,7 +367,7 @@ impl RetrievalEngine {
         limit: usize,
     ) -> Result<Vec<ContextSuggestion>> {
         let seed_limit = limit.saturating_mul(3).max(limit);
-        let hits = self.store.search(query, seed_limit).await?;
+        let hits = self.vector_store.search(query, seed_limit).await?;
         let include_data_files = embed_data_files_enabled();
 
         if hits.is_empty() {
@@ -373,7 +379,7 @@ impl RetrievalEngine {
         let mut semantic_content: HashMap<String, String> = HashMap::new();
 
         for (id, content, distance) in hits {
-            let node_id = normalize_node_id(&id);
+            let node_id = crate::normalize_node_id(&id);
             let sem_score = HybridScorer::semantic_score(distance);
 
             match semantic_scores.get_mut(&node_id) {
@@ -486,46 +492,44 @@ impl RetrievalEngine {
     /// Returns (calls: nodes this function calls, called_by: nodes that call this function)
     pub async fn get_node_neighbors(&self, id: &str) -> Option<NodeNeighbors> {
         use crate::graph::EdgeType;
-        // ... Logic update needed for hybrid ...
-        // For now, we still rely on finding index for RAM neighbors?
-        // CodeGraph::get_outgoing_edges returns a Vec.
+        use petgraph::visit::EdgeRef;
+        use petgraph::Direction;
 
         let mut calls = Vec::new();
         let mut called_by = Vec::new();
         let mut contains = Vec::new();
 
-        // Hybrid Outgoing Edges
-        let outgoing = { self.graph.read().await.get_outgoing_edges(id) };
+        let graph = self.graph.read().await;
 
-        for (target_id, weight) in outgoing {
-            // We need names? get_outgoing_edges returns TargetID.
-            // We need to lookup the node to get the name?
-            // Or Sled stored Edge has ID.
-            // RetrievalEngine::get_node_neighbors returns NAMES?
-            // "calls.push(target_node.name.clone())"
-
-            // This is expensive if we have to fetch every node to get its name.
-            // But for correctness, yes.
-            if let Some(node) = self.get_node_by_id(&target_id).await {
-                match weight {
-                    EdgeType::Calls => calls.push(node.name),
-                    EdgeType::Contains => contains.push(node.name),
+        // Use the index directly if it exists in RAM graph
+        if let Some(idx) = graph.find_node_index_by_id(id) {
+            // Outgoing edges
+            for edge in graph.graph.edges_directed(idx, Direction::Outgoing) {
+                let target_node = &graph.graph[edge.target()];
+                match edge.weight() {
+                    EdgeType::Calls => calls.push(target_node.name.clone()),
+                    EdgeType::Contains => contains.push(target_node.name.clone()),
                     _ => {}
                 }
             }
-        }
 
-        // Incoming edges (called_by) - Only RAM supported or scan?
-        // CodeGraph currently only exposes get_outgoing_edges from storage.
-        // So we keep RAM based incoming for now?
-        if let Some(idx) = self.graph.read().await.find_node_index_by_id(id) {
-            use petgraph::Direction;
-            // Incoming edges: Others CALL this node
-            let graph = self.graph.read().await;
+            // Incoming edges
             for edge in graph.graph.edges_directed(idx, Direction::Incoming) {
                 let source_node = &graph.graph[edge.source()];
                 if let EdgeType::Calls = edge.weight() {
                     called_by.push(source_node.name.clone());
+                }
+            }
+        } else {
+            // Fallback to storage-based edges if not in RAM
+            let outgoing = graph.get_outgoing_edges(id);
+            for (target_id, weight) in outgoing {
+                if let Some(node) = graph.find_node_by_id(&target_id) {
+                    match weight {
+                        EdgeType::Calls => calls.push(node.name.clone()),
+                        EdgeType::Contains => contains.push(node.name.clone()),
+                        _ => {}
+                    }
                 }
             }
         }
@@ -592,10 +596,6 @@ impl RetrievalEngine {
 
         Ok(suggestions)
     }
-}
-
-fn normalize_node_id(id: &str) -> String {
-    id.split('#').next().unwrap_or(id).to_string()
 }
 
 fn embed_data_files_enabled() -> bool {

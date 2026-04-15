@@ -152,7 +152,7 @@ impl LanceDbStore {
         }
 
         // 1. Generate Embeddings in batches for performance
-        const BATCH_SIZE: usize = 2;
+        const BATCH_SIZE: usize = 32;
         let mut embeddings: Vec<Vec<f32>> = Vec::with_capacity(all_chunks.len());
 
         let total_batches = all_chunks.len().div_ceil(BATCH_SIZE);

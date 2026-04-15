@@ -1,13 +1,12 @@
 pub mod engine;
-pub mod error;
+
 pub mod eval;
 mod fs_utils;
 pub mod git;
 pub mod graph;
-pub mod memory;
+
 pub mod parser;
-pub mod rpc;
-pub mod server;
+
 pub mod storage;
 pub mod vector;
 
@@ -208,7 +207,7 @@ pub async fn index_directory(path: &str, db_path: Option<&str>) -> Result<IndexS
 
 /// Updates an existing index incrementally (using Git or filesystem snapshots).
 /// If the index or graph does not exist, it falls back to a full index.
-pub async fn update_index(path: &str, db_path: Option<&str>) -> Result<()> {
+pub async fn update_index(path: &str, db_path: Option<&str>) -> Result<IndexStats> {
     use tracing::{info, warn};
 
     // Determine paths
@@ -234,8 +233,7 @@ pub async fn update_index(path: &str, db_path: Option<&str>) -> Result<()> {
             "Graph not found at {}, performing full index",
             graph_path.display()
         );
-        index_directory(path, db_path).await?;
-        return Ok(());
+        return index_directory(path, db_path).await;
     }
 
     // Load graph
@@ -254,8 +252,7 @@ pub async fn update_index(path: &str, db_path: Option<&str>) -> Result<()> {
     });
     if legacy_paths {
         info!("Legacy index detected. Performing full re-index.");
-        index_directory(path, db_path).await?;
-        return Ok(());
+        return index_directory(path, db_path).await;
     }
     let store = LanceDbStore::new(&db_path_str, "code_vectors").await?;
     let graph_arc = std::sync::Arc::new(tokio::sync::RwLock::new(graph));
@@ -277,7 +274,7 @@ pub async fn update_index(path: &str, db_path: Option<&str>) -> Result<()> {
                             warn!(error = %e, "Failed to save manifest");
                         }
                     }
-                    return Ok(());
+                    return Ok(IndexStats::default());
                 }
                 changed_files = files;
             }
@@ -304,7 +301,7 @@ pub async fn update_index(path: &str, db_path: Option<&str>) -> Result<()> {
 
         if changed_rel.is_empty() && deleted_rel.is_empty() {
             info!("No changes detected.");
-            return Ok(());
+            return Ok(IndexStats::default());
         }
 
         changed_files = changed_rel
@@ -318,7 +315,7 @@ pub async fn update_index(path: &str, db_path: Option<&str>) -> Result<()> {
 
     // Run incremental index
     info!("Starting incremental indexing for {}", path);
-    engine.incremental_index_paths(path, &changed_files).await?;
+    let stats = engine.incremental_index_paths(path, &changed_files).await?;
 
     // Save graph back to disk
     let updated_graph = graph_arc.read().await;
@@ -339,7 +336,7 @@ pub async fn update_index(path: &str, db_path: Option<&str>) -> Result<()> {
         warn!(error = %e, "Failed to save manifest");
     }
 
-    Ok(())
+    Ok(stats)
 }
 
 /// Statistics from an indexing operation
@@ -383,7 +380,7 @@ fn populate_graph_for_file(graph: &mut CodeGraph, file_path: &Path, file_id: &st
     extractor.extract(&tree, graph, file_id)?;
 
     // PASS 2: Extract references (Function Calls -> Calls edges)
-    let edges_created = extractor.extract_references(&tree, graph)?;
+    let edges_created = extractor.extract_references(&tree, graph, file_id)?;
     if edges_created > 0 {
         tracing::debug!("Linked {} call edges", edges_created);
     }
@@ -420,6 +417,10 @@ pub(crate) fn normalize_file_id(project_root: &Path, path: &Path) -> Option<Stri
         rel_str = format!("./{}", rel_str);
     }
     Some(rel_str)
+}
+
+pub(crate) fn normalize_node_id(id: &str) -> String {
+    id.split('#').next().unwrap_or(id).to_string()
 }
 
 fn file_id_to_path(project_root: &Path, file_id: &str) -> PathBuf {

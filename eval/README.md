@@ -12,6 +12,9 @@ ccm-cli eval --tasks eval/golden_tasks.v3.ccm.json
 ccm-cli eval --tasks eval/golden_tasks.v3.ccm.json --compare --report eval/report.json
 ```
 
+If the repository index is missing, the evaluator builds it automatically before scoring.
+`search_code` tasks still require a configured embedder.
+
 ## Files
 
 | File | Purpose |
@@ -54,14 +57,10 @@ ccm-cli eval --tasks eval/golden_tasks.v3.ccm.json --compare --report eval/repor
 | `read_graph` | Graph navigation | `node_id` |
 | `get_context` | Cursor-based retrieval | `file_path`, `line` |
 
-## Latest Results
+## Recorded Results
 
 ```
-Structural Pass Rate: 100.0%
-Hybrid Pass Rate:     100.0%
-Total Tasks:          56
-Passed:                56
-Failed:                0
+See the checked-in reports in `eval/report.*.json` for the latest recorded runs.
 ```
 
 ## Adding New Tasks

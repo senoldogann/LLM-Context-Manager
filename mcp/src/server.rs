@@ -17,10 +17,14 @@ use ccm_core::engine::RetrievalEngine;
 use ccm_core::graph::CodeGraph;
 use ccm_core::vector::store::LanceDbStore;
 
+const LATEST_PROTOCOL_VERSION: &str = "2025-11-25";
+const SUPPORTED_PROTOCOL_VERSIONS: [&str; 3] =
+    [LATEST_PROTOCOL_VERSION, "2025-06-18", "2025-03-26"];
+
 /// Holds the server's shared state.
 pub struct ServerState {
     pub default_engine: Arc<RetrievalEngine>,
-    engines: RwLock<EngineCache>,
+    pub engines: RwLock<EngineCache>,
     allowed_roots: Vec<PathBuf>,
     require_allowed_roots: bool,
 }
@@ -35,7 +39,7 @@ fn engine_cache_size() -> usize {
         .unwrap_or(DEFAULT_ENGINE_CACHE_SIZE)
 }
 
-struct EngineCache {
+pub struct EngineCache {
     map: HashMap<String, Arc<RetrievalEngine>>,
     order: VecDeque<String>,
     max: usize,
@@ -66,6 +70,11 @@ impl EngineCache {
 
         self.map.insert(key, engine.clone());
         engine
+    }
+
+    pub fn evict(&mut self, key: &str) {
+        self.map.remove(key);
+        self.order.retain(|k| k != key);
     }
 }
 
@@ -189,7 +198,7 @@ impl ServerState {
         tracing::info!(path = %path, "Loading context for project");
         // Assume db at path/data/ccm_db
         // Use the MCP specific DB path
-        let db_path = format!("{}/data/ccm_mcp_db", path);
+        let db_path = format!("{}/data/ccm_db", path);
 
         // Sanity check & Lazy Indexing
         if !std::path::Path::new(&db_path).exists() {
@@ -198,8 +207,8 @@ impl ServerState {
                 "Index not found. Triggering lazy indexing."
             );
 
-            // LAZY INDEXING: Index specifically for this request
-            match ccm_core::index_directory(path, Some(&db_path)).await {
+            // LAZY INDEXING: Incremental index for this request
+            match ccm_core::update_index(path, Some(&db_path)).await {
                 Ok(stats) => {
                     tracing::info!(nodes = stats.nodes_created, "Lazy indexing complete");
                 }
@@ -248,9 +257,9 @@ fn load_allowed_roots() -> Vec<PathBuf> {
         Vec::new()
     } else {
         let parts: Vec<&str> = if cfg!(windows) {
-            raw.split(';').collect()
+            raw.split([';', ',']).collect()
         } else {
-            raw.split([':', ';']).collect()
+            raw.split([':', ';', ',']).collect()
         };
 
         parts
@@ -316,7 +325,7 @@ pub async fn handle_request(
     let is_notification = request.id.is_none();
 
     match request.method.as_str() {
-        "initialize" => handle_initialize(request.id).map(Some),
+        "initialize" => handle_initialize(request.id, request.params.as_ref()).map(Some),
         "initialized" | "notifications/initialized" => {
             // Notifications don't get responses per JSON-RPC 2.0 spec
             if is_notification {
@@ -345,9 +354,9 @@ pub async fn handle_request(
     }
 }
 
-fn handle_initialize(id: Option<Value>) -> Result<JsonRpcResponse> {
+fn handle_initialize(id: Option<Value>, params: Option<&Value>) -> Result<JsonRpcResponse> {
     let result = json!({
-        "protocolVersion": "2025-06-18",
+        "protocolVersion": negotiate_protocol_version(params),
         "capabilities": ServerCapabilities {
             tools: ToolsCapability { list_changed: false },
         },
@@ -357,6 +366,21 @@ fn handle_initialize(id: Option<Value>) -> Result<JsonRpcResponse> {
         },
     });
     Ok(create_success_response(id, result))
+}
+
+fn negotiate_protocol_version(params: Option<&Value>) -> &'static str {
+    let requested = params
+        .and_then(|value| value.get("protocolVersion"))
+        .and_then(Value::as_str);
+
+    match requested {
+        Some(version) => SUPPORTED_PROTOCOL_VERSIONS
+            .iter()
+            .copied()
+            .find(|supported| *supported == version)
+            .unwrap_or(LATEST_PROTOCOL_VERSION),
+        None => LATEST_PROTOCOL_VERSION,
+    }
 }
 
 fn handle_list_tools(id: Option<Value>) -> Result<JsonRpcResponse> {
@@ -456,7 +480,7 @@ async fn handle_call_tool(
         "get_context" => tools::get_context(&engine, &arguments).await?,
         "search_code" => tools::search_code(&engine, &arguments).await?,
         "read_graph" => tools::read_graph(&engine, &arguments).await?,
-        "index_project" => tools::index_project(&arguments).await?,
+        "index_project" => tools::index_project(state, &arguments).await?,
         _ => {
             return Ok(create_error_response(
                 id,
@@ -467,4 +491,33 @@ async fn handle_call_tool(
     };
 
     Ok(create_success_response(id, serde_json::to_value(result)?))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::negotiate_protocol_version;
+    use serde_json::json;
+
+    #[test]
+    fn initialize_prefers_latest_when_client_omits_version() {
+        assert_eq!(negotiate_protocol_version(None), "2025-11-25");
+    }
+
+    #[test]
+    fn initialize_honors_supported_client_version() {
+        let params = json!({
+            "protocolVersion": "2025-06-18"
+        });
+
+        assert_eq!(negotiate_protocol_version(Some(&params)), "2025-06-18");
+    }
+
+    #[test]
+    fn initialize_falls_back_to_latest_for_unknown_versions() {
+        let params = json!({
+            "protocolVersion": "2024-11-05"
+        });
+
+        assert_eq!(negotiate_protocol_version(Some(&params)), "2025-11-25");
+    }
 }

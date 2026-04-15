@@ -1,5 +1,21 @@
 # Release Notes
 
+## v0.1.22 - MCP Compatibility & Eval Reliability (2026-04-15)
+
+### ✅ Installer Coverage
+- `npm install` flow now configures Codex through `codex mcp add` when the CLI is available.
+- Cursor config support now writes `~/.cursor/mcp.json`.
+
+### 🔌 MCP Compatibility
+- `initialize` now negotiates protocol versions instead of always returning `2025-06-18`.
+- Latest supported protocol is now `2025-11-25`, with compatibility for older clients.
+
+### 🧪 Evaluation Reliability
+- Evaluation bootstraps missing indexes before scoring instead of silently skipping the entire suite.
+- Golden tasks were refreshed to remove references to deleted files in the current repository layout.
+
+---
+
 ## v0.1.21 - Production Hardening (2026-02-03)
 
 ### ✅ Security & Release Integrity

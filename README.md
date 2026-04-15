@@ -51,7 +51,7 @@ Unlike tools that dump raw code, CCM injects **AI-Optimized Context**:
 - **Safe Defaults** - Configurable timeouts and file-size limits
 
 ### 🔌 Universal Compatibility (MCP)
-- **Plug & Play** - Works with Claude Desktop, Antigravity, Zed, Cursor
+- **Plug & Play** - Installer configures Codex, Cursor, Claude Desktop, and Antigravity
 - **Lazy Indexing** - Auto-indexes on first query
 - **Zero-Config** - Auto-detects project root
 
@@ -72,6 +72,9 @@ npx @senoldogann/context-manager index --path .
 ### 🔧 Manual Build (Rust)
 
 ```bash
+# If local source builds fail, install protoc first.
+# macOS: brew install protobuf
+
 git clone https://github.com/senoldogann/LLM-Context-Manager.git
 cd LLM-Context-Manager
 cargo build --release
@@ -196,7 +199,10 @@ ccm-cli eval --tasks eval/golden_tasks.v3.ccm.json
 ccm-cli eval --tasks eval/golden_tasks.json --compare
 ```
 
-**Latest Results:** 100% pass rate on golden tasks.
+If the evaluation index is missing, CCM bootstraps it automatically before scoring.
+Semantic `search_code` tasks still require a configured embedder.
+
+**Latest Recorded Results:** See the checked-in reports under [`eval/`](./eval).
 
 ---
 

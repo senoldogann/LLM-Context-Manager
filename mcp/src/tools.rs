@@ -101,7 +101,7 @@ pub async fn search_code(engine: &Arc<RetrievalEngine>, args: &Value) -> Result<
         });
     }
 
-    let hits = engine.search_code(query, 5).await?;
+    let hits = engine.search_code_hybrid(query, 5).await?;
     tracing::debug!(hits = hits.len(), query = %query, "search_code results");
 
     if hits.is_empty() {
@@ -142,7 +142,6 @@ pub async fn read_graph(engine: &Arc<RetrievalEngine>, args: &Value) -> Result<T
     let project_path = args.get("project_path").and_then(|v| v.as_str());
     let normalized_id = try_normalize_path(node_id, project_path);
 
-    // Try finding by normalized ID first, then raw ID
     // Try finding by normalized ID first, then raw ID
     let mut node_opt = engine.get_node_by_id(&normalized_id).await;
     if node_opt.is_none() {
@@ -236,7 +235,7 @@ fn try_normalize_path(path_str: &str, project_path: Option<&str>) -> String {
 
 /// Tool: index_project
 /// Manually triggers a re-index of the specified project.
-pub async fn index_project(args: &Value) -> Result<ToolResult> {
+pub async fn index_project(state: &crate::server::ServerState, args: &Value) -> Result<ToolResult> {
     let project_path = args
         .get("project_path")
         .and_then(|v| v.as_str())
@@ -244,16 +243,22 @@ pub async fn index_project(args: &Value) -> Result<ToolResult> {
 
     tracing::info!(path = %project_path, "Starting manual index");
 
-    // Default db path relative to project
+    // Shared db path inside project
     let db_path = std::path::Path::new(project_path)
-        .join("data/ccm_mcp_db") // Use mcp specific db folder to separate from CLI
+        .join("data/ccm_db") // Use shared db folder
         .to_string_lossy()
         .to_string();
 
-    match ccm_core::index_directory(project_path, Some(&db_path)).await {
+    match ccm_core::update_index(project_path, Some(&db_path)).await {
         Ok(stats) => {
+            // Invalidate the cache for this project so the next search uses the fresh index
+            {
+                let mut write = state.engines.write().await;
+                write.evict(project_path);
+            }
+
             let message = format!(
-                "Debugging: Indexing completed successfully.\n\nStats:\n- Files Indexed: {}\n- Files Failed: {}\n- Nodes Created: {}\n\nThe project is now ready for semantic search and graph navigation.",
+                "Indexing completed successfully.\n\nStats:\n- Files Indexed: {}\n- Files Failed: {}\n- Nodes Created: {}\n\nThe project is now ready for semantic search and graph navigation.",
                 stats.files_indexed, stats.files_failed, stats.nodes_created
             );
             Ok(ToolResult {
