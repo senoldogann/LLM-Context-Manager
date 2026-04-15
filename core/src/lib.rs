@@ -147,6 +147,9 @@ pub async fn index_directory(path: &str, db_path: Option<&str>) -> Result<IndexS
                 let Some(file_id) = normalize_file_id(&project_root, file_path) else {
                     continue;
                 };
+                if is_internal_index_file(&file_id) {
+                    continue;
+                }
 
                 if let Some(fp) = fingerprint_for_path(file_path) {
                     manifest.files.insert(file_id.clone(), fp);
@@ -423,6 +426,12 @@ pub(crate) fn normalize_node_id(id: &str) -> String {
     id.split('#').next().unwrap_or(id).to_string()
 }
 
+fn is_internal_index_file(file_id: &str) -> bool {
+    file_id == "./data/ccm_graph.json"
+        || file_id == "./data/ccm_manifest.json"
+        || file_id.starts_with("./data/ccm_db/")
+}
+
 fn file_id_to_path(project_root: &Path, file_id: &str) -> PathBuf {
     let rel = file_id.trim_start_matches("./");
     project_root.join(rel)
@@ -484,6 +493,9 @@ fn build_manifest(project_root: &Path) -> Result<IndexManifest> {
         let Some(file_id) = normalize_file_id(project_root, file_path) else {
             continue;
         };
+        if is_internal_index_file(&file_id) {
+            continue;
+        }
 
         if let Some(fp) = fingerprint_for_path(file_path) {
             manifest.files.insert(file_id, fp);
@@ -526,6 +538,10 @@ fn update_manifest_for_paths(manifest: &mut IndexManifest, project_root: &Path, 
         let Some(file_id) = normalize_file_id(project_root, &abs) else {
             continue;
         };
+        if is_internal_index_file(&file_id) {
+            manifest.files.remove(&file_id);
+            continue;
+        }
 
         if abs.exists() {
             if let Some(fp) = fingerprint_for_path(&abs) {

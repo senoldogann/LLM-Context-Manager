@@ -8,6 +8,46 @@ use std::sync::Arc;
 use crate::protocol::{ToolResult, ToolResultContent};
 use ccm_core::engine::{CursorPosition, RetrievalEngine};
 
+fn format_suggestion_metadata(suggestion: &ccm_core::engine::ContextSuggestion) -> String {
+    let mut metadata = Vec::new();
+
+    if let Some(node_id) = &suggestion.node_id {
+        metadata.push(format!("**Node ID:** {}", node_id));
+    }
+    if let Some(file_path) = &suggestion.file_path {
+        metadata.push(format!("**File:** {}", file_path));
+    }
+    if let Some(node_type) = &suggestion.node_type {
+        metadata.push(format!("**Node Type:** {}", node_type));
+    }
+    match (suggestion.start_line, suggestion.end_line) {
+        (Some(start), Some(end)) => metadata.push(format!("**Range:** {}-{}", start, end)),
+        (Some(start), None) => metadata.push(format!("**Line:** {}", start)),
+        _ => {}
+    }
+
+    if metadata.is_empty() {
+        String::new()
+    } else {
+        format!("{}\n\n", metadata.join("\n"))
+    }
+}
+
+fn format_suggestions_output(suggestions: &[ccm_core::engine::ContextSuggestion]) -> String {
+    let mut output = String::new();
+    for suggestion in suggestions {
+        output.push_str(&format!(
+            "## {} (Score: {:.2})\n**Reason:** {}\n{}\n```\n{}\n```\n\n---\n",
+            suggestion.title,
+            suggestion.relevance_score,
+            suggestion.reason,
+            format_suggestion_metadata(suggestion),
+            suggestion.content
+        ));
+    }
+    output
+}
+
 /// Tool: get_context
 /// Returns context for a given file path and line number.
 pub async fn get_context(engine: &Arc<RetrievalEngine>, args: &Value) -> Result<ToolResult> {
@@ -55,18 +95,10 @@ pub async fn get_context(engine: &Arc<RetrievalEngine>, args: &Value) -> Result<
         });
     }
 
-    let mut output = String::new();
-    for suggestion in suggestions {
-        output.push_str(&format!(
-            "## {} (Score: {:.2})\n**Reason:** {}\n\n```\n{}\n```\n\n---\n",
-            suggestion.title, suggestion.relevance_score, suggestion.reason, suggestion.content
-        ));
-    }
-
     Ok(ToolResult {
         content: vec![ToolResultContent {
             content_type: "text".to_string(),
-            text: output,
+            text: format_suggestions_output(&suggestions),
         }],
         is_error: None,
     })
@@ -91,7 +123,8 @@ pub async fn search_code(engine: &Arc<RetrievalEngine>, args: &Value) -> Result<
         });
     }
 
-    let hits = engine.search_code_hybrid(query, 5).await?;
+    let limit = args.get("limit").and_then(|v| v.as_u64()).unwrap_or(5) as usize;
+    let hits = engine.search_code_hybrid(query, limit.max(1)).await?;
     tracing::debug!(hits = hits.len(), query = %query, "search_code results");
 
     if hits.is_empty() {
@@ -104,18 +137,50 @@ pub async fn search_code(engine: &Arc<RetrievalEngine>, args: &Value) -> Result<
         });
     }
 
-    let mut output = String::new();
-    for hit in hits {
-        output.push_str(&format!(
-            "## {} (Score: {:.2})\n**Reason:** {}\n\n```\n{}\n```\n\n---\n",
-            hit.title, hit.relevance_score, hit.reason, hit.content
-        ));
+    Ok(ToolResult {
+        content: vec![ToolResultContent {
+            content_type: "text".to_string(),
+            text: format_suggestions_output(&hits),
+        }],
+        is_error: None,
+    })
+}
+
+/// Tool: find_nodes
+/// Finds graph nodes by name, path, or node ID fragment.
+pub async fn find_nodes(engine: &Arc<RetrievalEngine>, args: &Value) -> Result<ToolResult> {
+    let query = args
+        .get("query")
+        .and_then(|v| v.as_str())
+        .ok_or_else(|| anyhow::anyhow!("Missing query argument"))?;
+
+    if query.trim().is_empty() {
+        return Ok(ToolResult {
+            content: vec![ToolResultContent {
+                content_type: "text".to_string(),
+                text: "Error: 'query' cannot be empty. Please provide a node name, file path fragment, or node ID fragment.".to_string(),
+            }],
+            is_error: Some(true),
+        });
+    }
+
+    let limit = args.get("limit").and_then(|v| v.as_u64()).unwrap_or(10) as usize;
+    let matches = engine.find_graph_nodes(query, limit.max(1)).await;
+
+    if matches.is_empty() {
+        return Ok(ToolResult {
+            content: vec![ToolResultContent {
+                content_type: "text".to_string(),
+                text: format!("No graph nodes found for query: '{}'", query),
+            }],
+            is_error: None,
+        });
     }
 
     Ok(ToolResult {
         content: vec![ToolResultContent {
             content_type: "text".to_string(),
-            text: output,
+            text: format_suggestions_output(&matches),
         }],
         is_error: None,
     })
@@ -289,10 +354,17 @@ pub async fn index_project(state: &crate::server::ServerState, args: &Value) -> 
                 write.evict(project_path);
             }
 
-            let message = format!(
-                "Indexing completed successfully.\n\nStats:\n- Files Indexed: {}\n- Files Failed: {}\n- Nodes Created: {}\n\nThe project is now ready for semantic search and graph navigation.",
-                stats.files_indexed, stats.files_failed, stats.nodes_created
-            );
+            let message = if stats.files_indexed == 0
+                && stats.files_failed == 0
+                && stats.nodes_created == 0
+            {
+                "No changes detected. Existing index is already up to date.".to_string()
+            } else {
+                format!(
+                    "Project index refreshed successfully.\n\nStats:\n- Files Indexed: {}\n- Files Failed: {}\n- Nodes Created: {}\n\nThe project is ready for semantic search and graph navigation.",
+                    stats.files_indexed, stats.files_failed, stats.nodes_created
+                )
+            };
             Ok(ToolResult {
                 content: vec![ToolResultContent {
                     content_type: "text".to_string(),

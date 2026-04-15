@@ -25,6 +25,11 @@ pub struct CursorPosition {
 /// A suggested code context item.
 #[derive(Debug, Clone)]
 pub struct ContextSuggestion {
+    pub node_id: Option<String>,
+    pub file_path: Option<String>,
+    pub start_line: Option<usize>,
+    pub end_line: Option<usize>,
+    pub node_type: Option<String>,
     pub title: String,
     pub content: String,
     pub relevance_score: f32,
@@ -347,9 +352,26 @@ impl RetrievalEngine {
             let mut title = "Semantic Match".to_string();
             if let Some(node) = self.get_node_by_id(node_id).await {
                 title = format!("{:?}: {}", node.node_type, node.name);
+                results.push(ContextSuggestion {
+                    node_id: Some(node.id.clone()),
+                    file_path: Some(extract_file_path(&node.id)),
+                    start_line: Some(node.start_line),
+                    end_line: Some(node.end_line),
+                    node_type: Some(format!("{:?}", node.node_type)),
+                    title,
+                    content,
+                    relevance_score: 1.0 - score, // Rough normalization
+                    reason: format!("Vector Similarity (Dist: {:.4})", score),
+                });
+                continue;
             }
 
             results.push(ContextSuggestion {
+                node_id: Some(node_id.to_string()),
+                file_path: Some(extract_file_path(node_id)),
+                start_line: None,
+                end_line: None,
+                node_type: None,
                 title,
                 content,
                 relevance_score: 1.0 - score, // Rough normalization
@@ -458,6 +480,11 @@ impl RetrievalEngine {
 
                 let confidence = scorer.confidence(candidate.combined_score, top1, top2);
                 results.push(ContextSuggestion {
+                    node_id: Some(node.id.clone()),
+                    file_path: Some(extract_file_path(&node.id)),
+                    start_line: Some(node.start_line),
+                    end_line: Some(node.end_line),
+                    node_type: Some(format!("{:?}", node.node_type)),
                     title: format!("{:?}: {}", node.node_type, node.name),
                     content: node.content.clone(),
                     relevance_score: candidate.combined_score,
@@ -469,6 +496,11 @@ impl RetrievalEngine {
             } else if let Some(content) = semantic_content.get(&candidate.id) {
                 let confidence = scorer.confidence(candidate.combined_score, top1, top2);
                 results.push(ContextSuggestion {
+                    node_id: Some(candidate.id.clone()),
+                    file_path: Some(extract_file_path(&candidate.id)),
+                    start_line: None,
+                    end_line: None,
+                    node_type: None,
                     title: "Semantic Match".to_string(),
                     content: content.clone(),
                     relevance_score: candidate.combined_score,
@@ -541,6 +573,43 @@ impl RetrievalEngine {
         })
     }
 
+    pub async fn find_graph_nodes(&self, query: &str, limit: usize) -> Vec<ContextSuggestion> {
+        let normalized_query = query.trim().to_lowercase();
+        if normalized_query.is_empty() {
+            return Vec::new();
+        }
+
+        let graph = self.graph.read().await;
+        let mut results = Vec::new();
+
+        for node in graph.graph.node_weights() {
+            let node_name = node.name.to_lowercase();
+            let node_id = node.id.to_lowercase();
+            let file_path = extract_file_path(&node.id);
+
+            if node_name.contains(&normalized_query)
+                || node_id.contains(&normalized_query)
+                || file_path.to_lowercase().contains(&normalized_query)
+            {
+                results.push(ContextSuggestion {
+                    node_id: Some(node.id.clone()),
+                    file_path: Some(file_path),
+                    start_line: Some(node.start_line),
+                    end_line: Some(node.end_line),
+                    node_type: Some(format!("{:?}", node.node_type)),
+                    title: format!("{:?}: {}", node.node_type, node.name),
+                    content: node.content.clone(),
+                    relevance_score: 1.0,
+                    reason: "Graph node match".to_string(),
+                });
+            }
+        }
+
+        results.sort_by(|a, b| a.title.cmp(&b.title));
+        results.truncate(limit);
+        results
+    }
+
     /// Predicts relevant code context based on the user's cursor position.
     /// Uses a hybrid approach: Graph (Structural) + Vector (Semantic).
     pub async fn predict_context(&self, cursor: &CursorPosition) -> Result<Vec<ContextSuggestion>> {
@@ -558,6 +627,11 @@ impl RetrievalEngine {
 
             // Add the current node itself as context
             suggestions.push(ContextSuggestion {
+                node_id: Some(current_node.id.clone()),
+                file_path: Some(extract_file_path(&current_node.id)),
+                start_line: Some(current_node.start_line),
+                end_line: Some(current_node.end_line),
+                node_type: Some(format!("{:?}", current_node.node_type)),
                 title: format!("Current: {}", current_node.name),
                 content: current_node.content.clone(),
                 relevance_score: 1.0,
@@ -574,6 +648,11 @@ impl RetrievalEngine {
                 }
 
                 suggestions.push(ContextSuggestion {
+                    node_id: Some(neighbor.id.clone()),
+                    file_path: Some(extract_file_path(&neighbor.id)),
+                    start_line: Some(neighbor.start_line),
+                    end_line: Some(neighbor.end_line),
+                    node_type: Some(format!("{:?}", neighbor.node_type)),
                     title: format!("Related: {}", neighbor.name),
                     content: neighbor.content.clone(),
                     relevance_score: 0.8,
@@ -596,6 +675,14 @@ impl RetrievalEngine {
 
         Ok(suggestions)
     }
+}
+
+fn extract_file_path(node_id: &str) -> String {
+    node_id
+        .rsplitn(4, ':')
+        .last()
+        .unwrap_or(node_id)
+        .to_string()
 }
 
 fn embed_data_files_enabled() -> bool {

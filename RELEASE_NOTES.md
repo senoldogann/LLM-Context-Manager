@@ -1,5 +1,19 @@
 # Release Notes
 
+## v0.1.27 - MCP Tooling UX & Incremental Index Fixes (2026-04-15)
+
+### 🔎 Better MCP Tool Chaining
+- `search_code` now supports a configurable result limit and returns node IDs plus location metadata.
+- Added `find_nodes` so agents can discover graph node IDs before calling `read_graph`.
+- `get_context` now includes the same metadata surface, making graph follow-ups more natural.
+
+### ♻️ Index Refresh Accuracy
+- `index_project` now bypasses lazy engine bootstrapping so an explicit refresh no longer pre-indexes behind the scenes.
+- Clear "already up to date" messaging is now returned when no changes are detected.
+- Internal index artifacts are excluded from manifest diffing so incremental refreshes do not re-index CCM's own generated files.
+
+---
+
 ## v0.1.26 - Publish Pipeline Hardening (2026-04-15)
 
 ### 🚀 npm Release Reliability

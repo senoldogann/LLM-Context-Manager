@@ -190,6 +190,11 @@ Enable `CCM_EMBED_DATA_FILES=1` to include them in semantic search.
 
 ## 📝 Changelog
 
+### v0.1.27
+- ✅ `search_code` now returns node IDs and location metadata, with configurable limits
+- ✅ New `find_nodes` MCP tool for graph node discovery before `read_graph`
+- ✅ `index_project` now reports clean no-op refreshes and ignores internal CCM index files
+
 ### v0.1.26
 - ✅ Trusted publishing workflow updated for modern Node and npm requirements
 - ✅ Release jobs now skip npm publish when the same version is already live

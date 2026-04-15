@@ -54,7 +54,7 @@ fn mcp_index_project_then_get_context() -> Result<(), Box<dyn std::error::Error>
     stdin.flush()?;
 
     reader.read_line(&mut line)?;
-    assert!(line.contains("Indexing completed successfully"));
+    assert!(line.contains("Project index refreshed successfully"));
     line.clear();
 
     let context_req = json!({
@@ -75,6 +75,162 @@ fn mcp_index_project_then_get_context() -> Result<(), Box<dyn std::error::Error>
 
     reader.read_line(&mut line)?;
     assert!(line.contains("Current:"));
+
+    let _ = child.kill();
+
+    Ok(())
+}
+
+#[test]
+fn mcp_index_project_reports_when_index_is_current() -> Result<(), Box<dyn std::error::Error>> {
+    let dir = tempdir()?;
+    let project_root = dir.path();
+
+    fs::write(project_root.join("main.rs"), "fn foo() {}\n")?;
+    fs::create_dir_all(project_root.join("data"))?;
+
+    let mut cmd = Command::new(assert_cmd::cargo::cargo_bin!("ccm-mcp"));
+    cmd.env("CCM_DISABLE_EMBEDDER", "1")
+        .env("CCM_MCP_DEBUG", "0")
+        .env("CCM_ALLOWED_ROOTS", project_root.to_string_lossy().as_ref())
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null());
+
+    let mut child = cmd.spawn()?;
+    let mut stdin = child.stdin.take().unwrap();
+    let stdout = child.stdout.take().unwrap();
+    let mut reader = BufReader::new(stdout);
+
+    let init_req = json!({
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "initialize",
+        "params": {}
+    });
+    writeln!(stdin, "{}", init_req)?;
+    stdin.flush()?;
+
+    let mut line = String::new();
+    reader.read_line(&mut line)?;
+    assert!(line.contains("\"result\""));
+    line.clear();
+
+    let index_req = json!({
+        "jsonrpc": "2.0",
+        "id": 2,
+        "method": "tools/call",
+        "params": {
+            "name": "index_project",
+            "arguments": {
+                "project_path": project_root.to_string_lossy()
+            }
+        }
+    });
+    writeln!(stdin, "{}", index_req)?;
+    stdin.flush()?;
+
+    reader.read_line(&mut line)?;
+    assert!(line.contains("Project index refreshed successfully"));
+    line.clear();
+
+    let reindex_req = json!({
+        "jsonrpc": "2.0",
+        "id": 3,
+        "method": "tools/call",
+        "params": {
+            "name": "index_project",
+            "arguments": {
+                "project_path": project_root.to_string_lossy()
+            }
+        }
+    });
+    writeln!(stdin, "{}", reindex_req)?;
+    stdin.flush()?;
+
+    reader.read_line(&mut line)?;
+    assert!(line.contains("No changes detected. Existing index is already up to date."));
+
+    let _ = child.kill();
+
+    Ok(())
+}
+
+#[test]
+fn mcp_find_nodes_returns_node_metadata() -> Result<(), Box<dyn std::error::Error>> {
+    let dir = tempdir()?;
+    let project_root = dir.path();
+
+    fs::write(
+        project_root.join("main.rs"),
+        "fn foo() {}\nfn bar() { foo(); }\n",
+    )?;
+    fs::create_dir_all(project_root.join("data"))?;
+
+    let mut cmd = Command::new(assert_cmd::cargo::cargo_bin!("ccm-mcp"));
+    cmd.env("CCM_DISABLE_EMBEDDER", "1")
+        .env("CCM_MCP_DEBUG", "0")
+        .env("CCM_ALLOWED_ROOTS", project_root.to_string_lossy().as_ref())
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null());
+
+    let mut child = cmd.spawn()?;
+    let mut stdin = child.stdin.take().unwrap();
+    let stdout = child.stdout.take().unwrap();
+    let mut reader = BufReader::new(stdout);
+
+    let init_req = json!({
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "initialize",
+        "params": {}
+    });
+    writeln!(stdin, "{}", init_req)?;
+    stdin.flush()?;
+
+    let mut line = String::new();
+    reader.read_line(&mut line)?;
+    assert!(line.contains("\"result\""));
+    line.clear();
+
+    let index_req = json!({
+        "jsonrpc": "2.0",
+        "id": 2,
+        "method": "tools/call",
+        "params": {
+            "name": "index_project",
+            "arguments": {
+                "project_path": project_root.to_string_lossy()
+            }
+        }
+    });
+    writeln!(stdin, "{}", index_req)?;
+    stdin.flush()?;
+
+    reader.read_line(&mut line)?;
+    assert!(line.contains("Project index"));
+    line.clear();
+
+    let find_req = json!({
+        "jsonrpc": "2.0",
+        "id": 3,
+        "method": "tools/call",
+        "params": {
+            "name": "find_nodes",
+            "arguments": {
+                "query": "foo",
+                "project_path": project_root.to_string_lossy()
+            }
+        }
+    });
+    writeln!(stdin, "{}", find_req)?;
+    stdin.flush()?;
+
+    reader.read_line(&mut line)?;
+    assert!(line.contains("**Node ID:**"));
+    assert!(line.contains("**File:**"));
+    assert!(line.contains("foo"));
 
     let _ = child.kill();
 

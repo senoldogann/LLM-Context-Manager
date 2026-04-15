@@ -400,11 +400,25 @@ fn handle_list_tools(id: Option<Value>) -> Result<JsonRpcResponse> {
         },
         ToolDefinition {
             name: "search_code".to_string(),
-            description: Some("Search the codebase using vector similarity.".to_string()),
+            description: Some("Search the codebase using hybrid semantic and graph-aware ranking. Returns node IDs and location metadata so results can be chained into read_graph.".to_string()),
             input_schema: serde_json::json!({
                 "type": "object",
                 "properties": {
                     "query": { "type": "string", "description": "The search query (e.g. 'how does authentication work?')" },
+                    "limit": { "type": "integer", "description": "Optional maximum number of results to return. Defaults to 5." },
+                    "project_path": { "type": "string", "description": "Optional absolute path to the project root. If provided, uses the index in that project." }
+                },
+                "required": ["query"]
+            }),
+        },
+        ToolDefinition {
+            name: "find_nodes".to_string(),
+            description: Some("Find graph nodes by name, file path, or node ID fragment. Use this before read_graph when you do not already know the node ID.".to_string()),
+            input_schema: serde_json::json!({
+                "type": "object",
+                "properties": {
+                    "query": { "type": "string", "description": "A node name, file path fragment, or node ID fragment to search for." },
+                    "limit": { "type": "integer", "description": "Optional maximum number of matches to return. Defaults to 10." },
                     "project_path": { "type": "string", "description": "Optional absolute path to the project root. If provided, uses the index in that project." }
                 },
                 "required": ["query"]
@@ -424,7 +438,7 @@ fn handle_list_tools(id: Option<Value>) -> Result<JsonRpcResponse> {
         },
         ToolDefinition {
             name: "index_project".to_string(),
-            description: Some("Trigger a full re-index of the project. Use this when you start working on a project or when massive changes happen.".to_string()),
+            description: Some("Refresh the project index. Usually performs an incremental update and reports when the existing index is already up to date.".to_string()),
             input_schema: serde_json::json!({
                 "type": "object",
                 "properties": {
@@ -462,6 +476,9 @@ async fn handle_call_tool(
                 "Project path is not allowed. Set CCM_ALLOWED_ROOTS (or disable CCM_REQUIRE_ALLOWED_ROOTS).",
             ));
         }
+
+        let result = tools::index_project(state, &arguments).await?;
+        return Ok(create_success_response(id, json!(result)));
     }
 
     // Resolve Engine
@@ -480,8 +497,8 @@ async fn handle_call_tool(
     let result = match tool_name {
         "get_context" => tools::get_context(&engine, &arguments).await?,
         "search_code" => tools::search_code(&engine, &arguments).await?,
+        "find_nodes" => tools::find_nodes(&engine, &arguments).await?,
         "read_graph" => tools::read_graph(&engine, &arguments).await?,
-        "index_project" => tools::index_project(state, &arguments).await?,
         _ => {
             return Ok(create_error_response(
                 id,
