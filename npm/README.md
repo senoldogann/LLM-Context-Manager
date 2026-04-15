@@ -190,6 +190,11 @@ Enable `CCM_EMBED_DATA_FILES=1` to include them in semantic search.
 
 ## 📝 Changelog
 
+### v0.1.26
+- ✅ Trusted publishing workflow updated for modern Node and npm requirements
+- ✅ Release jobs now skip npm publish when the same version is already live
+- ✅ Safer wrapper binary downloads during concurrent first-run installs
+
 ### v0.1.25
 - ✅ npm publish now uses GitHub Actions trusted publishing (OIDC)
 - ✅ Clearer first-run verification and release reliability docs

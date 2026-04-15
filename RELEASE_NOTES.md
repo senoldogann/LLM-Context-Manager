@@ -1,5 +1,18 @@
 # Release Notes
 
+## v0.1.26 - Publish Pipeline Hardening (2026-04-15)
+
+### 🚀 npm Release Reliability
+- Updated the npm publish workflow to match npm trusted publishing requirements with modern GitHub Actions and Node 24.
+- Added a registry check so release jobs skip npm publish when the version is already live instead of failing the whole release.
+- Added explicit repository metadata to the npm package manifest for trusted publisher validation.
+
+### 📦 Wrapper Stability
+- Hardened binary downloads for concurrent first-run installs by creating unique temporary files per process.
+- Ensured wrapper download paths create parent directories before writing binary payloads.
+
+---
+
 ## v0.1.25 - Trusted Publishing & Onboarding Clarity (2026-04-15)
 
 ### 🚀 Publish Flow

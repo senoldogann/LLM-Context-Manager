@@ -7,7 +7,7 @@ const os = require('os');
 const https = require('https');
 const crypto = require('crypto');
 
-const VERSION = "0.1.25";
+const VERSION = "0.1.26";
 const REPO = 'senoldogann/LLM-Context-Manager';
 const BIN_DIR = path.join(os.homedir(), '.ccm', 'bin');
 const CHECKSUMS_FILE = 'checksums.txt';
@@ -159,6 +159,10 @@ function installCodexConfig() {
     return true;
 }
 
+function createUniqueTmpPath(binPath) {
+    return `${binPath}.${process.pid}.${Date.now()}.tmp`;
+}
+
 async function getBinaryFor(commandName) {
     const platform = os.platform();
     const arch = os.arch();
@@ -193,12 +197,16 @@ async function getBinaryFor(commandName) {
     }
 
     const url = `https://github.com/${REPO}/releases/download/v${VERSION}/${commandName}-${target}`;
-    const tmpPath = `${binPath}.tmp`;
+    const tmpPath = createUniqueTmpPath(binPath);
 
     try {
         await downloadFile(url, tmpPath);
         await verifyChecksum(tmpPath, [remoteFilename, binFilename]);
         fs.chmodSync(tmpPath, '755');
+        if (fs.existsSync(binPath)) {
+            fs.unlinkSync(tmpPath);
+            return binPath;
+        }
         fs.renameSync(tmpPath, binPath);
     } catch (err) {
         if (fs.existsSync(tmpPath)) fs.unlinkSync(tmpPath);
@@ -228,6 +236,7 @@ async function getBinary() {
 
 function downloadFile(url, dest) {
     return new Promise((resolve, reject) => {
+        fs.mkdirSync(path.dirname(dest), { recursive: true });
         https.get(url, (response) => {
             if (response.statusCode === 302 || response.statusCode === 301) {
                 try {
