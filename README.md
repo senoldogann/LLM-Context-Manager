@@ -1,5 +1,7 @@
 # Cognitive Codebase Matrix (CCM)
 
+English | [Turkce](./README.tr.md)
+
 > **🧠 The Neural Backbone for Autonomous AI Agents**
 
 > Bridge the gap between your codebase and your AI editor. CCM transforms static source code into a dynamic, queryable Knowledge Graph, enabling AI agents to navigate, understand, and reason about your project with surgical precision.
@@ -238,13 +240,18 @@ Semantic `search_code` tasks still require a configured embedder.
 ## Resources
 
 - **NPM Package:** [@senoldogann/context-manager](https://www.npmjs.com/package/@senoldogann/context-manager)
+- **Turkish README:** [README.tr.md](./README.tr.md)
 - **Getting Started:** [GETTING_STARTED.md](GETTING_STARTED.md)
 - **Contributing:** [CONTRIBUTING.md](CONTRIBUTING.md)
+
+---
+
+## Star History
+
+[![Star History Chart](https://api.star-history.com/svg?repos=senoldogann/LLM-Context-Manager&type=Date)](https://star-history.com/#senoldogann/LLM-Context-Manager&Date)
 
 ---
 
 ## License
 
 MIT License - Open source and free to use.
-
-SENOL DOGAN ❤️ 

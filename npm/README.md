@@ -152,6 +152,8 @@ Enable `CCM_EMBED_DATA_FILES=1` to include them in semantic search.
 
 **Source:** https://github.com/senoldogann/LLM-Context-Manager
 
+**Docs:** [English README](https://github.com/senoldogann/LLM-Context-Manager/blob/main/README.md) | [Turkish README](https://github.com/senoldogann/LLM-Context-Manager/blob/main/README.tr.md)
+
 ---
 
 ## 📝 Changelog
