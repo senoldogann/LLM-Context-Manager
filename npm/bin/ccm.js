@@ -7,7 +7,7 @@ const os = require('os');
 const https = require('https');
 const crypto = require('crypto');
 
-const VERSION = "0.1.23";
+const VERSION = "0.1.24";
 const REPO = 'senoldogann/LLM-Context-Manager';
 const BIN_DIR = path.join(os.homedir(), '.ccm', 'bin');
 const CHECKSUMS_FILE = 'checksums.txt';

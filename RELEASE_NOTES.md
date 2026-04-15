@@ -1,5 +1,13 @@
 # Release Notes
 
+## v0.1.24 - Release Pipeline Reliability (2026-04-15)
+
+### 🚀 Release Workflow
+- Replaced GitHub API-backed `setup-protoc` with native package manager installation on Linux, macOS, and Windows runners.
+- Updated checkout and Node setup actions to current major versions for better long-term runner compatibility.
+
+---
+
 ## v0.1.23 - MCP Transport Hardening (2026-04-15)
 
 ### 🔒 Transport & Input Safety

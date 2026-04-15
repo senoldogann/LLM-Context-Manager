@@ -156,6 +156,10 @@ Enable `CCM_EMBED_DATA_FILES=1` to include them in semantic search.
 
 ## 📝 Changelog
 
+### v0.1.24
+- ✅ Native `protoc` installation in GitHub Actions release builds
+- ✅ Updated release workflow actions for newer runner compatibility
+
 ### v0.1.23
 - ✅ JSON-RPC request size limit for safer MCP stdio transport
 - ✅ Sensitive value redaction in MCP debug logs
