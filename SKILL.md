@@ -2,6 +2,9 @@
 name: context-manager
 description: "Cognitive Codebase Matrix (CCM) MCP skill for deep codebase intelligence. Gives AI agents a queryable knowledge graph over any project: semantic hybrid search, call chain tracing, blast-radius analysis, and cursor-aware context retrieval — all via 9 MCP tools. WHEN: understand a large codebase, find callers/callees, map blast radius, retrieve cursor context, trace a call chain, inspect a graph node, get recently changed code, or index a project before starting work."
 origin: https://github.com/senoldogann/LLM-Context-Manager
+terminal_state: invoke_tool_chain("index_project", then search/context/graph/impact tools based on task)
+version: 1.0
+license: MIT
 ---
 
 # Cognitive Codebase Matrix (CCM)
@@ -23,6 +26,28 @@ Load this skill when you need to:
 - Index or re-index a project before starting a task
 
 Trigger phrases: "understand the codebase", "find usages of", "what calls X", "who depends on", "blast radius of", "context at line", "trace call chain", "index this project", "recently changed code", "read the graph", "find nodes named".
+
+## When NOT to Use
+
+**DO NOT** activate this skill when:
+- The project is **already indexed in memory** from this session and you just need context recall (context is cached; reuse `get_context` directly from memory without re-indexing)
+- User is asking for **code refactoring guidance without needing graph traversal** (use code-reviewer skill instead)
+- User wants **static type analysis** or **linting feedback** (use language-specific reviewer skill)
+- The task is **pure documentation** (no code exploration needed)
+- User says "just give me the file" without needing cross-file reasoning
+
+<HARD-GATE>
+You MUST call `index_project` before any other tool on a fresh project session.
+If the project was already indexed in this conversation, you MAY skip `index_project` and call tools directly.
+NEVER assume a project is indexed without explicit mention or evidence.
+</HARD-GATE>
+
+## Execution Boundaries
+
+- **Boundary 1:** All file paths MUST be relative to project root (e.g. `src/main.rs`, not `/Users/dev/my-app/src/main.rs`)
+- **Boundary 2:** Node IDs MUST be used exactly as returned by tools (never guessed or constructed)
+- **Boundary 3:** If a tool returns empty results, check node_id/file format BEFORE escalating
+- **Boundary 4:** `max_depth` in trace_call_chain should be 6–15; default (6) may miss distant paths
 
 ## MCP Setup
 
@@ -65,24 +90,116 @@ ollama serve
 ollama pull mxbai-embed-large
 ```
 
-## Recommended Agent Flow
+## Workflow Modes
+
+CCM supports 4 distinct operational modes depending on your task. Each has a terminal state.
+
+### Mode 1: Semantic Discovery (Entry Point for Exploration)
+**When:** You have a vague question like "find auth handling" but don't know the exact file/function.
 
 ```
-1. index_project          ← always run first on a new session / after edits
-        ↓
-2. search_code            ← semantic entry point — "find auth handling"
-        ↓
-3. get_context            ← cursor-based detail — file:line position
-        ↓ (optional deep-dive)
-4. find_nodes             ← locate a node by name when you know it
-5. read_graph             ← inspect connections of a known node_id
-6. find_usages            ← all callers of a node_id
-7. trace_call_chain       ← BFS path from node A to node B
-8. impact_of_change       ← blast radius before editing a file
-9. diff_context           ← git-based recent changes
+┌─────────────────────────────────────┐
+│ index_project (if fresh session)    │
+└──────────────┬──────────────────────┘
+               ↓
+┌──────────────────────────────────────┐
+│ search_code (natural language query) │
+│ Returns: ranked snippets + node_ids  │
+└──────────────┬──────────────────────┘
+               ↓
+         [Terminal: use node_id for next step]
 ```
 
-**Rule:** If the project has never been indexed in this session, call `index_project` before any other tool. It is incremental and fast on re-runs.
+**Output artifact:** Copy top result node_id and code snippet into your current tool/editorspacing/plan.
+
+---
+
+### Mode 2: Cursor-Based Context (IDE Integration)
+**When:** Your editor cursor is at file:line and you need surrounding context.
+
+```
+┌──────────────────────────────────────┐
+│ get_context(file, line)              │
+│ Returns: scope + graph neighbors     │
+└──────────────┬──────────────────────┘
+               ↓
+       [Terminal: you have context]
+```
+
+**Output artifact:** Paste retrieved context into your refactoring notes or task description.
+
+---
+
+### Mode 3: Graph Traversal (Surgical Dependency Analysis)
+**When:** You have a known node_id and need to drill into its callers, callees, or connections.
+
+```
+┌──────────────────────────────────────┐
+│ find_nodes (locate by name)          │ (optional)
+│ Returns: matching node_ids           │
+└──────────────┬──────────────────────┘
+               ↓
+┌──────────────────────────────────────┐
+│ read_graph (inspect node)            │
+│ Returns: node details + edges        │
+└──────────────┬──────────────────────┘
+               ↓
+        ╔════════════════════╗
+        ║  Choose path:      ║
+        ╚────┬───────────┬───╝
+             ↓           ↓
+    ┌──────────────┐  ┌──────────────────┐
+    │ find_usages  │  │ trace_call_chain │
+    │ (who calls?) │  │ (path A→B)       │
+    └──────────────┘  └──────────────────┘
+             ↓           ↓
+      [Terminal: impact mapped]
+```
+
+**Output artifact:** Document call chains and caller lists in your refactoring impact assessment or pre-edit checklist.
+
+---
+
+### Mode 4: Blast Radius & Recency (Pre-Edit Risk Assessment)
+**When:** Before editing a file, you MUST know what breaks and what changed recently.
+
+```
+┌──────────────────────────────────────┐
+│ impact_of_change (file path)         │
+│ Returns: dependents + transitive    │
+└──────────────┬──────────────────────┘
+               ↓
+┌──────────────────────────────────────┐
+│ diff_context (git-based changes)     │
+│ Returns: recent edits + frequency    │
+└──────────────┬──────────────────────┘
+               ↓
+      [Terminal: risk mapped]
+```
+
+**Output artifact:** Create a pre-edit risk matrix: "File X is depended on by Y and Z; recently touched by [commits]; estimated blast radius: N files".
+
+---
+
+## Recommended Starting Flow
+
+```
+START
+  ↓
+INDEX (if fresh session)
+  ↓
+CHOOSE MODE based on task:
+  • "Find something?"        → Mode 1 (search_code)
+  • "Context at cursor?"     → Mode 2 (get_context)
+  • "Dig into node?"         → Mode 3 (find_nodes → read_graph)
+  • "Before I edit X?"       → Mode 4 (impact_of_change + diff_context)
+  ↓
+EXTRACT OUTPUTS
+  ↓
+PASS TO next skill/task/plan
+```
+
+**Rule:** Most tasks combine 2–3 modes. E.g., "refactor auth" = Mode 1 (search) → Mode 4 (impact) → Mode 3 (trace callees) then handoff to code-reviewer.
 
 ## Tool Reference
 
@@ -367,15 +484,31 @@ Examples:
 
 Always use node_ids **exactly as returned** by tools. Do not guess or construct them manually.
 
-## Common Mistakes
+## Anti-Patterns & Risk Catalog
 
-| Mistake | Correct Approach |
-|---------|-----------------|
-| Calling `search_code` without indexing first | Always call `index_project` first in each session |
-| Constructing node_ids manually | Use `find_nodes` to discover exact node_ids |
-| Using absolute paths in `file` param | Use relative paths (`core/src/lib.rs`, not `/Users/dev/my-app/core/src/lib.rs`) |
-| Setting `max_depth` too low in `trace_call_chain` | Default is 6; increase to 10–15 for deep chains |
-| Skipping `impact_of_change` before a refactor | Always check blast radius before editing core files |
+| Anti-Pattern | Risk | Solution |
+|--------------|------|----------|
+| **Not indexing first** | All queries fail with "graph not indexed" | ALWAYS call `index_project` on fresh session (safe to repeat) |
+| **Mixing absolute + relative paths** | Tool returns "path outside project root" | Use ONLY relative paths (`core/src/lib.rs`, never `/Users/.../core/src/lib.rs`) |
+| **Manually constructing node_ids** | Wrong format breaks downstream tools | Use `find_nodes` output; NEVER guess the node_id format |
+| **Low `max_depth` in trace_call_chain** | Misses the actual path between functions | Default is 6; increase to 10–15 for deeper chains |
+| **Reading `search_code` score without understanding weights** | Over-trusting weak results | Always check the `Reason` field; score reflects hybrid rank, not absolute confidence |
+| **Editing a core file without `impact_of_change`** | Silent cascade failures in dependent code | Always run blast-radius check BEFORE editing |
+| **Assuming project is indexed from session history** | Stale data, missing recent edits | Re-run `index_project` after significant file changes |
+| **Using tool output for architecture decisions alone** | CCM maps code, not design intent | Pair tool output with code review, tests, and conversation with domain expert |
+| **Not checking diff_context before refactoring** | Duplicate work; overwriting recent changes | Always check `diff_context` with `days: 7` before any refactor |
+
+---
+
+## Common Output Mistakes (Decoding)
+
+| Tool Output | What It Means | Action |
+|-------------|---------------|--------|
+| `No context found for src/main.rs:100` | Graph doesn't have that file indexed | Re-run `index_project` or verify path is relative |
+| `Node not found with ID: ./core/src/lib.rs:function_item:310:0` | The node_id format is wrong or file changed | Use `find_nodes` to re-discover the correct node_id |
+| `No graph nodes found for query: 'UserService'` | Name doesn't exist in this codebase or is indexed differently | Try partial queries (e.g. `User` or `Service` separately) |
+| Empty result from `trace_call_chain` | No path exists within `max_depth` (common for distant calls) | Increase `max_depth` to 15–20 or check if path exists manually |
+| `Node ID: ./path/file.ext:node_type:line:col` contains multiple colons | This is correct node_id format | Always preserve the exact string; pass it verbatim to other tools |
 
 ## Supported Languages
 
@@ -395,8 +528,60 @@ For hybrid weight tuning, chunking controls, batch size, and embedding timeout, 
 | `CCM_MCP_ENGINE_CACHE_SIZE` | 4 | Max projects held in RAM |
 | `CCM_DISABLE_EMBEDDER` | 0 | Disable vector search entirely |
 
-## Source
+## Output Artifacts
 
-Repository: https://github.com/senoldogann/LLM-Context-Manager  
-npm: `@senoldogann/context-manager`  
-License: MIT
+After using CCM, you should have:
+
+- **Search Mode:** Code snippets + node_ids saved to current task context or notebook
+- **Context Mode:** Scope summary (functions, classes, dependencies) in your editor notes
+- **Graph Mode:** Call chains and impact maps documented as ASCII or Markdown tables
+- **Impact Mode:** Pre-edit risk checklist with affected files and change scope
+
+**Recommended:** Save critical outputs to your task description, implementation plan, or memory file for audit trail.
+
+---
+
+## Handoff to Next Layer
+
+After CCM retrieval, depending on your need:
+
+| Your Task | Hand Off To | Why |
+|-----------|-------------|-----|
+| "I understand the codebase now" | code-reviewer, code-simplifier | Pair graph knowledge with lint/quality feedback |
+| "Found a bug, need to fix it" | tdd-workflow, code-reviewer | Write failing test first, use graph as context |
+| "Design a massive refactor" | blueprint, architecture | CCM gives you the map; blueprint gives you the plan |
+| "Pre-flight check before PR" | code-reviewer, security-reviewer | CCM = "what's connected"; reviewers = "is it correct?" |
+| "Performance optimization" | performance-optimizer | CCM shows hot paths; optimizer profiles them |
+
+**Do NOT** end in CCM. Use it as input to the next skill/review/implementation layer. The terminal state is always passing structured output forward.
+
+---
+
+## Verification Checklist
+
+Before considering a task complete:
+
+- [ ] `index_project` was called (or explicitly verified to be cached from same session)
+- [ ] Output node_ids are exact strings (not paraphrased)
+- [ ] All file paths are relative to project root
+- [ ] Tool returned non-empty results (if empty, diagnosed and resolved)
+- [ ] Results were reviewed for relevance (score + reason checked)
+- [ ] Output passed to another skill or documented in task/plan
+- [ ] No assumptions made about file changes; `diff_context` checked if relevant
+
+**If any item is FALSE:** Re-run the tool with corrected parameters before proceeding.
+
+---
+
+## Source & References
+
+**Repository:** https://github.com/senoldogann/LLM-Context-Manager  
+**npm Package:** `@senoldogann/context-manager` (v0.1.31+)  
+**Built with:** Rust, Tree-sitter, LanceDB, Petgraph  
+**License:** MIT  
+
+**Further Reading:**
+- [Hybrid Ranking Algorithm](https://github.com/senoldogann/LLM-Context-Manager/blob/main/docs/hybrid-ranking.md) — weight tuning details
+- [.env.example](https://github.com/senoldogann/LLM-Context-Manager/blob/main/.env.example) — all configuration variables
+- [README](https://github.com/senoldogann/LLM-Context-Manager/blob/main/README.md) — installation and quick start
+- [MCP Protocol Spec](https://modelcontextprotocol.io/) — official MCP documentation
