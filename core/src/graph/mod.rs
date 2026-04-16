@@ -140,16 +140,61 @@ impl CodeGraph {
         Some(best_match)
     }
     pub fn find_node_by_id(&self, id: &str) -> Option<CodeNode> {
-        // 1. Check RAM
-        if let Some(node) = self.graph.node_weights().find(|node| node.id == id) {
-            return Some(node.clone());
+        // 1. O(1) lookup via id_index — previously was O(n) linear scan
+        if let Some(&idx) = self.id_index.get(id) {
+            return Some(self.graph[idx].clone());
         }
-        // 2. Check Storage
+        // 2. Check persistent storage
         if let Some(storage) = &self.storage {
             if let Ok(Some(node)) = storage.get_node(id) {
                 return Some(node);
             }
         }
+        None
+    }
+
+    /// Kesin ID eşleşmesi bulunamazsa aynı dosya+tür+yakın satır ile düzeltilmiş arama yapar.
+    /// Kod değişiklikleri nedeniyle satır numarası kaymış node_id'leri çözmek için kullanılır.
+    pub fn find_node_fuzzy_by_id(&self, id: &str) -> Option<CodeNode> {
+        if let Some(node) = self.find_node_by_id(id) {
+            return Some(node);
+        }
+
+        let (path_part, kind_part, row_part) = parse_node_id(id)?;
+        let target_row: usize = row_part.parse().ok()?;
+
+        let mut best: Option<&CodeNode> = None;
+        let mut best_dist = usize::MAX;
+
+        for node in self.graph.node_weights() {
+            let (node_path, node_kind, node_row_str) = match parse_node_id(&node.id) {
+                Some(t) => t,
+                None => continue,
+            };
+            if node_path != path_part || node_kind != kind_part {
+                continue;
+            }
+            let node_row: usize = match node_row_str.parse() {
+                Ok(r) => r,
+                Err(_) => continue,
+            };
+            let dist = node_row.abs_diff(target_row);
+            if dist < best_dist && dist <= 200 {
+                best_dist = dist;
+                best = Some(node);
+            }
+        }
+
+        if let Some(node) = best {
+            tracing::debug!(
+                requested = %id,
+                found = %node.id,
+                drift = %best_dist,
+                "Fuzzy node ID matched"
+            );
+            return Some(node.clone());
+        }
+
         None
     }
 
@@ -266,6 +311,17 @@ impl CodeGraph {
         // retain_nodes shifts indices! We MUST rebuild the index entirely.
         self.rebuild_index();
     }
+}
+
+/// "<path>:<kind>:<row>:<col>" formatındaki node ID'sini parçalarına ayırır.
+/// Başarılı olursa (path, kind, row) döndürür.
+fn parse_node_id(id: &str) -> Option<(&str, &str, &str)> {
+    let mut parts = id.rsplitn(4, ':');
+    let _col = parts.next()?;
+    let row = parts.next()?;
+    let kind = parts.next()?;
+    let path = parts.next()?;
+    Some((path, kind, row))
 }
 
 #[cfg(test)]

@@ -447,6 +447,59 @@ fn handle_list_tools(id: Option<Value>) -> Result<JsonRpcResponse> {
                 "required": ["project_path"]
             }),
         },
+        ToolDefinition {
+            name: "find_usages".to_string(),
+            description: Some("Find all nodes that call or reference a given node. Answers 'who calls this function?'.".to_string()),
+            input_schema: serde_json::json!({
+                "type": "object",
+                "properties": {
+                    "node_id": { "type": "string", "description": "Node ID to find usages for (from read_graph or search_code results)." },
+                    "limit": { "type": "integer", "description": "Max usages to return. Defaults to 20." },
+                    "project_path": { "type": "string", "description": "Optional absolute path to the project root." }
+                },
+                "required": ["node_id"]
+            }),
+        },
+        ToolDefinition {
+            name: "trace_call_chain".to_string(),
+            description: Some("Find the BFS call chain between two nodes. Shows how execution flows from one function to another.".to_string()),
+            input_schema: serde_json::json!({
+                "type": "object",
+                "properties": {
+                    "from_id": { "type": "string", "description": "Starting node ID." },
+                    "to_id": { "type": "string", "description": "Target node ID." },
+                    "max_depth": { "type": "integer", "description": "Max hops to search. Defaults to 8." },
+                    "project_path": { "type": "string", "description": "Optional absolute path to the project root." }
+                },
+                "required": ["from_id", "to_id"]
+            }),
+        },
+        ToolDefinition {
+            name: "impact_of_change".to_string(),
+            description: Some("Analyze the blast radius of changing a file. Returns all dependents across the codebase. Essential for safe refactoring.".to_string()),
+            input_schema: serde_json::json!({
+                "type": "object",
+                "properties": {
+                    "file": { "type": "string", "description": "Relative path of the file to analyze (e.g. 'src/engine.rs')." },
+                    "limit": { "type": "integer", "description": "Max dependents to return. Defaults to 30." },
+                    "project_path": { "type": "string", "description": "Optional absolute path to the project root." }
+                },
+                "required": ["file"]
+            }),
+        },
+        ToolDefinition {
+            name: "diff_context".to_string(),
+            description: Some("Get graph nodes for recently changed files based on git history. Shows what code has changed in the last N days.".to_string()),
+            input_schema: serde_json::json!({
+                "type": "object",
+                "properties": {
+                    "project_path": { "type": "string", "description": "Absolute path to the project root (must be a git repo)." },
+                    "days": { "type": "integer", "description": "Days to look back in git history. Defaults to 7." },
+                    "limit": { "type": "integer", "description": "Max nodes to return. Defaults to 30." }
+                },
+                "required": ["project_path"]
+            }),
+        },
     ];
 
     Ok(create_success_response(id, json!({ "tools": tools_list })))
@@ -499,6 +552,10 @@ async fn handle_call_tool(
         "search_code" => tools::search_code(&engine, &arguments).await?,
         "find_nodes" => tools::find_nodes(&engine, &arguments).await?,
         "read_graph" => tools::read_graph(&engine, &arguments).await?,
+        "find_usages" => tools::find_usages(&engine, &arguments).await?,
+        "trace_call_chain" => tools::trace_call_chain(&engine, &arguments).await?,
+        "impact_of_change" => tools::impact_of_change(&engine, &arguments).await?,
+        "diff_context" => tools::diff_context(&engine, &arguments).await?,
         _ => {
             return Ok(create_error_response(
                 id,

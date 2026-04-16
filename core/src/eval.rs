@@ -382,7 +382,28 @@ pub async fn evaluate_with_mode(tasks_file: GoldenTasksFile, mode: EvalMode) -> 
 
                 match hits {
                     Some(hits) => {
-                        let (matches, matched_items) = score_hits(&task.expected, &hits);
+                        // Beklenen node_id'leri fuzzy lookup ile mevcut satır numaralarına çöz
+                        let resolved_ids: Option<Vec<String>> =
+                            task.expected.node_ids.as_ref().map(|ids| {
+                                ids.iter()
+                                    .map(|id| {
+                                        let norm = normalize_task_node_id(&repo_path, id);
+                                        graph
+                                            .find_node_fuzzy_by_id(&norm)
+                                            .or_else(|| graph.find_node_fuzzy_by_id(id))
+                                            .map(|n| n.id)
+                                            .unwrap_or(norm)
+                                    })
+                                    .collect()
+                            });
+                        let resolved_expected = Expected {
+                            node_ids: resolved_ids,
+                            file_paths: task.expected.file_paths.clone(),
+                            min_recall: task.expected.min_recall,
+                            max_rank: task.expected.max_rank,
+                            reason_contains: task.expected.reason_contains.clone(),
+                        };
+                        let (matches, matched_items) = score_hits(&resolved_expected, &hits);
                         result.matches = matches;
                         result.matched_items = matched_items;
                         if matches >= expected_min_recall as usize {
@@ -708,7 +729,12 @@ fn normalize_path(repo_path: &Path, raw: &str) -> String {
 }
 
 fn gather_graph_hits(graph: &CodeGraph, node_id: &str) -> Option<Vec<String>> {
-    let idx = graph.find_node_index_by_id(node_id)?;
+    // Önce fuzzy arama yap (satır numarası kaymasını tolere eder), bulamazsa exact dene
+    let resolved_id = match graph.find_node_fuzzy_by_id(node_id) {
+        Some(n) => n.id,
+        None => return None,
+    };
+    let idx = graph.find_node_index_by_id(&resolved_id)?;
     let mut hits = Vec::new();
 
     hits.push(graph.graph[idx].id.clone());

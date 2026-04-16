@@ -86,15 +86,23 @@ impl LanceDbStore {
             }
         };
 
-        const MAX_CHARS: usize = 1000;
-        const OVERLAP: usize = 100;
+        let max_chars: usize = std::env::var("CCM_MAX_CHUNK_CHARS")
+            .ok()
+            .and_then(|v| v.parse().ok())
+            .unwrap_or(1000)
+            .max(1); // chunks(0) and div_ceil(0) both panic
+        let overlap: usize = std::env::var("CCM_CHUNK_OVERLAP")
+            .ok()
+            .and_then(|v| v.parse().ok())
+            .unwrap_or(100)
+            .min(max_chars.saturating_sub(1)); // overlap < max_chars guarantees forward progress
 
         let mut all_chunks = Vec::new();
         let mut all_chunk_ids = Vec::new();
         let mut original_ids_map = Vec::new(); // Maps chunk index to original ID index
 
         for (i, text) in texts.iter().enumerate() {
-            if text.len() <= MAX_CHARS {
+            if text.len() <= max_chars {
                 all_chunks.push(text.clone());
                 all_chunk_ids.push(ids[i].clone());
                 original_ids_map.push(i);
@@ -105,7 +113,7 @@ impl LanceDbStore {
 
                 while start < text.len() {
                     // Find a valid char boundary for 'end'
-                    let mut end = std::cmp::min(start + MAX_CHARS, text.len());
+                    let mut end = std::cmp::min(start + max_chars, text.len());
                     while !text.is_char_boundary(end) && end > start {
                         end -= 1;
                     }
@@ -130,7 +138,7 @@ impl LanceDbStore {
                     }
 
                     // Calculate next start with overlap, ensuring valid boundary
-                    let next_target = start + MAX_CHARS - OVERLAP;
+                    let next_target = start + max_chars - overlap;
                     let mut next_start = std::cmp::min(next_target, text.len());
                     while !text.is_char_boundary(next_start) && next_start < text.len() {
                         next_start += 1;
@@ -152,11 +160,15 @@ impl LanceDbStore {
         }
 
         // 1. Generate Embeddings in batches for performance
-        const BATCH_SIZE: usize = 32;
+        let batch_size: usize = std::env::var("CCM_EMBED_BATCH_SIZE")
+            .ok()
+            .and_then(|v| v.parse().ok())
+            .unwrap_or(32)
+            .max(1); // guard: chunks(0) panics at runtime
         let mut embeddings: Vec<Vec<f32>> = Vec::with_capacity(all_chunks.len());
 
-        let total_batches = all_chunks.len().div_ceil(BATCH_SIZE);
-        for (batch_idx, batch) in all_chunks.chunks(BATCH_SIZE).enumerate() {
+        let total_batches = all_chunks.len().div_ceil(batch_size);
+        for (batch_idx, batch) in all_chunks.chunks(batch_size).enumerate() {
             if batch_idx % 20 == 0 || (batch_idx + 1) == total_batches {
                 tracing::info!(
                     batch = batch_idx + 1,
@@ -249,7 +261,7 @@ impl LanceDbStore {
         let embedder = self
             .embedder
             .as_ref()
-            .ok_or_else(|| anyhow::anyhow!("Embedder not initialized"))?;
+            .ok_or_else(|| anyhow::anyhow!("Embedder not initialized. Set CCM_OPENAI_API_KEY or CCM_EMBED_URL to enable semantic search."))?;
 
         // 1. Embed Query
         let query_vecs = embedder.embed(vec![query.to_string()]).await?;

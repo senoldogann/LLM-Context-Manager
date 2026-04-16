@@ -47,7 +47,8 @@ pub async fn run_query(query: &str, project_path: &str) -> Result<Vec<ContextSug
     // Check if DB exists
     if !db_path.exists() {
         return Err(anyhow::anyhow!(
-            "Index not found. Please run indexing first."
+            "Index not found at '{}'. Run: ccm index -p <path>",
+            db_path_str
         ));
     }
 
@@ -98,7 +99,12 @@ pub async fn run_query(query: &str, project_path: &str) -> Result<Vec<ContextSug
     Ok(results)
 }
 
-const MAX_INDEX_ISSUES_RECORDED: usize = 250;
+fn max_index_issues_recorded() -> usize {
+    std::env::var("CCM_MAX_INDEX_ISSUES")
+        .ok()
+        .and_then(|v| v.parse().ok())
+        .unwrap_or(250)
+}
 const EXCLUDED_DIRECTORY_NAMES: &[&str] = &[
     ".git",
     ".hg",
@@ -404,6 +410,24 @@ pub async fn update_index(path: &str, db_path: Option<&str>) -> Result<IndexStat
     }
 
     // Run incremental index
+    // Filter out CCM's own data files before passing to the incremental indexer.
+    // git's untracked-file detection surfaces them because they are written into
+    // the project root on the first pass and have not yet been added to .gitignore.
+    let changed_files: Vec<PathBuf> = changed_files
+        .into_iter()
+        .filter(|p| {
+            normalize_file_id(&project_root, p)
+                .map(|id| !is_internal_index_file(&id))
+                .unwrap_or(true)
+        })
+        .collect();
+
+    // Nothing left to process after filtering — index is already up to date.
+    if changed_files.is_empty() {
+        info!("No actionable changes detected after filtering. Index is up to date.");
+        return Ok(IndexStats::default());
+    }
+
     info!("Starting incremental indexing for {}", path);
     let stats = engine.incremental_index_paths(path, &changed_files).await?;
 
@@ -860,14 +884,14 @@ pub(crate) fn register_issue(stats: &mut IndexStats, issue: IndexIssue, skipped:
 
     if skipped {
         stats.files_skipped += 1;
-        if stats.skipped_files.len() < MAX_INDEX_ISSUES_RECORDED {
+        if stats.skipped_files.len() < max_index_issues_recorded() {
             stats.skipped_files.push(issue);
         }
         return;
     }
 
     stats.files_failed += 1;
-    if stats.failed_files.len() < MAX_INDEX_ISSUES_RECORDED {
+    if stats.failed_files.len() < max_index_issues_recorded() {
         stats.failed_files.push(issue);
     }
 }

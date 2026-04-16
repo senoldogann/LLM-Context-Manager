@@ -45,7 +45,7 @@ Unlike tools that dump raw code, CCM injects **AI-Optimized Context**:
 - **Rust-Powered** - Blazing fast indexing and queries
 - **Batch Embedding** - Thousands of lines in seconds
 - **LanceDB** - Millisecond-latency vector storage
-- **Tree-sitter** - Robust AST for Rust, Python, TypeScript
+- **Tree-sitter** - Robust AST for Rust, Python, TypeScript, Go, Java, Kotlin, C#
 
 ### 🔒 Production Hardening
 - **Binary Checksums** - Release artifacts include `checksums.txt` for integrity
@@ -182,9 +182,15 @@ ccm-cli eval --tasks eval/golden_tasks.json
 
 | Tool | Purpose | Example |
 |------|---------|---------|
-| `search_code` | Semantic search | "Find auth handling" |
-| `read_graph` | Structural navigation | "Who calls this function?" |
+| `search_code` | Hybrid semantic + graph search | "Find auth handling" |
 | `get_context` | Cursor-based retrieval | Context at file:line |
+| `find_nodes` | Find nodes by name or path | "find_nodes query=UserService" |
+| `read_graph` | Inspect a specific node by ID | Node details + graph connections |
+| `index_project` | Refresh the project index | Incremental re-index |
+| `find_usages` | Find all callers of a node | "Who calls this function?" |
+| `trace_call_chain` | BFS call chain between two nodes | from_id → to_id path |
+| `impact_of_change` | Blast radius of a file change | Dependents across codebase |
+| `diff_context` | Recently changed code via git | Last N days of changes |
 
 ---
 
@@ -214,6 +220,10 @@ ccm-cli eval --tasks eval/golden_tasks.json
 | Python | `.py` | Full AST |
 | TypeScript | `.ts`, `.tsx` | Full AST |
 | JavaScript | `.js`, `.jsx` | Full AST |
+| Go | `.go` | Full AST |
+| Java | `.java` | Full AST |
+| Kotlin | `.kt`, `.kts` | Full AST |
+| C# | `.cs` | Full AST |
 | Config/Data | `.md`, `.json`, `.yaml` | Full File |
 
 ---

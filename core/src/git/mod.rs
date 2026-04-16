@@ -61,6 +61,70 @@ impl GitIntegrator {
         Ok(changed_files)
     }
 
+    /// Son N günde commit edilen dosyaları döndürür.
+    pub fn get_changed_files_since_days(&self, days: u32) -> Result<Vec<PathBuf>> {
+        let workdir = self
+            .repo
+            .workdir()
+            .context("Repository has no working directory")?
+            .to_path_buf();
+
+        let cutoff = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_secs() as i64)
+            .unwrap_or(0)
+            - (days as i64 * 86400);
+
+        let mut revwalk = self.repo.revwalk()?;
+        revwalk.push_head()?;
+        revwalk.set_sorting(git2::Sort::TIME)?;
+
+        let mut changed: std::collections::HashSet<PathBuf> = std::collections::HashSet::new();
+
+        for oid_result in revwalk {
+            let oid = oid_result?;
+            let commit = self.repo.find_commit(oid)?;
+
+            if commit.time().seconds() < cutoff {
+                break;
+            }
+
+            if commit.parent_count() == 0 {
+                let tree = commit.tree()?;
+                tree.walk(git2::TreeWalkMode::PreOrder, |root, entry| {
+                    if entry.kind() == Some(git2::ObjectType::Blob) {
+                        let rel = if root.is_empty() {
+                            PathBuf::from(entry.name().unwrap_or(""))
+                        } else {
+                            PathBuf::from(root).join(entry.name().unwrap_or(""))
+                        };
+                        changed.insert(workdir.join(rel));
+                    }
+                    git2::TreeWalkResult::Ok
+                })?;
+            } else {
+                let parent_tree = commit.parent(0)?.tree()?;
+                let tree = commit.tree()?;
+                let diff =
+                    self.repo
+                        .diff_tree_to_tree(Some(&parent_tree), Some(&tree), None)?;
+                diff.foreach(
+                    &mut |delta, _| {
+                        if let Some(p) = delta.new_file().path() {
+                            changed.insert(workdir.join(p));
+                        }
+                        true
+                    },
+                    None,
+                    None,
+                    None,
+                )?;
+            }
+        }
+
+        Ok(changed.into_iter().collect())
+    }
+
     /// Experimental: Get changed line ranges (Hunks) for a file.
     /// Useful for surgical re-indexing (future optimization).
     pub fn get_changed_ranges(&self, _file_path: &Path) -> Result<Vec<(usize, usize)>> {

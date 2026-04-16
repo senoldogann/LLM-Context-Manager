@@ -24,6 +24,10 @@ pub(crate) fn detect_language(path: &Path) -> SupportedLanguage {
         "rs" => SupportedLanguage::Rust,
         "py" => SupportedLanguage::Python,
         "ts" | "js" | "tsx" | "jsx" => SupportedLanguage::TypeScript,
+        "go" => SupportedLanguage::Go,
+        "java" => SupportedLanguage::Java,
+        "kt" | "kts" => SupportedLanguage::Kotlin,
+        "cs" => SupportedLanguage::CSharp,
         _ => SupportedLanguage::Data,
     }
 }

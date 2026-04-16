@@ -430,6 +430,202 @@ pub async fn index_project(state: &crate::server::ServerState, args: &Value) -> 
     }
 }
 
+/// Tool: find_usages
+/// Verilen node_id'yi çağıran / kullanan tüm node'ları döndürür.
+pub async fn find_usages(engine: &Arc<RetrievalEngine>, args: &Value) -> Result<ToolResult> {
+    let node_id = args
+        .get("node_id")
+        .and_then(|v| v.as_str())
+        .ok_or_else(|| anyhow::anyhow!("Missing 'node_id' argument"))?;
+
+    if node_id.trim().is_empty() {
+        return Ok(ToolResult {
+            content: vec![ToolResultContent {
+                content_type: "text".to_string(),
+                text: "Error: 'node_id' cannot be empty.".to_string(),
+            }],
+            is_error: Some(true),
+        });
+    }
+
+    let project_path = args.get("project_path").and_then(|v| v.as_str());
+    let normalized_id = normalize_graph_node_id(node_id, project_path)?;
+    let limit = args.get("limit").and_then(|v| v.as_u64()).unwrap_or(20) as usize;
+
+    let usages = engine.find_usages(&normalized_id, limit.max(1)).await;
+
+    if usages.is_empty() {
+        return Ok(ToolResult {
+            content: vec![ToolResultContent {
+                content_type: "text".to_string(),
+                text: format!("No usages found for node: '{}'", node_id),
+            }],
+            is_error: None,
+        });
+    }
+
+    Ok(ToolResult {
+        content: vec![ToolResultContent {
+            content_type: "text".to_string(),
+            text: format!(
+                "## Usages of `{}` ({} found)\n\n{}",
+                node_id,
+                usages.len(),
+                format_suggestions_output(&usages)
+            ),
+        }],
+        is_error: None,
+    })
+}
+
+/// Tool: trace_call_chain
+/// from_id'den to_id'ye giden çağrı zincirini BFS ile bulur.
+pub async fn trace_call_chain(engine: &Arc<RetrievalEngine>, args: &Value) -> Result<ToolResult> {
+    let from_id = args
+        .get("from_id")
+        .and_then(|v| v.as_str())
+        .ok_or_else(|| anyhow::anyhow!("Missing 'from_id' argument"))?;
+    let to_id = args
+        .get("to_id")
+        .and_then(|v| v.as_str())
+        .ok_or_else(|| anyhow::anyhow!("Missing 'to_id' argument"))?;
+
+    let project_path = args.get("project_path").and_then(|v| v.as_str());
+    let normalized_from = normalize_graph_node_id(from_id, project_path)?;
+    let normalized_to = normalize_graph_node_id(to_id, project_path)?;
+    let max_depth = args
+        .get("max_depth")
+        .and_then(|v| v.as_u64())
+        .unwrap_or(8) as usize;
+
+    let chain = engine
+        .trace_call_chain(&normalized_from, &normalized_to, max_depth)
+        .await;
+
+    if chain.is_empty() {
+        return Ok(ToolResult {
+            content: vec![ToolResultContent {
+                content_type: "text".to_string(),
+                text: format!(
+                    "No call chain found from '{}' to '{}' within {} hops.",
+                    from_id, to_id, max_depth
+                ),
+            }],
+            is_error: None,
+        });
+    }
+
+    Ok(ToolResult {
+        content: vec![ToolResultContent {
+            content_type: "text".to_string(),
+            text: format!(
+                "## Call Chain: {} → {} ({} steps)\n\n{}",
+                from_id,
+                to_id,
+                chain.len(),
+                format_suggestions_output(&chain)
+            ),
+        }],
+        is_error: None,
+    })
+}
+
+/// Tool: impact_of_change
+/// Bir dosya değiştiğinde etkilenecek tüm node ve dosyaları listeler.
+pub async fn impact_of_change(
+    engine: &Arc<RetrievalEngine>,
+    args: &Value,
+) -> Result<ToolResult> {
+    let file = args
+        .get("file")
+        .and_then(|v| v.as_str())
+        .ok_or_else(|| anyhow::anyhow!("Missing 'file' argument"))?;
+
+    if file.trim().is_empty() {
+        return Ok(ToolResult {
+            content: vec![ToolResultContent {
+                content_type: "text".to_string(),
+                text: "Error: 'file' cannot be empty.".to_string(),
+            }],
+            is_error: Some(true),
+        });
+    }
+
+    let project_path = args.get("project_path").and_then(|v| v.as_str());
+    let normalized = normalize_graph_path(file, project_path)?;
+    let limit = args.get("limit").and_then(|v| v.as_u64()).unwrap_or(30) as usize;
+
+    let impacted = engine.impact_of_change(&normalized, limit.max(1)).await;
+
+    if impacted.is_empty() {
+        return Ok(ToolResult {
+            content: vec![ToolResultContent {
+                content_type: "text".to_string(),
+                text: format!(
+                    "No dependents found for '{}'. The file may not be indexed or has no callers.",
+                    file
+                ),
+            }],
+            is_error: None,
+        });
+    }
+
+    Ok(ToolResult {
+        content: vec![ToolResultContent {
+            content_type: "text".to_string(),
+            text: format!(
+                "## Impact of changing `{}` ({} dependents)\n\n{}",
+                file,
+                impacted.len(),
+                format_suggestions_output(&impacted)
+            ),
+        }],
+        is_error: None,
+    })
+}
+
+/// Tool: diff_context
+/// Son N günde commit edilen dosyaların graph node'larını döndürür.
+pub async fn diff_context(engine: &Arc<RetrievalEngine>, args: &Value) -> Result<ToolResult> {
+    let project_path = args
+        .get("project_path")
+        .and_then(|v| v.as_str())
+        .ok_or_else(|| anyhow::anyhow!("Missing 'project_path' argument"))?;
+
+    let days = args.get("days").and_then(|v| v.as_u64()).unwrap_or(7) as u32;
+    let limit = args.get("limit").and_then(|v| v.as_u64()).unwrap_or(30) as usize;
+
+    let nodes = engine
+        .diff_context(project_path, days, limit.max(1))
+        .await;
+
+    if nodes.is_empty() {
+        return Ok(ToolResult {
+            content: vec![ToolResultContent {
+                content_type: "text".to_string(),
+                text: format!(
+                    "No changed code found in the last {} day(s). The project may not be a git repo or nothing has been committed recently.",
+                    days
+                ),
+            }],
+            is_error: None,
+        });
+    }
+
+    Ok(ToolResult {
+        content: vec![ToolResultContent {
+            content_type: "text".to_string(),
+            text: format!(
+                "## Recently Changed Code (last {} days, {} nodes)\n\n{}",
+                days,
+                nodes.len(),
+                format_suggestions_output(&nodes)
+            ),
+        }],
+        is_error: None,
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::{normalize_graph_node_id, normalize_graph_path};

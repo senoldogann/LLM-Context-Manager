@@ -1,5 +1,31 @@
 # Release Notes
 
+## v0.1.31 - Incremental Index Idempotency & Embedder Fallback (2026-04-16)
+
+### 🐛 Bug Fixes
+
+- **Idempotent `index_project`**: A second call to `index_project` on an already-indexed project now
+  correctly reports "No changes detected" instead of reporting a spurious refresh. Two root causes
+  were fixed:
+  - CCM's own data files (`data/ccm_graph.json`, `data/ccm_manifest.json`, `data/ccm_db/`) are now
+    filtered out of the git untracked-file list before the incremental indexer runs.
+  - `nodes_created` in `IndexStats` now tracks the delta of new nodes added during a pass, not the
+    total node count of the graph — preventing the "refreshed" response even when zero files changed.
+
+- **`search_code` with embedder disabled**: When `CCM_DISABLE_EMBEDDER=1` is set (or no embedding
+  provider is configured), `search_code` and the hybrid search path no longer return an "Internal
+  error". They now gracefully fall through to graph-based keyword search.
+
+- **`diff_context` absolute path**: `diff_context` no longer misreports file paths when the project
+  root and CWD differ. Relative paths are now resolved against the project root, not the process CWD.
+
+### 🧪 Testing
+- Added a real-world end-to-end integration test (`guardian_e2e_test`) that exercises all 9 MCP tools
+  against a complex Tauri + TypeScript project. Marked `#[ignore]` so it runs locally on demand and
+  does not block CI.
+
+---
+
 ## v0.1.27 - MCP Tooling UX & Incremental Index Fixes (2026-04-15)
 
 ### 🔎 Better MCP Tool Chaining

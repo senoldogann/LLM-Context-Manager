@@ -6,7 +6,11 @@ pub enum SupportedLanguage {
     Rust,
     Python,
     TypeScript,
-    Data, // New variant for non-code files (JSON, MD, etc.)
+    Go,
+    Java,
+    Kotlin,
+    CSharp,
+    Data, // Kod olmayan dosyalar (JSON, MD, vb.)
 }
 
 pub struct CodeParser {
@@ -41,6 +45,10 @@ impl CodeParser {
             SupportedLanguage::Rust => tree_sitter_rust::LANGUAGE.into(),
             SupportedLanguage::Python => tree_sitter_python::LANGUAGE.into(),
             SupportedLanguage::TypeScript => tree_sitter_typescript::LANGUAGE_TYPESCRIPT.into(),
+            SupportedLanguage::Go => tree_sitter_go::LANGUAGE.into(),
+            SupportedLanguage::Java => tree_sitter_java::LANGUAGE.into(),
+            SupportedLanguage::Kotlin => tree_sitter_kotlin_ng::LANGUAGE.into(),
+            SupportedLanguage::CSharp => tree_sitter_c_sharp::LANGUAGE.into(),
             SupportedLanguage::Data => {
                 return Err(anyhow!("Data files do not support AST parsing"))
             }

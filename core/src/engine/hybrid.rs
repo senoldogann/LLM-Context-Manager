@@ -13,11 +13,12 @@ pub struct HybridWeights {
 
 impl Default for HybridWeights {
     fn default() -> Self {
+        // graph sinyaline biraz daha ağırlık; spatial/recent düşürüldü
         Self {
-            graph: 0.50,
+            graph: 0.55,
             semantic: 0.35,
-            spatial: 0.10,
-            recent: 0.05,
+            spatial: 0.08,
+            recent: 0.02,
         }
     }
 }

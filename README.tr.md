@@ -180,9 +180,15 @@ ccm-cli eval --tasks eval/golden_tasks.v3.ccm.json
 
 | Tool | Amac | Ornek |
 |------|------|-------|
-| `search_code` | Semantik arama | "Auth handling'i bul" |
-| `read_graph` | Yapisal gezinti | "Bu fonksiyonu kim cagiriyor?" |
+| `search_code` | Hibrit semantik + graf arama | "Auth handling'i bul" |
 | `get_context` | Dosya ve satira gore baglam | file:line baglami |
+| `find_nodes` | Isim veya yola gore node bul | "find_nodes query=UserService" |
+| `read_graph` | Belirli bir node'u incele | Node detaylari + graf baglantilari |
+| `index_project` | Proje indexini yenile | Arttirmali yeniden indexleme |
+| `find_usages` | Bir node'un tum kullanimlarini bul | "Bu fonksiyonu kim cagiriyor?" |
+| `trace_call_chain` | Iki node arasi BFS cagri zinciri | from_id → to_id yolu |
+| `impact_of_change` | Bir dosya degisikliginin etki alani | Kod tabanindaki bagimlilar |
+| `diff_context` | Git'ten son degisiklikler | Son N gunun degisiklikleri |
 
 ---
 
@@ -212,6 +218,10 @@ ccm-cli eval --tasks eval/golden_tasks.v3.ccm.json
 | Python | `.py` | Tam AST |
 | TypeScript | `.ts`, `.tsx` | Tam AST |
 | JavaScript | `.js`, `.jsx` | Tam AST |
+| Go | `.go` | Tam AST |
+| Java | `.java` | Tam AST |
+| Kotlin | `.kt`, `.kts` | Tam AST |
+| C# | `.cs` | Tam AST |
 | Config/Data | `.md`, `.json`, `.yaml` | Tam dosya |
 
 ---

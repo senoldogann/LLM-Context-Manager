@@ -132,8 +132,9 @@ impl Extractor {
         let mut doc_lines = Vec::new();
         let mut current_node = *node;
 
-        // Safety limit to look back 5 nodes max
-        for _ in 0..5 {
+        // Safety limit: look back at most this many siblings for docstring/comment nodes.
+        const MAX_DOC_LOOKBACK: usize = 5;
+        for _ in 0..MAX_DOC_LOOKBACK {
             if let Some(prev) = current_node.prev_sibling() {
                 let kind = prev.kind();
                 if kind == "line_comment" || kind == "block_comment" || kind == "comment" {
@@ -167,7 +168,11 @@ impl Extractor {
             SupportedLanguage::Rust => self.classify_rust_node(node, kind),
             SupportedLanguage::Python => self.classify_python_node(node, kind),
             SupportedLanguage::TypeScript => self.classify_typescript_node(node, kind),
-            SupportedLanguage::Data => None, // Data files don't have sub-nodes via AST
+            SupportedLanguage::Go => self.classify_go_node(node, kind),
+            SupportedLanguage::Java => self.classify_java_node(node, kind),
+            SupportedLanguage::Kotlin => self.classify_kotlin_node(node, kind),
+            SupportedLanguage::CSharp => self.classify_csharp_node(node, kind),
+            SupportedLanguage::Data => None,
         }
     }
 
@@ -279,6 +284,171 @@ impl Extractor {
         }
     }
 
+    fn classify_go_node(&self, node: &Node, kind: &str) -> Option<(NodeType, String)> {
+        match kind {
+            "function_declaration" => {
+                let name = self.find_child_text(node, "identifier")?;
+                Some((NodeType::Function, name))
+            }
+            "method_declaration" => {
+                // Go method: func (recv T) Name(...) — isim field_identifier olarak gelir
+                let name = self
+                    .find_child_text(node, "field_identifier")
+                    .or_else(|| self.find_child_text(node, "identifier"))
+                    .unwrap_or_else(|| "anonymous".to_string());
+                Some((NodeType::Method, name))
+            }
+            "type_declaration" => {
+                // type Foo struct{} / type Bar interface{}
+                // İçindeki type_spec'ten ismi al
+                let mut cursor = node.walk();
+                for child in node.children(&mut cursor) {
+                    if child.kind() == "type_spec" {
+                        if let Some(name) = self.find_child_text(&child, "type_identifier") {
+                            // Struct mu interface mi?
+                            let body_kind = child
+                                .children(&mut child.walk())
+                                .find(|c| {
+                                    c.kind() == "struct_type" || c.kind() == "interface_type"
+                                })
+                                .map(|c| c.kind())
+                                .unwrap_or("");
+                            let node_type = if body_kind == "interface_type" {
+                                NodeType::Class
+                            } else {
+                                NodeType::Struct
+                            };
+                            return Some((node_type, name));
+                        }
+                    }
+                }
+                None
+            }
+            "import_declaration" => {
+                let content = self.get_node_text(node);
+                Some((NodeType::Import, content))
+            }
+            "var_declaration" | "const_declaration" | "short_var_declaration" => {
+                // Basit değişken adı — ilk identifier'ı al
+                let name = self
+                    .find_child_text(node, "identifier")
+                    .unwrap_or_else(|| "anonymous_var".to_string());
+                Some((NodeType::Variable, name))
+            }
+            _ => None,
+        }
+    }
+
+    fn classify_java_node(&self, node: &Node, kind: &str) -> Option<(NodeType, String)> {
+        match kind {
+            "method_declaration" => {
+                let name = self.find_child_text(node, "identifier")?;
+                Some((NodeType::Method, name))
+            }
+            "constructor_declaration" => {
+                let name = self.find_child_text(node, "identifier")?;
+                Some((NodeType::Function, name))
+            }
+            "class_declaration" => {
+                let name = self.find_child_text(node, "identifier")?;
+                Some((NodeType::Class, name))
+            }
+            "interface_declaration" => {
+                let name = self.find_child_text(node, "identifier")?;
+                Some((NodeType::Struct, name))
+            }
+            "enum_declaration" => {
+                let name = self.find_child_text(node, "identifier")?;
+                Some((NodeType::Struct, name))
+            }
+            "import_declaration" => {
+                let content = self.get_node_text(node);
+                Some((NodeType::Import, content))
+            }
+            "field_declaration" | "local_variable_declaration" => {
+                let name = self
+                    .find_child_text(node, "variable_declarator")
+                    .or_else(|| self.find_child_text(node, "identifier"))
+                    .unwrap_or_else(|| "field".to_string());
+                Some((NodeType::Variable, name))
+            }
+            _ => None,
+        }
+    }
+
+    fn classify_csharp_node(&self, node: &Node, kind: &str) -> Option<(NodeType, String)> {
+        match kind {
+            "method_declaration" => {
+                let name = self.find_child_text(node, "identifier")?;
+                Some((NodeType::Method, name))
+            }
+            "constructor_declaration" => {
+                let name = self.find_child_text(node, "identifier")?;
+                Some((NodeType::Function, name))
+            }
+            "class_declaration" => {
+                let name = self.find_child_text(node, "identifier")?;
+                Some((NodeType::Class, name))
+            }
+            "interface_declaration" => {
+                let name = self.find_child_text(node, "identifier")?;
+                Some((NodeType::Struct, name))
+            }
+            "record_declaration" | "struct_declaration" => {
+                let name = self.find_child_text(node, "identifier")?;
+                Some((NodeType::Struct, name))
+            }
+            "enum_declaration" => {
+                let name = self.find_child_text(node, "identifier")?;
+                Some((NodeType::Struct, name))
+            }
+            "using_directive" => {
+                let content = self.get_node_text(node);
+                Some((NodeType::Import, content))
+            }
+            "field_declaration" | "property_declaration" | "event_field_declaration" => {
+                let name = self
+                    .find_child_text(node, "variable_declarator")
+                    .or_else(|| self.find_child_text(node, "identifier"))
+                    .unwrap_or_else(|| "field".to_string());
+                Some((NodeType::Variable, name))
+            }
+            _ => None,
+        }
+    }
+
+    fn classify_kotlin_node(&self, node: &Node, kind: &str) -> Option<(NodeType, String)> {
+        match kind {
+            "function_declaration" => {
+                let name = self.find_child_text(node, "simple_identifier")?;
+                Some((NodeType::Function, name))
+            }
+            "secondary_constructor" => {
+                Some((NodeType::Function, "constructor".to_string()))
+            }
+            "class_declaration" | "object_declaration" => {
+                let name = self
+                    .find_child_text(node, "type_identifier")
+                    .or_else(|| self.find_child_text(node, "simple_identifier"))
+                    .unwrap_or_else(|| "anonymous".to_string());
+                // Both class_declaration and object_declaration map to Class:
+                // Kotlin objects are effectively singleton classes.
+                Some((NodeType::Class, name))
+            }
+            "import_header" => {
+                let content = self.get_node_text(node);
+                Some((NodeType::Import, content))
+            }
+            "property_declaration" => {
+                let name = self
+                    .find_child_text(node, "simple_identifier")
+                    .unwrap_or_else(|| "property".to_string());
+                Some((NodeType::Variable, name))
+            }
+            _ => None,
+        }
+    }
+
     /// Helper: Finds a child node by kind and returns its text.
     fn find_child_text(&self, node: &Node, child_kind: &str) -> Option<String> {
         let mut cursor = node.walk();
@@ -326,6 +496,10 @@ impl Extractor {
             SupportedLanguage::Rust => kind == "call_expression",
             SupportedLanguage::Python => kind == "call",
             SupportedLanguage::TypeScript => kind == "call_expression",
+            SupportedLanguage::Go => kind == "call_expression",
+            SupportedLanguage::Java => kind == "method_invocation",
+            SupportedLanguage::Kotlin => kind == "call_expression",
+            SupportedLanguage::CSharp => kind == "invocation_expression",
             SupportedLanguage::Data => false,
         };
 

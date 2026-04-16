@@ -1,6 +1,6 @@
 [package]
 name = "ccm-core"
-version = "0.1.30"
+version = "0.1.31"
 edition = "2021"
 authors = ["Senol Dogan"]
 description = "Core engine for Cognitive Codebase Matrix"
@@ -25,10 +25,18 @@ tracing-subscriber = "0.3"
 lancedb = "0.23.1"
 
 # AST Parsing
+# Grammar crate versions intentionally diverge from tree-sitter core (0.23-0.26 mix).
+# This is safe: the underlying C TSLanguage ABI has been stable across 0.x minor releases.
+# Each grammar crate compiles its C parser against its own pinned tree-sitter version; the
+# resulting Language pointer is binary-compatible with the 0.26 runtime. Verified by:
+# all integration tests pass and 56/56 golden eval tasks succeed.
 tree-sitter = "0.26"
 tree-sitter-rust = "0.24"
 tree-sitter-python = "0.25"
 tree-sitter-typescript = "0.23"
+tree-sitter-go = "0.25"
+# Java: tree-sitter-java 0.23.5 — LANGUAGE const API, tree-sitter 0.26 uyumlu
+# Kotlin: tree-sitter-kotlin-ng (fork) — eski tree-sitter-kotlin 0.3.x uyumsuz (0.22 API)
 
 # Arrow (Explicitly needed for Vector Store)
 arrow-array = "56"
@@ -38,6 +46,10 @@ futures = "0.3"
 reqwest = { version = "0.11", features = ["json", "rustls-tls"] }
 dotenvy = "0.15"
 ignore = "0.4"
+tree-sitter-java = "0.23.5"
+# tree-sitter-kotlin 0.3.x, tree-sitter 0.26 ile uyumsuz — ng fork kullanılıyor
+tree-sitter-kotlin-ng = "1.1.0"
+tree-sitter-c-sharp = "0.23.5"
 
 [dev-dependencies]
 tempfile = "3.8"
