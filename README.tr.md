@@ -10,6 +10,7 @@
 [![MCP Ready](https://img.shields.io/badge/MCP-Compatible-blue.svg?style=flat-square&logo=google-cloud)](https://modelcontextprotocol.io/)
 [![Graph-RAG](https://img.shields.io/badge/Engine-Graph--RAG-purple.svg?style=flat-square)](https://github.com/senoldogann/LLM-Context-Manager)
 [![License](https://img.shields.io/badge/License-MIT-green.svg?style=flat-square)](LICENSE)
+[![Agent Skill](https://img.shields.io/badge/Agent-SKILL.md-blueviolet.svg?style=flat-square)](SKILL.md)
 
 ---
 
@@ -98,6 +99,15 @@ Beklenen sonuc:
 | Antigravity | Destekleniyor | Yerel host config |
 
 Editor otomatik tespit edilmezse installer'in verdigi manuel MCP config'i kullanabilirsiniz.
+
+### 🤖 Ajan Skill'i
+
+CCM, tum 9 MCP aracini, node_id formatini, onerilen akisi ve yaygin hatalari anlatan bir [`SKILL.md`](SKILL.md) ile geliyor — hicbir tahmin yapmadan.
+
+Ajan skill dizininize kopyalayin, birinci sinif arac referansi olarak kullanin:
+```bash
+cp SKILL.md ~/.agents/skills/context-manager/SKILL.md
+```
 
 ### Manuel Derleme (Rust)
 

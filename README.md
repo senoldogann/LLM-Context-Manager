@@ -10,6 +10,7 @@ English | [Turkce](./README.tr.md)
 [![MCP Ready](https://img.shields.io/badge/MCP-Compatible-blue.svg?style=flat-square&logo=google-cloud)](https://modelcontextprotocol.io/)
 [![Graph-RAG](https://img.shields.io/badge/Engine-Graph--RAG-purple.svg?style=flat-square)](https://github.com/senoldogann/LLM-Context-Manager)
 [![License](https://img.shields.io/badge/License-MIT-green.svg?style=flat-square)](LICENSE)
+[![Agent Skill](https://img.shields.io/badge/Agent-SKILL.md-blueviolet.svg?style=flat-square)](SKILL.md)
 
 ---
 
@@ -98,6 +99,16 @@ Expected outcomes:
 | Antigravity | Supported | Native host config |
 
 If your editor is not auto-detected, use the manual MCP config printed by the installer.
+
+### 🤖 Agent Skill
+
+CCM ships a [`SKILL.md`](SKILL.md) that AI agents (Claude Code, Copilot, Codex, Cursor) can load to understand all 9 MCP tools, node_id format, recommended flow, and common pitfalls — with zero guesswork.
+
+Copy it into your agent's skill directory and it becomes a first-class tool reference:
+```bash
+# Install to your local agents skill directory
+cp SKILL.md ~/.agents/skills/context-manager/SKILL.md
+```
 
 ### 🔧 Manual Build (Rust)
 
