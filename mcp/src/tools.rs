@@ -356,14 +356,57 @@ pub async fn index_project(state: &crate::server::ServerState, args: &Value) -> 
 
             let message = if stats.files_indexed == 0
                 && stats.files_failed == 0
+                && stats.files_skipped == 0
                 && stats.nodes_created == 0
             {
                 "No changes detected. Existing index is already up to date.".to_string()
             } else {
-                format!(
-                    "Project index refreshed successfully.\n\nStats:\n- Files Indexed: {}\n- Files Failed: {}\n- Nodes Created: {}\n\nThe project is ready for semantic search and graph navigation.",
-                    stats.files_indexed, stats.files_failed, stats.nodes_created
-                )
+                let mut lines = vec![
+                    "Project index refreshed successfully.".to_string(),
+                    String::new(),
+                    "Stats:".to_string(),
+                    format!("- Files Indexed: {}", stats.files_indexed),
+                    format!("- Files Failed: {}", stats.files_failed),
+                    format!("- Files Skipped: {}", stats.files_skipped),
+                    format!("- Nodes Created: {}", stats.nodes_created),
+                ];
+
+                if !stats.reason_counts.is_empty() {
+                    lines.push(String::new());
+                    lines.push("Issue Breakdown:".to_string());
+                    let mut reasons: Vec<_> = stats.reason_counts.iter().collect();
+                    reasons.sort_by(|left, right| right.1.cmp(left.1));
+                    for (reason, count) in reasons {
+                        lines.push(format!("- {}: {}", reason, count));
+                    }
+                }
+
+                if !stats.failed_files.is_empty() {
+                    lines.push(String::new());
+                    lines.push("Failed Files (sample):".to_string());
+                    for issue in stats.failed_files.iter().take(10) {
+                        lines.push(format!(
+                            "- {} [{}] {}",
+                            issue.path,
+                            issue.reason.as_str(),
+                            issue.detail
+                        ));
+                    }
+                }
+
+                if !stats.suggested_ignores.is_empty() {
+                    lines.push(String::new());
+                    lines.push("Suggested Ignore Patterns:".to_string());
+                    for pattern in stats.suggested_ignores.iter().take(10) {
+                        lines.push(format!("- {}", pattern));
+                    }
+                }
+
+                lines.push(String::new());
+                lines.push(
+                    "The project is ready for semantic search and graph navigation.".to_string(),
+                );
+                lines.join("\n")
             };
             Ok(ToolResult {
                 content: vec![ToolResultContent {

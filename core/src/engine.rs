@@ -1,7 +1,7 @@
 pub mod hybrid;
 
 use crate::engine::hybrid::HybridScorer;
-use crate::fs_utils::{detect_language, read_text_file_limited};
+use crate::fs_utils::{detect_language, read_text_file_limited, FileReadError};
 use crate::git::GitIntegrator;
 use crate::graph::{CodeGraph, CodeNode, EdgeType, NodeType};
 use crate::normalize_file_id;
@@ -9,6 +9,9 @@ use crate::parser::CodeParser;
 use crate::parser::SupportedLanguage;
 use crate::vector::extractor::Extractor;
 use crate::vector::store::LanceDbStore;
+use crate::{
+    path_is_policy_excluded, register_issue, suggestion_for_issue, IndexIssue, IndexIssueReason,
+};
 use anyhow::Result;
 use petgraph::visit::EdgeRef;
 
@@ -58,6 +61,7 @@ struct HybridCandidate {
     id: String,
     graph_score: f32,
     semantic_score: f32,
+    path_score: f32,
     combined_score: f32,
 }
 
@@ -164,6 +168,19 @@ impl RetrievalEngine {
             let Some(relative_path) = normalize_file_id(&root_path, &abs_path) else {
                 continue;
             };
+            if path_is_policy_excluded(&abs_path) {
+                let issue = IndexIssue {
+                    path: relative_path,
+                    reason: IndexIssueReason::SkippedByPolicy,
+                    detail: "Skipped by default exclude policy".to_string(),
+                    suggested_ignore: suggestion_for_issue(
+                        &abs_path.to_string_lossy(),
+                        &IndexIssueReason::SkippedByPolicy,
+                    ),
+                };
+                register_issue(&mut stats, issue, true);
+                continue;
+            }
 
             tracing::debug!(path = %relative_path, "Processing file");
 
@@ -193,12 +210,14 @@ impl RetrievalEngine {
             let content = match read_text_file_limited(&abs_path) {
                 Ok(content) => content,
                 Err(e) => {
+                    let issue = classify_incremental_read_error(&relative_path, e);
                     tracing::warn!(
                         path = %relative_path,
-                        error = %e,
+                        reason = %issue.reason.as_str(),
+                        detail = %issue.detail,
                         "Skipping file during incremental indexing"
                     );
-                    stats.files_failed += 1;
+                    register_issue(&mut stats, issue, false);
                     continue;
                 }
             };
@@ -229,12 +248,21 @@ impl RetrievalEngine {
             let tree = match parser.parse_tree(&content, lang) {
                 Ok(tree) => tree,
                 Err(e) => {
+                    let issue = IndexIssue {
+                        path: relative_path,
+                        reason: IndexIssueReason::ParseError,
+                        detail: e.to_string(),
+                        suggested_ignore: suggestion_for_issue(
+                            &abs_path.to_string_lossy(),
+                            &IndexIssueReason::ParseError,
+                        ),
+                    };
                     tracing::warn!(
-                        path = %relative_path,
-                        error = %e,
+                        path = %issue.path,
+                        detail = %issue.detail,
                         "Skipping file due to parse error"
                     );
-                    stats.files_failed += 1;
+                    register_issue(&mut stats, issue, false);
                     continue;
                 }
             };
@@ -300,7 +328,16 @@ impl RetrievalEngine {
                 }
                 stats.files_indexed += 1;
             } else {
-                stats.files_failed += 1;
+                let issue = IndexIssue {
+                    path: relative_path,
+                    reason: IndexIssueReason::ExtractError,
+                    detail: "AST extraction failed".to_string(),
+                    suggested_ignore: suggestion_for_issue(
+                        &abs_path.to_string_lossy(),
+                        &IndexIssueReason::ExtractError,
+                    ),
+                };
+                register_issue(&mut stats, issue, false);
             }
         }
 
@@ -430,11 +467,16 @@ impl RetrievalEngine {
         for id in candidate_ids {
             let graph_score = graph_scores.get(&id).copied().unwrap_or(0.0);
             let semantic_score = semantic_scores.get(&id).copied().unwrap_or(0.0);
-            let combined_score = scorer.combine(graph_score, semantic_score, 0.0, 0.0);
+            let spatial_score = graph
+                .find_node_by_id(&id)
+                .map(|node| repo_priority_score(&extract_file_path(&node.id)))
+                .unwrap_or(0.0);
+            let combined_score = scorer.combine(graph_score, semantic_score, spatial_score, 0.0);
             candidates.push(HybridCandidate {
                 id,
                 graph_score,
                 semantic_score,
+                path_score: spatial_score,
                 combined_score,
             });
         }
@@ -489,8 +531,11 @@ impl RetrievalEngine {
                     content: node.content.clone(),
                     relevance_score: candidate.combined_score,
                     reason: format!(
-                        "Hybrid (graph {:.2}, semantic {:.2}, conf {:.2})",
-                        candidate.graph_score, candidate.semantic_score, confidence
+                        "Hybrid (graph {:.2}, semantic {:.2}, path {:.2}, conf {:.2})",
+                        candidate.graph_score,
+                        candidate.semantic_score,
+                        candidate.path_score,
+                        confidence
                     ),
                 });
             } else if let Some(content) = semantic_content.get(&candidate.id) {
@@ -505,8 +550,8 @@ impl RetrievalEngine {
                     content: content.clone(),
                     relevance_score: candidate.combined_score,
                     reason: format!(
-                        "Hybrid (semantic {:.2}, conf {:.2})",
-                        candidate.semantic_score, confidence
+                        "Hybrid (semantic {:.2}, path {:.2}, conf {:.2})",
+                        candidate.semantic_score, candidate.path_score, confidence
                     ),
                 });
             }
@@ -633,7 +678,13 @@ impl RetrievalEngine {
                 end_line: Some(current_node.end_line),
                 node_type: Some(format!("{:?}", current_node.node_type)),
                 title: format!("Current: {}", current_node.name),
-                content: current_node.content.clone(),
+                content: focused_content_window(
+                    &current_node.content,
+                    current_node.start_line,
+                    Some(cursor.line),
+                    120,
+                    12_000,
+                ),
                 relevance_score: 1.0,
                 reason: "Active Focus".to_string(),
             });
@@ -654,7 +705,13 @@ impl RetrievalEngine {
                     end_line: Some(neighbor.end_line),
                     node_type: Some(format!("{:?}", neighbor.node_type)),
                     title: format!("Related: {}", neighbor.name),
-                    content: neighbor.content.clone(),
+                    content: focused_content_window(
+                        &neighbor.content,
+                        neighbor.start_line,
+                        Some(cursor.line),
+                        80,
+                        8_000,
+                    ),
                     relevance_score: 0.8,
                     reason: "Structural Relation".to_string(),
                 });
@@ -685,9 +742,154 @@ fn extract_file_path(node_id: &str) -> String {
         .to_string()
 }
 
+fn repo_priority_score(file_path: &str) -> f32 {
+    let normalized = file_path.to_ascii_lowercase();
+    let mut score = 0.5_f32;
+
+    if normalized.contains("/src/")
+        || normalized.contains("/app/")
+        || normalized.contains("/frontend/")
+        || normalized.contains("/backend/")
+        || normalized.contains("/server/")
+        || normalized.contains("/cmd/")
+        || normalized.contains("/go-scraper/")
+    {
+        score += 0.30;
+    }
+
+    if normalized.ends_with("/main.rs")
+        || normalized.ends_with("/main.py")
+        || normalized.ends_with("/main.ts")
+        || normalized.ends_with("/main.js")
+        || normalized.ends_with("/index.ts")
+        || normalized.ends_with("/index.js")
+    {
+        score += 0.20;
+    }
+
+    if normalized.contains("/scripts/")
+        || normalized.contains("/examples/")
+        || normalized.contains("/docs/")
+        || normalized.contains("/test/")
+        || normalized.contains("/tests/")
+        || normalized.contains("/fixtures/")
+    {
+        score -= 0.40;
+    }
+
+    if normalized.contains("/node_modules/")
+        || normalized.contains("/target/")
+        || normalized.contains("/dist/")
+        || normalized.contains("/build/")
+        || normalized.contains("/vendor/")
+    {
+        score -= 0.50;
+    }
+
+    score.clamp(0.0, 1.0)
+}
+
+fn focused_content_window(
+    content: &str,
+    section_start_line: usize,
+    focus_line: Option<usize>,
+    max_lines: usize,
+    max_chars: usize,
+) -> String {
+    if content.len() <= max_chars {
+        return content.to_string();
+    }
+
+    let lines: Vec<&str> = content.lines().collect();
+    if lines.is_empty() {
+        return String::new();
+    }
+
+    let focus_index = focus_line
+        .map(|line| line.saturating_sub(section_start_line))
+        .unwrap_or(0)
+        .min(lines.len().saturating_sub(1));
+
+    let half = max_lines / 2;
+    let mut start = focus_index.saturating_sub(half);
+    let end = (start + max_lines).min(lines.len());
+    if end - start < max_lines {
+        start = end.saturating_sub(max_lines);
+    }
+
+    let slice = lines[start..end].join("\n");
+    if slice.len() <= max_chars {
+        return slice;
+    }
+
+    let mut end_idx = max_chars;
+    while !slice.is_char_boundary(end_idx) {
+        end_idx = end_idx.saturating_sub(1);
+        if end_idx == 0 {
+            break;
+        }
+    }
+
+    format!(
+        "{}\n\n... [context window truncated: showing focused section around line {}]",
+        &slice[..end_idx],
+        focus_line.unwrap_or(section_start_line)
+    )
+}
+
 fn embed_data_files_enabled() -> bool {
     std::env::var("CCM_EMBED_DATA_FILES")
         .or_else(|_| std::env::var("CCM_EMBED_DATA"))
         .map(|val| matches!(val.to_lowercase().as_str(), "1" | "true" | "yes"))
         .unwrap_or(false)
+}
+
+fn classify_incremental_read_error(path: &str, error: anyhow::Error) -> IndexIssue {
+    match error.downcast::<FileReadError>() {
+        Ok(file_error) => match file_error {
+            FileReadError::TooLarge {
+                size_bytes,
+                limit_bytes,
+                ..
+            } => IndexIssue {
+                path: path.to_string(),
+                reason: IndexIssueReason::FileTooLarge,
+                detail: format!(
+                    "File is too large ({} bytes > {} bytes)",
+                    size_bytes, limit_bytes
+                ),
+                suggested_ignore: suggestion_for_issue(path, &IndexIssueReason::FileTooLarge),
+            },
+            FileReadError::BinaryNul { .. } => IndexIssue {
+                path: path.to_string(),
+                reason: IndexIssueReason::BinaryFile,
+                detail: "Binary file detected (contains NUL bytes)".to_string(),
+                suggested_ignore: suggestion_for_issue(path, &IndexIssueReason::BinaryFile),
+            },
+            FileReadError::NonUtf8 { source, .. } => IndexIssue {
+                path: path.to_string(),
+                reason: IndexIssueReason::NonUtf8File,
+                detail: format!("File is not UTF-8 text: {}", source),
+                suggested_ignore: suggestion_for_issue(path, &IndexIssueReason::NonUtf8File),
+            },
+            FileReadError::Metadata { source, .. } => IndexIssue {
+                path: path.to_string(),
+                reason: IndexIssueReason::MetadataError,
+                detail: format!("Failed to read file metadata: {}", source),
+                suggested_ignore: suggestion_for_issue(path, &IndexIssueReason::MetadataError),
+            },
+            FileReadError::Read { source, .. } => IndexIssue {
+                path: path.to_string(),
+                reason: IndexIssueReason::ReadError,
+                detail: format!("Failed to read file content: {}", source),
+                suggested_ignore: suggestion_for_issue(path, &IndexIssueReason::ReadError),
+            },
+        },
+        Err(other) => IndexIssue {
+            path: path.to_string(),
+            reason: IndexIssueReason::ReadError,
+            detail: other.to_string(),
+            suggested_ignore: suggestion_for_issue(path, &IndexIssueReason::ReadError),
+        },
+    }
 }

@@ -1,5 +1,5 @@
 use crate::parser::SupportedLanguage;
-use anyhow::{anyhow, Result};
+use anyhow::Result;
 use std::fs;
 use std::path::Path;
 
@@ -30,26 +30,102 @@ pub(crate) fn detect_language(path: &Path) -> SupportedLanguage {
 
 pub(crate) fn read_text_file_limited(path: &Path) -> Result<String> {
     let max_bytes = max_file_bytes();
-    read_text_file_with_limit(path, max_bytes)
+    read_text_file_with_limit(path, max_bytes).map_err(Into::into)
 }
 
-pub(crate) fn read_text_file_with_limit(path: &Path, max_bytes: u64) -> Result<String> {
-    let meta = fs::metadata(path)?;
+#[derive(Debug)]
+pub enum FileReadError {
+    Metadata {
+        path: String,
+        source: std::io::Error,
+    },
+    TooLarge {
+        path: String,
+        size_bytes: u64,
+        limit_bytes: u64,
+    },
+    Read {
+        path: String,
+        source: std::io::Error,
+    },
+    BinaryNul {
+        path: String,
+    },
+    NonUtf8 {
+        path: String,
+        source: std::string::FromUtf8Error,
+    },
+}
+
+impl std::fmt::Display for FileReadError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Metadata { path, source } => {
+                write!(f, "Failed to read metadata for '{}': {}", path, source)
+            }
+            Self::TooLarge {
+                path,
+                size_bytes,
+                limit_bytes,
+            } => write!(
+                f,
+                "File '{}' is too large: {} bytes > limit {} bytes",
+                path, size_bytes, limit_bytes
+            ),
+            Self::Read { path, source } => {
+                write!(f, "Failed to read file '{}': {}", path, source)
+            }
+            Self::BinaryNul { path } => write!(f, "Binary file detected (NUL byte): '{}'", path),
+            Self::NonUtf8 { path, source } => {
+                write!(f, "Non UTF-8 content in '{}': {}", path, source)
+            }
+        }
+    }
+}
+
+impl std::error::Error for FileReadError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        match self {
+            Self::Metadata { source, .. } => Some(source),
+            Self::Read { source, .. } => Some(source),
+            Self::NonUtf8 { source, .. } => Some(source),
+            Self::TooLarge { .. } | Self::BinaryNul { .. } => None,
+        }
+    }
+}
+
+pub(crate) fn read_text_file_with_limit(
+    path: &Path,
+    max_bytes: u64,
+) -> std::result::Result<String, FileReadError> {
+    let path_str = path.to_string_lossy().to_string();
+    let meta = fs::metadata(path).map_err(|source| FileReadError::Metadata {
+        path: path_str.clone(),
+        source,
+    })?;
     if meta.len() > max_bytes {
-        return Err(anyhow!(
-            "File size {} bytes exceeds limit of {} bytes",
-            meta.len(),
-            max_bytes
-        ));
+        return Err(FileReadError::TooLarge {
+            path: path_str,
+            size_bytes: meta.len(),
+            limit_bytes: max_bytes,
+        });
     }
 
-    let bytes = fs::read(path)?;
+    let bytes = fs::read(path).map_err(|source| FileReadError::Read {
+        path: path.to_string_lossy().to_string(),
+        source,
+    })?;
 
     if bytes.iter().take(BINARY_SNIFF_LEN).any(|byte| *byte == 0) {
-        return Err(anyhow!("Binary file detected (NUL byte)"));
+        return Err(FileReadError::BinaryNul {
+            path: path.to_string_lossy().to_string(),
+        });
     }
 
-    String::from_utf8(bytes).map_err(|_| anyhow!("Binary or non-UTF-8 file"))
+    String::from_utf8(bytes).map_err(|source| FileReadError::NonUtf8 {
+        path: path.to_string_lossy().to_string(),
+        source,
+    })
 }
 
 #[cfg(test)]
@@ -64,7 +140,7 @@ mod tests {
         fs::write(&file_path, vec![0u8, 159u8, 146u8]).unwrap();
 
         let err = read_text_file_with_limit(&file_path, 1024).unwrap_err();
-        assert!(err.to_string().contains("Binary"));
+        assert!(matches!(err, FileReadError::BinaryNul { .. }));
     }
 
     #[test]
@@ -75,6 +151,6 @@ mod tests {
         fs::write(&file_path, payload).unwrap();
 
         let err = read_text_file_with_limit(&file_path, 8).unwrap_err();
-        assert!(err.to_string().contains("exceeds limit"));
+        assert!(matches!(err, FileReadError::TooLarge { .. }));
     }
 }

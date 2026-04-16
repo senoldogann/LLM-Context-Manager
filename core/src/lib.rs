@@ -11,7 +11,7 @@ pub mod storage;
 pub mod vector;
 
 use crate::engine::{CursorPosition, RetrievalEngine};
-use crate::fs_utils::{detect_language, read_text_file_limited};
+use crate::fs_utils::{detect_language, read_text_file_limited, FileReadError};
 use crate::graph::CodeGraph;
 use crate::parser::{CodeParser, SupportedLanguage};
 use crate::vector::store::LanceDbStore;
@@ -98,10 +98,68 @@ pub async fn run_query(query: &str, project_path: &str) -> Result<Vec<ContextSug
     Ok(results)
 }
 
+const MAX_INDEX_ISSUES_RECORDED: usize = 250;
+const EXCLUDED_DIRECTORY_NAMES: &[&str] = &[
+    ".git",
+    ".hg",
+    ".svn",
+    "node_modules",
+    "vendor",
+    "target",
+    "dist",
+    "build",
+    "out",
+    ".next",
+    ".turbo",
+    ".cache",
+    "coverage",
+];
+const EXCLUDED_FILE_EXTENSIONS: &[&str] = &[
+    "png", "jpg", "jpeg", "gif", "webp", "ico", "pdf", "zip", "gz", "tar", "7z", "rar", "jar",
+    "exe", "dll", "so", "dylib", "class", "o", "a", "woff", "woff2", "ttf", "eot", "mp3", "mp4",
+    "mov", "avi", "bin",
+];
+
+fn build_project_walker(path: &Path) -> ignore::Walk {
+    use ignore::WalkBuilder;
+
+    WalkBuilder::new(path)
+        .hidden(false)
+        .git_ignore(true)
+        .git_exclude(true)
+        .parents(true)
+        .ignore(true)
+        .add_custom_ignore_filename(".ccmignore")
+        .filter_entry(should_traverse_entry)
+        .build()
+}
+
+fn should_traverse_entry(entry: &ignore::DirEntry) -> bool {
+    let Some(name) = entry.file_name().to_str() else {
+        return true;
+    };
+    let file_type = entry.file_type();
+
+    if file_type.map(|ft| ft.is_dir()).unwrap_or(false) {
+        return !EXCLUDED_DIRECTORY_NAMES.contains(&name);
+    }
+
+    if file_type.map(|ft| ft.is_file()).unwrap_or(false) {
+        let ext = Path::new(name)
+            .extension()
+            .and_then(|value| value.to_str())
+            .map(|value| value.to_ascii_lowercase());
+        if let Some(extension) = ext {
+            return !EXCLUDED_FILE_EXTENSIONS.contains(&extension.as_str());
+        }
+    }
+
+    true
+}
+
 /// Index a directory recursively.
 /// Parses all supported files and stores embeddings in the vector database.
 pub async fn index_directory(path: &str, db_path: Option<&str>) -> Result<IndexStats> {
-    use ignore::WalkBuilder;
     use tracing::{error, info, warn};
 
     // If db_path is provided, use it. Otherwise default to path/data/ccm_db
@@ -128,11 +186,8 @@ pub async fn index_directory(path: &str, db_path: Option<&str>) -> Result<IndexS
         )
     })?;
 
-    // Create a walker that respects .gitignore
-    let walker = WalkBuilder::new(path)
-        .hidden(false) // Still scan hidden files if needed, but respect gitignore
-        .git_ignore(true)
-        .build();
+    // Create a walker that respects gitignore + ccmignore and skips heavy noise paths.
+    let walker = build_project_walker(Path::new(path));
 
     // Walk directory recursively
     for result in walker {
@@ -148,6 +203,13 @@ pub async fn index_directory(path: &str, db_path: Option<&str>) -> Result<IndexS
                     continue;
                 };
                 if is_internal_index_file(&file_id) {
+                    let issue = IndexIssue {
+                        path: file_id,
+                        reason: IndexIssueReason::InternalIndexFile,
+                        detail: "Internal CCM data file".to_string(),
+                        suggested_ignore: None,
+                    };
+                    register_issue(&mut stats, issue, true);
                     continue;
                 }
 
@@ -155,20 +217,45 @@ pub async fn index_directory(path: &str, db_path: Option<&str>) -> Result<IndexS
                     manifest.files.insert(file_id.clone(), fp);
                 }
 
-                // Universal Support: We attempt to index ALL files returned by the ignore-walker.
+                if path_is_policy_excluded(file_path) {
+                    let issue = IndexIssue {
+                        path: file_id,
+                        reason: IndexIssueReason::SkippedByPolicy,
+                        detail: "Skipped by default exclude policy".to_string(),
+                        suggested_ignore: suggestion_for_issue(
+                            &file_path.to_string_lossy(),
+                            &IndexIssueReason::SkippedByPolicy,
+                        ),
+                    };
+                    register_issue(&mut stats, issue, true);
+                    continue;
+                }
 
                 match populate_graph_for_file(&mut graph, file_path, &file_id) {
                     Ok(_) => {
                         stats.files_indexed += 1;
                     }
                     Err(e) => {
-                        stats.files_failed += 1;
-                        tracing::debug!(file = %file_path_str, error = %e, "Skipped file");
+                        let issue = issue_from_populate_error(&file_id, e);
+                        tracing::debug!(
+                            file = %file_path_str,
+                            reason = %issue.reason.as_str(),
+                            detail = %issue.detail,
+                            "Failed to index file"
+                        );
+                        register_issue(&mut stats, issue, false);
                     }
                 }
             }
             Err(err) => {
-                warn!("Error during directory traversal: {}", err);
+                let issue = IndexIssue {
+                    path: path.to_string(),
+                    reason: IndexIssueReason::WalkError,
+                    detail: err.to_string(),
+                    suggested_ignore: None,
+                };
+                register_issue(&mut stats, issue, false);
+                warn!(error = %err, "Error during directory traversal");
             }
         }
     }
@@ -342,18 +429,109 @@ pub async fn update_index(path: &str, db_path: Option<&str>) -> Result<IndexStat
     Ok(stats)
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
+#[serde(rename_all = "snake_case")]
+pub enum IndexIssueReason {
+    WalkError,
+    SkippedByPolicy,
+    InternalIndexFile,
+    FileTooLarge,
+    BinaryFile,
+    NonUtf8File,
+    MetadataError,
+    ReadError,
+    ParseError,
+    ExtractError,
+}
+
+impl IndexIssueReason {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Self::WalkError => "walk_error",
+            Self::SkippedByPolicy => "skipped_by_policy",
+            Self::InternalIndexFile => "internal_index_file",
+            Self::FileTooLarge => "file_too_large",
+            Self::BinaryFile => "binary_file",
+            Self::NonUtf8File => "non_utf8_file",
+            Self::MetadataError => "metadata_error",
+            Self::ReadError => "read_error",
+            Self::ParseError => "parse_error",
+            Self::ExtractError => "extract_error",
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct IndexIssue {
+    pub path: String,
+    pub reason: IndexIssueReason,
+    pub detail: String,
+    pub suggested_ignore: Option<String>,
+}
+
 /// Statistics from an indexing operation
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Clone, Serialize, Deserialize)]
 pub struct IndexStats {
     pub files_indexed: usize,
     pub files_failed: usize,
+    pub files_skipped: usize,
     pub nodes_created: usize,
+    pub failed_files: Vec<IndexIssue>,
+    pub skipped_files: Vec<IndexIssue>,
+    pub reason_counts: HashMap<String, usize>,
+    pub suggested_ignores: Vec<String>,
 }
 
-fn populate_graph_for_file(graph: &mut CodeGraph, file_path: &Path, file_id: &str) -> Result<()> {
+enum PopulateFileError {
+    Read(FileReadError),
+    Parse(anyhow::Error),
+    Extract(anyhow::Error),
+}
+
+impl std::fmt::Display for PopulateFileError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Read(err) => write!(f, "{}", err),
+            Self::Parse(err) => write!(f, "{}", err),
+            Self::Extract(err) => write!(f, "{}", err),
+        }
+    }
+}
+
+impl std::fmt::Debug for PopulateFileError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Read(err) => f.debug_tuple("Read").field(err).finish(),
+            Self::Parse(err) => f.debug_tuple("Parse").field(err).finish(),
+            Self::Extract(err) => f.debug_tuple("Extract").field(err).finish(),
+        }
+    }
+}
+
+impl std::error::Error for PopulateFileError {}
+
+impl From<FileReadError> for PopulateFileError {
+    fn from(value: FileReadError) -> Self {
+        Self::Read(value)
+    }
+}
+
+fn populate_graph_for_file(
+    graph: &mut CodeGraph,
+    file_path: &Path,
+    file_id: &str,
+) -> std::result::Result<(), PopulateFileError> {
     use crate::vector::extractor::Extractor;
 
-    let content = read_text_file_limited(file_path)?;
+    let content = read_text_file_limited(file_path).map_err(|error| {
+        match error.downcast::<FileReadError>() {
+            Ok(file_error) => PopulateFileError::Read(file_error),
+            Err(other) => PopulateFileError::Read(FileReadError::Read {
+                path: file_path.to_string_lossy().to_string(),
+                source: std::io::Error::other(other.to_string()),
+            }),
+        }
+    })?;
 
     let lang = detect_language(file_path);
 
@@ -376,14 +554,20 @@ fn populate_graph_for_file(graph: &mut CodeGraph, file_path: &Path, file_id: &st
 
     // Parse AST
     let mut parser = CodeParser::new();
-    let tree = parser.parse_tree(&content, lang)?;
+    let tree = parser
+        .parse_tree(&content, lang)
+        .map_err(PopulateFileError::Parse)?;
 
     // PASS 1: Extract definitions (Files, Functions, Classes, etc.)
     let mut extractor = Extractor::new(content.clone(), lang);
-    extractor.extract(&tree, graph, file_id)?;
+    extractor
+        .extract(&tree, graph, file_id)
+        .map_err(PopulateFileError::Extract)?;
 
     // PASS 2: Extract references (Function Calls -> Calls edges)
-    let edges_created = extractor.extract_references(&tree, graph, file_id)?;
+    let edges_created = extractor
+        .extract_references(&tree, graph, file_id)
+        .map_err(PopulateFileError::Extract)?;
     if edges_created > 0 {
         tracing::debug!("Linked {} call edges", edges_created);
     }
@@ -471,13 +655,8 @@ fn save_manifest(path: &Path, manifest: &IndexManifest) -> Result<()> {
 }
 
 fn build_manifest(project_root: &Path) -> Result<IndexManifest> {
-    use ignore::WalkBuilder;
-
     let mut manifest = IndexManifest::default();
-    let walker = WalkBuilder::new(project_root)
-        .hidden(false)
-        .git_ignore(true)
-        .build();
+    let walker = build_project_walker(project_root);
 
     for result in walker {
         let entry = match result {
@@ -494,6 +673,9 @@ fn build_manifest(project_root: &Path) -> Result<IndexManifest> {
             continue;
         };
         if is_internal_index_file(&file_id) {
+            continue;
+        }
+        if path_is_policy_excluded(file_path) {
             continue;
         }
 
@@ -544,11 +726,148 @@ fn update_manifest_for_paths(manifest: &mut IndexManifest, project_root: &Path, 
         }
 
         if abs.exists() {
+            if path_is_policy_excluded(&abs) {
+                manifest.files.remove(&file_id);
+                continue;
+            }
             if let Some(fp) = fingerprint_for_path(&abs) {
                 manifest.files.insert(file_id, fp);
             }
         } else {
             manifest.files.remove(&file_id);
         }
+    }
+}
+
+pub(crate) fn path_is_policy_excluded(file_path: &Path) -> bool {
+    for component in file_path.components() {
+        let text = component.as_os_str().to_string_lossy().to_string();
+        if EXCLUDED_DIRECTORY_NAMES.contains(&text.as_str()) {
+            return true;
+        }
+    }
+
+    let extension = file_path
+        .extension()
+        .and_then(|value| value.to_str())
+        .map(|value| value.to_ascii_lowercase());
+    if let Some(ext) = extension {
+        return EXCLUDED_FILE_EXTENSIONS.contains(&ext.as_str());
+    }
+
+    false
+}
+
+fn issue_from_read_error(path: &str, error: FileReadError) -> IndexIssue {
+    let (reason, detail) = match error {
+        FileReadError::TooLarge {
+            size_bytes,
+            limit_bytes,
+            ..
+        } => (
+            IndexIssueReason::FileTooLarge,
+            format!(
+                "File is too large ({} bytes > {} bytes)",
+                size_bytes, limit_bytes
+            ),
+        ),
+        FileReadError::BinaryNul { .. } => (
+            IndexIssueReason::BinaryFile,
+            "Binary file detected (contains NUL bytes)".to_string(),
+        ),
+        FileReadError::NonUtf8 { source, .. } => (
+            IndexIssueReason::NonUtf8File,
+            format!("File is not UTF-8 text: {}", source),
+        ),
+        FileReadError::Metadata { source, .. } => (
+            IndexIssueReason::MetadataError,
+            format!("Failed to read file metadata: {}", source),
+        ),
+        FileReadError::Read { source, .. } => (
+            IndexIssueReason::ReadError,
+            format!("Failed to read file content: {}", source),
+        ),
+    };
+
+    IndexIssue {
+        path: path.to_string(),
+        suggested_ignore: suggestion_for_issue(path, &reason),
+        reason,
+        detail,
+    }
+}
+
+fn issue_from_populate_error(path: &str, error: PopulateFileError) -> IndexIssue {
+    match error {
+        PopulateFileError::Read(read_error) => issue_from_read_error(path, read_error),
+        PopulateFileError::Parse(parse_error) => IndexIssue {
+            path: path.to_string(),
+            reason: IndexIssueReason::ParseError,
+            detail: parse_error.to_string(),
+            suggested_ignore: suggestion_for_issue(path, &IndexIssueReason::ParseError),
+        },
+        PopulateFileError::Extract(extract_error) => IndexIssue {
+            path: path.to_string(),
+            reason: IndexIssueReason::ExtractError,
+            detail: extract_error.to_string(),
+            suggested_ignore: suggestion_for_issue(path, &IndexIssueReason::ExtractError),
+        },
+    }
+}
+
+pub(crate) fn suggestion_for_issue(path: &str, reason: &IndexIssueReason) -> Option<String> {
+    let normalized = path.replace('\\', "/");
+    let first_segment = normalized
+        .trim_start_matches("./")
+        .split('/')
+        .next()
+        .map(|value| value.to_string());
+
+    if let Some(segment) = first_segment {
+        if EXCLUDED_DIRECTORY_NAMES.contains(&segment.as_str()) {
+            return Some(format!("./{}/**", segment));
+        }
+    }
+
+    if matches!(
+        reason,
+        IndexIssueReason::FileTooLarge
+            | IndexIssueReason::BinaryFile
+            | IndexIssueReason::NonUtf8File
+            | IndexIssueReason::ParseError
+    ) {
+        let extension = Path::new(&normalized)
+            .extension()
+            .and_then(|value| value.to_str())
+            .map(|value| value.to_ascii_lowercase());
+        if let Some(ext) = extension {
+            return Some(format!("**/*.{}", ext));
+        }
+    }
+
+    None
+}
+
+pub(crate) fn register_issue(stats: &mut IndexStats, issue: IndexIssue, skipped: bool) {
+    let reason_key = issue.reason.as_str().to_string();
+    *stats.reason_counts.entry(reason_key).or_insert(0) += 1;
+
+    if let Some(pattern) = &issue.suggested_ignore {
+        if !stats.suggested_ignores.contains(pattern) {
+            stats.suggested_ignores.push(pattern.clone());
+        }
+    }
+
+    if skipped {
+        stats.files_skipped += 1;
+        if stats.skipped_files.len() < MAX_INDEX_ISSUES_RECORDED {
+            stats.skipped_files.push(issue);
+        }
+        return;
+    }
+
+    stats.files_failed += 1;
+    if stats.failed_files.len() < MAX_INDEX_ISSUES_RECORDED {
+        stats.failed_files.push(issue);
     }
 }

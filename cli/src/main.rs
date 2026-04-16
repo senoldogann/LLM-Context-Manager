@@ -94,13 +94,27 @@ async fn main() -> anyhow::Result<()> {
             let db_path_str = db_path.as_ref().map(|p| p.to_string_lossy().to_string());
 
             // Initial Indexing
-            if let Err(e) = ccm_core::index_directory(&path_str, db_path_str.as_deref()).await {
-                tracing::error!("Initial indexing failed: {}", e);
-                if !watch {
-                    std::process::exit(1);
+            match ccm_core::index_directory(&path_str, db_path_str.as_deref()).await {
+                Ok(stats) => {
+                    tracing::info!(
+                        indexed = stats.files_indexed,
+                        failed = stats.files_failed,
+                        skipped = stats.files_skipped,
+                        nodes = stats.nodes_created,
+                        "Initial indexing complete"
+                    );
+                    if !stats.reason_counts.is_empty() {
+                        for (reason, count) in &stats.reason_counts {
+                            tracing::info!(reason = %reason, count = *count, "Index issue summary");
+                        }
+                    }
                 }
-            } else {
-                tracing::info!("Initial Indexing Complete");
+                Err(e) => {
+                    tracing::error!("Initial indexing failed: {}", e);
+                    if !watch {
+                        std::process::exit(1);
+                    }
+                }
             }
 
             if watch {
