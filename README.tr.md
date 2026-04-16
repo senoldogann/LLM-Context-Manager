@@ -1,5 +1,9 @@
 # Cognitive Codebase Matrix (CCM)
 
+<p align="center">
+  <img src="docs/assets/cover.png" width="400" alt="LLM Context Manager">
+</p>
+
 [English](./README.md) | Turkce
 
 > **🧠 Otonom Yapay Zeka Ajanlari Icin Norel Omurga**

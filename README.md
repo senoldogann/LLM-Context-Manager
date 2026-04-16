@@ -1,5 +1,9 @@
 # Cognitive Codebase Matrix (CCM)
 
+<p align="center">
+  <img src="docs/assets/cover.png" width="400" alt="LLM Context Manager">
+</p>
+
 English | [Turkce](./README.tr.md)
 
 > **🧠 The Neural Backbone for Autonomous AI Agents**
