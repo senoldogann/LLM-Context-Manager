@@ -116,7 +116,7 @@ cargo build --release
 
 ## Configuration
 
-Create `~/.ccm/.env`:
+Create `~/.ccm/.env` (or start from the repository's `.env.example`):
 
 ```ini
 # Option A: Local (Recommended - Privacy)
@@ -151,6 +151,12 @@ CCM_EMBED_DATA_FILES=0
 # npm wrapper security (0 = enforce checksum, 1 = bypass)
 CCM_ALLOW_UNVERIFIED_BINARIES=0
 ```
+
+Advanced overrides:
+- `CCM_PROJECT_ROOT` pins the default project root used by the npm wrapper and MCP fallback engine.
+- `CCM_DB_PATH` overrides the default MCP vector DB location.
+- `.env.example` contains the full advanced tuning surface for chunking, batch size, hybrid ranking weights, and compatibility aliases such as `OPENAI_API_KEY`, `CCM_SKIP_CHECKSUM`, `CCM_MCP_REQUIRE_ALLOWED_ROOTS`, `CCM_EMBED_DATA`, and `EMBEDDING_DISABLED`.
+- Hybrid weight tuning details live in [`docs/hybrid-ranking.md`](./docs/hybrid-ranking.md).
 
 **Note:** Requires Ollama running (`ollama serve`) with model pulled (`ollama pull mxbai-embed-large`).
 **Production Tip:** Set `CCM_ALLOWED_ROOTS` and enable `CCM_REQUIRE_ALLOWED_ROOTS=1` to prevent unintended project access.
@@ -255,7 +261,7 @@ CCM release builds are designed to be reproducible and install-safe:
 - The npm wrapper verifies downloaded binaries before first use
 - MCP transport now enforces request size limits and redacts sensitive debug payloads
 - The release workflow builds Linux, macOS, and Windows artifacts before attaching release assets
-- npm publishing uses GitHub Actions trusted publishing with OIDC
+- npm publication is a separate manual step from `npm/` after the GitHub Release assets are attached
 - The README quick-start now matches the same smoke path we use for first-install checks
 
 For local source builds, `cargo build --release` still requires `protoc` to be installed on your machine.
@@ -266,7 +272,7 @@ For local source builds, `cargo build --release` still requires `protoc` to be i
 
 ### "No context found"
 1. Run `ccm-cli index --path .` first
-2. Check CCM_PROJECT_ROOT matches indexed directory
+2. If you override it, check `CCM_PROJECT_ROOT` matches the indexed directory
 3. Ensure Ollama is running
 
 ### Slow indexing
@@ -296,6 +302,8 @@ For local source builds, `cargo build --release` still requires `protoc` to be i
 - **NPM Package:** [@senoldogann/context-manager](https://www.npmjs.com/package/@senoldogann/context-manager)
 - **Turkish README:** [README.tr.md](./README.tr.md)
 - **Getting Started:** [GETTING_STARTED.md](GETTING_STARTED.md)
+- **Environment Example:** [.env.example](./.env.example)
+- **Hybrid Ranking Notes:** [docs/hybrid-ranking.md](./docs/hybrid-ranking.md)
 - **Contributing:** [CONTRIBUTING.md](CONTRIBUTING.md)
 
 ---

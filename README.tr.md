@@ -45,7 +45,7 @@ CCM, ham kod yiginlari vermek yerine **AI-Optimized Context** uretir:
 - **Rust Tabanli** - Hizli indexleme ve sorgulama
 - **Toplu Embedding** - Buyuk kod bloklarini kisa surede isler
 - **LanceDB** - Dusuk gecikmeli vektor depolama
-- **Tree-sitter** - Rust, Python ve TypeScript icin saglam AST analizi
+- **Tree-sitter** - Rust, Python, TypeScript, Go, Java, Kotlin ve C# icin saglam AST analizi
 
 ### Production Sertlestirme
 - **Binary Checksums** - Release artifact'lari `checksums.txt` ile dogrulanir
@@ -114,7 +114,7 @@ cargo build --release
 
 ## Konfigurasyon
 
-`~/.ccm/.env` dosyasi olusturun:
+`~/.ccm/.env` dosyasi olusturun (veya repodaki `.env.example` dosyasini baz alin):
 
 ```ini
 # Secenek A: Lokal (onerilen)
@@ -148,6 +148,12 @@ CCM_EMBED_DATA_FILES=0
 # Binary checksum dogrulama (0 = zorunlu, 1 = bypass)
 CCM_ALLOW_UNVERIFIED_BINARIES=0
 ```
+
+Gelismis ayarlar:
+- `CCM_PROJECT_ROOT`, npm wrapper ve MCP fallback engine icin varsayilan proje kokunu sabitler.
+- `CCM_DB_PATH`, varsayilan MCP vektor veritabani konumunu degistirir.
+- Chunking, batch size, hibrit agirliklar ve `OPENAI_API_KEY`, `CCM_SKIP_CHECKSUM`, `CCM_MCP_REQUIRE_ALLOWED_ROOTS`, `CCM_EMBED_DATA`, `EMBEDDING_DISABLED` gibi uyumluluk alias'lari icin `.env.example` dosyasina bakin.
+- Hibrit skor agirliklari icin [`docs/hybrid-ranking.md`](./docs/hybrid-ranking.md) dosyasini kullanin.
 
 **Not:** Lokal embedding icin Ollama'nin calisiyor olmasi gerekir (`ollama serve`) ve modelin indirilmis olmasi gerekir (`ollama pull mxbai-embed-large`).
 
@@ -253,6 +259,7 @@ CCM release akisinda kurulum guvenilirligi icin su noktalar yer alir:
 - npm wrapper, indirilen binary'leri ilk kullanimdan once dogrular
 - MCP transport request size limit uygular ve debug payload'larda hassas degerleri maskeler
 - Release workflow, asset yuklemeden once Linux, macOS ve Windows build'lerini alir
+- npm yayini, GitHub Release asset'lari tamamlandiktan sonra `npm/` dizininden manuel yapilir
 - README quick-start adimlari ilk kurulum smoke test akisi ile aynidir
 
 Lokal source build icin `cargo build --release` komutu halen makinenizde `protoc` kurulu olmasini gerektirir.
@@ -263,7 +270,7 @@ Lokal source build icin `cargo build --release` komutu halen makinenizde `protoc
 
 ### "No context found"
 1. Once `ccm-cli index --path .` calistirin
-2. Dogru proje dizininde oldugunuzu kontrol edin
+2. Override ettiyseniz `CCM_PROJECT_ROOT` degerinin indexlenen dizinle ayni oldugunu kontrol edin
 3. Ollama'nin ayakta oldugundan emin olun
 
 ### Yavas indexleme
@@ -293,6 +300,8 @@ Lokal source build icin `cargo build --release` komutu halen makinenizde `protoc
 - **NPM Paketi:** [@senoldogann/context-manager](https://www.npmjs.com/package/@senoldogann/context-manager)
 - **English README:** [README.md](./README.md)
 - **Baslangic Rehberi:** [GETTING_STARTED.md](./GETTING_STARTED.md)
+- **Ornek Ortam Dosyasi:** [.env.example](./.env.example)
+- **Hybrid Ranking Notlari:** [docs/hybrid-ranking.md](./docs/hybrid-ranking.md)
 - **Katki:** [CONTRIBUTING.md](./CONTRIBUTING.md)
 
 ---

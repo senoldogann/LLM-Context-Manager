@@ -36,6 +36,8 @@ cargo build --release
 
 ### Step 2: Configure
 
+Create `~/.ccm/.env` with the basics below, or start from the repository's `.env.example` for the full advanced list.
+
 Ensure [Ollama](https://ollama.com) is running:
 
 ```bash
@@ -53,6 +55,8 @@ CCM_REQUIRE_ALLOWED_ROOTS=1
 # Include data files in semantic search
 CCM_EMBED_DATA_FILES=0
 ```
+
+Advanced overrides such as `CCM_PROJECT_ROOT`, `CCM_DB_PATH`, chunking controls, and hybrid ranking weights are documented in `.env.example` and [`docs/hybrid-ranking.md`](docs/hybrid-ranking.md).
 
 ### Step 3: Index Your Project
 

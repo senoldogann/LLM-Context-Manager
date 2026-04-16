@@ -261,7 +261,7 @@ impl LanceDbStore {
         let embedder = self
             .embedder
             .as_ref()
-            .ok_or_else(|| anyhow::anyhow!("Embedder not initialized. Set CCM_OPENAI_API_KEY or CCM_EMBED_URL to enable semantic search."))?;
+            .ok_or_else(|| anyhow::anyhow!("Embedder not initialized. Configure EMBEDDING_PROVIDER/EMBEDDING_HOST/EMBEDDING_MODEL and EMBEDDING_API_KEY (or OPENAI_API_KEY), or disable semantic search with CCM_DISABLE_EMBEDDER=1."))?;
 
         // 1. Embed Query
         let query_vecs = embedder.embed(vec![query.to_string()]).await?;

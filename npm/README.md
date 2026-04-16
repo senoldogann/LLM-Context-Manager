@@ -104,13 +104,14 @@ CCM uses a **Local-First** architecture:
 
 ### Environment Variables
 
-Create `~/.ccm/.env`:
+Create `~/.ccm/.env` (or start from the repository's `.env.example`):
 
 ```ini
 # Local (Recommended)
 EMBEDDING_PROVIDER=ollama
 EMBEDDING_HOST=http://127.0.0.1:11434
 EMBEDDING_MODEL=mxbai-embed-large
+EMBEDDING_API_KEY=ollama
 
 # Cloud (Optional)
 EMBEDDING_PROVIDER=openai
@@ -138,6 +139,12 @@ CCM_EMBED_DATA_FILES=0
 # Binary checksum verification (0 = enforce, 1 = bypass)
 CCM_ALLOW_UNVERIFIED_BINARIES=0
 ```
+
+Advanced overrides:
+- `CCM_PROJECT_ROOT` pins the default project root used by the wrapper and MCP fallback engine.
+- `CCM_DB_PATH` overrides the default MCP vector DB location.
+- `.env.example` in the repository contains chunking, batch-size, hybrid-weight, and compatibility-alias settings such as `OPENAI_API_KEY`, `CCM_SKIP_CHECKSUM`, `CCM_MCP_REQUIRE_ALLOWED_ROOTS`, `CCM_EMBED_DATA`, and `EMBEDDING_DISABLED`.
+- Hybrid scoring defaults and tuning notes live in [`docs/hybrid-ranking.md`](https://github.com/senoldogann/LLM-Context-Manager/blob/main/docs/hybrid-ranking.md).
 
 **Production Tip:** Set `CCM_ALLOWED_ROOTS` and enable `CCM_REQUIRE_ALLOWED_ROOTS=1` to restrict MCP access.
 
@@ -169,7 +176,7 @@ This package handles:
 - The npm wrapper verifies checksums before using downloaded binaries
 - Redirects are restricted to approved GitHub release hosts
 - Release builds run for Linux, macOS, and Windows before assets are attached
-- npm publishing uses GitHub Actions trusted publishing with OIDC
+- npm publication is a manual step from `npm/` after the GitHub Release assets are attached
 - The same smoke path is documented here and in the main repository README
 
 ### ✅ Binary Integrity
@@ -189,6 +196,11 @@ Enable `CCM_EMBED_DATA_FILES=1` to include them in semantic search.
 ---
 
 ## 📝 Changelog
+
+### v0.1.31
+- ✅ `index_project` is idempotent again and ignores CCM's own generated index files
+- ✅ `search_code` falls back cleanly when embeddings are disabled
+- ✅ Added a real-world Guardian MCP end-to-end test for all 9 tools
 
 ### v0.1.27
 - ✅ `search_code` now returns node IDs and location metadata, with configurable limits

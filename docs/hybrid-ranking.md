@@ -13,10 +13,10 @@ Combine structural graph signals with semantic vector similarity to improve rele
 score = w_graph * graph_score + w_sem * semantic_score + w_spatial * spatial_score + w_recent * recency_score
 
 Default weights (balanced):
-- w_graph = 0.50
+- w_graph = 0.55
 - w_sem = 0.35
-- w_spatial = 0.10
-- w_recent = 0.05
+- w_spatial = 0.08
+- w_recent = 0.02
 
 Alternative profiles:
 - Structural-first: 0.65 / 0.25 / 0.07 / 0.03

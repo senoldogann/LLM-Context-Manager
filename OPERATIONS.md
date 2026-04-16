@@ -20,9 +20,13 @@ cargo test
 ### 🚀 Releasing a New Version
 1.  **Test:** Ensure `cargo test` passes.
 2.  **Lint:** Run `cargo clippy`.
-3.  **Publish:** 
-    - Update version in `Cargo.toml` files.
-    - Run `npm publish` in the `npm/` directory for the wrapper.
+3.  **Prepare Release:**
+    - Update version in `Cargo.toml` files and `npm/package.json`.
+    - Push the release tag so GitHub Actions can build binaries and attach GitHub Release assets.
+4.  **Publish Wrapper Manually:**
+    - Wait until the GitHub Release assets and `checksums.txt` are attached.
+    - In `npm/`, run `npm pack` to inspect the wrapper payload.
+    - Then run `npm publish --access public` from the `npm/` directory.
 
 ### 🐛 Debugging
 To see detailed logs during development, use the `RUST_LOG` environment variable:
