@@ -105,9 +105,9 @@ impl GitIntegrator {
             } else {
                 let parent_tree = commit.parent(0)?.tree()?;
                 let tree = commit.tree()?;
-                let diff =
-                    self.repo
-                        .diff_tree_to_tree(Some(&parent_tree), Some(&tree), None)?;
+                let diff = self
+                    .repo
+                    .diff_tree_to_tree(Some(&parent_tree), Some(&tree), None)?;
                 diff.foreach(
                     &mut |delta, _| {
                         if let Some(p) = delta.new_file().path() {

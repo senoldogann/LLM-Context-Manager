@@ -14,11 +14,7 @@ const GUARDIAN_ROOT: &str = "/Users/dogan/Desktop/guardian";
 // ---------------------------------------------------------------------------
 
 /// Sends one newline-delimited JSON-RPC request and reads one response line.
-fn send(
-    stdin: &mut impl Write,
-    reader: &mut BufReader<impl std::io::Read>,
-    req: Value,
-) -> Value {
+fn send(stdin: &mut impl Write, reader: &mut BufReader<impl std::io::Read>, req: Value) -> Value {
     writeln!(stdin, "{}", req).expect("write to MCP stdin");
     stdin.flush().expect("flush to MCP stdin");
     let mut line = String::new();
@@ -87,7 +83,8 @@ fn guardian_mcp_all_tools_e2e() {
     // =======================================================================
     println!("\n── STEP 0: initialize ──────────────────────────────────────");
     let resp = send(
-        &mut stdin, &mut reader,
+        &mut stdin,
+        &mut reader,
         json!({ "jsonrpc": "2.0", "id": 0, "method": "initialize", "params": {} }),
     );
     assert_no_error(&resp, "0 initialize");
@@ -99,7 +96,10 @@ fn guardian_mcp_all_tools_e2e() {
         resp["result"]["capabilities"]["tools"].is_object(),
         "tools capability missing"
     );
-    println!("  ✓ protocolVersion = {}", resp["result"]["protocolVersion"]);
+    println!(
+        "  ✓ protocolVersion = {}",
+        resp["result"]["protocolVersion"]
+    );
     println!("  ✓ tools capability present");
 
     // =======================================================================
@@ -107,7 +107,8 @@ fn guardian_mcp_all_tools_e2e() {
     // =======================================================================
     println!("\n── STEP 1: tools/list ──────────────────────────────────────");
     let resp = send(
-        &mut stdin, &mut reader,
+        &mut stdin,
+        &mut reader,
         json!({ "jsonrpc": "2.0", "id": 1, "method": "tools/list", "params": {} }),
     );
     assert_no_error(&resp, "1 tools/list");
@@ -120,14 +121,22 @@ fn guardian_mcp_all_tools_e2e() {
         .collect();
 
     let required_tools = [
-        "search_code", "get_context", "find_nodes", "read_graph",
-        "index_project", "find_usages", "trace_call_chain",
-        "impact_of_change", "diff_context",
+        "search_code",
+        "get_context",
+        "find_nodes",
+        "read_graph",
+        "index_project",
+        "find_usages",
+        "trace_call_chain",
+        "impact_of_change",
+        "diff_context",
     ];
     for name in &required_tools {
         assert!(
             tools.iter().any(|t| t == name),
-            "tool '{}' not in tools/list — got: {:?}", name, tools
+            "tool '{}' not in tools/list — got: {:?}",
+            name,
+            tools
         );
     }
     println!("  ✓ {} tools registered: {:?}", tools.len(), tools);
@@ -137,7 +146,8 @@ fn guardian_mcp_all_tools_e2e() {
     // =======================================================================
     println!("\n── STEP 2: index_project (guardian — first pass) ──────────");
     let resp = send(
-        &mut stdin, &mut reader,
+        &mut stdin,
+        &mut reader,
         json!({
             "jsonrpc": "2.0", "id": 2,
             "method": "tools/call",
@@ -151,7 +161,8 @@ fn guardian_mcp_all_tools_e2e() {
     let text = text_of(&resp);
     assert!(
         text.contains("Project index refreshed") || text.contains("already up to date"),
-        "unexpected index_project response: {}", text
+        "unexpected index_project response: {}",
+        text
     );
     println!("  ✓ {}", text.lines().next().unwrap_or(""));
 
@@ -160,7 +171,8 @@ fn guardian_mcp_all_tools_e2e() {
     // =======================================================================
     println!("\n── STEP 3: search_code (\"AI audit critique generation\") ──");
     let resp = send(
-        &mut stdin, &mut reader,
+        &mut stdin,
+        &mut reader,
         json!({
             "jsonrpc": "2.0", "id": 3,
             "method": "tools/call",
@@ -178,19 +190,27 @@ fn guardian_mcp_all_tools_e2e() {
     assert!(!text.is_empty(), "search_code must return content");
     let lower = text.to_lowercase();
     assert!(
-        lower.contains("critique") || lower.contains("audit")
-            || lower.contains("ai") || lower.contains("severity")
+        lower.contains("critique")
+            || lower.contains("audit")
+            || lower.contains("ai")
+            || lower.contains("severity")
             || lower.contains("no results"),
-        "search_code must return a valid response, got: {}", &text[..text.len().min(400)]
+        "search_code must return a valid response, got: {}",
+        &text[..text.len().min(400)]
     );
-    println!("  ✓ {} chars — {}", text.len(), text.lines().next().unwrap_or("").trim());
+    println!(
+        "  ✓ {} chars — {}",
+        text.len(),
+        text.lines().next().unwrap_or("").trim()
+    );
 
     // =======================================================================
     // STEP 4 — get_context: file + line lookup into ai_client.rs
     // =======================================================================
     println!("\n── STEP 4: get_context (src-tauri/src/ai_client.rs:1) ─────");
     let resp = send(
-        &mut stdin, &mut reader,
+        &mut stdin,
+        &mut reader,
         json!({
             "jsonrpc": "2.0", "id": 4,
             "method": "tools/call",
@@ -207,14 +227,19 @@ fn guardian_mcp_all_tools_e2e() {
     assert_no_error(&resp, "4 get_context");
     let text = text_of(&resp);
     assert!(!text.is_empty(), "get_context must return content");
-    println!("  ✓ {} chars — {}", text.len(), text.lines().next().unwrap_or("").trim());
+    println!(
+        "  ✓ {} chars — {}",
+        text.len(),
+        text.lines().next().unwrap_or("").trim()
+    );
 
     // =======================================================================
     // STEP 5 — find_nodes: locate nodes related to AiClient
     // =======================================================================
     println!("\n── STEP 5: find_nodes (\"AiClient\") ────────────────────────");
     let resp = send(
-        &mut stdin, &mut reader,
+        &mut stdin,
+        &mut reader,
         json!({
             "jsonrpc": "2.0", "id": 5,
             "method": "tools/call",
@@ -233,12 +258,18 @@ fn guardian_mcp_all_tools_e2e() {
     let lower = text.to_lowercase();
     assert!(
         lower.contains("aiclient") || lower.contains("ai_client") || lower.contains("node id"),
-        "find_nodes must locate AiClient, got: {}", &text[..text.len().min(400)]
+        "find_nodes must locate AiClient, got: {}",
+        &text[..text.len().min(400)]
     );
-    println!("  ✓ {} chars — {}", text.len(), text.lines().next().unwrap_or("").trim());
+    println!(
+        "  ✓ {} chars — {}",
+        text.len(),
+        text.lines().next().unwrap_or("").trim()
+    );
 
     // Extract a real node ID from the find_nodes result for the next steps
-    let node_id = text.lines()
+    let node_id = text
+        .lines()
         .find(|l| l.contains("**Node ID:**"))
         .and_then(|l| l.split("**Node ID:**").nth(1))
         .map(|s| s.trim().to_string())
@@ -248,9 +279,13 @@ fn guardian_mcp_all_tools_e2e() {
     // =======================================================================
     // STEP 6 — read_graph: inspect the node in detail
     // =======================================================================
-    println!("\n── STEP 6: read_graph ({}) ─", &node_id[..node_id.len().min(40)]);
+    println!(
+        "\n── STEP 6: read_graph ({}) ─",
+        &node_id[..node_id.len().min(40)]
+    );
     let resp = send(
-        &mut stdin, &mut reader,
+        &mut stdin,
+        &mut reader,
         json!({
             "jsonrpc": "2.0", "id": 6,
             "method": "tools/call",
@@ -266,14 +301,19 @@ fn guardian_mcp_all_tools_e2e() {
     assert_no_error(&resp, "6 read_graph");
     let text = text_of(&resp);
     assert!(!text.is_empty(), "read_graph must return content");
-    println!("  ✓ {} chars — {}", text.len(), text.lines().next().unwrap_or("").trim());
+    println!(
+        "  ✓ {} chars — {}",
+        text.len(),
+        text.lines().next().unwrap_or("").trim()
+    );
 
     // =======================================================================
     // STEP 7 — find_usages: who uses that node?
     // =======================================================================
     println!("\n── STEP 7: find_usages ─────────────────────────────────────");
     let resp = send(
-        &mut stdin, &mut reader,
+        &mut stdin,
+        &mut reader,
         json!({
             "jsonrpc": "2.0", "id": 7,
             "method": "tools/call",
@@ -289,14 +329,19 @@ fn guardian_mcp_all_tools_e2e() {
     assert_no_error(&resp, "7 find_usages");
     let text = text_of(&resp);
     assert!(!text.is_empty(), "find_usages must return content");
-    println!("  ✓ {} chars — {}", text.len(), text.lines().next().unwrap_or("").trim());
+    println!(
+        "  ✓ {} chars — {}",
+        text.len(),
+        text.lines().next().unwrap_or("").trim()
+    );
 
     // =======================================================================
     // STEP 8 — trace_call_chain: triage → context
     // =======================================================================
     println!("\n── STEP 8: trace_call_chain (TriageResult → ProjectContext) ─");
     let resp = send(
-        &mut stdin, &mut reader,
+        &mut stdin,
+        &mut reader,
         json!({
             "jsonrpc": "2.0", "id": 8,
             "method": "tools/call",
@@ -320,7 +365,8 @@ fn guardian_mcp_all_tools_e2e() {
     // =======================================================================
     println!("\n── STEP 9: impact_of_change (src-tauri/src/ai_client.rs) ──");
     let resp = send(
-        &mut stdin, &mut reader,
+        &mut stdin,
+        &mut reader,
         json!({
             "jsonrpc": "2.0", "id": 9,
             "method": "tools/call",
@@ -339,16 +385,22 @@ fn guardian_mcp_all_tools_e2e() {
     let lower = text.to_lowercase();
     assert!(
         lower.contains("impact") || lower.contains("dependent") || lower.contains("no dependent"),
-        "impact_of_change must describe dependents, got: {}", &text[..text.len().min(300)]
+        "impact_of_change must describe dependents, got: {}",
+        &text[..text.len().min(300)]
     );
-    println!("  ✓ {} chars — {}", text.len(), text.lines().next().unwrap_or("").trim());
+    println!(
+        "  ✓ {} chars — {}",
+        text.len(),
+        text.lines().next().unwrap_or("").trim()
+    );
 
     // =======================================================================
     // STEP 10 — diff_context: surfaces recent git commits in guardian
     // =======================================================================
     println!("\n── STEP 10: diff_context (days=30) ─────────────────────────");
     let resp = send(
-        &mut stdin, &mut reader,
+        &mut stdin,
+        &mut reader,
         json!({
             "jsonrpc": "2.0", "id": 10,
             "method": "tools/call",
@@ -366,18 +418,26 @@ fn guardian_mcp_all_tools_e2e() {
     assert!(!text.is_empty(), "diff_context must return content");
     let lower = text.to_lowercase();
     assert!(
-        lower.contains("recently changed") || lower.contains("no recent")
-            || lower.contains("last") || lower.contains("days"),
-        "diff_context must describe recent changes, got: {}", &text[..text.len().min(300)]
+        lower.contains("recently changed")
+            || lower.contains("no recent")
+            || lower.contains("last")
+            || lower.contains("days"),
+        "diff_context must describe recent changes, got: {}",
+        &text[..text.len().min(300)]
     );
-    println!("  ✓ {} chars — {}", text.len(), text.lines().next().unwrap_or("").trim());
+    println!(
+        "  ✓ {} chars — {}",
+        text.len(),
+        text.lines().next().unwrap_or("").trim()
+    );
 
     // =======================================================================
     // STEP 11 — index_project (2nd call): must detect no changes (idempotent)
     // =======================================================================
     println!("\n── STEP 11: index_project (idempotency check) ──────────────");
     let resp = send(
-        &mut stdin, &mut reader,
+        &mut stdin,
+        &mut reader,
         json!({
             "jsonrpc": "2.0", "id": 11,
             "method": "tools/call",
@@ -391,7 +451,8 @@ fn guardian_mcp_all_tools_e2e() {
     let text = text_of(&resp);
     assert!(
         text.contains("No changes detected") || text.contains("already up to date"),
-        "2nd index_project must be idempotent, got: {}", text
+        "2nd index_project must be idempotent, got: {}",
+        text
     );
     println!("  ✓ {}", text.lines().next().unwrap_or("").trim());
 

@@ -355,10 +355,7 @@ impl RetrievalEngine {
                 "Incremental: indexing semantic nodes"
             );
             let ids: Vec<String> = nodes_to_index.iter().map(|n| n.id.clone()).collect();
-            let texts: Vec<String> = nodes_to_index
-                .iter()
-                .map(build_embedding_text)
-                .collect();
+            let texts: Vec<String> = nodes_to_index.iter().map(build_embedding_text).collect();
 
             // Deduplicate?
 
@@ -600,10 +597,7 @@ impl RetrievalEngine {
                     relevance_score: candidate.combined_score,
                     reason: format!(
                         "{}Hybrid (semantic {:.2}, path {:.2}, conf {:.2})",
-                        fallback_prefix,
-                        candidate.semantic_score,
-                        candidate.path_score,
-                        confidence
+                        fallback_prefix, candidate.semantic_score, candidate.path_score, confidence
                     ),
                 });
             }
@@ -1120,7 +1114,10 @@ fn build_embedding_text(node: &CodeNode) -> String {
     } else {
         &node.content
     };
-    format!("{} {}\nfile: {}\n{}", type_label, node.name, file_path, content)
+    format!(
+        "{} {}\nfile: {}\n{}",
+        type_label, node.name, file_path, content
+    )
 }
 
 fn repo_priority_score(file_path: &str) -> f32 {

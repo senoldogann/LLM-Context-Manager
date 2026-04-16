@@ -308,9 +308,7 @@ impl Extractor {
                             // Struct mu interface mi?
                             let body_kind = child
                                 .children(&mut child.walk())
-                                .find(|c| {
-                                    c.kind() == "struct_type" || c.kind() == "interface_type"
-                                })
+                                .find(|c| c.kind() == "struct_type" || c.kind() == "interface_type")
                                 .map(|c| c.kind())
                                 .unwrap_or("");
                             let node_type = if body_kind == "interface_type" {
@@ -423,9 +421,7 @@ impl Extractor {
                 let name = self.find_child_text(node, "simple_identifier")?;
                 Some((NodeType::Function, name))
             }
-            "secondary_constructor" => {
-                Some((NodeType::Function, "constructor".to_string()))
-            }
+            "secondary_constructor" => Some((NodeType::Function, "constructor".to_string())),
             "class_declaration" | "object_declaration" => {
                 let name = self
                     .find_child_text(node, "type_identifier")

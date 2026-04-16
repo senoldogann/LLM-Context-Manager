@@ -493,10 +493,7 @@ pub async fn trace_call_chain(engine: &Arc<RetrievalEngine>, args: &Value) -> Re
     let project_path = args.get("project_path").and_then(|v| v.as_str());
     let normalized_from = normalize_graph_node_id(from_id, project_path)?;
     let normalized_to = normalize_graph_node_id(to_id, project_path)?;
-    let max_depth = args
-        .get("max_depth")
-        .and_then(|v| v.as_u64())
-        .unwrap_or(8) as usize;
+    let max_depth = args.get("max_depth").and_then(|v| v.as_u64()).unwrap_or(8) as usize;
 
     let chain = engine
         .trace_call_chain(&normalized_from, &normalized_to, max_depth)
@@ -532,10 +529,7 @@ pub async fn trace_call_chain(engine: &Arc<RetrievalEngine>, args: &Value) -> Re
 
 /// Tool: impact_of_change
 /// Bir dosya değiştiğinde etkilenecek tüm node ve dosyaları listeler.
-pub async fn impact_of_change(
-    engine: &Arc<RetrievalEngine>,
-    args: &Value,
-) -> Result<ToolResult> {
+pub async fn impact_of_change(engine: &Arc<RetrievalEngine>, args: &Value) -> Result<ToolResult> {
     let file = args
         .get("file")
         .and_then(|v| v.as_str())
@@ -595,9 +589,7 @@ pub async fn diff_context(engine: &Arc<RetrievalEngine>, args: &Value) -> Result
     let days = args.get("days").and_then(|v| v.as_u64()).unwrap_or(7) as u32;
     let limit = args.get("limit").and_then(|v| v.as_u64()).unwrap_or(30) as usize;
 
-    let nodes = engine
-        .diff_context(project_path, days, limit.max(1))
-        .await;
+    let nodes = engine.diff_context(project_path, days, limit.max(1)).await;
 
     if nodes.is_empty() {
         return Ok(ToolResult {
