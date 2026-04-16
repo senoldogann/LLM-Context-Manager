@@ -5,7 +5,7 @@ use std::env;
 use std::panic::{catch_unwind, AssertUnwindSafe};
 use std::time::Duration;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Provider {
     OpenAI,
     Ollama,
@@ -75,22 +75,14 @@ impl RemoteEmbedder {
         let provider_str = env::var("EMBEDDING_PROVIDER")
             .unwrap_or_default()
             .to_lowercase();
-
-        let provider = if provider_str.contains("openai") || base_url.contains("api.openai.com") {
-            Provider::OpenAI
-        } else {
-            // Default to Ollama for privacy/local-first
-            Provider::Ollama
-        };
-
-        let api_key = match provider {
-            Provider::OpenAI => env::var("EMBEDDING_API_KEY")
-                .or_else(|_| env::var("OPENAI_API_KEY"))
-                .context("EMBEDDING_API_KEY or OPENAI_API_KEY not set")?,
-            Provider::Ollama => env::var("EMBEDDING_API_KEY")
-                .or_else(|_| env::var("OPENAI_API_KEY"))
-                .unwrap_or_else(|_| "ollama".to_string()), // Default dummy key
-        };
+        let provider = resolve_provider(&provider_str, &base_url);
+        let api_key = resolve_api_key(&provider)?;
+        tracing::info!(
+            provider = provider_label(&provider),
+            host = %base_url,
+            model = %model,
+            "Embedding provider configured"
+        );
 
         Self::new(api_key, model, base_url, provider)
     }
@@ -339,6 +331,31 @@ impl RemoteEmbedder {
     }
 }
 
+fn resolve_provider(provider_str: &str, base_url: &str) -> Provider {
+    if provider_str.contains("openai") || base_url.contains("api.openai.com") {
+        return Provider::OpenAI;
+    }
+    Provider::Ollama
+}
+
+fn resolve_api_key(provider: &Provider) -> Result<String> {
+    match provider {
+        Provider::OpenAI => env::var("EMBEDDING_API_KEY")
+            .or_else(|_| env::var("OPENAI_API_KEY"))
+            .context("EMBEDDING_API_KEY or OPENAI_API_KEY not set"),
+        Provider::Ollama => Ok(env::var("EMBEDDING_API_KEY")
+            .or_else(|_| env::var("OPENAI_API_KEY"))
+            .unwrap_or_else(|_| "ollama".to_string())),
+    }
+}
+
+fn provider_label(provider: &Provider) -> &'static str {
+    match provider {
+        Provider::OpenAI => "openai",
+        Provider::Ollama => "ollama",
+    }
+}
+
 fn build_http_client(timeout: Duration) -> Result<Client> {
     match catch_unwind(AssertUnwindSafe(|| {
         Client::builder().timeout(timeout).build()
@@ -368,5 +385,28 @@ fn build_http_client(timeout: Duration) -> Result<Client> {
         Err(_) => Err(anyhow::anyhow!(
             "HTTP client builder panicked in no_proxy mode"
         )),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{resolve_provider, Provider};
+
+    #[test]
+    fn resolve_provider_defaults_to_ollama_for_localhost() {
+        let provider = resolve_provider("", "http://127.0.0.1:11434");
+        assert_eq!(provider, Provider::Ollama);
+    }
+
+    #[test]
+    fn resolve_provider_uses_openai_when_explicit() {
+        let provider = resolve_provider("openai", "http://127.0.0.1:11434");
+        assert_eq!(provider, Provider::OpenAI);
+    }
+
+    #[test]
+    fn resolve_provider_uses_openai_when_host_is_openai() {
+        let provider = resolve_provider("", "https://api.openai.com/v1");
+        assert_eq!(provider, Provider::OpenAI);
     }
 }

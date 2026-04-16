@@ -123,6 +123,7 @@ Create `~/.ccm/.env`:
 EMBEDDING_PROVIDER=ollama
 EMBEDDING_HOST=http://127.0.0.1:11434
 EMBEDDING_MODEL=mxbai-embed-large
+# No API key is required for local Ollama.
 
 # Option B: Cloud (OpenAI)
 EMBEDDING_PROVIDER=openai
