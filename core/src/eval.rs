@@ -909,7 +909,7 @@ mod tests {
             id: "./src/a.rs:func:1:0".to_string(),
             node_type: NodeType::Function,
             name: "a".to_string(),
-            content: "fn a() {}".to_string(),
+            content: "fn a() {}".into(),
             start_line: 1,
             end_line: 1,
         };
@@ -917,7 +917,7 @@ mod tests {
             id: "./src/b.rs:func:2:0".to_string(),
             node_type: NodeType::Function,
             name: "b".to_string(),
-            content: "fn b() {}".to_string(),
+            content: "fn b() {}".into(),
             start_line: 2,
             end_line: 2,
         };
@@ -938,7 +938,7 @@ mod tests {
             id: "./src/main.rs".to_string(),
             node_type: NodeType::File,
             name: "./src/main.rs".to_string(),
-            content: String::new(),
+            content: "".into(),
             start_line: 1,
             end_line: 10,
         };
@@ -946,7 +946,7 @@ mod tests {
             id: "./src/main.rs:func:1:0".to_string(),
             node_type: NodeType::Function,
             name: "main".to_string(),
-            content: "fn main() {}".to_string(),
+            content: "fn main() {}".into(),
             start_line: 1,
             end_line: 1,
         };

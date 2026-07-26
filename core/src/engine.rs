@@ -224,7 +224,7 @@ impl RetrievalEngine {
                     id: relative_path.clone(),
                     node_type: NodeType::DataFile,
                     name: relative_path.clone(),
-                    content,
+                    content: content.into(),
                     start_line: 1,
                     end_line,
                 };
@@ -380,6 +380,7 @@ impl RetrievalEngine {
         };
 
         let mut results = Vec::new();
+        let graph = self.graph.read().await;
         for (id, content, score) in hits {
             // Distance in LanceDB is usually L2 or Cosine distance.
             // Lower is better for L2, higher is better for Cosine similarity.
@@ -390,7 +391,7 @@ impl RetrievalEngine {
 
             // 2. Lookup the real Node in the Graph to get metadata (Name, Type)
             let mut title = "Semantic Match".to_string();
-            if let Some(node) = self.get_node_by_id(node_id).await {
+            if let Some(node) = graph.find_node_fuzzy_by_id(node_id) {
                 title = format!("{:?}: {}", node.node_type, node.name);
                 results.push(ContextSuggestion {
                     node_id: Some(node.id.clone()),
@@ -582,7 +583,7 @@ impl RetrievalEngine {
                     end_line: Some(node.end_line),
                     node_type: Some(format!("{:?}", node.node_type)),
                     title: format!("{:?}: {}", node.node_type, node.name),
-                    content: node.content.clone(),
+                    content: node.content.to_string(),
                     relevance_score: candidate.combined_score,
                     reason: format!(
                         "{}Hybrid (graph {:.2}, semantic {:.2}, path {:.2}, conf {:.2})",
@@ -664,7 +665,7 @@ impl RetrievalEngine {
                 end_line: Some(source.end_line),
                 node_type: Some(format!("{:?}", source.node_type)),
                 title: format!("{:?}: {}", source.node_type, source.name),
-                content: source.content.clone(),
+                content: source.content.to_string(),
                 relevance_score: 1.0,
                 reason: format!("{} → {}", rel, target_node.name),
             });
@@ -721,7 +722,7 @@ impl RetrievalEngine {
                             end_line: Some(node.end_line),
                             node_type: Some(format!("{:?}", node.node_type)),
                             title: format!("Step {}: {:?} {}", i + 1, node.node_type, node.name),
-                            content: node.content.clone(),
+                            content: node.content.to_string(),
                             relevance_score: 1.0 - (i as f32 * 0.05),
                             reason: format!("Call chain step {}/{}", i + 1, path.len()),
                         }
@@ -844,7 +845,7 @@ impl RetrievalEngine {
                         end_line: Some(source.end_line),
                         node_type: Some(format!("{:?}", source.node_type)),
                         title: format!("{:?}: {}", source.node_type, source.name),
-                        content: source.content.clone(),
+                        content: source.content.to_string(),
                         relevance_score: (1.0 - depth as f32 * 0.15).max(0.55),
                         reason: if depth == 0 {
                             format!("Directly depends on {} in changed file", target.name)
@@ -941,7 +942,7 @@ impl RetrievalEngine {
                             end_line: Some(node.end_line),
                             node_type: Some(format!("{:?}", node.node_type)),
                             title: format!("{:?}: {}", node.node_type, node.name),
-                            content: node.content.clone(),
+                            content: node.content.to_string(),
                             relevance_score: 1.0,
                             reason: reason.clone(),
                         });
@@ -1056,7 +1057,7 @@ impl RetrievalEngine {
                         end_line: Some(node.end_line),
                         node_type: Some(format!("{:?}", node.node_type)),
                         title: format!("{:?}: {}", node.node_type, node.name),
-                        content: node.content.clone(),
+                        content: node.content.to_string(),
                         relevance_score: (score / 100.0).clamp(0.0, 1.0),
                         reason: format!("Ranked lexical graph match ({score:.0})"),
                     },
@@ -1123,7 +1124,7 @@ impl RetrievalEngine {
                     end_line: Some(current_node.end_line),
                     node_type: Some(format!("{:?}", current_node.node_type)),
                     title: format!("Active element: {}", current_node.name),
-                    content: current_node.content.clone(),
+                    content: current_node.content.to_string(),
                     relevance_score: 0.95,
                     reason: "Exact cursor element".to_string(),
                 });

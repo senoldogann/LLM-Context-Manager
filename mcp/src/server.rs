@@ -2,7 +2,6 @@
 
 use anyhow::Result;
 use serde_json::{json, Value};
-use std::collections::{HashMap, VecDeque};
 use std::path::{Component, Path, PathBuf};
 use std::sync::Arc;
 use tokio::sync::RwLock;
@@ -40,36 +39,32 @@ fn engine_cache_size() -> usize {
         .unwrap_or(DEFAULT_ENGINE_CACHE_SIZE)
 }
 
+use lru::LruCache;
+use std::num::NonZeroUsize;
+
 pub struct EngineCache {
-    map: HashMap<String, Arc<RetrievalEngine>>,
-    order: VecDeque<String>,
-    max: usize,
+    cache: LruCache<String, Arc<RetrievalEngine>>,
 }
 
 impl EngineCache {
     fn new(max: usize) -> Self {
+        let cap = NonZeroUsize::new(max).unwrap_or_else(|| NonZeroUsize::new(1).unwrap());
         Self {
-            map: HashMap::new(),
-            order: VecDeque::new(),
-            max,
+            cache: LruCache::new(cap),
         }
     }
 
-    fn get(&self, key: &str) -> Option<Arc<RetrievalEngine>> {
-        self.map.get(key).cloned()
+    fn get(&mut self, key: &str) -> Option<Arc<RetrievalEngine>> {
+        self.cache.get(key).cloned()
+    }
+
+    #[allow(dead_code)]
+    fn peek(&self, key: &str) -> Option<Arc<RetrievalEngine>> {
+        self.cache.peek(key).cloned()
     }
 
     fn insert(&mut self, key: String, engine: Arc<RetrievalEngine>) -> Arc<RetrievalEngine> {
-        if !self.map.contains_key(&key) {
-            if self.map.len() >= self.max {
-                if let Some(evict_key) = self.order.pop_front() {
-                    self.map.remove(&evict_key);
-                }
-            }
-            self.order.push_back(key.clone());
-        }
-
-        self.map.insert(key, engine.clone());
+        self.cache.put(key, engine.clone());
         engine
     }
 }
@@ -182,19 +177,12 @@ impl ServerState {
             ));
         }
 
-        // Check cache (read)
+        // Check cache (write lock needed for LRU order update)
         {
-            let read = self.engines.read().await;
-            if let Some(engine) = read.get(path) {
-                return Ok(engine.clone());
+            let mut engines = self.engines.write().await;
+            if let Some(engine) = engines.get(path) {
+                return Ok(engine);
             }
-        }
-
-        // Load (write)
-        let mut write = self.engines.write().await;
-        // Double check
-        if let Some(engine) = write.get(path) {
-            return Ok(engine.clone());
         }
 
         tracing::info!(path = %path, "Loading context for project");
@@ -243,7 +231,11 @@ impl ServerState {
         let store = LanceDbStore::new(&db_path, "code_vectors").await?;
         let engine = Arc::new(RetrievalEngine::new(Arc::new(RwLock::new(graph)), store));
 
-        Ok(write.insert(path.to_string(), engine))
+        let mut engines = self.engines.write().await;
+        if let Some(existing) = engines.get(path) {
+            return Ok(existing);
+        }
+        Ok(engines.insert(path.to_string(), engine))
     }
 
     pub async fn refresh_project_engine(&self, project_path: &str) -> Result<()> {

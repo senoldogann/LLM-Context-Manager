@@ -746,6 +746,7 @@ dependencies = [
  "assert_cmd",
  "async-trait",
  "ccm-core",
+ "lru",
  "serde",
  "serde_json",
  "tempfile",

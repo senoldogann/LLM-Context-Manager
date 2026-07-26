@@ -183,7 +183,7 @@ mod tests {
             id: id.to_string(),
             node_type: NodeType::Function,
             name: id.to_string(),
-            content: String::new(),
+            content: "".into(),
             start_line: 1,
             end_line: 1,
         }

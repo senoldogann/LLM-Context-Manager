@@ -1,3 +1,4 @@
+use anyhow::Context;
 use clap::Parser;
 use std::path::PathBuf;
 
@@ -356,7 +357,7 @@ fn run_doctor(path: &std::path::Path, json: bool) -> anyhow::Result<()> {
 
     let healthy = checks
         .as_object()
-        .expect("doctor checks must be an object")
+        .context("doctor checks must be an object")?
         .values()
         .all(|check| check.get("ok").and_then(|v| v.as_bool()).unwrap_or(false));
     let output = serde_json::json!({"healthy": healthy, "checks": checks});
@@ -368,7 +369,7 @@ fn run_doctor(path: &std::path::Path, json: bool) -> anyhow::Result<()> {
             "CCM doctor: {}",
             if healthy { "healthy" } else { "issues found" }
         );
-        let checks = output["checks"].as_object().expect("checks object");
+        let checks = output["checks"].as_object().context("checks object")?;
         for (name, check) in checks {
             let ok = check.get("ok").and_then(|v| v.as_bool()).unwrap_or(false);
             println!("{} {}", if ok { "✓" } else { "✗" }, name);

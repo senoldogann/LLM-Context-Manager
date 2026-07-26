@@ -130,7 +130,11 @@ const EXCLUDED_FILE_EXTENSIONS: &[&str] = &[
 const EXCLUDED_SECRET_FILE_NAMES: &[&str] = &[
     ".npmrc",
     ".pypirc",
+    ".htaccess",
+    "wp-config.php",
+    "docker-compose.override.yml",
     "credentials.json",
+    "secrets.json",
     "service-account.json",
     "service_account.json",
     "id_rsa",
@@ -289,8 +293,8 @@ pub async fn index_directory(path: &str, db_path: Option<&str>) -> Result<IndexS
     // Index into vector store
     if stats.nodes_created > 0 {
         use std::sync::Arc;
-        let graph_arc = Arc::new(tokio::sync::RwLock::new(graph.clone())); // Still need clone because graph is used below for save_to_file
-        let engine = RetrievalEngine::new(graph_arc, store);
+        let graph_arc = Arc::new(tokio::sync::RwLock::new(graph));
+        let engine = RetrievalEngine::new(graph_arc.clone(), store);
         engine.index_graph().await?;
 
         info!(
@@ -301,7 +305,10 @@ pub async fn index_directory(path: &str, db_path: Option<&str>) -> Result<IndexS
 
         // PERSISTENCE: Save graph to disk
         let graph_path = parent_dir.join("ccm_graph.json");
-        graph.save_to_file(&graph_path.to_string_lossy())?;
+        graph_arc
+            .read()
+            .await
+            .save_to_file(&graph_path.to_string_lossy())?;
         info!(path = %graph_path.display(), "Graph saved to disk");
     } else {
         warn!("No supported files found to index");
@@ -547,7 +554,7 @@ fn populate_graph_for_file(
             id: file_id.to_string(),
             node_type: NodeType::DataFile,
             name: file_id.to_string(),
-            content: content.clone(),
+            content: content.as_str().into(),
             start_line: 1,
             end_line: content.lines().count().max(1),
         };

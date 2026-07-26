@@ -17,7 +17,7 @@ fn test_sled_persistence() {
         id: "node1".to_string(),
         node_type: NodeType::Function,
         name: "test_func".to_string(),
-        content: "fn test() {}".to_string(),
+        content: "fn test() {}".into(),
         start_line: 1,
         end_line: 10,
     };
@@ -35,5 +35,5 @@ fn test_sled_persistence() {
     let storage2 = SledStorage::new(&db_path).unwrap();
     let loaded_node_2 = storage2.get_node("node1").unwrap();
     assert!(loaded_node_2.is_some());
-    assert_eq!(loaded_node_2.unwrap().content, "fn test() {}");
+    assert_eq!(loaded_node_2.unwrap().content.as_ref(), "fn test() {}");
 }

@@ -356,6 +356,16 @@ fn provider_label(provider: &Provider) -> &'static str {
     }
 }
 
+fn panic_message(payload: &Box<dyn std::any::Any + Send>) -> String {
+    if let Some(s) = payload.downcast_ref::<&str>() {
+        s.to_string()
+    } else if let Some(s) = payload.downcast_ref::<String>() {
+        s.clone()
+    } else {
+        "Unknown panic payload".to_string()
+    }
+}
+
 fn build_http_client(timeout: Duration) -> Result<Client> {
     match catch_unwind(AssertUnwindSafe(|| {
         Client::builder().timeout(timeout).build()
@@ -367,8 +377,10 @@ fn build_http_client(timeout: Duration) -> Result<Client> {
                 "Failed to build HTTP client with system proxy settings; retrying with no_proxy"
             );
         }
-        Err(_) => {
-            tracing::warn!(
+        Err(payload) => {
+            let msg = panic_message(&payload);
+            tracing::error!(
+                panic = %msg,
                 "HTTP client builder panicked with system proxy settings; retrying with no_proxy"
             );
         }
@@ -382,9 +394,14 @@ fn build_http_client(timeout: Duration) -> Result<Client> {
             "Failed to build HTTP client in no_proxy mode: {}",
             error
         )),
-        Err(_) => Err(anyhow::anyhow!(
-            "HTTP client builder panicked in no_proxy mode"
-        )),
+        Err(payload) => {
+            let msg = panic_message(&payload);
+            tracing::error!(panic = %msg, "HTTP client builder panicked in no_proxy mode");
+            Err(anyhow::anyhow!(
+                "HTTP client builder panicked in no_proxy mode: {}",
+                msg
+            ))
+        }
     }
 }
 

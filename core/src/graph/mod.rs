@@ -23,7 +23,7 @@ pub struct CodeNode {
     pub id: String,
     pub node_type: NodeType,
     pub name: String,
-    pub content: String,
+    pub content: Arc<str>,
     pub start_line: usize,
     pub end_line: usize,
 }
@@ -44,6 +44,8 @@ pub struct CodeGraph {
     pub graph: DiGraph<CodeNode, EdgeType>,
     pub storage: Option<Arc<dyn GraphStorage>>,
     pub id_index: std::collections::HashMap<String, NodeIndex>,
+    pub name_index: std::collections::HashMap<String, Vec<NodeIndex>>,
+    pub file_nodes_index: std::collections::HashMap<String, Vec<NodeIndex>>,
 }
 
 impl Default for CodeGraph {
@@ -52,6 +54,8 @@ impl Default for CodeGraph {
             graph: DiGraph::new(),
             storage: None,
             id_index: std::collections::HashMap::new(),
+            name_index: std::collections::HashMap::new(),
+            file_nodes_index: std::collections::HashMap::new(),
         }
     }
 }
@@ -73,8 +77,12 @@ impl CodeGraph {
             }
         }
         let id = node.id.clone();
+        let name = node.name.clone();
+        let file_id = graph_node_file_path(&node.id).to_string();
         let idx = self.graph.add_node(node);
         self.id_index.insert(id, idx);
+        self.name_index.entry(name).or_default().push(idx);
+        self.file_nodes_index.entry(file_id).or_default().push(idx);
         idx
     }
 
@@ -406,6 +414,8 @@ impl CodeGraph {
             graph,
             storage: None,
             id_index: std::collections::HashMap::new(),
+            name_index: std::collections::HashMap::new(),
+            file_nodes_index: std::collections::HashMap::new(),
         };
         g.rebuild_index();
         Ok(g)
@@ -414,10 +424,34 @@ impl CodeGraph {
     /// Rebuilds the HashMap index from the current graph nodes
     pub fn rebuild_index(&mut self) {
         self.id_index.clear();
+        self.name_index.clear();
+        self.file_nodes_index.clear();
         for idx in self.graph.node_indices() {
             let node = &self.graph[idx];
             self.id_index.insert(node.id.clone(), idx);
+            self.name_index
+                .entry(node.name.clone())
+                .or_default()
+                .push(idx);
+            let file_id = graph_node_file_path(&node.id).to_string();
+            self.file_nodes_index.entry(file_id).or_default().push(idx);
         }
+    }
+
+    /// Returns all node indices matching the given symbol/node name.
+    pub fn find_nodes_by_name(&self, name: &str) -> &[NodeIndex] {
+        self.name_index
+            .get(name)
+            .map(|v| v.as_slice())
+            .unwrap_or(&[])
+    }
+
+    /// Returns all node indices belonging to the given file ID.
+    pub fn find_nodes_by_file(&self, file_id: &str) -> &[NodeIndex] {
+        self.file_nodes_index
+            .get(file_id)
+            .map(|v| v.as_slice())
+            .unwrap_or(&[])
     }
 
     /// Alias for load_from_file to match API conventions
@@ -556,12 +590,42 @@ mod tests {
             id: "test_func".to_string(),
             node_type: NodeType::Function,
             name: "test".to_string(),
-            content: "fn test() {}".to_string(),
+            content: "fn test() {}".into(),
             start_line: 1,
             end_line: 1,
         };
         let index = graph.add_node(node);
         assert_eq!(index.index(), 0);
+    }
+
+    #[test]
+    fn test_find_nodes_by_name_and_file() {
+        let mut graph = CodeGraph::new();
+        let node1 = CodeNode {
+            id: "./src/lib.rs:function_definition:symbol:1:0".to_string(),
+            node_type: NodeType::Function,
+            name: "process_data".to_string(),
+            content: "fn process_data() {}".into(),
+            start_line: 1,
+            end_line: 5,
+        };
+        let node2 = CodeNode {
+            id: "./src/lib.rs:function_definition:symbol:10:0".to_string(),
+            node_type: NodeType::Function,
+            name: "process_data".to_string(),
+            content: "fn process_data() {}".into(),
+            start_line: 10,
+            end_line: 15,
+        };
+
+        graph.add_node(node1);
+        graph.add_node(node2);
+
+        let by_name = graph.find_nodes_by_name("process_data");
+        assert_eq!(by_name.len(), 2);
+
+        let by_file = graph.find_nodes_by_file("./src/lib.rs");
+        assert_eq!(by_file.len(), 2);
     }
 
     #[test]
@@ -572,7 +636,7 @@ mod tests {
             id: "./a.rs".to_string(),
             node_type: NodeType::File,
             name: "./a.rs".to_string(),
-            content: "fn foo() {}".to_string(),
+            content: "fn foo() {}".into(),
             start_line: 1,
             end_line: 1,
         });
@@ -580,7 +644,7 @@ mod tests {
             id: "./a.rs:func:foo".to_string(),
             node_type: NodeType::Function,
             name: "foo".to_string(),
-            content: "fn foo() {}".to_string(),
+            content: "fn foo() {}".into(),
             start_line: 1,
             end_line: 1,
         });
@@ -590,7 +654,7 @@ mod tests {
             id: "./b.rs".to_string(),
             node_type: NodeType::File,
             name: "./b.rs".to_string(),
-            content: "fn bar() {}".to_string(),
+            content: "fn bar() {}".into(),
             start_line: 1,
             end_line: 1,
         });
@@ -598,7 +662,7 @@ mod tests {
             id: "./b.rs:func:bar".to_string(),
             node_type: NodeType::Function,
             name: "bar".to_string(),
-            content: "fn bar() {}".to_string(),
+            content: "fn bar() {}".into(),
             start_line: 1,
             end_line: 1,
         });
@@ -621,7 +685,7 @@ mod tests {
             id: "./detector.py:class_definition:symbol:1:0".to_string(),
             node_type: NodeType::Class,
             name: "YoloDetector".to_string(),
-            content: "class YoloDetector: pass".to_string(),
+            content: "class YoloDetector: pass".into(),
             start_line: 1,
             end_line: 1,
         });
@@ -629,7 +693,7 @@ mod tests {
             id: "./camera.py:import_from_statement:symbol:2:0".to_string(),
             node_type: NodeType::Import,
             name: "from detector import YoloDetector".to_string(),
-            content: "from detector import YoloDetector".to_string(),
+            content: "from detector import YoloDetector".into(),
             start_line: 1,
             end_line: 1,
         });
@@ -637,8 +701,7 @@ mod tests {
             id: "./camera.py:function_definition:symbol:3:0".to_string(),
             node_type: NodeType::Function,
             name: "open_camera".to_string(),
-            content: "def open_camera(detector: YoloDetector):\n    return YoloDetector()"
-                .to_string(),
+            content: "def open_camera(detector: YoloDetector):\n    return YoloDetector()".into(),
             start_line: 3,
             end_line: 4,
         });
@@ -666,7 +729,7 @@ mod tests {
                 id: id.to_string(),
                 node_type: NodeType::Function,
                 name: "load".to_string(),
-                content: format!("def load(): return '{file}'"),
+                content: format!("def load(): return '{file}'").into(),
                 start_line: 1,
                 end_line: 1,
             });
@@ -675,7 +738,7 @@ mod tests {
             id: "./caller.py:function_definition:symbol:3:0".to_string(),
             node_type: NodeType::Function,
             name: "run".to_string(),
-            content: "def run(): return load()".to_string(),
+            content: "def run(): return load()".into(),
             start_line: 1,
             end_line: 1,
         });
@@ -690,5 +753,63 @@ mod tests {
                 .count(),
             0
         );
+    }
+
+    #[test]
+    fn test_code_node_serde_arc_str() {
+        // 1. Standard node
+        let original_node = CodeNode {
+            id: "./src/lib.rs:func:1".to_string(),
+            node_type: NodeType::Function,
+            name: "test_func".to_string(),
+            content: "fn test_func() { println!(\"hello\"); }".into(),
+            start_line: 1,
+            end_line: 5,
+        };
+
+        let json = serde_json::to_string(&original_node).expect("failed to serialize node");
+        let deserialized: CodeNode =
+            serde_json::from_str(&json).expect("failed to deserialize node");
+
+        assert_eq!(deserialized.id, original_node.id);
+        assert_eq!(deserialized.node_type, original_node.node_type);
+        assert_eq!(deserialized.name, original_node.name);
+        assert_eq!(
+            deserialized.content.as_ref(),
+            "fn test_func() { println!(\"hello\"); }"
+        );
+        assert_eq!(deserialized.start_line, original_node.start_line);
+        assert_eq!(deserialized.end_line, original_node.end_line);
+
+        // 2. Empty content string
+        let empty_node = CodeNode {
+            id: "./empty.rs".to_string(),
+            node_type: NodeType::File,
+            name: "./empty.rs".to_string(),
+            content: "".into(),
+            start_line: 0,
+            end_line: 0,
+        };
+        let empty_json =
+            serde_json::to_string(&empty_node).expect("failed to serialize empty node");
+        let deserialized_empty: CodeNode =
+            serde_json::from_str(&empty_json).expect("failed to deserialize empty node");
+        assert_eq!(deserialized_empty.content.as_ref(), "");
+
+        // 3. Long content string (10KB+)
+        let long_text = "x".repeat(15_000);
+        let long_node = CodeNode {
+            id: "./large.rs".to_string(),
+            node_type: NodeType::File,
+            name: "./large.rs".to_string(),
+            content: long_text.as_str().into(),
+            start_line: 1,
+            end_line: 1000,
+        };
+        let long_json = serde_json::to_string(&long_node).expect("failed to serialize large node");
+        let deserialized_long: CodeNode =
+            serde_json::from_str(&long_json).expect("failed to deserialize large node");
+        assert_eq!(deserialized_long.content.len(), 15_000);
+        assert_eq!(deserialized_long.content.as_ref(), long_text.as_str());
     }
 }

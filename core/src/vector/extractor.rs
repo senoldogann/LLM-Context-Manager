@@ -43,7 +43,7 @@ impl Extractor {
             id: file_id.to_string(),
             node_type: NodeType::File,
             name: file_id.to_string(),
-            content: String::new(),
+            content: "".into(),
             start_line: 0,
             end_line: tree.root_node().end_position().row,
         };
@@ -107,7 +107,7 @@ impl Extractor {
                 id: id.clone(),
                 node_type,
                 name,
-                content: final_content,
+                content: final_content.into(),
                 start_line: node.start_position().row + 1, // 1-indexed
                 end_line: node.end_position().row + 1,
             };
@@ -760,19 +760,10 @@ impl Extractor {
         file_id: &str,
     ) -> Option<NodeIndex> {
         let line = node.start_position().row + 1; // 1-indexed
+        let file_nodes = graph.find_nodes_by_file(file_id);
 
-        // Pre-compute prefix for fast matching (e.g., "./src/main.rs:")
-        let prefix = format!("{}:", file_id);
-
-        // Find the function node that contains this line
-        for idx in graph.graph.node_indices() {
+        for &idx in file_nodes {
             let code_node = &graph.graph[idx];
-
-            // Critical fix: ensure we only match functions in the EXACT same file
-            if !code_node.id.starts_with(&prefix) && code_node.id != file_id {
-                continue;
-            }
-
             if matches!(code_node.node_type, NodeType::Function | NodeType::Method)
                 && code_node.start_line <= line
                 && code_node.end_line >= line
@@ -783,13 +774,11 @@ impl Extractor {
         None
     }
 
-    /// Find a function node by its name (fuzzy match).
+    /// Find a function node by its name (exact/fast lookup).
     fn find_function_by_name(&self, graph: &CodeGraph, name: &str) -> Option<NodeIndex> {
-        for idx in graph.graph.node_indices() {
+        for &idx in graph.find_nodes_by_name(name) {
             let code_node = &graph.graph[idx];
-            if matches!(code_node.node_type, NodeType::Function | NodeType::Method)
-                && code_node.name == name
-            {
+            if matches!(code_node.node_type, NodeType::Function | NodeType::Method) {
                 return Some(idx);
             }
         }

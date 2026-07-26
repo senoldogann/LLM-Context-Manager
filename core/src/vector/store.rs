@@ -295,27 +295,21 @@ impl LanceDbStore {
             Err(_) => return Ok(()), // Table doesn't exist, nothing to delete
         };
 
-        let escaped = prefix.replace('\'', "''");
-        let like_allowed = !escaped.contains('%') && !escaped.contains('_');
+        let escaped_lower = prefix.replace('\'', "''");
+        let predicate = format!("starts_with(id, '{}')", escaped_lower);
 
-        // LanceDB supports SQL-like deletion syntax.
-        // We filter where `id` LIKE 'prefix%'
-        if like_allowed {
-            let predicate = format!("id LIKE '{}%'", escaped);
-            match table.delete(&predicate).await {
-                Ok(_) => return Ok(()),
-                Err(e) => {
-                    tracing::warn!(
-                        error = %e,
-                        "Failed to delete old vectors with LIKE predicate"
-                    );
-                }
-            }
+        if let Ok(_) = table.delete(&predicate).await {
+            return Ok(());
         }
 
-        // Fallback: range delete for prefix matches
-        let upper = format!("{}{}", escaped, "\u{10FFFF}");
-        let range_predicate = format!("id >= '{}' AND id < '{}'", escaped, upper);
+        // Fallback: range predicate using lexicographical upper bound
+        let range_predicate = if let Some(upper) = prefix_upper_bound(prefix) {
+            let escaped_upper = upper.replace('\'', "''");
+            format!("id >= '{}' AND id < '{}'", escaped_lower, escaped_upper)
+        } else {
+            format!("id >= '{}'", escaped_lower)
+        };
+
         match table.delete(&range_predicate).await {
             Ok(_) => Ok(()),
             Err(e) => {
@@ -331,6 +325,19 @@ impl LanceDbStore {
             }
         }
     }
+}
+
+fn prefix_upper_bound(prefix: &str) -> Option<String> {
+    let mut chars: Vec<char> = prefix.chars().collect();
+    while let Some(last) = chars.pop() {
+        if last < '\u{10FFFF}' {
+            if let Some(next) = char::from_u32(last as u32 + 1) {
+                chars.push(next);
+                return Some(chars.into_iter().collect());
+            }
+        }
+    }
+    None
 }
 
 fn semantic_chunks(text: &str, max_chars: usize, overlap: usize) -> Vec<String> {
