@@ -298,7 +298,7 @@ impl LanceDbStore {
         let escaped_lower = prefix.replace('\'', "''");
         let predicate = format!("starts_with(id, '{}')", escaped_lower);
 
-        if let Ok(_) = table.delete(&predicate).await {
+        if table.delete(&predicate).await.is_ok() {
             return Ok(());
         }
 
