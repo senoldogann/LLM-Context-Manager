@@ -786,10 +786,7 @@ fn normalize_path(repo_path: &Path, raw: &str) -> String {
 
 fn gather_graph_hits(graph: &CodeGraph, node_id: &str) -> Option<Vec<String>> {
     // Önce fuzzy arama yap (satır numarası kaymasını tolere eder), bulamazsa exact dene
-    let resolved_id = match graph.find_node_fuzzy_by_id(node_id) {
-        Some(n) => n.id,
-        None => return None,
-    };
+    let resolved_id = graph.find_node_fuzzy_by_id(node_id)?.id;
     let idx = graph.find_node_index_by_id(&resolved_id)?;
     let mut hits = Vec::new();
 
