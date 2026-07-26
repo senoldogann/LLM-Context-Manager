@@ -434,8 +434,18 @@ impl RetrievalEngine {
         // fallback rather than surfacing an unhelpful "Internal error" to the caller.
         let hits = match self.vector_store.search(query, seed_limit).await {
             Ok(h) => h,
-            Err(e) if e.to_string().contains("Embedder not initialized") => vec![],
-            Err(e) => return Err(e),
+            Err(e) => {
+                let msg = e.to_string();
+                if msg.contains("Embedder not initialized")
+                    || msg.contains("was not found")
+                    || msg.contains("not found")
+                    || msg.contains("DatasetNotFound")
+                {
+                    vec![]
+                } else {
+                    return Err(e);
+                }
+            }
         };
         let include_data_files = embed_data_files_enabled();
 

@@ -43,10 +43,7 @@ const MCP_SERVER_NAME = 'context-manager';
 const MCP_COMMAND = 'npx';
 const MCP_ARGS = ['-y', `@senoldogann/context-manager@${VERSION}`, 'mcp'];
 const MCP_ENV = {
-    RUST_LOG: 'info',
-    CCM_PROJECT_ROOT: process.cwd(),
-    CCM_ALLOWED_ROOTS: process.cwd(),
-    CCM_REQUIRE_ALLOWED_ROOTS: '1'
+    RUST_LOG: 'info'
 };
 const ALLOWED_REDIRECT_HOSTS = new Set([
     'github.com',

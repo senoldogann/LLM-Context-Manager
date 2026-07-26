@@ -39,7 +39,7 @@ test('installer merges MCP config and preserves existing settings', () => {
     const config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
     assert.equal(config.theme, 'dark');
     assert.equal(config.mcpServers.existing.command, 'safe');
-    assert.equal(config.mcpServers['context-manager'].env.CCM_REQUIRE_ALLOWED_ROOTS, '1');
+    assert.equal(config.mcpServers['context-manager'].env.RUST_LOG, 'info');
     assert.ok(fs.existsSync(`${configPath}.bak`));
 });
 
@@ -64,11 +64,11 @@ test('atomic writer leaves valid JSON and no temporary file', () => {
     assert.deepEqual(fs.readdirSync(directory), ['mcp.json']);
 });
 
-test('generated MCP command pins package version and narrows project access', () => {
+test('generated MCP command pins package version and configures RUST_LOG', () => {
     assert.match(MCP_ARGS[1], /^@senoldogann\/context-manager@\d+\.\d+\.\d+$/);
-    assert.equal(MCP_ENV.CCM_REQUIRE_ALLOWED_ROOTS, '1');
-    assert.equal(MCP_ENV.CCM_ALLOWED_ROOTS, process.cwd());
-    assert.equal(MCP_ENV.CCM_PROJECT_ROOT, process.cwd());
+    assert.equal(MCP_ENV.RUST_LOG, 'info');
+    assert.equal(MCP_ENV.CCM_PROJECT_ROOT, undefined);
+    assert.equal(MCP_ENV.CCM_ALLOWED_ROOTS, undefined);
 });
 
 test('Codex installer replaces stale or disabled entry without invoking Codex binary', () => {
