@@ -50,7 +50,7 @@ CCM, ham kod yiginlari vermek yerine **AI-Optimized Context** uretir:
 - **Rust Tabanli** - Hizli indexleme ve sorgulama
 - **Toplu Embedding** - Buyuk kod bloklarini kisa surede isler
 - **LanceDB** - Dusuk gecikmeli vektor depolama
-- **Tree-sitter** - Rust, Python, TypeScript, Go, Java, Kotlin ve C# icin saglam AST analizi
+- **Tree-sitter** - Rust, Python, TypeScript, Go, Java, Kotlin, C#, C, C++, Ruby, PHP ve Swift icin saglam AST analizi
 
 ### Production Sertlestirme
 - **Binary Checksums** - Release artifact'lari `checksums.txt` ile dogrulanir
@@ -242,6 +242,11 @@ ccm-cli eval --tasks eval/golden_tasks.v3.ccm.json
 | Java | `.java` | Tam AST |
 | Kotlin | `.kt`, `.kts` | Tam AST |
 | C# | `.cs` | Tam AST |
+| C | `.c`, `.h` | Tam AST |
+| C++ | `.cc`, `.cpp`, `.cxx`, `.hh`, `.hpp`, `.hxx` | Tam AST |
+| Ruby | `.rb`, `.rake`, `.gemspec` | Tam AST |
+| PHP | `.php`, `.phtml` | Tam AST |
+| Swift | `.swift` | Tam AST |
 | Config/Data | `.md`, `.json`, `.yaml` | Tam dosya |
 
 ---

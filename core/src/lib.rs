@@ -21,6 +21,8 @@ use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::time::UNIX_EPOCH;
 
+pub const INDEX_SCHEMA_VERSION: u32 = 2;
+
 pub fn init() {
     tracing::info!("CCM Core Initialized");
 }
@@ -123,7 +125,16 @@ const EXCLUDED_DIRECTORY_NAMES: &[&str] = &[
 const EXCLUDED_FILE_EXTENSIONS: &[&str] = &[
     "png", "jpg", "jpeg", "gif", "webp", "ico", "pdf", "zip", "gz", "tar", "7z", "rar", "jar",
     "exe", "dll", "so", "dylib", "class", "o", "a", "woff", "woff2", "ttf", "eot", "mp3", "mp4",
-    "mov", "avi", "bin",
+    "mov", "avi", "bin", "key", "pem", "p12", "pfx",
+];
+const EXCLUDED_SECRET_FILE_NAMES: &[&str] = &[
+    ".npmrc",
+    ".pypirc",
+    "credentials.json",
+    "service-account.json",
+    "service_account.json",
+    "id_rsa",
+    "id_ed25519",
 ];
 
 fn build_project_walker(path: &Path) -> ignore::Walk {
@@ -166,7 +177,7 @@ fn should_traverse_entry(entry: &ignore::DirEntry) -> bool {
 /// Index a directory recursively.
 /// Parses all supported files and stores embeddings in the vector database.
 pub async fn index_directory(path: &str, db_path: Option<&str>) -> Result<IndexStats> {
-    use tracing::{error, info, warn};
+    use tracing::{info, warn};
 
     // If db_path is provided, use it. Otherwise default to path/data/ccm_db
     let default_db_path = std::path::Path::new(path).join("data/ccm_db");
@@ -284,19 +295,17 @@ pub async fn index_directory(path: &str, db_path: Option<&str>) -> Result<IndexS
 
         // PERSISTENCE: Save graph to disk
         let graph_path = parent_dir.join("ccm_graph.json");
-        match graph.save_to_file(&graph_path.to_string_lossy()) {
-            Ok(_) => info!(path = %graph_path.display(), "Graph saved to disk"),
-            Err(e) => error!(error = %e, "Failed to save graph"),
-        }
+        graph.save_to_file(&graph_path.to_string_lossy())?;
+        info!(path = %graph_path.display(), "Graph saved to disk");
     } else {
         warn!("No supported files found to index");
     }
 
     // Save manifest for incremental indexing (even if no nodes were created).
     let manifest_path = parent_dir.join("ccm_manifest.json");
-    if let Err(e) = save_manifest(&manifest_path, &manifest) {
-        error!(error = %e, "Failed to save manifest");
-    }
+    manifest.schema_version = INDEX_SCHEMA_VERSION;
+    manifest.indexed_commit = current_head_oid(&project_root);
+    save_manifest(&manifest_path, &manifest)?;
 
     Ok(stats)
 }
@@ -304,7 +313,7 @@ pub async fn index_directory(path: &str, db_path: Option<&str>) -> Result<IndexS
 /// Updates an existing index incrementally (using Git or filesystem snapshots).
 /// If the index or graph does not exist, it falls back to a full index.
 pub async fn update_index(path: &str, db_path: Option<&str>) -> Result<IndexStats> {
-    use tracing::{info, warn};
+    use tracing::info;
 
     // Determine paths
     let default_db_path = std::path::Path::new(path).join("data/ccm_db");
@@ -356,58 +365,33 @@ pub async fn update_index(path: &str, db_path: Option<&str>) -> Result<IndexStat
     let engine = RetrievalEngine::new(graph_arc.clone(), store);
 
     let mut manifest = load_manifest(&manifest_path);
-    let mut changed_files: Vec<PathBuf> = Vec::new();
-    let mut used_manifest_diff = false;
-
-    match crate::git::GitIntegrator::new(&project_root) {
-        Ok(git) => match git.get_changed_files() {
-            Ok(files) => {
-                if files.is_empty() {
-                    info!("No changes detected.");
-                    if manifest.files.is_empty() {
-                        manifest = build_manifest(&project_root)?;
-                        if let Err(e) = save_manifest(&manifest_path, &manifest) {
-                            warn!(error = %e, "Failed to save manifest");
-                        }
-                    }
-                    return Ok(IndexStats::default());
-                }
-                changed_files = files;
-            }
-            Err(e) => {
-                warn!(
-                    "Git change detection failed: {}. Falling back to filesystem scan.",
-                    e
-                );
-                used_manifest_diff = true;
-            }
-        },
-        Err(e) => {
-            warn!(
-                "Git repository not detected: {}. Falling back to filesystem scan.",
-                e
-            );
-            used_manifest_diff = true;
-        }
+    if manifest.schema_version != INDEX_SCHEMA_VERSION {
+        info!(
+            found = manifest.schema_version,
+            expected = INDEX_SCHEMA_VERSION,
+            "Index schema changed. Performing full re-index."
+        );
+        return index_directory(path, db_path).await;
     }
 
-    if used_manifest_diff {
-        let new_manifest = build_manifest(&project_root)?;
-        let (changed_rel, deleted_rel) = diff_manifest(&manifest, &new_manifest);
+    let new_manifest = build_manifest(&project_root)?;
+    let (changed_rel, deleted_rel) = diff_manifest(&manifest, &new_manifest);
 
-        if changed_rel.is_empty() && deleted_rel.is_empty() {
-            info!("No changes detected.");
-            return Ok(IndexStats::default());
+    if changed_rel.is_empty() && deleted_rel.is_empty() {
+        if manifest.indexed_commit != new_manifest.indexed_commit {
+            manifest.indexed_commit = new_manifest.indexed_commit;
+            save_manifest(&manifest_path, &manifest)?;
         }
-
-        changed_files = changed_rel
-            .iter()
-            .chain(deleted_rel.iter())
-            .map(|rel| file_id_to_path(&project_root, rel))
-            .collect();
-
-        manifest = new_manifest;
+        info!("No changes detected.");
+        return Ok(IndexStats::default());
     }
+
+    let changed_files: Vec<PathBuf> = changed_rel
+        .iter()
+        .chain(deleted_rel.iter())
+        .map(|rel| file_id_to_path(&project_root, rel))
+        .collect();
+    manifest = new_manifest;
 
     // Run incremental index
     // Filter out CCM's own data files before passing to the incremental indexer.
@@ -433,22 +417,11 @@ pub async fn update_index(path: &str, db_path: Option<&str>) -> Result<IndexStat
 
     // Save graph back to disk
     let updated_graph = graph_arc.read().await;
-    match updated_graph.save_to_file(&graph_path.to_string_lossy()) {
-        Ok(_) => info!(path = %graph_path.display(), "Graph updated on disk"),
-        Err(e) => warn!(error = %e, "Failed to save updated graph"),
-    }
+    updated_graph.save_to_file(&graph_path.to_string_lossy())?;
+    info!(path = %graph_path.display(), "Graph updated on disk");
 
     // Update manifest
-    if !used_manifest_diff {
-        if manifest.files.is_empty() {
-            manifest = build_manifest(&project_root)?;
-        } else {
-            update_manifest_for_paths(&mut manifest, &project_root, &changed_files);
-        }
-    }
-    if let Err(e) = save_manifest(&manifest_path, &manifest) {
-        warn!(error = %e, "Failed to save manifest");
-    }
+    save_manifest(&manifest_path, &manifest)?;
 
     Ok(stats)
 }
@@ -601,12 +574,18 @@ fn populate_graph_for_file(
 
 #[derive(Debug, Default, Serialize, Deserialize)]
 struct IndexManifest {
+    #[serde(default)]
+    schema_version: u32,
+    #[serde(default)]
+    indexed_commit: Option<String>,
     files: HashMap<String, FileFingerprint>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 struct FileFingerprint {
     modified_sec: u64,
+    #[serde(default)]
+    modified_nsec: u32,
     size: u64,
 }
 
@@ -647,14 +626,16 @@ fn file_id_to_path(project_root: &Path, file_id: &str) -> PathBuf {
 
 fn fingerprint_for_path(path: &Path) -> Option<FileFingerprint> {
     let meta = std::fs::metadata(path).ok()?;
-    let modified_sec = meta
+    let modified = meta
         .modified()
         .ok()
-        .and_then(|m| m.duration_since(UNIX_EPOCH).ok())
-        .map(|d| d.as_secs())
-        .unwrap_or(0);
+        .and_then(|value| value.duration_since(UNIX_EPOCH).ok());
     Some(FileFingerprint {
-        modified_sec,
+        modified_sec: modified.as_ref().map(|value| value.as_secs()).unwrap_or(0),
+        modified_nsec: modified
+            .as_ref()
+            .map(|value| value.subsec_nanos())
+            .unwrap_or(0),
         size: meta.len(),
     })
 }
@@ -672,14 +653,23 @@ fn save_manifest(path: &Path, manifest: &IndexManifest) -> Result<()> {
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent)?;
     }
-    let file = std::fs::File::create(path)?;
-    let writer = std::io::BufWriter::new(file);
-    serde_json::to_writer_pretty(writer, manifest)?;
+    let temp_path = path.with_extension(format!("json.{}.tmp", std::process::id()));
+    let file = std::fs::File::create(&temp_path)?;
+    let mut writer = std::io::BufWriter::new(file);
+    serde_json::to_writer_pretty(&mut writer, manifest)?;
+    use std::io::Write;
+    writer.flush()?;
+    writer.get_ref().sync_all()?;
+    std::fs::rename(&temp_path, path)?;
     Ok(())
 }
 
 fn build_manifest(project_root: &Path) -> Result<IndexManifest> {
-    let mut manifest = IndexManifest::default();
+    let mut manifest = IndexManifest {
+        schema_version: INDEX_SCHEMA_VERSION,
+        indexed_commit: current_head_oid(project_root),
+        files: HashMap::new(),
+    };
     let walker = build_project_walker(project_root);
 
     for result in walker {
@@ -734,39 +724,29 @@ fn diff_manifest(
     (changed, deleted)
 }
 
-fn update_manifest_for_paths(manifest: &mut IndexManifest, project_root: &Path, paths: &[PathBuf]) {
-    for path in paths {
-        let abs = if path.is_absolute() {
-            path.clone()
-        } else {
-            project_root.join(path)
-        };
-        let Some(file_id) = normalize_file_id(project_root, &abs) else {
-            continue;
-        };
-        if is_internal_index_file(&file_id) {
-            manifest.files.remove(&file_id);
-            continue;
-        }
-
-        if abs.exists() {
-            if path_is_policy_excluded(&abs) {
-                manifest.files.remove(&file_id);
-                continue;
-            }
-            if let Some(fp) = fingerprint_for_path(&abs) {
-                manifest.files.insert(file_id, fp);
-            }
-        } else {
-            manifest.files.remove(&file_id);
-        }
-    }
-}
-
 pub(crate) fn path_is_policy_excluded(file_path: &Path) -> bool {
     for component in file_path.components() {
         let text = component.as_os_str().to_string_lossy().to_string();
         if EXCLUDED_DIRECTORY_NAMES.contains(&text.as_str()) {
+            return true;
+        }
+    }
+
+    let file_name = file_path
+        .file_name()
+        .and_then(|value| value.to_str())
+        .map(|value| value.to_ascii_lowercase());
+    if let Some(name) = file_name {
+        if (name == ".env" || name.starts_with(".env."))
+            && name != ".env.example"
+            && name != ".env.sample"
+        {
+            return true;
+        }
+        if EXCLUDED_SECRET_FILE_NAMES.contains(&name.as_str())
+            || name.starts_with("service-account-")
+            || name.starts_with("service_account_")
+        {
             return true;
         }
     }
@@ -780,6 +760,12 @@ pub(crate) fn path_is_policy_excluded(file_path: &Path) -> bool {
     }
 
     false
+}
+
+fn current_head_oid(project_root: &Path) -> Option<String> {
+    let repo = git2::Repository::open(project_root).ok()?;
+    let oid = repo.head().ok()?.target().map(|value| value.to_string());
+    oid
 }
 
 fn issue_from_read_error(path: &str, error: FileReadError) -> IndexIssue {
@@ -893,5 +879,53 @@ pub(crate) fn register_issue(stats: &mut IndexStats, issue: IndexIssue, skipped:
     stats.files_failed += 1;
     if stats.failed_files.len() < max_index_issues_recorded() {
         stats.failed_files.push(issue);
+    }
+}
+
+#[cfg(test)]
+mod policy_tests {
+    use super::{diff_manifest, path_is_policy_excluded, FileFingerprint, IndexManifest};
+    use std::collections::HashMap;
+    use std::path::Path;
+
+    #[test]
+    fn secret_files_are_excluded_but_examples_remain_indexable() {
+        assert!(path_is_policy_excluded(Path::new("/repo/.env")));
+        assert!(path_is_policy_excluded(Path::new("/repo/.env.production")));
+        assert!(path_is_policy_excluded(Path::new("/repo/credentials.json")));
+        assert!(path_is_policy_excluded(Path::new("/repo/private.key")));
+        assert!(!path_is_policy_excluded(Path::new("/repo/.env.example")));
+    }
+
+    #[test]
+    fn manifest_diff_detects_clean_checkout_content_changes() {
+        let old = IndexManifest {
+            schema_version: 2,
+            indexed_commit: Some("old".to_string()),
+            files: HashMap::from([(
+                "./src/lib.rs".to_string(),
+                FileFingerprint {
+                    modified_sec: 1,
+                    modified_nsec: 0,
+                    size: 10,
+                },
+            )]),
+        };
+        let new = IndexManifest {
+            schema_version: 2,
+            indexed_commit: Some("new".to_string()),
+            files: HashMap::from([(
+                "./src/lib.rs".to_string(),
+                FileFingerprint {
+                    modified_sec: 2,
+                    modified_nsec: 0,
+                    size: 12,
+                },
+            )]),
+        };
+
+        let (changed, deleted) = diff_manifest(&old, &new);
+        assert_eq!(changed, vec!["./src/lib.rs"]);
+        assert!(deleted.is_empty());
     }
 }

@@ -50,7 +50,7 @@ Unlike tools that dump raw code, CCM injects **AI-Optimized Context**:
 - **Rust-Powered** - Blazing fast indexing and queries
 - **Batch Embedding** - Thousands of lines in seconds
 - **LanceDB** - Millisecond-latency vector storage
-- **Tree-sitter** - Robust AST for Rust, Python, TypeScript, Go, Java, Kotlin, C#
+- **Tree-sitter** - Robust AST for Rust, Python, TypeScript, Go, Java, Kotlin, C#, C, C++, Ruby, PHP, and Swift
 
 ### 🔒 Production Hardening
 - **Binary Checksums** - Release artifacts include `checksums.txt` for integrity
@@ -245,6 +245,11 @@ ccm-cli eval --tasks eval/golden_tasks.json
 | Java | `.java` | Full AST |
 | Kotlin | `.kt`, `.kts` | Full AST |
 | C# | `.cs` | Full AST |
+| C | `.c`, `.h` | Full AST |
+| C++ | `.cc`, `.cpp`, `.cxx`, `.hh`, `.hpp`, `.hxx` | Full AST |
+| Ruby | `.rb`, `.rake`, `.gemspec` | Full AST |
+| PHP | `.php`, `.phtml` | Full AST |
+| Swift | `.swift` | Full AST |
 | Config/Data | `.md`, `.json`, `.yaml` | Full File |
 
 ---

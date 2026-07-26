@@ -96,16 +96,6 @@ impl RetrievalEngine {
                 // Zenginleştirilmiş embedding metni üret
                 let text_representation = build_embedding_text(node);
 
-                // Büyük node uyarısı artık build_embedding_text içinde 6000 ile kırpılıyor;
-                // ham içerik 8000'i aşıyorsa log bırak.
-                if node.content.len() > 8000 {
-                    tracing::warn!(
-                        node = %node.id,
-                        len = node.content.len(),
-                        "Node is very large; content truncated for embedding"
-                    );
-                }
-
                 ids.push(node.id.clone());
                 texts.push(text_representation);
             }
@@ -1085,7 +1075,7 @@ fn extract_file_path(node_id: &str) -> String {
 
 /// Embedding için zenginleştirilmiş metin üretir.
 /// Debug format ({:?}) yerine doğal dil kullanır; dosya yolunu ve içeriği dahil eder.
-/// Çok büyük içerikleri ~6000 karakter ile kırpar.
+/// Büyük içerikler daha sonra semantik sınırlarda parçalara ayrılır.
 fn build_embedding_text(node: &CodeNode) -> String {
     let type_label = match node.node_type {
         NodeType::Function => "function",
@@ -1099,24 +1089,9 @@ fn build_embedding_text(node: &CodeNode) -> String {
         NodeType::File => "file",
     };
     let file_path = extract_file_path(&node.id);
-    let max_embed_chars: usize = std::env::var("CCM_MAX_EMBED_CHARS")
-        .ok()
-        .and_then(|v| v.parse().ok())
-        .unwrap_or(6000)
-        .max(1);
-    let content = if node.content.len() > max_embed_chars {
-        // Walk back to a valid char boundary: direct byte-slice panics on multi-byte chars.
-        let mut end = max_embed_chars;
-        while end > 0 && !node.content.is_char_boundary(end) {
-            end -= 1;
-        }
-        &node.content[..end]
-    } else {
-        &node.content
-    };
     format!(
         "{} {}\nfile: {}\n{}",
-        type_label, node.name, file_path, content
+        type_label, node.name, file_path, node.content
     )
 }
 

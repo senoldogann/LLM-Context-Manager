@@ -512,7 +512,7 @@ Always use node_ids **exactly as returned** by tools. Do not guess or construct 
 
 ## Supported Languages
 
-Rust, Python, TypeScript, JavaScript, Go, Java, Kotlin, C#
+Rust, Python, TypeScript, JavaScript, Go, Java, Kotlin, C#, C, C++, Ruby, PHP, Swift
 
 ## Advanced Configuration
 

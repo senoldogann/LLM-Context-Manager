@@ -1,5 +1,18 @@
 # Release Notes
 
+## v0.2.0 - Stable Context Index & Quality Gates
+
+- Replaced line-based semantic node IDs with stable symbol-path identities while retaining legacy fuzzy lookup.
+- Added index schema version 2 with automatic safe rebuild and filesystem-based incremental change detection.
+- Added `ccm-cli doctor` for root permissions, index compatibility, graph, vector store, provider, and binary checks.
+- Added enforceable evaluation thresholds, skipped-task rejection, and baseline regression comparison using golden tasks v3.
+- Added semantic-boundary chunking for large AST nodes.
+- Added full AST support for C, C++, Ruby, PHP, and Swift.
+- Upgraded LanceDB from 0.23.1 to 0.31.0 and removed vulnerable legacy AWS/RSA/rustls dependency chains.
+- Hardened MCP installation with pinned npm versions, strict project roots, atomic config writes, and malformed-config preservation.
+- Excluded common secret files from indexing and made graph/manifest writes atomic and error-visible.
+- Added npm installer tests, MCP protocol release smoke tests, Linux ARM64/macOS Intel artifacts, SBOM generation, provenance attestation, dependency audit, and CodeQL workflow analysis.
+
 ## v0.1.31 - Incremental Index Idempotency & Embedder Fallback (2026-04-16)
 
 ### 🐛 Bug Fixes

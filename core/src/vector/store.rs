@@ -1,8 +1,6 @@
 use crate::vector::remote::RemoteEmbedder;
 use anyhow::Result;
-use arrow_array::{
-    FixedSizeListArray, Float32Array, RecordBatch, RecordBatchIterator, StringArray,
-};
+use arrow_array::{FixedSizeListArray, Float32Array, RecordBatch, StringArray};
 use arrow_schema::{DataType, Field, Schema};
 use futures::TryStreamExt;
 use lancedb::query::{ExecutableQuery, QueryBase};
@@ -107,54 +105,13 @@ impl LanceDbStore {
                 all_chunk_ids.push(ids[i].clone());
                 original_ids_map.push(i);
             } else {
-                // Split large text into overlapping chunks
-                let mut start = 0;
-                let mut chunk_idx = 0;
-
-                while start < text.len() {
-                    // Find a valid char boundary for 'end'
-                    let mut end = std::cmp::min(start + max_chars, text.len());
-                    while !text.is_char_boundary(end) && end > start {
-                        end -= 1;
-                    }
-
-                    // Safety check: if 'end' somehow equals 'start' (single huge char?), force forward to next valid
-                    if end == start && start < text.len() {
-                        if let Some((next_idx, _)) = text[start..].char_indices().nth(1) {
-                            end = start + next_idx;
-                        } else {
-                            end = text.len();
-                        }
-                    }
-
-                    let chunk = text[start..end].to_string();
-
+                for (chunk_idx, chunk) in semantic_chunks(text, max_chars, overlap)
+                    .into_iter()
+                    .enumerate()
+                {
                     all_chunks.push(chunk);
                     all_chunk_ids.push(format!("{}#chunk{}", ids[i], chunk_idx));
                     original_ids_map.push(i);
-
-                    if end == text.len() {
-                        break;
-                    }
-
-                    // Calculate next start with overlap, ensuring valid boundary
-                    let next_target = start + max_chars - overlap;
-                    let mut next_start = std::cmp::min(next_target, text.len());
-                    while !text.is_char_boundary(next_start) && next_start < text.len() {
-                        next_start += 1;
-                    }
-                    // Ensure forward progress
-                    if next_start <= start {
-                        if let Some((idx, _)) = text[start..].char_indices().nth(1) {
-                            start += idx;
-                        } else {
-                            start = text.len();
-                        }
-                    } else {
-                        start = next_start;
-                    }
-
-                    chunk_idx += 1;
                 }
             }
         }
@@ -238,7 +195,7 @@ impl LanceDbStore {
             ],
         )?;
 
-        let batches = RecordBatchIterator::new(vec![Ok(batch)], schema.clone());
+        let batches = vec![batch];
 
         let table = self.conn.open_table(&self.table_name).execute().await;
         match table {
@@ -373,5 +330,54 @@ impl LanceDbStore {
                 ))
             }
         }
+    }
+}
+
+fn semantic_chunks(text: &str, max_chars: usize, overlap: usize) -> Vec<String> {
+    let mut chunks = Vec::new();
+    let mut start = 0;
+
+    while start < text.len() {
+        let mut hard_end = (start + max_chars).min(text.len());
+        while hard_end > start && !text.is_char_boundary(hard_end) {
+            hard_end -= 1;
+        }
+
+        let minimum_split = start + (hard_end - start) / 2;
+        let preferred = text[minimum_split..hard_end]
+            .rfind("\n\n")
+            .map(|offset| minimum_split + offset + 2)
+            .or_else(|| {
+                text[minimum_split..hard_end]
+                    .rfind('\n')
+                    .map(|offset| minimum_split + offset + 1)
+            });
+        let end = preferred.filter(|end| *end > start).unwrap_or(hard_end);
+        chunks.push(text[start..end].to_string());
+        if end == text.len() {
+            break;
+        }
+
+        let mut next = end.saturating_sub(overlap);
+        while next < end && !text.is_char_boundary(next) {
+            next += 1;
+        }
+        start = if next > start { next } else { end };
+    }
+
+    chunks
+}
+
+#[cfg(test)]
+mod chunk_tests {
+    use super::semantic_chunks;
+
+    #[test]
+    fn semantic_chunks_prefer_code_boundaries_and_preserve_progress() {
+        let text = "fn one() {\n  work();\n}\n\nfn two() {\n  more();\n}\n";
+        let chunks = semantic_chunks(text, 32, 4);
+        assert!(chunks.len() >= 2);
+        assert!(chunks[0].ends_with("\n\n"));
+        assert!(chunks.iter().all(|chunk| chunk.len() <= 32));
     }
 }

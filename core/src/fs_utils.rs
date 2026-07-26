@@ -28,6 +28,11 @@ pub(crate) fn detect_language(path: &Path) -> SupportedLanguage {
         "java" => SupportedLanguage::Java,
         "kt" | "kts" => SupportedLanguage::Kotlin,
         "cs" => SupportedLanguage::CSharp,
+        "c" | "h" => SupportedLanguage::C,
+        "cc" | "cpp" | "cxx" | "hh" | "hpp" | "hxx" => SupportedLanguage::Cpp,
+        "rb" | "rake" | "gemspec" => SupportedLanguage::Ruby,
+        "php" | "phtml" => SupportedLanguage::Php,
+        "swift" => SupportedLanguage::Swift,
         _ => SupportedLanguage::Data,
     }
 }
@@ -35,6 +40,27 @@ pub(crate) fn detect_language(path: &Path) -> SupportedLanguage {
 pub(crate) fn read_text_file_limited(path: &Path) -> Result<String> {
     let max_bytes = max_file_bytes();
     read_text_file_with_limit(path, max_bytes).map_err(Into::into)
+}
+
+#[cfg(test)]
+mod language_tests {
+    use super::detect_language;
+    use crate::parser::SupportedLanguage;
+    use std::path::Path;
+
+    #[test]
+    fn detects_extended_language_extensions() {
+        let cases = [
+            ("main.c", SupportedLanguage::C),
+            ("main.cpp", SupportedLanguage::Cpp),
+            ("task.rb", SupportedLanguage::Ruby),
+            ("index.php", SupportedLanguage::Php),
+            ("App.swift", SupportedLanguage::Swift),
+        ];
+        for (path, expected) in cases {
+            assert_eq!(detect_language(Path::new(path)), expected);
+        }
+    }
 }
 
 #[derive(Debug)]

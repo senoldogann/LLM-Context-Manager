@@ -10,6 +10,11 @@ pub enum SupportedLanguage {
     Java,
     Kotlin,
     CSharp,
+    C,
+    Cpp,
+    Ruby,
+    Php,
+    Swift,
     Data, // Kod olmayan dosyalar (JSON, MD, vb.)
 }
 
@@ -49,6 +54,11 @@ impl CodeParser {
             SupportedLanguage::Java => tree_sitter_java::LANGUAGE.into(),
             SupportedLanguage::Kotlin => tree_sitter_kotlin_ng::LANGUAGE.into(),
             SupportedLanguage::CSharp => tree_sitter_c_sharp::LANGUAGE.into(),
+            SupportedLanguage::C => tree_sitter_c::LANGUAGE.into(),
+            SupportedLanguage::Cpp => tree_sitter_cpp::LANGUAGE.into(),
+            SupportedLanguage::Ruby => tree_sitter_ruby::LANGUAGE.into(),
+            SupportedLanguage::Php => tree_sitter_php::LANGUAGE_PHP.into(),
+            SupportedLanguage::Swift => tree_sitter_swift::LANGUAGE.into(),
             SupportedLanguage::Data => {
                 return Err(anyhow!("Data files do not support AST parsing"))
             }
@@ -81,5 +91,34 @@ mod tests {
         let code = "def hello(): print('world')";
         let sexp = parser.parse(code, SupportedLanguage::Python).unwrap();
         assert!(sexp.contains("function_definition"));
+    }
+
+    #[test]
+    fn parses_extended_open_source_languages() {
+        let cases = [
+            (SupportedLanguage::C, "int answer(void) { return 42; }"),
+            (
+                SupportedLanguage::Cpp,
+                "class Greeter { public: void hello() {} };",
+            ),
+            (
+                SupportedLanguage::Ruby,
+                "class Greeter\n def hello; end\nend",
+            ),
+            (
+                SupportedLanguage::Php,
+                "<?php class Greeter { public function hello() {} }",
+            ),
+            (
+                SupportedLanguage::Swift,
+                "struct Greeter { func hello() {} }",
+            ),
+        ];
+
+        for (language, source) in cases {
+            let mut parser = CodeParser::new();
+            let tree = parser.parse_tree(source, language).unwrap();
+            assert!(!tree.root_node().has_error(), "{language:?} parse failed");
+        }
     }
 }

@@ -37,9 +37,12 @@ let checksumCache = null;
 
 const MCP_SERVER_NAME = 'context-manager';
 const MCP_COMMAND = 'npx';
-const MCP_ARGS = ['-y', '@senoldogann/context-manager', 'mcp'];
+const MCP_ARGS = ['-y', `@senoldogann/context-manager@${VERSION}`, 'mcp'];
 const MCP_ENV = {
-    RUST_LOG: 'info'
+    RUST_LOG: 'info',
+    CCM_PROJECT_ROOT: process.cwd(),
+    CCM_ALLOWED_ROOTS: process.cwd(),
+    CCM_REQUIRE_ALLOWED_ROOTS: '1'
 };
 const ALLOWED_REDIRECT_HOSTS = new Set([
     'github.com',
@@ -114,12 +117,15 @@ function installJsonConfig(configPath, mcpConfig) {
 
     let config = { mcpServers: {} };
     if (fs.existsSync(configPath)) {
+        const backupPath = `${configPath}.bak`;
+        fs.copyFileSync(configPath, backupPath);
         try {
             const content = fs.readFileSync(configPath, 'utf8');
             config = JSON.parse(content);
-            fs.copyFileSync(configPath, `${configPath}.bak`);
         } catch (e) {
-            console.warn(`[CCM] Could not parse ${configPath}, creating backup and starting fresh section.`);
+            throw new Error(
+                `Could not parse ${configPath}. The original file was preserved and copied to ${backupPath}.`
+            );
         }
     }
 
@@ -128,9 +134,25 @@ function installJsonConfig(configPath, mcpConfig) {
     }
 
     config.mcpServers[MCP_SERVER_NAME] = mcpConfig;
-    fs.writeFileSync(configPath, JSON.stringify(config, null, 2));
+    writeJsonAtomic(configPath, config);
     console.log(`[CCM] ✓ Successfully updated: ${configPath}`);
     return true;
+}
+
+function writeJsonAtomic(configPath, value) {
+    const tempPath = `${configPath}.${process.pid}.${Date.now()}.tmp`;
+    try {
+        fs.writeFileSync(tempPath, `${JSON.stringify(value, null, 2)}\n`, {
+            encoding: 'utf8',
+            mode: 0o600
+        });
+        fs.renameSync(tempPath, configPath);
+    } catch (error) {
+        if (fs.existsSync(tempPath)) {
+            fs.unlinkSync(tempPath);
+        }
+        throw error;
+    }
 }
 
 function installCodexConfig() {
@@ -157,17 +179,26 @@ function installCodexConfig() {
 
     const existing = existingServers.find((server) => server.name === MCP_SERVER_NAME);
     if (existing) {
-        const removeResult = spawnSync('codex', ['mcp', 'remove', MCP_SERVER_NAME], {
-            encoding: 'utf8'
-        });
-
-        if (removeResult.status !== 0) {
-            console.warn(`[CCM] Codex MCP removal failed: ${removeResult.stderr.trim()}`);
-            return false;
-        }
+        console.log('[CCM] Codex MCP entry already exists; leaving it unchanged.');
+        return true;
     }
 
-    const addArgs = ['mcp', 'add', MCP_SERVER_NAME, '--env', 'RUST_LOG=info', '--', MCP_COMMAND, ...MCP_ARGS];
+    const addArgs = [
+        'mcp',
+        'add',
+        MCP_SERVER_NAME,
+        '--env',
+        'RUST_LOG=info',
+        '--env',
+        `CCM_PROJECT_ROOT=${process.cwd()}`,
+        '--env',
+        `CCM_ALLOWED_ROOTS=${process.cwd()}`,
+        '--env',
+        'CCM_REQUIRE_ALLOWED_ROOTS=1',
+        '--',
+        MCP_COMMAND,
+        ...MCP_ARGS
+    ];
     const addResult = spawnSync('codex', addArgs, {
         encoding: 'utf8'
     });
@@ -415,4 +446,16 @@ async function main() {
     }
 }
 
-main();
+if (require.main === module) {
+    main();
+}
+
+module.exports = {
+    MCP_ARGS,
+    MCP_ENV,
+    installJsonConfig,
+    parseChecksums,
+    resolveRedirectUrl,
+    verifyChecksum,
+    writeJsonAtomic
+};

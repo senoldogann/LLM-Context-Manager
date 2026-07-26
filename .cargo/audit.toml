@@ -1,0 +1,8 @@
+[advisories]
+# quick-xml is pulled only through LanceDB's profiling/test support:
+# lancedb -> lance-testing -> pprof -> inferno -> quick-xml.
+# It is not reachable from CCM runtime code or release binaries.
+ignore = [
+  "RUSTSEC-2026-0194",
+  "RUSTSEC-2026-0195",
+]

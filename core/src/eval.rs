@@ -56,7 +56,7 @@ pub struct Expected {
     pub reason_contains: Option<Vec<String>>,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct EvalReport {
     pub schema_version: u32,
     pub generated_at: u64,
@@ -64,7 +64,7 @@ pub struct EvalReport {
     pub results: Vec<TaskResult>,
 }
 
-#[derive(Debug, Serialize, Default)]
+#[derive(Debug, Serialize, Deserialize, Default)]
 pub struct Totals {
     pub tasks: usize,
     pub scored: usize,
@@ -73,7 +73,7 @@ pub struct Totals {
     pub skipped: usize,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct TaskResult {
     pub id: String,
     pub query_type: String,
@@ -123,6 +123,65 @@ pub fn write_report<W: Write>(writer: W, report: &EvalReport) -> Result<()> {
 pub fn write_comparison_report<W: Write>(writer: W, report: &ComparisonReport) -> Result<()> {
     serde_json::to_writer_pretty(writer, report)?;
     Ok(())
+}
+
+pub fn report_pass_rate(report: &EvalReport) -> f64 {
+    let total = report.totals.scored;
+    if total == 0 {
+        return 0.0;
+    }
+    (report.totals.passed as f64 / total as f64) * 100.0
+}
+
+pub fn enforce_quality_gate(
+    report: &EvalReport,
+    minimum_pass_rate: f64,
+    baseline: Option<&EvalReport>,
+    maximum_regression: f64,
+) -> Result<()> {
+    if report.totals.scored == 0 {
+        anyhow::bail!("evaluation quality gate failed: no tasks were scored");
+    }
+    if report.totals.scored != report.totals.tasks || report.totals.skipped > 0 {
+        anyhow::bail!(
+            "evaluation quality gate failed: {} of {} tasks were scored ({} skipped)",
+            report.totals.scored,
+            report.totals.tasks,
+            report.totals.skipped
+        );
+    }
+
+    let current = report_pass_rate(report);
+    if current < minimum_pass_rate {
+        anyhow::bail!(
+            "evaluation quality gate failed: pass rate {:.1}% is below {:.1}%",
+            current,
+            minimum_pass_rate
+        );
+    }
+
+    if let Some(baseline) = baseline {
+        let baseline_rate = report_pass_rate(baseline);
+        let regression = baseline_rate - current;
+        if regression > maximum_regression {
+            anyhow::bail!(
+                "evaluation quality gate failed: {:.1}% regression exceeds {:.1}% (baseline {:.1}%, current {:.1}%)",
+                regression,
+                maximum_regression,
+                baseline_rate,
+                current
+            );
+        }
+    }
+
+    Ok(())
+}
+
+pub fn load_report(path: &Path) -> Result<EvalReport> {
+    let file = std::fs::File::open(path)
+        .with_context(|| format!("Failed to open evaluation report: {}", path.display()))?;
+    serde_json::from_reader(std::io::BufReader::new(file))
+        .with_context(|| format!("Failed to parse evaluation report: {}", path.display()))
 }
 
 pub fn summarize_report(report: &EvalReport, report_path: Option<&str>) -> String {
@@ -658,10 +717,7 @@ fn build_comparison_summary(structural: &EvalReport, hybrid: &EvalReport) -> Com
 }
 
 fn pass_rate(report: &EvalReport) -> f64 {
-    if report.totals.tasks == 0 {
-        return 0.0;
-    }
-    (report.totals.passed as f64 / report.totals.tasks as f64) * 100.0
+    report_pass_rate(report)
 }
 
 fn query_type_pass_rate(report: &EvalReport) -> BTreeMap<String, f64> {

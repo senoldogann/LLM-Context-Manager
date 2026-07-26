@@ -462,4 +462,5 @@ fn guardian_mcp_all_tools_e2e() {
     println!("╚══════════════════════════════════════════════════════════╝\n");
 
     let _ = child.kill();
+    let _ = child.wait();
 }

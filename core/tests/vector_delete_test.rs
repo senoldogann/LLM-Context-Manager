@@ -1,7 +1,5 @@
 use anyhow::Result;
-use arrow_array::{
-    FixedSizeListArray, Float32Array, RecordBatch, RecordBatchIterator, StringArray,
-};
+use arrow_array::{FixedSizeListArray, Float32Array, RecordBatch, StringArray};
 use arrow_schema::{DataType, Field, Schema};
 use ccm_core::vector::store::LanceDbStore;
 use futures::TryStreamExt;
@@ -79,8 +77,9 @@ async fn test_delete_by_prefix_removes_rows() -> Result<()> {
         ],
     )?;
 
-    let batches = RecordBatchIterator::new(vec![Ok(batch)], schema.clone());
-    conn.create_table("code_vectors", batches).execute().await?;
+    conn.create_table("code_vectors", vec![batch])
+        .execute()
+        .await?;
 
     let table = conn.open_table("code_vectors").execute().await?;
     let initial_count = table.count_rows(None).await?;

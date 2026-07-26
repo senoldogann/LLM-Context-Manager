@@ -17,6 +17,7 @@ pub struct Extractor {
     source_code: String,
     language: SupportedLanguage,
     node_map: HashMap<String, NodeIndex>,
+    id_occurrences: HashMap<String, usize>,
 }
 
 impl Extractor {
@@ -25,6 +26,7 @@ impl Extractor {
             source_code,
             language,
             node_map: HashMap::new(),
+            id_occurrences: HashMap::new(),
         }
     }
 
@@ -49,7 +51,7 @@ impl Extractor {
         self.node_map.insert(file_id.to_string(), file_idx);
 
         // Walk the AST and extract elements
-        self.walk_node(tree.root_node(), graph, file_idx, file_id)?;
+        self.walk_node(tree.root_node(), graph, file_idx, file_id, "")?;
 
         Ok(file_idx)
     }
@@ -60,6 +62,7 @@ impl Extractor {
         graph: &mut CodeGraph,
         parent_idx: NodeIndex,
         file_id: &str,
+        semantic_parent: &str,
     ) -> Result<()> {
         // Determine if this node is semantically significant
         if let Some((node_type, name)) = self.classify_node(&node) {
@@ -84,14 +87,21 @@ impl Extractor {
                 raw_content
             };
 
-            // ID Generation: Prefix with file_id for global uniqueness and GC
+            let semantic_path = if semantic_parent.is_empty() {
+                name.clone()
+            } else {
+                format!("{}::{}", semantic_parent, name)
+            };
+            let identity = format!("{}:{}:{}", file_id, node.kind(), semantic_path);
+            let occurrence = self.id_occurrences.entry(identity.clone()).or_insert(0);
             let id = format!(
-                "{}:{}:{}:{}",
+                "{}:{}:symbol:{:016x}:{}",
                 file_id,
                 node.kind(),
-                node.start_position().row,
-                node.start_position().column
+                stable_hash(&identity),
+                *occurrence
             );
+            *occurrence += 1;
 
             let code_node = CodeNode {
                 id: id.clone(),
@@ -111,13 +121,13 @@ impl Extractor {
             // Walk children with this node as parent
             let mut cursor = node.walk();
             for child in node.children(&mut cursor) {
-                self.walk_node(child, graph, current_idx, file_id)?;
+                self.walk_node(child, graph, current_idx, file_id, &semantic_path)?;
             }
         } else {
             // Not a semantic node, continue walking with same parent
             let mut cursor = node.walk();
             for child in node.children(&mut cursor) {
-                self.walk_node(child, graph, parent_idx, file_id)?;
+                self.walk_node(child, graph, parent_idx, file_id, semantic_parent)?;
             }
         }
 
@@ -172,6 +182,11 @@ impl Extractor {
             SupportedLanguage::Java => self.classify_java_node(node, kind),
             SupportedLanguage::Kotlin => self.classify_kotlin_node(node, kind),
             SupportedLanguage::CSharp => self.classify_csharp_node(node, kind),
+            SupportedLanguage::C => self.classify_c_node(node, kind),
+            SupportedLanguage::Cpp => self.classify_cpp_node(node, kind),
+            SupportedLanguage::Ruby => self.classify_ruby_node(node, kind),
+            SupportedLanguage::Php => self.classify_php_node(node, kind),
+            SupportedLanguage::Swift => self.classify_swift_node(node, kind),
             SupportedLanguage::Data => None,
         }
     }
@@ -445,6 +460,150 @@ impl Extractor {
         }
     }
 
+    fn classify_c_node(&self, node: &Node, kind: &str) -> Option<(NodeType, String)> {
+        match kind {
+            "function_definition" => Some((
+                NodeType::Function,
+                self.find_descendant_text(node, &["identifier"])
+                    .unwrap_or_else(|| "anonymous".to_string()),
+            )),
+            "struct_specifier" | "union_specifier" | "enum_specifier" => Some((
+                NodeType::Struct,
+                self.find_descendant_text(node, &["type_identifier", "identifier"])
+                    .unwrap_or_else(|| "anonymous".to_string()),
+            )),
+            "preproc_include" => Some((NodeType::Import, self.get_node_text(node))),
+            "declaration" => self
+                .find_descendant_text(node, &["identifier"])
+                .map(|name| (NodeType::Variable, name)),
+            _ => None,
+        }
+    }
+
+    fn classify_cpp_node(&self, node: &Node, kind: &str) -> Option<(NodeType, String)> {
+        match kind {
+            "function_definition" => Some((
+                NodeType::Function,
+                self.find_descendant_text(
+                    node,
+                    &["field_identifier", "operator_name", "identifier"],
+                )
+                .unwrap_or_else(|| "anonymous".to_string()),
+            )),
+            "class_specifier" => Some((
+                NodeType::Class,
+                self.find_descendant_text(node, &["type_identifier", "identifier"])
+                    .unwrap_or_else(|| "anonymous".to_string()),
+            )),
+            "struct_specifier" | "union_specifier" | "enum_specifier" => Some((
+                NodeType::Struct,
+                self.find_descendant_text(node, &["type_identifier", "identifier"])
+                    .unwrap_or_else(|| "anonymous".to_string()),
+            )),
+            "namespace_definition" => Some((
+                NodeType::Module,
+                self.find_descendant_text(node, &["namespace_identifier", "identifier"])
+                    .unwrap_or_else(|| "anonymous".to_string()),
+            )),
+            "preproc_include" => Some((NodeType::Import, self.get_node_text(node))),
+            _ => None,
+        }
+    }
+
+    fn classify_ruby_node(&self, node: &Node, kind: &str) -> Option<(NodeType, String)> {
+        match kind {
+            "method" | "singleton_method" => Some((
+                NodeType::Method,
+                self.find_descendant_text(node, &["identifier", "constant"])
+                    .unwrap_or_else(|| "anonymous".to_string()),
+            )),
+            "class" => Some((
+                NodeType::Class,
+                self.find_descendant_text(node, &["constant", "identifier"])
+                    .unwrap_or_else(|| "anonymous".to_string()),
+            )),
+            "module" => Some((
+                NodeType::Module,
+                self.find_descendant_text(node, &["constant", "identifier"])
+                    .unwrap_or_else(|| "anonymous".to_string()),
+            )),
+            "assignment" => self
+                .find_descendant_text(
+                    node,
+                    &[
+                        "identifier",
+                        "instance_variable",
+                        "class_variable",
+                        "global_variable",
+                    ],
+                )
+                .map(|name| (NodeType::Variable, name)),
+            "call" if self.get_node_text(node).starts_with("require") => {
+                Some((NodeType::Import, self.get_node_text(node)))
+            }
+            _ => None,
+        }
+    }
+
+    fn classify_php_node(&self, node: &Node, kind: &str) -> Option<(NodeType, String)> {
+        match kind {
+            "function_definition" => Some((
+                NodeType::Function,
+                self.find_descendant_text(node, &["name", "identifier"])
+                    .unwrap_or_else(|| "anonymous".to_string()),
+            )),
+            "method_declaration" => Some((
+                NodeType::Method,
+                self.find_descendant_text(node, &["name", "identifier"])
+                    .unwrap_or_else(|| "anonymous".to_string()),
+            )),
+            "class_declaration" => Some((
+                NodeType::Class,
+                self.find_descendant_text(node, &["name", "identifier"])
+                    .unwrap_or_else(|| "anonymous".to_string()),
+            )),
+            "interface_declaration" | "trait_declaration" | "enum_declaration" => Some((
+                NodeType::Struct,
+                self.find_descendant_text(node, &["name", "identifier"])
+                    .unwrap_or_else(|| "anonymous".to_string()),
+            )),
+            "namespace_definition" => Some((
+                NodeType::Module,
+                self.find_descendant_text(node, &["namespace_name", "name"])
+                    .unwrap_or_else(|| "global".to_string()),
+            )),
+            "namespace_use_declaration" | "require_expression" | "include_expression" => {
+                Some((NodeType::Import, self.get_node_text(node)))
+            }
+            _ => None,
+        }
+    }
+
+    fn classify_swift_node(&self, node: &Node, kind: &str) -> Option<(NodeType, String)> {
+        match kind {
+            "function_declaration" | "initializer_declaration" => Some((
+                NodeType::Function,
+                self.find_descendant_text(node, &["simple_identifier", "identifier"])
+                    .unwrap_or_else(|| "init".to_string()),
+            )),
+            "class_declaration" | "actor_declaration" => Some((
+                NodeType::Class,
+                self.find_descendant_text(node, &["type_identifier", "simple_identifier"])
+                    .unwrap_or_else(|| "anonymous".to_string()),
+            )),
+            "struct_declaration" | "protocol_declaration" | "enum_declaration" => Some((
+                NodeType::Struct,
+                self.find_descendant_text(node, &["type_identifier", "simple_identifier"])
+                    .unwrap_or_else(|| "anonymous".to_string()),
+            )),
+            "import_declaration" => Some((NodeType::Import, self.get_node_text(node))),
+            "property_declaration" => self
+                .find_descendant_text(node, &["simple_identifier", "identifier"])
+                .map(|name| (NodeType::Variable, name)),
+            _ => None,
+        }
+    }
+
     /// Helper: Finds a child node by kind and returns its text.
     fn find_child_text(&self, node: &Node, child_kind: &str) -> Option<String> {
         let mut cursor = node.walk();
@@ -452,6 +611,20 @@ impl Extractor {
             if child.kind() == child_kind {
                 return Some(self.get_node_text(&child));
             }
+        }
+        None
+    }
+
+    fn find_descendant_text(&self, node: &Node, kinds: &[&str]) -> Option<String> {
+        let mut stack = vec![*node];
+        while let Some(current) = stack.pop() {
+            if current.id() != node.id() && kinds.contains(&current.kind()) {
+                return Some(self.get_node_text(&current));
+            }
+            let mut cursor = current.walk();
+            let mut children: Vec<Node> = current.children(&mut cursor).collect();
+            children.reverse();
+            stack.extend(children);
         }
         None
     }
@@ -496,6 +669,17 @@ impl Extractor {
             SupportedLanguage::Java => kind == "method_invocation",
             SupportedLanguage::Kotlin => kind == "call_expression",
             SupportedLanguage::CSharp => kind == "invocation_expression",
+            SupportedLanguage::C | SupportedLanguage::Cpp => kind == "call_expression",
+            SupportedLanguage::Ruby => kind == "call",
+            SupportedLanguage::Php => {
+                matches!(
+                    kind,
+                    "function_call_expression"
+                        | "member_call_expression"
+                        | "scoped_call_expression"
+                )
+            }
+            SupportedLanguage::Swift => kind == "call_expression",
             SupportedLanguage::Data => false,
         };
 
@@ -613,6 +797,15 @@ impl Extractor {
     }
 }
 
+fn stable_hash(value: &str) -> u64 {
+    value
+        .as_bytes()
+        .iter()
+        .fold(0xcbf29ce484222325_u64, |hash, byte| {
+            (hash ^ u64::from(*byte)).wrapping_mul(0x100000001b3)
+        })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -688,5 +881,76 @@ impl Point {
 
         // Should have: 1 File + 1 Struct + 1 impl (Class) + 1 Function = 4 nodes
         assert!(graph.graph.node_count() >= 4);
+    }
+
+    #[test]
+    fn semantic_ids_survive_unrelated_line_insertions() {
+        fn function_id(source: &str) -> String {
+            let mut parser = CodeParser::new();
+            let tree = parser.parse_tree(source, SupportedLanguage::Rust).unwrap();
+            let mut graph = CodeGraph::new();
+            let mut extractor = Extractor::new(source.to_string(), SupportedLanguage::Rust);
+            extractor
+                .extract(&tree, &mut graph, "./src/lib.rs")
+                .unwrap();
+            graph
+                .graph
+                .node_weights()
+                .find(|node| node.name == "stable")
+                .expect("stable function")
+                .id
+                .clone()
+        }
+
+        let before = function_id("fn stable() {}\n");
+        let after = function_id("\n\n// unrelated\nfn stable() {}\n");
+        assert_eq!(before, after);
+        assert!(before.contains(":symbol:"));
+    }
+
+    #[test]
+    fn extracts_symbols_from_extended_languages() {
+        let cases = [
+            (
+                SupportedLanguage::C,
+                "int answer(void) { return 42; }",
+                "answer",
+            ),
+            (
+                SupportedLanguage::Cpp,
+                "class Greeter { public: void hello() {} };",
+                "Greeter",
+            ),
+            (
+                SupportedLanguage::Ruby,
+                "class Greeter\n def hello; end\nend",
+                "Greeter",
+            ),
+            (
+                SupportedLanguage::Php,
+                "<?php class Greeter { public function hello() {} }",
+                "Greeter",
+            ),
+            (
+                SupportedLanguage::Swift,
+                "struct Greeter { func hello() {} }",
+                "Greeter",
+            ),
+        ];
+
+        for (language, source, expected_name) in cases {
+            let mut parser = CodeParser::new();
+            let tree = parser.parse_tree(source, language).unwrap();
+            let mut graph = CodeGraph::new();
+            let mut extractor = Extractor::new(source.to_string(), language);
+            extractor.extract(&tree, &mut graph, "./sample").unwrap();
+            assert!(
+                graph
+                    .graph
+                    .node_weights()
+                    .any(|node| node.name == expected_name),
+                "{language:?} did not extract {expected_name}"
+            );
+        }
     }
 }

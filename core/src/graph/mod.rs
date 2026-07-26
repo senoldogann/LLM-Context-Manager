@@ -167,17 +167,20 @@ impl CodeGraph {
         let mut best_dist = usize::MAX;
 
         for node in self.graph.node_weights() {
-            let (node_path, node_kind, node_row_str) = match parse_node_id(&node.id) {
-                Some(t) => t,
-                None => continue,
-            };
+            let (node_path, node_kind, node_row) =
+                if let Some((path, kind)) = parse_stable_node_id(&node.id) {
+                    (path, kind, node.start_line.saturating_sub(1))
+                } else if let Some((path, kind, row)) = parse_node_id(&node.id) {
+                    let Ok(row) = row.parse::<usize>() else {
+                        continue;
+                    };
+                    (path, kind, row)
+                } else {
+                    continue;
+                };
             if node_path != path_part || node_kind != kind_part {
                 continue;
             }
-            let node_row: usize = match node_row_str.parse() {
-                Ok(r) => r,
-                Err(_) => continue,
-            };
             let dist = node_row.abs_diff(target_row);
             if dist < best_dist && dist <= 200 {
                 best_dist = dist;
@@ -230,9 +233,18 @@ impl CodeGraph {
 
     /// Saves the graph to a JSON file.
     pub fn save_to_file(&self, path: &str) -> anyhow::Result<()> {
-        let file = std::fs::File::create(path)?;
-        let writer = std::io::BufWriter::new(file);
-        serde_json::to_writer(writer, &self.graph)?;
+        let path = std::path::Path::new(path);
+        if let Some(parent) = path.parent() {
+            std::fs::create_dir_all(parent)?;
+        }
+        let temp_path = path.with_extension(format!("json.{}.tmp", std::process::id()));
+        let file = std::fs::File::create(&temp_path)?;
+        let mut writer = std::io::BufWriter::new(file);
+        serde_json::to_writer(&mut writer, &self.graph)?;
+        use std::io::Write;
+        writer.flush()?;
+        writer.get_ref().sync_all()?;
+        std::fs::rename(temp_path, path)?;
         Ok(())
     }
 
@@ -322,6 +334,18 @@ fn parse_node_id(id: &str) -> Option<(&str, &str, &str)> {
     let kind = parts.next()?;
     let path = parts.next()?;
     Some((path, kind, row))
+}
+
+fn parse_stable_node_id(id: &str) -> Option<(&str, &str)> {
+    let mut parts = id.rsplitn(5, ':');
+    let _occurrence = parts.next()?;
+    let _hash = parts.next()?;
+    if parts.next()? != "symbol" {
+        return None;
+    }
+    let kind = parts.next()?;
+    let path = parts.next()?;
+    Some((path, kind))
 }
 
 #[cfg(test)]

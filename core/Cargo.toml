@@ -1,6 +1,6 @@
 [package]
 name = "ccm-core"
-version = "0.1.31"
+version = "0.2.0"
 edition = "2021"
 authors = ["Senol Dogan"]
 description = "Core engine for Cognitive Codebase Matrix"
@@ -22,7 +22,7 @@ tracing-subscriber = "0.3"
 
 # LanceDB henüz stabilize olmadığı için temsili versiyon. 
 # Gerçek projede güncel crate sürümü kontrol edilmeli.
-lancedb = "0.23.1"
+lancedb = "0.31.0"
 
 # AST Parsing
 # Grammar crate versions intentionally diverge from tree-sitter core (0.23-0.26 mix).
@@ -39,17 +39,22 @@ tree-sitter-go = "0.25"
 # Kotlin: tree-sitter-kotlin-ng (fork) — eski tree-sitter-kotlin 0.3.x uyumsuz (0.22 API)
 
 # Arrow (Explicitly needed for Vector Store)
-arrow-array = "56"
-arrow-schema = "56"
+arrow-array = "58"
+arrow-schema = "58"
 tokio-stream = { version = "0.1", features = ["net"] }
 futures = "0.3"
-reqwest = { version = "0.11", features = ["json", "rustls-tls"] }
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
 dotenvy = "0.15"
 ignore = "0.4"
 tree-sitter-java = "0.23.5"
 # tree-sitter-kotlin 0.3.x, tree-sitter 0.26 ile uyumsuz — ng fork kullanılıyor
 tree-sitter-kotlin-ng = "1.1.0"
 tree-sitter-c-sharp = "0.23.5"
+tree-sitter-c = "0.24.2"
+tree-sitter-cpp = "0.23.4"
+tree-sitter-ruby = "0.23.1"
+tree-sitter-php = "0.24.2"
+tree-sitter-swift = "0.7.3"
 
 [dev-dependencies]
 tempfile = "3.8"

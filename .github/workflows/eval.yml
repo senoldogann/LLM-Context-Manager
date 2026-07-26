@@ -14,10 +14,10 @@ jobs:
       EMBEDDING_PROVIDER: openai
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
       - name: Setup Rust
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@4cda84d5c5c54efe2404f9d843567869ab1699d4 # stable
 
       - name: Install protoc
         run: |
@@ -30,11 +30,23 @@ jobs:
       - name: Index (structural-only)
         run: ./target/release/ccm-cli index --path .
 
-      - name: Eval (structural-only)
-        run: ./target/release/ccm-cli eval --tasks eval/golden_tasks.v1.json --report eval/report.json
+      - name: Prepare structural golden tasks v3
+        run: >-
+          jq '.tasks |= map(select(.query.type != "search_code"))'
+          eval/golden_tasks.v3.ccm.json
+          > eval/golden_tasks.v3.structural.json
+
+      - name: Eval quality gate (structural-only)
+        run: >-
+          ./target/release/ccm-cli eval
+          --tasks eval/golden_tasks.v3.structural.json
+          --report eval/report.json
+          --baseline eval/report.phase3_baseline.json
+          --min-pass-rate 100
+          --max-regression 0
 
       - name: Upload eval report
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: eval-report
           path: eval/report.json
