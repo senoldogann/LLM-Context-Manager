@@ -10,6 +10,8 @@
 
 > CCM, kod tabaniniz ile yapay zeka editorunuz arasindaki boslugu kapatir. Statik kaynak kodu dinamik ve sorgulanabilir bir bilgi grafina donusturur; boylece ajanlar projenizi daha dogru gezebilir, anlayabilir ve akil yurutme yapabilir.
 
+> **Guncel surum: v0.2.1.** UTF-8 parcalama panic'i giderildi, dosyalar arasi sinif/import kullanimlari duzeltildi ve ilk kurulum dayanikli hale getirildi.
+
 [![Rust](https://img.shields.io/badge/Built%20With-Rust-orange.svg?style=flat-square&logo=rust)](https://www.rust-lang.org/)
 [![MCP Ready](https://img.shields.io/badge/MCP-Compatible-blue.svg?style=flat-square&logo=google-cloud)](https://modelcontextprotocol.io/)
 [![Graph-RAG](https://img.shields.io/badge/Engine-Graph--RAG-purple.svg?style=flat-square)](https://github.com/senoldogann/LLM-Context-Manager)
@@ -44,6 +46,7 @@ CCM, ham kod yiginlari vermek yerine **AI-Optimized Context** uretir:
 
 ### Bagli Zeka (Graph Navigator)
 - **Iki Asamali Indexleme** - Fonksiyon tanimlarini cagri noktalarina baglar
+- **Arttirmali Guncelleme** - Ilk calismadan sonra yalnizca eklenen, degisen, yeniden adlandirilan veya silinen dosyalari isler
 - **Derin Gezinti** - "Bunu kim cagiriyor?" gibi sorulara daha dogru cevap verir
 
 ### Yuksek Performansli Cekirdek
@@ -97,7 +100,7 @@ Beklenen sonuc:
 
 | Host | Durum | Kurulum Yolu |
 |------|-------|--------------|
-| Codex | Destekleniyor | Installer ile `codex mcp add ...` |
+| Codex | Destekleniyor | `~/.codex/config.toml` atomik olarak guncellenir |
 | Cursor | Destekleniyor | `~/.cursor/mcp.json` |
 | Claude Desktop | Destekleniyor | Yerel desktop config |
 | Antigravity | Destekleniyor | Yerel host config |
@@ -122,6 +125,17 @@ cp SKILL.md ~/.agents/skills/context-manager/SKILL.md
 git clone https://github.com/senoldogann/LLM-Context-Manager.git
 cd LLM-Context-Manager
 cargo build --release
+```
+
+### Manuel npm yayini (maintainer)
+
+`package.json` repo kokunde degil, bilerek `npm/` dizinindedir:
+
+```bash
+cd npm
+npm test
+npm pack --dry-run
+npm publish --access public --provenance
 ```
 
 ---
@@ -161,6 +175,10 @@ CCM_EMBED_DATA_FILES=0
 
 # Binary checksum dogrulama (0 = zorunlu, 1 = bypass)
 CCM_ALLOW_UNVERIFIED_BINARIES=0
+
+# Opsiyonel indirme ayarlari
+CCM_DOWNLOAD_TIMEOUT_MS=120000
+CCM_DOWNLOAD_ATTEMPTS=3
 ```
 
 Gelismis ayarlar:
@@ -192,6 +210,9 @@ ccm-cli query --text "src/main.rs:50"
 # Watch mode
 ccm-cli index --path . --watch
 
+# Kurulum, allowlist ve index uyumlulugunu denetle
+ccm-cli doctor --path .
+
 # Degerlendirme calistir
 ccm-cli eval --tasks eval/golden_tasks.v3.ccm.json
 ```
@@ -209,6 +230,10 @@ ccm-cli eval --tasks eval/golden_tasks.v3.ccm.json
 | `trace_call_chain` | Iki node arasi BFS cagri zinciri | from_id → to_id yolu |
 | `impact_of_change` | Bir dosya degisikliginin etki alani | Kod tabanindaki bagimlilar |
 | `diff_context` | Git'ten son degisiklikler | Son N gunun degisiklikleri |
+
+### Arttirmali indexleme davranisi
+
+Ilk `index` tum projeyi indeksler. Sonraki `index_project` veya `index --watch` calismalari dosya manifestini karsilastirir; yalnizca yeni ya da degisen dosyalari gunceller ve silinen dosyalarin node'larini kaldirir. Hicbir sey degismediyse vektor veritabani bastan olusturulmaz.
 
 ---
 

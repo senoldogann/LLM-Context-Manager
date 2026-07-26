@@ -12,8 +12,42 @@ permissions:
   attestations: write
 
 jobs:
+  quality-gate:
+    name: Release quality gate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - uses: dtolnay/rust-toolchain@4cda84d5c5c54efe2404f9d843567869ab1699d4 # stable
+        with:
+          components: rustfmt, clippy
+      - name: Install protoc
+        run: sudo apt-get update && sudo apt-get install -y protobuf-compiler
+      - name: Format and lint
+        run: |
+          cargo fmt --all -- --check
+          cargo clippy --workspace --all-targets -- -D warnings
+      - name: Test workspace and npm wrapper
+        run: |
+          cargo test --workspace
+          npm test --prefix npm
+      - name: Build and index release candidate
+        run: |
+          cargo build --release -p ccm-cli
+          ./target/release/ccm-cli index --path .
+      - name: Run golden tasks v3 quality gate
+        run: |
+          jq '.tasks |= map(select(.query.type != "search_code"))' \
+            eval/golden_tasks.v3.ccm.json > eval/golden_tasks.v3.structural.json
+          ./target/release/ccm-cli eval \
+            --tasks eval/golden_tasks.v3.structural.json \
+            --report eval/release-report.json \
+            --baseline eval/report.phase3_baseline.json \
+            --min-pass-rate 100 \
+            --max-regression 0
+
   build:
     name: Build (${{ matrix.target }})
+    needs: quality-gate
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -70,6 +104,7 @@ jobs:
           mkdir -p dist
           cp "target/${{ matrix.target }}/release/ccm-cli${{ matrix.ext }}" "dist/ccm-cli-${{ matrix.target }}${{ matrix.ext }}"
           cp "target/${{ matrix.target }}/release/ccm-mcp${{ matrix.ext }}" "dist/ccm-mcp-${{ matrix.target }}${{ matrix.ext }}"
+          gzip -9 dist/*
 
       - name: Upload artifacts
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
@@ -130,4 +165,12 @@ jobs:
         run: npm test --prefix npm
       - name: Publish with provenance
         working-directory: npm
-        run: npm publish --access public --provenance
+        shell: bash
+        run: |
+          PACKAGE_NAME=$(node -p "require('./package.json').name")
+          PACKAGE_VERSION=$(node -p "require('./package.json').version")
+          if npm view "${PACKAGE_NAME}@${PACKAGE_VERSION}" version >/dev/null 2>&1; then
+            echo "${PACKAGE_NAME}@${PACKAGE_VERSION} is already published; skipping."
+          else
+            npm publish --access public --provenance
+          fi

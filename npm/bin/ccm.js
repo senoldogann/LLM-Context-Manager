@@ -1,11 +1,13 @@
 #!/usr/bin/env node
 
-const { spawn, spawnSync } = require('child_process');
+const { spawn } = require('child_process');
 const path = require('path');
 const fs = require('fs');
 const os = require('os');
 const https = require('https');
 const crypto = require('crypto');
+const zlib = require('zlib');
+const { pipeline } = require('stream/promises');
 
 function resolvePackageVersion() {
     if (process.env.CCM_BINARY_VERSION && process.env.CCM_BINARY_VERSION.trim() !== '') {
@@ -33,6 +35,8 @@ const VERSION = resolvePackageVersion();
 const REPO = 'senoldogann/LLM-Context-Manager';
 const BIN_DIR = path.join(os.homedir(), '.ccm', 'bin');
 const CHECKSUMS_FILE = 'checksums.txt';
+const DOWNLOAD_TIMEOUT_MS = positiveInteger(process.env.CCM_DOWNLOAD_TIMEOUT_MS, 120_000);
+const DOWNLOAD_ATTEMPTS = positiveInteger(process.env.CCM_DOWNLOAD_ATTEMPTS, 3);
 let checksumCache = null;
 
 const MCP_SERVER_NAME = 'context-manager';
@@ -49,6 +53,11 @@ const ALLOWED_REDIRECT_HOSTS = new Set([
     'objects.githubusercontent.com',
     'release-assets.githubusercontent.com'
 ]);
+
+function positiveInteger(raw, fallback) {
+    const value = Number(raw);
+    return Number.isSafeInteger(value) && value > 0 ? value : fallback;
+}
 
 function allowUnverifiedBinaries() {
     const raw = process.env.CCM_ALLOW_UNVERIFIED_BINARIES || process.env.CCM_SKIP_CHECKSUM || '';
@@ -156,82 +165,92 @@ function writeJsonAtomic(configPath, value) {
 }
 
 function installCodexConfig() {
-    const listResult = spawnSync('codex', ['mcp', 'list', '--json'], {
-        encoding: 'utf8'
-    });
-
-    if (listResult.error) {
+    const codexDirectory = path.join(os.homedir(), '.codex');
+    if (!fs.existsSync(codexDirectory)) {
         return false;
     }
-
-    if (listResult.status !== 0) {
-        console.warn(`[CCM] Codex MCP inspection failed: ${listResult.stderr.trim()}`);
-        return false;
-    }
-
-    let existingServers = [];
-    try {
-        existingServers = JSON.parse(listResult.stdout);
-    } catch (error) {
-        console.warn('[CCM] Could not parse Codex MCP list output.');
-        return false;
-    }
-
-    const existing = existingServers.find((server) => server.name === MCP_SERVER_NAME);
-    if (existing) {
-        console.log('[CCM] Codex MCP entry already exists; leaving it unchanged.');
-        return true;
-    }
-
-    const addArgs = [
-        'mcp',
-        'add',
-        MCP_SERVER_NAME,
-        '--env',
-        'RUST_LOG=info',
-        '--env',
-        `CCM_PROJECT_ROOT=${process.cwd()}`,
-        '--env',
-        `CCM_ALLOWED_ROOTS=${process.cwd()}`,
-        '--env',
-        'CCM_REQUIRE_ALLOWED_ROOTS=1',
-        '--',
-        MCP_COMMAND,
-        ...MCP_ARGS
-    ];
-    const addResult = spawnSync('codex', addArgs, {
-        encoding: 'utf8'
-    });
-
-    if (addResult.status !== 0) {
-        console.warn(`[CCM] Codex MCP install failed: ${addResult.stderr.trim()}`);
-        return false;
-    }
-
+    const configPath = path.join(codexDirectory, 'config.toml');
+    installCodexTomlConfig(configPath, process.cwd(), VERSION);
     console.log('[CCM] ✓ Successfully updated: ~/.codex/config.toml');
     return true;
+}
+
+function installCodexTomlConfig(configPath, projectRoot, version) {
+    let content = '';
+    if (fs.existsSync(configPath)) {
+        content = fs.readFileSync(configPath, 'utf8');
+        fs.copyFileSync(configPath, `${configPath}.bak`);
+    }
+
+    const sectionPrefix = `mcp_servers.${MCP_SERVER_NAME}`;
+    const lines = content.split(/\r?\n/);
+    const preserved = [];
+    let removing = false;
+    for (const line of lines) {
+        const header = line.trim().match(/^\[([^\]]+)\]$/);
+        if (header) {
+            removing = header[1] === sectionPrefix || header[1].startsWith(`${sectionPrefix}.`);
+        }
+        if (!removing) {
+            preserved.push(line);
+        }
+    }
+
+    const quote = (value) => JSON.stringify(String(value));
+    const block = [
+        `[${sectionPrefix}]`,
+        `command = ${quote(MCP_COMMAND)}`,
+        `args = [${['-y', `@senoldogann/context-manager@${version}`, 'mcp'].map(quote).join(', ')}]`,
+        'enabled = true',
+        '',
+        `[${sectionPrefix}.env]`,
+        `RUST_LOG = ${quote('info')}`,
+        `CCM_PROJECT_ROOT = ${quote(projectRoot)}`,
+        `CCM_ALLOWED_ROOTS = ${quote(projectRoot)}`,
+        `CCM_REQUIRE_ALLOWED_ROOTS = ${quote('1')}`
+    ].join('\n');
+
+    const next = `${preserved.join('\n').trimEnd()}\n\n${block}\n`.replace(/^\n+/, '');
+    writeTextAtomic(configPath, next);
 }
 
 function createUniqueTmpPath(binPath) {
     return `${binPath}.${process.pid}.${Date.now()}.tmp`;
 }
 
+function writeTextAtomic(filePath, content) {
+    const tempPath = `${filePath}.${process.pid}.${Date.now()}.tmp`;
+    try {
+        fs.writeFileSync(tempPath, content, { encoding: 'utf8', mode: 0o600 });
+        fs.renameSync(tempPath, filePath);
+    } catch (error) {
+        if (fs.existsSync(tempPath)) fs.unlinkSync(tempPath);
+        throw error;
+    }
+}
+
 async function getBinaryFor(commandName) {
     const platform = os.platform();
     const arch = os.arch();
 
-    let target = '';
+    let target;
     if (platform === 'darwin') {
-        target = arch === 'arm64' ? 'aarch64-apple-darwin' : 'x86_64-apple-darwin';
+        if (arch === 'arm64') target = 'aarch64-apple-darwin';
+        if (arch === 'x64') target = 'x86_64-apple-darwin';
     } else if (platform === 'linux') {
-        target = 'x86_64-unknown-linux-gnu';
+        if (arch === 'arm64') target = 'aarch64-unknown-linux-gnu';
+        if (arch === 'x64') target = 'x86_64-unknown-linux-gnu';
     } else if (platform === 'win32') {
-        target = 'x86_64-pc-windows-msvc.exe';
+        if (arch === 'x64') target = 'x86_64-pc-windows-msvc.exe';
+    }
+    if (!target) {
+        throw new Error(`Unsupported platform: ${platform}/${arch}`);
     }
 
     const binFilename = `${commandName}-v${VERSION}-${target}`;
     const binPath = path.join(BIN_DIR, binFilename);
     const remoteFilename = `${commandName}-${target}`;
+    const compressedFilename = `${remoteFilename}.gz`;
 
     // If file exists, ensure it is executable
     if (fs.existsSync(binPath)) {
@@ -249,12 +268,29 @@ async function getBinaryFor(commandName) {
         fs.mkdirSync(BIN_DIR, { recursive: true });
     }
 
-    const url = `https://github.com/${REPO}/releases/download/v${VERSION}/${commandName}-${target}`;
     const tmpPath = createUniqueTmpPath(binPath);
+    const compressedPath = `${binPath}.gz.download`;
+    const rawPath = `${binPath}.download`;
 
     try {
-        await downloadFile(url, tmpPath);
-        await verifyChecksum(tmpPath, [remoteFilename, binFilename]);
+        const compressedUrl =
+            `https://github.com/${REPO}/releases/download/v${VERSION}/${compressedFilename}`;
+        try {
+            await downloadFileWithRetry(compressedUrl, compressedPath);
+            await verifyChecksum(compressedPath, [compressedFilename]);
+            await extractGzip(compressedPath, tmpPath);
+            fs.unlinkSync(compressedPath);
+        } catch (error) {
+            if (error.statusCode !== 404) {
+                throw error;
+            }
+            if (fs.existsSync(compressedPath)) fs.unlinkSync(compressedPath);
+            const rawUrl =
+                `https://github.com/${REPO}/releases/download/v${VERSION}/${remoteFilename}`;
+            await downloadFileWithRetry(rawUrl, rawPath);
+            await verifyChecksum(rawPath, [remoteFilename, binFilename]);
+            fs.renameSync(rawPath, tmpPath);
+        }
         fs.chmodSync(tmpPath, '755');
         if (fs.existsSync(binPath)) {
             fs.unlinkSync(tmpPath);
@@ -263,10 +299,22 @@ async function getBinaryFor(commandName) {
         fs.renameSync(tmpPath, binPath);
     } catch (err) {
         if (fs.existsSync(tmpPath)) fs.unlinkSync(tmpPath);
+        if (/checksum|gzip|header|unexpected end/i.test(err.message || '')) {
+            if (fs.existsSync(compressedPath)) fs.unlinkSync(compressedPath);
+            if (fs.existsSync(rawPath)) fs.unlinkSync(rawPath);
+        }
         throw err;
     }
 
     return binPath;
+}
+
+async function extractGzip(source, destination) {
+    await pipeline(
+        fs.createReadStream(source),
+        zlib.createGunzip(),
+        fs.createWriteStream(destination)
+    );
 }
 
 async function getBinary() {
@@ -287,50 +335,87 @@ async function getBinary() {
     return await getBinaryFor(commandName);
 }
 
-function downloadFile(url, dest) {
+function downloadFile(url, dest, redirectsRemaining = 5) {
     return new Promise((resolve, reject) => {
         fs.mkdirSync(path.dirname(dest), { recursive: true });
-        https.get(url, (response) => {
+        const existingBytes = fs.existsSync(dest) ? fs.statSync(dest).size : 0;
+        const headers = existingBytes > 0 ? { Range: `bytes=${existingBytes}-` } : {};
+        const request = https.get(url, { headers }, (response) => {
             if (response.statusCode === 302 || response.statusCode === 301) {
+                response.resume();
+                if (redirectsRemaining <= 0) {
+                    return reject(new Error('Too many redirects while downloading binary'));
+                }
                 try {
                     const redirectUrl = resolveRedirectUrl(url, response.headers.location);
-                    return downloadFile(redirectUrl, dest).then(resolve).catch(reject);
+                    return downloadFile(redirectUrl, dest, redirectsRemaining - 1)
+                        .then(resolve)
+                        .catch(reject);
                 } catch (error) {
                     return reject(error);
                 }
             }
-            if (response.statusCode !== 200) {
-                return reject(new Error(`Failed to download: ${response.statusCode}`));
+            if (response.statusCode === 416 && existingBytes > 0) {
+                response.resume();
+                return resolve();
             }
-            const file = fs.createWriteStream(dest);
-            response.pipe(file);
-            file.on('finish', () => {
-                file.close(resolve);
-            });
-            file.on('error', (err) => {
-                fs.unlink(dest, () => { });
-                reject(err);
-            });
-        }).on('error', (err) => {
-            fs.unlink(dest, () => { });
+            if (response.statusCode !== 200 && response.statusCode !== 206) {
+                response.resume();
+                const error = new Error(`Failed to download: ${response.statusCode}`);
+                error.statusCode = response.statusCode;
+                return reject(error);
+            }
+            const append = response.statusCode === 206 && existingBytes > 0;
+            const file = fs.createWriteStream(dest, { flags: append ? 'a' : 'w' });
+            pipeline(response, file).then(resolve).catch(reject);
+        });
+        request.setTimeout(DOWNLOAD_TIMEOUT_MS, () => {
+            request.destroy(new Error(`Download timed out after ${DOWNLOAD_TIMEOUT_MS}ms`));
+        });
+        request.on('error', (err) => {
             reject(err);
         });
     });
 }
 
-function downloadText(url) {
+async function downloadFileWithRetry(url, dest, attempts = DOWNLOAD_ATTEMPTS) {
+    let lastError;
+    for (let attempt = 1; attempt <= attempts; attempt++) {
+        try {
+            await downloadFile(url, dest);
+            return;
+        } catch (error) {
+            lastError = error;
+            if (error.statusCode === 404 || attempt === attempts) break;
+            console.warn(`[CCM] Download interrupted; retrying (${attempt}/${attempts})...`);
+            await new Promise((resolve) => setTimeout(resolve, attempt * 500));
+        }
+    }
+    throw lastError;
+}
+
+function downloadText(url, redirectsRemaining = 5) {
     return new Promise((resolve, reject) => {
-        https.get(url, (response) => {
+        const request = https.get(url, (response) => {
             if (response.statusCode === 302 || response.statusCode === 301) {
+                response.resume();
+                if (redirectsRemaining <= 0) {
+                    return reject(new Error('Too many redirects while downloading checksums'));
+                }
                 try {
                     const redirectUrl = resolveRedirectUrl(url, response.headers.location);
-                    return downloadText(redirectUrl).then(resolve).catch(reject);
+                    return downloadText(redirectUrl, redirectsRemaining - 1)
+                        .then(resolve)
+                        .catch(reject);
                 } catch (error) {
                     return reject(error);
                 }
             }
             if (response.statusCode !== 200) {
-                return reject(new Error(`Failed to download: ${response.statusCode}`));
+                response.resume();
+                const error = new Error(`Failed to download: ${response.statusCode}`);
+                error.statusCode = response.statusCode;
+                return reject(error);
             }
             let data = '';
             response.setEncoding('utf8');
@@ -338,7 +423,11 @@ function downloadText(url) {
                 data += chunk;
             });
             response.on('end', () => resolve(data));
-        }).on('error', reject);
+        });
+        request.setTimeout(DOWNLOAD_TIMEOUT_MS, () => {
+            request.destroy(new Error(`Download timed out after ${DOWNLOAD_TIMEOUT_MS}ms`));
+        });
+        request.on('error', reject);
     });
 }
 
@@ -453,6 +542,8 @@ if (require.main === module) {
 module.exports = {
     MCP_ARGS,
     MCP_ENV,
+    extractGzip,
+    installCodexTomlConfig,
     installJsonConfig,
     parseChecksums,
     resolveRedirectUrl,

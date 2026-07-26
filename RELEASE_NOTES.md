@@ -1,5 +1,17 @@
 # Release Notes
 
+## v0.2.1 - UTF-8 Safety, Retrieval Accuracy & Installer Reliability
+
+- Fixed the UTF-8 chunk boundary panic triggered by multibyte Turkish, Finnish, punctuation, and emoji characters.
+- Rebuilt cross-file reference edges deterministically after full and incremental indexing, including imports, constructors, and type annotations.
+- Corrected stable node ID file-path extraction and ranked code symbols above generic data-file path matches.
+- Made `get_context` return the enclosing function, method, or class before leaf assignments.
+- Included staged, unstaged, and untracked worktree files in `diff_context`.
+- Fixed `ccm doctor` allowlist health reporting and added missing Go, Java, Kotlin, and C# watch extensions.
+- Replaced Codex CLI-dependent setup with an atomic `~/.codex/config.toml` update that repairs stale or disabled entries.
+- Added compressed release downloads with resume, retry, timeout, checksum verification, and Linux ARM64 selection.
+- Added a release-time quality gate covering formatting, lint, workspace tests, npm tests, indexing, and golden tasks v3.
+
 ## v0.2.0 - Stable Context Index & Quality Gates
 
 - Replaced line-based semantic node IDs with stable symbol-path identities while retaining legacy fuzzy lookup.

@@ -4,6 +4,24 @@ use std::io::{BufRead, BufReader, Write};
 use std::process::{Command, Stdio};
 use tempfile::tempdir;
 
+fn send_request(
+    stdin: &mut impl Write,
+    reader: &mut impl BufRead,
+    request: serde_json::Value,
+) -> Result<serde_json::Value, Box<dyn std::error::Error>> {
+    writeln!(stdin, "{}", request)?;
+    stdin.flush()?;
+    let mut line = String::new();
+    reader.read_line(&mut line)?;
+    Ok(serde_json::from_str(&line)?)
+}
+
+fn tool_text(response: &serde_json::Value) -> &str {
+    response["result"]["content"][0]["text"]
+        .as_str()
+        .unwrap_or_default()
+}
+
 #[test]
 fn mcp_index_project_then_get_context() -> Result<(), Box<dyn std::error::Error>> {
     let dir = tempdir()?;
@@ -295,5 +313,128 @@ fn mcp_rejects_project_outside_allowlist() -> Result<(), Box<dyn std::error::Err
 
     let _ = child.kill();
 
+    Ok(())
+}
+
+#[test]
+fn mcp_resolves_class_import_constructor_context_and_impact(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let dir = tempdir()?;
+    let project_root = dir.path();
+
+    fs::write(
+        project_root.join("detector.py"),
+        "class YoloDetector:\n    def detect(self):\n        return []\n",
+    )?;
+    fs::write(
+        project_root.join("camera.py"),
+        "from detector import YoloDetector\n\n\
+         def open_camera(detector: YoloDetector):\n    return YoloDetector()\n\n\
+         def boot():\n    return open_camera(YoloDetector())\n",
+    )?;
+
+    let mut cmd = Command::new(assert_cmd::cargo::cargo_bin!("ccm-mcp"));
+    cmd.env("CCM_DISABLE_EMBEDDER", "1")
+        .env("CCM_MCP_DEBUG", "0")
+        .env("CCM_PROJECT_ROOT", project_root)
+        .env("CCM_ALLOWED_ROOTS", project_root)
+        .env("CCM_REQUIRE_ALLOWED_ROOTS", "1")
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null());
+
+    let mut child = cmd.spawn()?;
+    let mut stdin = child.stdin.take().unwrap();
+    let mut reader = BufReader::new(child.stdout.take().unwrap());
+
+    let initialized = send_request(
+        &mut stdin,
+        &mut reader,
+        json!({"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}),
+    )?;
+    assert!(initialized.get("result").is_some());
+
+    let indexed = send_request(
+        &mut stdin,
+        &mut reader,
+        json!({
+            "jsonrpc":"2.0","id":2,"method":"tools/call",
+            "params":{"name":"index_project","arguments":{"project_path":project_root}}
+        }),
+    )?;
+    assert!(tool_text(&indexed).contains("Project index refreshed successfully"));
+
+    let found = send_request(
+        &mut stdin,
+        &mut reader,
+        json!({
+            "jsonrpc":"2.0","id":3,"method":"tools/call",
+            "params":{"name":"find_nodes","arguments":{
+                "query":"YoloDetector","project_path":project_root
+            }}
+        }),
+    )?;
+    let found_text = tool_text(&found);
+    let node_id = found_text
+        .lines()
+        .find_map(|line| line.strip_prefix("**Node ID:** "))
+        .expect("YoloDetector stable node ID");
+    assert!(node_id.contains(":symbol:"));
+
+    let usages = send_request(
+        &mut stdin,
+        &mut reader,
+        json!({
+            "jsonrpc":"2.0","id":4,"method":"tools/call",
+            "params":{"name":"find_usages","arguments":{
+                "node_id":node_id,"project_path":project_root
+            }}
+        }),
+    )?;
+    let usages_text = tool_text(&usages);
+    assert!(usages_text.contains("./camera.py"));
+    assert!(usages_text.contains("open_camera"));
+
+    let context = send_request(
+        &mut stdin,
+        &mut reader,
+        json!({
+            "jsonrpc":"2.0","id":5,"method":"tools/call",
+            "params":{"name":"get_context","arguments":{
+                "file":"camera.py","line":4,"project_path":project_root
+            }}
+        }),
+    )?;
+    let context_text = tool_text(&context);
+    assert!(context_text.contains("Current: open_camera"));
+    assert!(context_text.contains("def open_camera"));
+
+    let graph = send_request(
+        &mut stdin,
+        &mut reader,
+        json!({
+            "jsonrpc":"2.0","id":6,"method":"tools/call",
+            "params":{"name":"read_graph","arguments":{
+                "node_id":node_id,"project_path":project_root
+            }}
+        }),
+    )?;
+    assert!(tool_text(&graph).contains("Node Details: YoloDetector"));
+
+    let impact = send_request(
+        &mut stdin,
+        &mut reader,
+        json!({
+            "jsonrpc":"2.0","id":7,"method":"tools/call",
+            "params":{"name":"impact_of_change","arguments":{
+                "file":"detector.py","project_path":project_root
+            }}
+        }),
+    )?;
+    let impact_text = tool_text(&impact);
+    assert!(impact_text.contains("./camera.py"));
+    assert!(impact_text.contains("open_camera"));
+
+    let _ = child.kill();
     Ok(())
 }

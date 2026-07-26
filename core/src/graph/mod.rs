@@ -28,7 +28,7 @@ pub struct CodeNode {
     pub end_line: usize,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub enum EdgeType {
     Calls,
     Defines,
@@ -79,6 +79,13 @@ impl CodeGraph {
     }
 
     pub fn add_edge(&mut self, source: NodeIndex, target: NodeIndex, weight: EdgeType) {
+        if self
+            .graph
+            .edges_connecting(source, target)
+            .any(|edge| edge.weight() == &weight)
+        {
+            return;
+        }
         if let Some(storage) = &self.storage {
             let source_node = &self.graph[source];
             let target_node = &self.graph[target];
@@ -87,6 +94,109 @@ impl CodeGraph {
             }
         }
         self.graph.add_edge(source, target, weight);
+    }
+
+    /// Rebuilds cross-symbol references from the current semantic node contents.
+    ///
+    /// Definitions are extracted per file, but callers can be indexed before their
+    /// targets. Rebuilding after all changed definitions are present makes reference
+    /// edges deterministic and repairs incoming edges after incremental updates.
+    pub fn rebuild_reference_edges(&mut self) -> usize {
+        self.graph.retain_edges(|graph, edge_idx| {
+            !matches!(graph[edge_idx], EdgeType::Calls | EdgeType::Imports)
+        });
+
+        let mut symbols: std::collections::HashMap<String, Vec<NodeIndex>> =
+            std::collections::HashMap::new();
+        for idx in self.graph.node_indices() {
+            let node = &self.graph[idx];
+            if matches!(
+                node.node_type,
+                NodeType::Function
+                    | NodeType::Method
+                    | NodeType::Class
+                    | NodeType::Struct
+                    | NodeType::Module
+            ) && is_referenceable_symbol(&node.name)
+            {
+                symbols.entry(node.name.clone()).or_default().push(idx);
+            }
+        }
+
+        let source_indices: Vec<NodeIndex> = self
+            .graph
+            .node_indices()
+            .filter(|idx| {
+                matches!(
+                    self.graph[*idx].node_type,
+                    NodeType::Function | NodeType::Method | NodeType::Variable | NodeType::Import
+                )
+            })
+            .collect();
+
+        let mut references: HashSet<(NodeIndex, NodeIndex, bool)> = HashSet::new();
+        for source_idx in source_indices {
+            let source = &self.graph[source_idx];
+            let source_file = graph_node_file_path(&source.id);
+            let tokens = identifier_tokens(&source.content);
+            for (name, call_like) in tokens {
+                let Some(targets) = symbols.get(name) else {
+                    continue;
+                };
+                let same_file_targets: Vec<_> = targets
+                    .iter()
+                    .copied()
+                    .filter(|target_idx| {
+                        graph_node_file_path(&self.graph[*target_idx].id) == source_file
+                    })
+                    .collect();
+                let resolved_targets: Vec<_> = if same_file_targets.is_empty() {
+                    if targets.len() == 1 {
+                        targets.clone()
+                    } else {
+                        continue;
+                    }
+                } else {
+                    same_file_targets
+                };
+
+                for target_idx in resolved_targets {
+                    if source_idx == target_idx {
+                        continue;
+                    }
+                    let target = &self.graph[target_idx];
+                    let edge_type = if call_like {
+                        EdgeType::Calls
+                    } else if matches!(
+                        target.node_type,
+                        NodeType::Class | NodeType::Struct | NodeType::Module
+                    ) {
+                        EdgeType::Imports
+                    } else {
+                        continue;
+                    };
+                    references.insert((
+                        source_idx,
+                        target_idx,
+                        matches!(edge_type, EdgeType::Calls),
+                    ));
+                }
+            }
+        }
+
+        let count = references.len();
+        for (source, target, is_call) in references {
+            self.add_edge(
+                source,
+                target,
+                if is_call {
+                    EdgeType::Calls
+                } else {
+                    EdgeType::Imports
+                },
+            );
+        }
+        count
     }
 
     /// Finds the node corresponding to a specific file path.
@@ -138,6 +248,45 @@ impl CodeGraph {
         }
 
         Some(best_match)
+    }
+
+    /// Returns enclosing semantic scopes from the narrowest to the widest.
+    pub fn find_enclosing_scopes(&self, file_path: &str, line: usize) -> Vec<NodeIndex> {
+        let Some(file_node_idx) = self.find_file_node(file_path) else {
+            return Vec::new();
+        };
+        let mut matches = Vec::new();
+        let mut stack = vec![file_node_idx];
+
+        while let Some(idx) = stack.pop() {
+            let node = &self.graph[idx];
+            if node.start_line <= line && node.end_line >= line {
+                if matches!(
+                    node.node_type,
+                    NodeType::Function
+                        | NodeType::Method
+                        | NodeType::Class
+                        | NodeType::Struct
+                        | NodeType::Module
+                ) {
+                    matches.push(idx);
+                }
+                for edge in self
+                    .graph
+                    .edges_directed(idx, petgraph::Direction::Outgoing)
+                {
+                    if matches!(edge.weight(), EdgeType::Contains) {
+                        stack.push(edge.target());
+                    }
+                }
+            }
+        }
+
+        matches.sort_by_key(|idx| {
+            let node = &self.graph[*idx];
+            node.end_line.saturating_sub(node.start_line)
+        });
+        matches
     }
     pub fn find_node_by_id(&self, id: &str) -> Option<CodeNode> {
         // 1. O(1) lookup via id_index — previously was O(n) linear scan
@@ -325,6 +474,54 @@ impl CodeGraph {
     }
 }
 
+fn is_referenceable_symbol(name: &str) -> bool {
+    let mut chars = name.chars();
+    chars.next().is_some_and(is_identifier_start)
+        && chars.all(|ch| is_identifier_start(ch) || ch.is_numeric())
+}
+
+fn graph_node_file_path(node_id: &str) -> &str {
+    if let Some((path_and_kind, _)) = node_id.split_once(":symbol:") {
+        return path_and_kind
+            .rsplit_once(':')
+            .map(|(path, _)| path)
+            .unwrap_or(node_id);
+    }
+    node_id.rsplitn(4, ':').last().unwrap_or(node_id)
+}
+
+fn is_identifier_start(ch: char) -> bool {
+    ch == '_' || ch == '$' || ch.is_alphabetic()
+}
+
+fn identifier_tokens(content: &str) -> Vec<(&str, bool)> {
+    let mut tokens = Vec::new();
+    let mut chars = content.char_indices().peekable();
+
+    while let Some((start, first)) = chars.next() {
+        if !is_identifier_start(first) {
+            continue;
+        }
+
+        let mut end = start + first.len_utf8();
+        while let Some(&(index, ch)) = chars.peek() {
+            if !is_identifier_start(ch) && !ch.is_numeric() {
+                break;
+            }
+            chars.next();
+            end = index + ch.len_utf8();
+        }
+
+        let call_like = content[end..]
+            .chars()
+            .find(|ch| !ch.is_whitespace())
+            .is_some_and(|ch| ch == '(');
+        tokens.push((&content[start..end], call_like));
+    }
+
+    tokens
+}
+
 /// "<path>:<kind>:<row>:<col>" formatındaki node ID'sini parçalarına ayırır.
 /// Başarılı olursa (path, kind, row) döndürür.
 fn parse_node_id(id: &str) -> Option<(&str, &str, &str)> {
@@ -415,5 +612,83 @@ mod tests {
             .graph
             .node_weights()
             .all(|node| !node.id.starts_with("./a.rs")));
+    }
+
+    #[test]
+    fn rebuild_reference_edges_links_imports_constructors_and_type_annotations() {
+        let mut graph = CodeGraph::new();
+        let class_idx = graph.add_node(CodeNode {
+            id: "./detector.py:class_definition:symbol:1:0".to_string(),
+            node_type: NodeType::Class,
+            name: "YoloDetector".to_string(),
+            content: "class YoloDetector: pass".to_string(),
+            start_line: 1,
+            end_line: 1,
+        });
+        let import_idx = graph.add_node(CodeNode {
+            id: "./camera.py:import_from_statement:symbol:2:0".to_string(),
+            node_type: NodeType::Import,
+            name: "from detector import YoloDetector".to_string(),
+            content: "from detector import YoloDetector".to_string(),
+            start_line: 1,
+            end_line: 1,
+        });
+        let function_idx = graph.add_node(CodeNode {
+            id: "./camera.py:function_definition:symbol:3:0".to_string(),
+            node_type: NodeType::Function,
+            name: "open_camera".to_string(),
+            content: "def open_camera(detector: YoloDetector):\n    return YoloDetector()"
+                .to_string(),
+            start_line: 3,
+            end_line: 4,
+        });
+
+        graph.rebuild_reference_edges();
+
+        assert!(graph
+            .graph
+            .edges_connecting(import_idx, class_idx)
+            .any(|edge| matches!(edge.weight(), EdgeType::Imports)));
+        assert!(graph
+            .graph
+            .edges_connecting(function_idx, class_idx)
+            .any(|edge| matches!(edge.weight(), EdgeType::Calls)));
+    }
+
+    #[test]
+    fn rebuild_reference_edges_skips_ambiguous_cross_file_symbols() {
+        let mut graph = CodeGraph::new();
+        for (id, file) in [
+            ("./a.py:function_definition:symbol:1:0", "./a.py"),
+            ("./b.py:function_definition:symbol:2:0", "./b.py"),
+        ] {
+            graph.add_node(CodeNode {
+                id: id.to_string(),
+                node_type: NodeType::Function,
+                name: "load".to_string(),
+                content: format!("def load(): return '{file}'"),
+                start_line: 1,
+                end_line: 1,
+            });
+        }
+        let source_idx = graph.add_node(CodeNode {
+            id: "./caller.py:function_definition:symbol:3:0".to_string(),
+            node_type: NodeType::Function,
+            name: "run".to_string(),
+            content: "def run(): return load()".to_string(),
+            start_line: 1,
+            end_line: 1,
+        });
+
+        graph.rebuild_reference_edges();
+
+        assert_eq!(
+            graph
+                .graph
+                .edges_directed(source_idx, petgraph::Direction::Outgoing)
+                .filter(|edge| matches!(edge.weight(), EdgeType::Calls))
+                .count(),
+            0
+        );
     }
 }

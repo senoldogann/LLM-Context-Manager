@@ -21,7 +21,7 @@ use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::time::UNIX_EPOCH;
 
-pub const INDEX_SCHEMA_VERSION: u32 = 2;
+pub const INDEX_SCHEMA_VERSION: u32 = 3;
 
 pub fn init() {
     tracing::info!("CCM Core Initialized");
@@ -276,6 +276,12 @@ pub async fn index_directory(path: &str, db_path: Option<&str>) -> Result<IndexS
             }
         }
     }
+
+    let reference_edges = graph.rebuild_reference_edges();
+    info!(
+        edges = reference_edges,
+        "Rebuilt deterministic cross-file reference graph"
+    );
 
     // Count nodes
     stats.nodes_created = graph.graph.node_count();

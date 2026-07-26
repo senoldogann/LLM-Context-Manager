@@ -176,6 +176,11 @@ async fn main() -> anyhow::Result<()> {
                                                 | "js"
                                                 | "tsx"
                                                 | "jsx"
+                                                | "go"
+                                                | "java"
+                                                | "kt"
+                                                | "kts"
+                                                | "cs"
                                                 | "md"
                                                 | "json"
                                                 | "yaml"
@@ -322,6 +327,7 @@ fn run_doctor(path: &std::path::Path, json: bool) -> anyhow::Result<()> {
     let expected_schema = ccm_core::INDEX_SCHEMA_VERSION as u64;
     let strict_roots = std::env::var("CCM_REQUIRE_ALLOWED_ROOTS").ok().as_deref() == Some("1");
     let allowed_roots = std::env::var("CCM_ALLOWED_ROOTS").ok();
+    let allowed_roots_ok = allowed_roots_check(&root, strict_roots, allowed_roots.as_deref());
     let provider = std::env::var("CCM_EMBEDDING_PROVIDER")
         .or_else(|_| std::env::var("EMBEDDING_PROVIDER"))
         .unwrap_or_else(|_| "local".to_string());
@@ -332,7 +338,7 @@ fn run_doctor(path: &std::path::Path, json: bool) -> anyhow::Result<()> {
     let checks = serde_json::json!({
         "project_root": {"ok": root.is_dir(), "value": root},
         "allowed_roots": {
-            "ok": strict_roots && allowed_roots.as_deref().is_some_and(|v| !v.trim().is_empty()),
+            "ok": allowed_roots_ok,
             "strict": strict_roots,
             "value": allowed_roots
         },
@@ -373,4 +379,46 @@ fn run_doctor(path: &std::path::Path, json: bool) -> anyhow::Result<()> {
         anyhow::bail!("doctor found configuration or index issues");
     }
     Ok(())
+}
+
+fn allowed_roots_check(root: &std::path::Path, strict: bool, raw: Option<&str>) -> bool {
+    if !strict {
+        return true;
+    }
+    let Some(raw) = raw.filter(|value| !value.trim().is_empty()) else {
+        return false;
+    };
+    let separators: &[char] = if cfg!(windows) {
+        &[';', ',']
+    } else {
+        &[':', ';', ',']
+    };
+    raw.split(separators)
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(std::path::Path::new)
+        .map(|path| std::fs::canonicalize(path).unwrap_or_else(|_| path.to_path_buf()))
+        .any(|allowed| root.starts_with(allowed))
+}
+
+#[cfg(test)]
+mod doctor_tests {
+    use super::allowed_roots_check;
+
+    #[test]
+    fn optional_allowlist_is_healthy_when_not_configured() {
+        assert!(allowed_roots_check(
+            std::path::Path::new("/tmp/project"),
+            false,
+            None
+        ));
+    }
+
+    #[test]
+    fn strict_allowlist_requires_the_project_root() {
+        let root = std::path::Path::new("/tmp/projects/app");
+        assert!(allowed_roots_check(root, true, Some("/tmp/projects")));
+        assert!(!allowed_roots_check(root, true, Some("/tmp/other")));
+        assert!(!allowed_roots_check(root, true, None));
+    }
 }

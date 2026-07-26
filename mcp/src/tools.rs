@@ -280,6 +280,18 @@ fn normalize_graph_path(path_str: &str, project_path: Option<&str>) -> Result<St
 }
 
 fn normalize_graph_node_id(node_id: &str, project_path: Option<&str>) -> Result<String> {
+    if let Some((path_and_kind, suffix)) = node_id.split_once(":symbol:") {
+        let (path_part, kind_part) = path_and_kind
+            .rsplit_once(':')
+            .ok_or_else(|| anyhow::anyhow!("Stable node ID is missing its node kind"))?;
+        return Ok(format!(
+            "{}:{}:symbol:{}",
+            normalize_graph_path(path_part, project_path)?,
+            kind_part,
+            suffix
+        ));
+    }
+
     let mut parts = node_id.rsplitn(4, ':');
     let column = parts.next();
     let line = parts.next();
@@ -348,11 +360,8 @@ pub async fn index_project(state: &crate::server::ServerState, args: &Value) -> 
 
     match ccm_core::update_index(project_path, Some(&db_path)).await {
         Ok(stats) => {
-            // Invalidate the cache for this project so the next search uses the fresh index
-            {
-                let mut write = state.engines.write().await;
-                write.evict(project_path);
-            }
+            // Refresh both the explicit project cache and the default startup engine.
+            state.refresh_project_engine(project_path).await?;
 
             let message = if stats.files_indexed == 0
                 && stats.files_failed == 0
@@ -638,5 +647,11 @@ mod tests {
     fn node_ids_normalize_only_the_path_prefix() {
         let normalized = normalize_graph_node_id("src/lib.rs:function_item:12:0", None).unwrap();
         assert_eq!(normalized, "./src/lib.rs:function_item:12:0");
+    }
+
+    #[test]
+    fn stable_node_id_keeps_file_path_and_symbol_suffix() {
+        let id = "./src/detector/yolo.py:class_definition:symbol:0123456789abcdef:0";
+        assert_eq!(normalize_graph_node_id(id, None).unwrap(), id);
     }
 }

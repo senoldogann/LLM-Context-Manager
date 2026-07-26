@@ -3,10 +3,13 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const test = require('node:test');
+const zlib = require('node:zlib');
 
 const {
     MCP_ARGS,
     MCP_ENV,
+    extractGzip,
+    installCodexTomlConfig,
     installJsonConfig,
     writeJsonAtomic
 } = require('../bin/ccm.js');
@@ -66,4 +69,52 @@ test('generated MCP command pins package version and narrows project access', ()
     assert.equal(MCP_ENV.CCM_REQUIRE_ALLOWED_ROOTS, '1');
     assert.equal(MCP_ENV.CCM_ALLOWED_ROOTS, process.cwd());
     assert.equal(MCP_ENV.CCM_PROJECT_ROOT, process.cwd());
+});
+
+test('Codex installer replaces stale or disabled entry without invoking Codex binary', () => {
+    const { configPath } = tempConfig();
+    fs.writeFileSync(
+        configPath,
+        [
+            'model = "gpt-5"',
+            '',
+            '[mcp_servers.context-manager]',
+            'command = "old"',
+            'enabled = false',
+            '',
+            '[mcp_servers.context-manager.env]',
+            'CCM_PROJECT_ROOT = "/old"',
+            '',
+            '[mcp_servers.keep-me]',
+            'command = "safe"',
+            ''
+        ].join('\n')
+    );
+
+    installCodexTomlConfig(configPath, '/projects/current', '0.2.1');
+
+    const content = fs.readFileSync(configPath, 'utf8');
+    assert.match(content, /model = "gpt-5"/);
+    assert.match(content, /\[mcp_servers\.keep-me\]/);
+    assert.match(content, /@senoldogann\/context-manager@0\.2\.1/);
+    assert.match(content, /enabled = true/);
+    assert.match(content, /CCM_PROJECT_ROOT = "\/projects\/current"/);
+    assert.doesNotMatch(content, /command = "old"/);
+    assert.equal(
+        content.match(/\[mcp_servers\.context-manager\]/g).length,
+        1
+    );
+    assert.ok(fs.existsSync(`${configPath}.bak`));
+});
+
+test('compressed release binary is restored byte-for-byte', async () => {
+    const { directory } = tempConfig();
+    const compressed = path.join(directory, 'ccm-mcp.gz');
+    const restored = path.join(directory, 'ccm-mcp');
+    const expected = Buffer.from('binary\0payload\nTürkçe ve Suomi 🧠');
+    fs.writeFileSync(compressed, zlib.gzipSync(expected));
+
+    await extractGzip(compressed, restored);
+
+    assert.deepEqual(fs.readFileSync(restored), expected);
 });

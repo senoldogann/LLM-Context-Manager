@@ -754,6 +754,16 @@ fn normalize_repo_path(path: &str) -> Result<PathBuf> {
 
 fn normalize_task_node_id(repo_path: &Path, node_id: &str) -> String {
     let cleaned = node_id.replace('\\', "/");
+    if let Some((path_and_kind, suffix)) = cleaned.split_once(":symbol:") {
+        if let Some((file, kind)) = path_and_kind.rsplit_once(':') {
+            return format!(
+                "{}:{}:symbol:{}",
+                normalize_path(repo_path, file),
+                kind,
+                suffix
+            );
+        }
+    }
     let mut parts = cleaned.rsplitn(4, ':');
     let col = parts.next();
     let row = parts.next();
@@ -883,6 +893,13 @@ mod tests {
     fn node_id_to_file_path_strips_suffix() {
         let file_path = node_id_to_file_path("./src/main.rs:func:1:0#chunk1");
         assert_eq!(file_path, "./src/main.rs");
+    }
+
+    #[test]
+    fn normalize_task_node_id_preserves_stable_symbol_ids() {
+        let repo = Path::new("/repo");
+        let id = "./src/main.rs:function_item:symbol:0123456789abcdef:0";
+        assert_eq!(normalize_task_node_id(repo, id), id);
     }
 
     #[test]

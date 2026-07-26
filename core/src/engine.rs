@@ -334,6 +334,15 @@ impl RetrievalEngine {
             }
         }
 
+        {
+            let mut graph = self.graph.write().await;
+            let reference_edges = graph.rebuild_reference_edges();
+            tracing::info!(
+                edges = reference_edges,
+                "Rebuilt references after incremental update"
+            );
+        }
+
         // Remove duplicates from nodes_to_index (DFS visits multiple times?)
         // `graph.neighbors` returns unique neighbor indices. But if multiple paths?
         // AST is a Tree. No multi-parent.
@@ -737,6 +746,8 @@ impl RetrievalEngine {
 
     /// Bir dosyanın değişmesi durumunda etkilenecek dosya ve node'ları döndürür.
     pub async fn impact_of_change(&self, file_path: &str, limit: usize) -> Vec<ContextSuggestion> {
+        use std::collections::VecDeque;
+
         let graph = self.graph.read().await;
 
         // Dosyaya ait tüm node'ları bul
@@ -775,27 +786,48 @@ impl RetrievalEngine {
             }
         }
 
-        // Bu node'lara bağlanan dış node'ları topla
-        let mut impacted: std::collections::HashMap<String, ContextSuggestion> =
-            std::collections::HashMap::new();
+        // Walk incoming dependency edges breadth-first so direct dependents stay
+        // ahead of transitive callers while the blast radius remains bounded.
+        const MAX_IMPACT_DEPTH: usize = 3;
+        let mut impacted_ids = std::collections::HashSet::new();
+        let mut visited = file_nodes.clone();
+        let mut initial_nodes: Vec<_> = file_nodes.iter().copied().collect();
+        initial_nodes.sort_by_key(|idx| idx.index());
+        let mut queue: VecDeque<(petgraph::graph::NodeIndex, usize)> =
+            initial_nodes.into_iter().map(|idx| (idx, 0)).collect();
+        let mut results = Vec::new();
 
-        for &node_idx in &file_nodes {
+        while let Some((node_idx, depth)) = queue.pop_front() {
+            if results.len() >= limit {
+                break;
+            }
             for edge in graph
                 .graph
                 .edges_directed(node_idx, petgraph::Direction::Incoming)
             {
+                if !matches!(
+                    edge.weight(),
+                    crate::graph::EdgeType::Calls
+                        | crate::graph::EdgeType::Imports
+                        | crate::graph::EdgeType::Defines
+                        | crate::graph::EdgeType::Inherits
+                        | crate::graph::EdgeType::Reads
+                        | crate::graph::EdgeType::Writes
+                ) {
+                    continue;
+                }
                 let source_idx = edge.source();
                 if file_nodes.contains(&source_idx) {
-                    continue; // aynı dosya içi bağlantı
+                    continue;
                 }
                 let source = &graph.graph[source_idx];
                 if matches!(source.node_type, NodeType::File | NodeType::DataFile) {
                     continue;
                 }
                 let file = extract_file_path(&source.id);
-                impacted.entry(source.id.clone()).or_insert_with(|| {
+                if impacted_ids.insert(source.id.clone()) {
                     let target = &graph.graph[node_idx];
-                    ContextSuggestion {
+                    results.push(ContextSuggestion {
                         node_id: Some(source.id.clone()),
                         file_path: Some(file),
                         start_line: Some(source.start_line),
@@ -803,16 +835,27 @@ impl RetrievalEngine {
                         node_type: Some(format!("{:?}", source.node_type)),
                         title: format!("{:?}: {}", source.node_type, source.name),
                         content: source.content.clone(),
-                        relevance_score: 1.0,
-                        reason: format!("Depends on {} in changed file", target.name),
-                    }
-                });
+                        relevance_score: (1.0 - depth as f32 * 0.15).max(0.55),
+                        reason: if depth == 0 {
+                            format!("Directly depends on {} in changed file", target.name)
+                        } else {
+                            format!(
+                                "Transitively depends on changed file via {} (depth {})",
+                                target.name,
+                                depth + 1
+                            )
+                        },
+                    });
+                }
+                if depth < MAX_IMPACT_DEPTH && visited.insert(source_idx) {
+                    queue.push_back((source_idx, depth + 1));
+                }
+                if results.len() >= limit {
+                    break;
+                }
             }
         }
 
-        let mut results: Vec<ContextSuggestion> = impacted.into_values().collect();
-        results.sort_by(|a, b| a.file_path.cmp(&b.file_path));
-        results.truncate(limit);
         results
     }
 
@@ -828,13 +871,16 @@ impl RetrievalEngine {
             Err(_) => return Vec::new(),
         };
 
-        let changed_files = match git.get_changed_files_since_days(days) {
-            Ok(files) => files,
-            Err(_) => {
-                // fallback: staged/unstaged değişiklikler
-                git.get_changed_files().unwrap_or_default()
-            }
-        };
+        let recent_files = git.get_changed_files_since_days(days).unwrap_or_default();
+        let worktree_files = git.get_changed_files().unwrap_or_default();
+        let mut changed_files: std::collections::HashMap<PathBuf, (bool, bool)> =
+            std::collections::HashMap::new();
+        for path in recent_files {
+            changed_files.entry(path).or_default().0 = true;
+        }
+        for path in worktree_files {
+            changed_files.entry(path).or_default().1 = true;
+        }
 
         if changed_files.is_empty() {
             return Vec::new();
@@ -844,7 +890,10 @@ impl RetrievalEngine {
         let mut results = Vec::new();
         let root = std::path::Path::new(project_root);
 
-        for path in &changed_files {
+        let mut changed_files: Vec<(PathBuf, (bool, bool))> = changed_files.into_iter().collect();
+        changed_files.sort_by(|(path_a, _), (path_b, _)| path_a.cmp(path_b));
+
+        for (path, (recent, worktree)) in &changed_files {
             if results.len() >= limit {
                 break;
             }
@@ -852,6 +901,17 @@ impl RetrievalEngine {
             let rel = match crate::normalize_file_id(root, path) {
                 Some(r) => r,
                 None => continue,
+            };
+            let reason = match (*recent, *worktree) {
+                (true, true) => format!(
+                    "Changed in the last {} days and in the current worktree",
+                    days
+                ),
+                (true, false) => format!("Changed in the last {} days", days),
+                (false, true) => {
+                    "Changed in the current worktree (including untracked)".to_string()
+                }
+                (false, false) => continue,
             };
             if let Some(file_idx) = graph.find_file_node(&rel) {
                 let mut stack = vec![file_idx];
@@ -873,7 +933,7 @@ impl RetrievalEngine {
                             title: format!("{:?}: {}", node.node_type, node.name),
                             content: node.content.clone(),
                             relevance_score: 1.0,
-                            reason: format!("Recently changed (last {} days)", days),
+                            reason: reason.clone(),
                         });
                     }
                     for edge in graph
@@ -954,7 +1014,10 @@ impl RetrievalEngine {
         }
 
         let graph = self.graph.read().await;
-        let mut results = Vec::new();
+        let mut scored_results = Vec::new();
+        let file_targeted = normalized_query.contains('/')
+            || normalized_query.contains('\\')
+            || normalized_query.contains('.');
 
         // O(n) substring scan: unavoidable without a secondary trigram/inverted index.
         // Acceptable in practice — graph is already in RAM and results are capped by limit.
@@ -963,25 +1026,43 @@ impl RetrievalEngine {
             let node_id = node.id.to_lowercase();
             let file_path = extract_file_path(&node.id);
 
-            if node_name.contains(&normalized_query)
-                || node_id.contains(&normalized_query)
-                || file_path.to_lowercase().contains(&normalized_query)
-            {
-                results.push(ContextSuggestion {
-                    node_id: Some(node.id.clone()),
-                    file_path: Some(file_path),
-                    start_line: Some(node.start_line),
-                    end_line: Some(node.end_line),
-                    node_type: Some(format!("{:?}", node.node_type)),
-                    title: format!("{:?}: {}", node.node_type, node.name),
-                    content: node.content.clone(),
-                    relevance_score: 1.0,
-                    reason: "Graph node match".to_string(),
-                });
+            let file_path_lower = file_path.to_lowercase();
+            let content_lower = node.content.to_lowercase();
+            if let Some(score) = lexical_graph_score(
+                &normalized_query,
+                &node_name,
+                &node_id,
+                &file_path_lower,
+                &content_lower,
+                &node.node_type,
+                file_targeted,
+            ) {
+                scored_results.push((
+                    score,
+                    ContextSuggestion {
+                        node_id: Some(node.id.clone()),
+                        file_path: Some(file_path),
+                        start_line: Some(node.start_line),
+                        end_line: Some(node.end_line),
+                        node_type: Some(format!("{:?}", node.node_type)),
+                        title: format!("{:?}: {}", node.node_type, node.name),
+                        content: node.content.clone(),
+                        relevance_score: (score / 100.0).clamp(0.0, 1.0),
+                        reason: format!("Ranked lexical graph match ({score:.0})"),
+                    },
+                ));
             }
         }
 
-        results.sort_by(|a, b| a.title.cmp(&b.title));
+        scored_results.sort_by(|(score_a, result_a), (score_b, result_b)| {
+            score_b
+                .total_cmp(score_a)
+                .then_with(|| result_a.title.cmp(&result_b.title))
+        });
+        let mut results: Vec<ContextSuggestion> = scored_results
+            .into_iter()
+            .map(|(_, result)| result)
+            .collect();
         results.truncate(limit);
         results
     }
@@ -1000,28 +1081,46 @@ impl RetrievalEngine {
         if let Some(node_idx) = node_idx_opt {
             let graph = self.graph.read().await;
             let current_node = &graph.graph[node_idx];
+            let scope_indices = graph.find_enclosing_scopes(&cursor.file_path, cursor.line);
+            let primary_idx = scope_indices.first().copied().unwrap_or(node_idx);
+            let primary_node = &graph.graph[primary_idx];
 
-            // Add the current node itself as context
+            // Prefer the enclosing function/class over a leaf assignment so the
+            // caller receives a coherent implementation unit.
             suggestions.push(ContextSuggestion {
-                node_id: Some(current_node.id.clone()),
-                file_path: Some(extract_file_path(&current_node.id)),
-                start_line: Some(current_node.start_line),
-                end_line: Some(current_node.end_line),
-                node_type: Some(format!("{:?}", current_node.node_type)),
-                title: format!("Current: {}", current_node.name),
+                node_id: Some(primary_node.id.clone()),
+                file_path: Some(extract_file_path(&primary_node.id)),
+                start_line: Some(primary_node.start_line),
+                end_line: Some(primary_node.end_line),
+                node_type: Some(format!("{:?}", primary_node.node_type)),
+                title: format!("Current: {}", primary_node.name),
                 content: focused_content_window(
-                    &current_node.content,
-                    current_node.start_line,
+                    &primary_node.content,
+                    primary_node.start_line,
                     Some(cursor.line),
                     120,
                     12_000,
                 ),
                 relevance_score: 1.0,
-                reason: "Active Focus".to_string(),
+                reason: "Enclosing semantic scope".to_string(),
             });
 
+            if node_idx != primary_idx {
+                suggestions.push(ContextSuggestion {
+                    node_id: Some(current_node.id.clone()),
+                    file_path: Some(extract_file_path(&current_node.id)),
+                    start_line: Some(current_node.start_line),
+                    end_line: Some(current_node.end_line),
+                    node_type: Some(format!("{:?}", current_node.node_type)),
+                    title: format!("Active element: {}", current_node.name),
+                    content: current_node.content.clone(),
+                    relevance_score: 0.95,
+                    reason: "Exact cursor element".to_string(),
+                });
+            }
+
             // 2. Structural Retrieval: Find immediate neighbors (Callers/Callees)
-            let neighbors = graph.graph.neighbors(node_idx);
+            let neighbors = graph.graph.neighbors(primary_idx);
             for neighbor_idx in neighbors {
                 let neighbor = &graph.graph[neighbor_idx];
 
@@ -1050,7 +1149,7 @@ impl RetrievalEngine {
 
             // 3. Semantic Retrieval (Hybrid): "What else is like this function?"
             // We use the current function's signature/docstring as a query
-            let query = format!("related to {}", current_node.name);
+            let query = format!("related to {}", primary_node.name);
             // Limiting to top 2 semantic matches to avoid noise
             if let Ok(semantic_hits) = self.search_code(&query, 2).await {
                 for mut hit in semantic_hits {
@@ -1066,11 +1165,59 @@ impl RetrievalEngine {
 }
 
 fn extract_file_path(node_id: &str) -> String {
+    if let Some((path_and_kind, _)) = node_id.split_once(":symbol:") {
+        if let Some((path, _kind)) = path_and_kind.rsplit_once(':') {
+            return path.to_string();
+        }
+    }
     node_id
         .rsplitn(4, ':')
         .last()
         .unwrap_or(node_id)
         .to_string()
+}
+
+fn lexical_graph_score(
+    query: &str,
+    node_name: &str,
+    node_id: &str,
+    file_path: &str,
+    content: &str,
+    node_type: &NodeType,
+    file_targeted: bool,
+) -> Option<f32> {
+    let name_match = node_name.contains(query);
+    let path_match = file_path.contains(query) || node_id.contains(query);
+    let content_match = content.contains(query);
+    if !name_match && !path_match && !content_match {
+        return None;
+    }
+
+    let mut score = if node_name == query {
+        100.0
+    } else if node_name.starts_with(query) {
+        88.0
+    } else if name_match {
+        78.0
+    } else if content_match && !matches!(node_type, NodeType::File | NodeType::DataFile) {
+        60.0
+    } else if file_targeted {
+        68.0
+    } else {
+        48.0
+    };
+
+    if matches!(
+        node_type,
+        NodeType::Function | NodeType::Method | NodeType::Class | NodeType::Struct
+    ) {
+        score += 8.0;
+    }
+    if !file_targeted && matches!(node_type, NodeType::File | NodeType::DataFile) {
+        score -= 35.0;
+    }
+
+    Some(score)
 }
 
 /// Embedding için zenginleştirilmiş metin üretir.
@@ -1251,5 +1398,43 @@ fn classify_incremental_read_error(path: &str, error: anyhow::Error) -> IndexIss
             detail: other.to_string(),
             suggested_ignore: suggestion_for_issue(path, &IndexIssueReason::ReadError),
         },
+    }
+}
+
+#[cfg(test)]
+mod retrieval_regression_tests {
+    use super::{extract_file_path, lexical_graph_score};
+    use crate::graph::NodeType;
+
+    #[test]
+    fn stable_node_ids_report_the_actual_file_path() {
+        let id = "./src/detector/yolo.py:class_definition:symbol:0123456789abcdef:0";
+        assert_eq!(extract_file_path(id), "./src/detector/yolo.py");
+    }
+
+    #[test]
+    fn code_symbols_rank_above_generic_data_file_path_matches() {
+        let symbol = lexical_graph_score(
+            "vision",
+            "visionpipeline",
+            "symbol-id",
+            "./src/vision.py",
+            "class VisionPipeline: pass",
+            &NodeType::Class,
+            false,
+        )
+        .unwrap();
+        let data_file = lexical_graph_score(
+            "vision",
+            "./data/vision_memory.db",
+            "./data/vision_memory.db",
+            "./data/vision_memory.db",
+            "",
+            &NodeType::DataFile,
+            false,
+        )
+        .unwrap();
+
+        assert!(symbol > data_file);
     }
 }

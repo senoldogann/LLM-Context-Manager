@@ -4,6 +4,8 @@
 
 **Node.js wrapper for Cognitive Codebase Matrix (CCM)** - Enables AI agents to understand and navigate your codebase with surgical precision.
 
+**v0.2.1** fixes UTF-8 indexing crashes, stale Codex MCP entries, interrupted binary downloads, and missing cross-file class/import usages.
+
 [![npm](https://img.shields.io/npm/v/@senoldogann/context-manager?color=orange)](https://www.npmjs.com/package/@senoldogann/context-manager)
 [![MCP](https://img.shields.io/badge/MCP-Compatible-blue)](https://modelcontextprotocol.io/)
 [![Rust](https://img.shields.io/badge/Built%20With-Rust-orange.svg)](https://www.rust-lang.org/)
@@ -45,6 +47,8 @@ npx @senoldogann/context-manager mcp
 
 If the wrapper is healthy, the query command should return code context and the MCP process should stay open waiting for stdio messages.
 
+The first index is complete; subsequent runs are incremental and process only added, changed, renamed, or deleted files. An unchanged project returns a clean no-op.
+
 ---
 
 ## 📖 What is CCM?
@@ -67,6 +71,7 @@ The npm wrapper downloads pre-built binaries and passes commands through:
 | `npx @senoldogann/context-manager index --path <dir>` | Index a project |
 | `npx @senoldogann/context-manager query --text "..."` | Search codebase |
 | `npx @senoldogann/context-manager mcp` | Run MCP server directly |
+| `npx @senoldogann/context-manager doctor --path <dir>` | Diagnose config and index health |
 | `npx @senoldogann/context-manager eval --tasks <file>` | Run evaluation tasks |
 
 ### Supported Hosts
@@ -138,6 +143,10 @@ CCM_EMBED_DATA_FILES=0
 
 # Binary checksum verification (0 = enforce, 1 = bypass)
 CCM_ALLOW_UNVERIFIED_BINARIES=0
+
+# Optional binary download tuning
+CCM_DOWNLOAD_TIMEOUT_MS=120000
+CCM_DOWNLOAD_ATTEMPTS=3
 ```
 
 Advanced overrides:
@@ -167,16 +176,27 @@ Once configured, ask your AI agent:
 This package handles:
 
 1. OS/architecture detection
-2. Binary download from GitHub Releases
+2. Resumable, retrying compressed binary download from GitHub Releases
 3. Global persistence in `~/.ccm`
+
+For a manual maintainer release, run the commands from this `npm/` directory:
+
+```bash
+npm test
+npm pack --dry-run
+npm publish --access public --provenance
+```
+
+Running `npm publish` from the repository root fails because the root intentionally has no `package.json`.
 
 ### ✅ Release Reliability
 
 - GitHub Releases publish platform binaries plus `checksums.txt`
 - The npm wrapper verifies checksums before using downloaded binaries
+- Interrupted downloads resume from their partial file and use a bounded timeout/retry policy
 - Redirects are restricted to approved GitHub release hosts
 - Release builds run for Linux, macOS, and Windows before assets are attached
-- npm publication is a manual step from `npm/` after the GitHub Release assets are attached
+- Codex configuration is updated directly and atomically, even when the `codex` wrapper is broken
 - The same smoke path is documented here and in the main repository README
 
 ### ✅ Binary Integrity
@@ -196,6 +216,15 @@ Enable `CCM_EMBED_DATA_FILES=1` to include them in semantic search.
 ---
 
 ## 📝 Changelog
+
+### v0.2.1
+- ✅ UTF-8-safe semantic chunking prevents panics on Turkish, Finnish, and emoji content
+- ✅ Cross-file imports, constructors, and type annotations contribute to usage and impact analysis
+- ✅ `get_context` returns the enclosing function/class instead of only a leaf assignment
+- ✅ Incremental `diff_context` includes staged, unstaged, and untracked worktree files
+- ✅ Compressed release binaries, download resume/retry/timeout, Linux ARM64 detection
+- ✅ Codex MCP entries are repaired and enabled without depending on the Codex CLI binary
+- ✅ Release tags run tests, lint, npm tests, indexing, and golden tasks v3 before publishing assets
 
 ### v0.1.31
 - ✅ `index_project` is idempotent again and ignores CCM's own generated index files

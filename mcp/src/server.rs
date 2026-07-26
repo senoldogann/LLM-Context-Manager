@@ -23,8 +23,9 @@ const SUPPORTED_PROTOCOL_VERSIONS: [&str; 3] =
 
 /// Holds the server's shared state.
 pub struct ServerState {
-    pub default_engine: Arc<RetrievalEngine>,
+    pub default_engine: RwLock<Arc<RetrievalEngine>>,
     pub engines: RwLock<EngineCache>,
+    default_project_root: Option<PathBuf>,
     allowed_roots: Vec<PathBuf>,
     require_allowed_roots: bool,
 }
@@ -71,34 +72,11 @@ impl EngineCache {
         self.map.insert(key, engine.clone());
         engine
     }
-
-    pub fn evict(&mut self, key: &str) {
-        self.map.remove(key);
-        self.order.retain(|k| k != key);
-    }
 }
 
 impl ServerState {
     pub async fn new() -> Result<Self> {
         tracing::info!("Initializing CCM Core Engine for MCP...");
-
-        // Use CCM_DB_PATH env var if available
-        let db_path = if let Ok(path) = std::env::var("CCM_DB_PATH") {
-            path
-        } else {
-            // Default to absolute path in home dir to avoid read-only CWD issues
-            let home = std::env::var("HOME")
-                .or_else(|_| std::env::var("USERPROFILE"))
-                .unwrap_or_else(|_| ".".to_string());
-            let path = std::path::PathBuf::from(home)
-                .join(".ccm")
-                .join("mcp")
-                .join("data")
-                .join("ccm_mcp_db");
-            // Ensure directory exists
-            let _ = std::fs::create_dir_all(&path);
-            path.to_string_lossy().to_string()
-        };
 
         // Use CCM_PROJECT_ROOT env var if available, otherwise default to CWD
         let project_root = std::env::var("CCM_PROJECT_ROOT").ok().or_else(|| {
@@ -111,6 +89,29 @@ impl ServerState {
             }
             None
         });
+        let default_project_root = project_root
+            .as_deref()
+            .map(Path::new)
+            .map(canonicalize_project_path);
+
+        // Prefer the selected project's shared index. A home-directory fallback is
+        // only used when no project root is available.
+        let db_path = if let Ok(path) = std::env::var("CCM_DB_PATH") {
+            path
+        } else if let Some(root) = &default_project_root {
+            root.join("data/ccm_db").to_string_lossy().to_string()
+        } else {
+            let home = std::env::var("HOME")
+                .or_else(|_| std::env::var("USERPROFILE"))
+                .unwrap_or_else(|_| ".".to_string());
+            let path = PathBuf::from(home)
+                .join(".ccm")
+                .join("mcp")
+                .join("data")
+                .join("ccm_mcp_db");
+            let _ = std::fs::create_dir_all(&path);
+            path.to_string_lossy().to_string()
+        };
 
         tracing::info!(path = %db_path, "Using Vector DB path");
 
@@ -158,8 +159,9 @@ impl ServerState {
         }
 
         Ok(Self {
-            default_engine,
+            default_engine: RwLock::new(default_engine),
             engines: RwLock::new(EngineCache::new(cache_size)),
+            default_project_root,
             allowed_roots,
             require_allowed_roots,
         })
@@ -170,7 +172,7 @@ impl ServerState {
     pub async fn get_engine(&self, project_path: Option<&str>) -> Result<Arc<RetrievalEngine>> {
         let path = match project_path {
             Some(p) => p,
-            None => return Ok(self.default_engine.clone()),
+            None => return Ok(self.default_engine.read().await.clone()),
         };
 
         if !self.is_path_allowed(path) {
@@ -199,9 +201,14 @@ impl ServerState {
         // Assume db at path/data/ccm_db
         // Use the MCP specific DB path
         let db_path = format!("{}/data/ccm_db", path);
+        let graph_path = format!("{}/data/ccm_graph.json", path);
+        let manifest_path = format!("{}/data/ccm_manifest.json", path);
 
         // Sanity check & Lazy Indexing
-        if !std::path::Path::new(&db_path).exists() {
+        if !Path::new(&db_path).exists()
+            || !Path::new(&graph_path).is_file()
+            || !Path::new(&manifest_path).is_file()
+        {
             tracing::warn!(
                 path = %db_path,
                 "Index not found. Triggering lazy indexing."
@@ -221,7 +228,6 @@ impl ServerState {
             }
         }
 
-        let graph_path = format!("{}/data/ccm_graph.json", path);
         let mut graph = CodeGraph::new();
         if std::path::Path::new(&graph_path).exists() {
             if let Ok(g) = CodeGraph::load_from_file(&graph_path) {
@@ -238,6 +244,34 @@ impl ServerState {
         let engine = Arc::new(RetrievalEngine::new(Arc::new(RwLock::new(graph)), store));
 
         Ok(write.insert(path.to_string(), engine))
+    }
+
+    pub async fn refresh_project_engine(&self, project_path: &str) -> Result<()> {
+        let db_path = Path::new(project_path)
+            .join("data/ccm_db")
+            .to_string_lossy()
+            .to_string();
+        let graph_path = Path::new(project_path).join("data/ccm_graph.json");
+        let graph = if graph_path.exists() {
+            CodeGraph::load_from_file(&graph_path.to_string_lossy())?
+        } else {
+            CodeGraph::new()
+        };
+        let store = LanceDbStore::new(&db_path, "code_vectors").await?;
+        let engine = Arc::new(RetrievalEngine::new(Arc::new(RwLock::new(graph)), store));
+
+        self.engines
+            .write()
+            .await
+            .insert(project_path.to_string(), engine.clone());
+        if self
+            .default_project_root
+            .as_ref()
+            .is_some_and(|root| canonicalize_project_path(Path::new(project_path)) == *root)
+        {
+            *self.default_engine.write().await = engine;
+        }
+        Ok(())
     }
 
     fn is_path_allowed(&self, path: &str) -> bool {

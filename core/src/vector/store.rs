@@ -342,8 +342,18 @@ fn semantic_chunks(text: &str, max_chars: usize, overlap: usize) -> Vec<String> 
         while hard_end > start && !text.is_char_boundary(hard_end) {
             hard_end -= 1;
         }
+        if hard_end == start {
+            hard_end = text[start..]
+                .char_indices()
+                .nth(1)
+                .map(|(offset, _)| start + offset)
+                .unwrap_or(text.len());
+        }
 
-        let minimum_split = start + (hard_end - start) / 2;
+        let mut minimum_split = start + (hard_end - start) / 2;
+        while minimum_split < hard_end && !text.is_char_boundary(minimum_split) {
+            minimum_split += 1;
+        }
         let preferred = text[minimum_split..hard_end]
             .rfind("\n\n")
             .map(|offset| minimum_split + offset + 2)
@@ -379,5 +389,26 @@ mod chunk_tests {
         assert!(chunks.len() >= 2);
         assert!(chunks[0].ends_with("\n\n"));
         assert!(chunks.iter().all(|chunk| chunk.len() <= 32));
+    }
+
+    #[test]
+    fn semantic_chunks_never_slice_inside_utf8_characters() {
+        let text = format!(
+            "{}… Türkçe: ğüşiöç, Suomi: ääkköset, emoji: 🧠\n{}",
+            "a".repeat(499),
+            "b".repeat(700)
+        );
+        let chunks = semantic_chunks(&text, 500, 100);
+
+        assert!(chunks.len() >= 3);
+        assert!(chunks.iter().all(|chunk| chunk.len() <= 500));
+        assert!(chunks.iter().any(|chunk| chunk.contains('…')));
+        assert!(chunks.iter().any(|chunk| chunk.contains('🧠')));
+    }
+
+    #[test]
+    fn semantic_chunks_make_progress_when_limit_is_smaller_than_a_character() {
+        let chunks = semantic_chunks("🧠🧠", 1, 0);
+        assert_eq!(chunks, vec!["🧠", "🧠"]);
     }
 }

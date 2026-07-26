@@ -10,6 +10,8 @@ English | [Turkce](./README.tr.md)
 
 > Bridge the gap between your codebase and your AI editor. CCM transforms static source code into a dynamic, queryable Knowledge Graph, enabling AI agents to navigate, understand, and reason about your project with surgical precision.
 
+> **Current release: v0.2.1.** This patch prevents UTF-8 chunking panics, repairs cross-file class/import usage edges, and hardens first-run installation.
+
 [![Rust](https://img.shields.io/badge/Built%20With-Rust-orange.svg?style=flat-square&logo=rust)](https://www.rust-lang.org/)
 [![MCP Ready](https://img.shields.io/badge/MCP-Compatible-blue.svg?style=flat-square&logo=google-cloud)](https://modelcontextprotocol.io/)
 [![Graph-RAG](https://img.shields.io/badge/Engine-Graph--RAG-purple.svg?style=flat-square)](https://github.com/senoldogann/LLM-Context-Manager)
@@ -44,6 +46,7 @@ Unlike tools that dump raw code, CCM injects **AI-Optimized Context**:
 
 ### 🧠 Connected Intelligence (Graph Navigator)
 - **Two-Pass Indexing** - Links function definitions to call sites
+- **Incremental Refresh** - Re-indexes only added, modified, renamed, or deleted files after the first run
 - **Deep Traversal** - Ask "Who calls this?" and get accurate answers
 
 ### ⚡ High-Performance Core
@@ -55,7 +58,7 @@ Unlike tools that dump raw code, CCM injects **AI-Optimized Context**:
 ### 🔒 Production Hardening
 - **Binary Checksums** - Release artifacts include `checksums.txt` for integrity
 - **MCP Allowlist** - Restrict project access with `CCM_ALLOWED_ROOTS`
-- **Safe Defaults** - Configurable timeouts and file-size limits
+- **Safe Defaults** - UTF-8-safe chunking, configurable timeouts, retries, and file-size limits
 
 ### 🔌 Universal Compatibility (MCP)
 - **Plug & Play** - Installer configures Codex, Cursor, Claude Desktop, and Antigravity
@@ -97,7 +100,7 @@ Expected outcomes:
 
 | Host | Status | Installation Path |
 |------|--------|-------------------|
-| Codex | Supported | `codex mcp add ...` via installer |
+| Codex | Supported | Atomic update of `~/.codex/config.toml` |
 | Cursor | Supported | `~/.cursor/mcp.json` |
 | Claude Desktop | Supported | Native desktop config |
 | Antigravity | Supported | Native host config |
@@ -125,6 +128,17 @@ cd LLM-Context-Manager
 cargo build --release
 
 # Binary location: target/release/ccm-cli
+```
+
+### Manual npm publication (maintainers)
+
+The npm manifest is intentionally inside `npm/`, not the repository root:
+
+```bash
+cd npm
+npm test
+npm pack --dry-run
+npm publish --access public --provenance
 ```
 
 ---
@@ -165,6 +179,10 @@ CCM_EMBED_DATA_FILES=0
 
 # npm wrapper security (0 = enforce checksum, 1 = bypass)
 CCM_ALLOW_UNVERIFIED_BINARIES=0
+
+# Optional download tuning (milliseconds / attempts)
+CCM_DOWNLOAD_TIMEOUT_MS=120000
+CCM_DOWNLOAD_ATTEMPTS=3
 ```
 
 Advanced overrides:
@@ -195,6 +213,9 @@ ccm-cli query --text "src/main.rs:50"
 # Watch mode - auto-reindex
 ccm-cli index --path . --watch
 
+# Diagnose installer, allowlist, and index compatibility
+ccm-cli doctor --path .
+
 # Evaluate retrieval quality
 ccm-cli eval --tasks eval/golden_tasks.json
 ```
@@ -212,6 +233,10 @@ ccm-cli eval --tasks eval/golden_tasks.json
 | `trace_call_chain` | BFS call chain between two nodes | from_id → to_id path |
 | `impact_of_change` | Blast radius of a file change | Dependents across codebase |
 | `diff_context` | Recently changed code via git | Last N days of changes |
+
+### Incremental indexing behavior
+
+The first `index` builds the complete index. Later `index_project` or `index --watch` runs compare the filesystem manifest and update only changed or newly created files while removing deleted-file nodes. The vector database is not rebuilt when nothing changed. Cross-file reference edges are refreshed from the in-memory semantic graph so callers remain accurate after a symbol changes.
 
 ---
 
