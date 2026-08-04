@@ -287,28 +287,26 @@ impl LanceDbStore {
         Ok(hits)
     }
 
-    /// Deletes vectors where the ID starts with the given prefix.
-    /// This is used for Garbage Collection when re-indexing a file.
+    /// Verilen dosyaya ait vektörleri siler (Garbage Collection).
+    ///
+    /// Dosya ID'sinin kendisini, ':' ile devam eden sembol node ID'lerini ve
+    /// '#' ile devam eden chunk ID'lerini kapsar. Düz `starts_with(prefix)`
+    /// kullanılmaz; çünkü `a.rs` için `a.rs.bak` gibi aynı öneki paylaşan
+    /// kardeş dosyaların vektörlerini de siler (veri kaybı).
     pub async fn delete_by_prefix(&self, prefix: &str) -> Result<()> {
         let table = match self.conn.open_table(&self.table_name).execute().await {
             Ok(t) => t,
-            Err(_) => return Ok(()), // Table doesn't exist, nothing to delete
+            Err(_) => return Ok(()), // Tablo yoksa silinecek bir şey de yok
         };
 
-        let escaped_lower = prefix.replace('\'', "''");
-        let predicate = format!("starts_with(id, '{}')", escaped_lower);
+        let predicate = file_scoped_delete_predicate(prefix);
 
         if table.delete(&predicate).await.is_ok() {
             return Ok(());
         }
 
-        // Fallback: range predicate using lexicographical upper bound
-        let range_predicate = if let Some(upper) = prefix_upper_bound(prefix) {
-            let escaped_upper = upper.replace('\'', "''");
-            format!("id >= '{}' AND id < '{}'", escaped_lower, escaped_upper)
-        } else {
-            format!("id >= '{}'", escaped_lower)
-        };
+        // Fallback: lexicographical üst sınır kullanan range predicate'leri
+        let range_predicate = file_scoped_delete_range_predicate(prefix);
 
         match table.delete(&range_predicate).await {
             Ok(_) => Ok(()),
@@ -325,6 +323,42 @@ impl LanceDbStore {
             }
         }
     }
+}
+
+/// Yalnızca verilen dosyanın vektörlerini eşleyen silme predicate'i üretir:
+/// tam dosya ID'si, ':' devamı (sembol node'ları) ve '#' devamı (chunk'lar).
+fn file_scoped_delete_predicate(file_id: &str) -> String {
+    let exact = escape_sql_literal(file_id);
+    let colon = escape_sql_literal(&format!("{}:", file_id));
+    let hash = escape_sql_literal(&format!("{}#", file_id));
+    format!(
+        "id = '{}' OR starts_with(id, '{}') OR starts_with(id, '{}')",
+        exact, colon, hash
+    )
+}
+
+/// `starts_with` desteklenmeyen backend'ler için range tabanlı eşdeğer predicate.
+fn file_scoped_delete_range_predicate(file_id: &str) -> String {
+    let mut clauses = vec![format!("id = '{}'", escape_sql_literal(file_id))];
+
+    for separator in [':', '#'] {
+        let lower = format!("{}{}", file_id, separator);
+        let clause = match prefix_upper_bound(&lower) {
+            Some(upper) => format!(
+                "(id >= '{}' AND id < '{}')",
+                escape_sql_literal(&lower),
+                escape_sql_literal(&upper)
+            ),
+            None => format!("id >= '{}'", escape_sql_literal(&lower)),
+        };
+        clauses.push(clause);
+    }
+
+    clauses.join(" OR ")
+}
+
+fn escape_sql_literal(value: &str) -> String {
+    value.replace('\'', "''")
 }
 
 fn prefix_upper_bound(prefix: &str) -> Option<String> {

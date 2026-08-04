@@ -36,16 +36,17 @@ impl Extractor {
         graph: &mut CodeGraph,
         file_id: &str,
     ) -> Result<NodeIndex> {
-        // Create File node as root
-        // Note: For Phase 3 Optimization, we want the File node to be a "container"
-        // but not necessarily the primary embedding target unless specifically asked.
+        // File node kök konteyner olarak oluşturulur.
+        // Satır aralığı sembol node'larıyla tutarlı şekilde 1-indexed olmalı;
+        // aksi halde son satır sorguları File node'u kapsam dışı bırakır.
+        let end_line = self.source_code.lines().count().max(1);
         let file_node = CodeNode {
             id: file_id.to_string(),
             node_type: NodeType::File,
             name: file_id.to_string(),
             content: "".into(),
-            start_line: 0,
-            end_line: tree.root_node().end_position().row,
+            start_line: 1,
+            end_line,
         };
         let file_idx = graph.add_node(file_node);
         self.node_map.insert(file_id.to_string(), file_idx);
@@ -177,7 +178,9 @@ impl Extractor {
         match &self.language {
             SupportedLanguage::Rust => self.classify_rust_node(node, kind),
             SupportedLanguage::Python => self.classify_python_node(node, kind),
-            SupportedLanguage::TypeScript => self.classify_typescript_node(node, kind),
+            SupportedLanguage::TypeScript | SupportedLanguage::Tsx => {
+                self.classify_typescript_node(node, kind)
+            }
             SupportedLanguage::Go => self.classify_go_node(node, kind),
             SupportedLanguage::Java => self.classify_java_node(node, kind),
             SupportedLanguage::Kotlin => self.classify_kotlin_node(node, kind),
@@ -635,155 +638,6 @@ impl Extractor {
         let end = node.end_byte().min(self.source_code.len());
         self.source_code.get(start..end).unwrap_or("").to_string()
     }
-
-    // ========== PHASE 2: REFERENCE EXTRACTION (Graph Navigator) ==========
-
-    /// Second pass: Extract function calls and link them to definitions.
-    /// Call this AFTER `extract()` to populate the symbol table.
-    pub fn extract_references(
-        &self,
-        tree: &Tree,
-        graph: &mut CodeGraph,
-        file_id: &str,
-    ) -> Result<usize> {
-        let mut edges_created = 0;
-        self.walk_for_calls(tree.root_node(), graph, &mut edges_created, file_id)?;
-        Ok(edges_created)
-    }
-
-    fn walk_for_calls(
-        &self,
-        node: Node,
-        graph: &mut CodeGraph,
-        edges_created: &mut usize,
-        file_id: &str,
-    ) -> Result<()> {
-        let kind = node.kind();
-
-        // Detect call expressions based on language
-        let is_call = match &self.language {
-            SupportedLanguage::Rust => kind == "call_expression",
-            SupportedLanguage::Python => kind == "call",
-            SupportedLanguage::TypeScript => kind == "call_expression",
-            SupportedLanguage::Go => kind == "call_expression",
-            SupportedLanguage::Java => kind == "method_invocation",
-            SupportedLanguage::Kotlin => kind == "call_expression",
-            SupportedLanguage::CSharp => kind == "invocation_expression",
-            SupportedLanguage::C | SupportedLanguage::Cpp => kind == "call_expression",
-            SupportedLanguage::Ruby => kind == "call",
-            SupportedLanguage::Php => {
-                matches!(
-                    kind,
-                    "function_call_expression"
-                        | "member_call_expression"
-                        | "scoped_call_expression"
-                )
-            }
-            SupportedLanguage::Swift => kind == "call_expression",
-            SupportedLanguage::Data => false,
-        };
-
-        if is_call {
-            if let Some(callee_name) = self.extract_callee_name(&node) {
-                // Find the calling function (parent context) within the same file
-                if let Some(caller_idx) = self.find_enclosing_function(&node, graph, file_id) {
-                    // Find the called function by name (can be anywhere in graph)
-                    if let Some(callee_idx) = self.find_function_by_name(graph, &callee_name) {
-                        // Don't create self-edges
-                        if caller_idx != callee_idx {
-                            graph.add_edge(caller_idx, callee_idx, EdgeType::Calls);
-                            *edges_created += 1;
-                        }
-                    }
-                }
-            }
-        }
-
-        // Recurse into children
-        let mut cursor = node.walk();
-        for child in node.children(&mut cursor) {
-            self.walk_for_calls(child, graph, edges_created, file_id)?;
-        }
-
-        Ok(())
-    }
-
-    /// Extract the function name being called from a call expression.
-    fn extract_callee_name(&self, call_node: &Node) -> Option<String> {
-        // For Rust: call_expression has a "function" child
-        // For Python: call has a "function" child
-        // For TS: call_expression has a "function" child
-
-        let func_child = call_node.child_by_field_name("function")?;
-        let kind = func_child.kind();
-
-        // Handle simple identifier calls like `foo()`
-        if kind == "identifier" {
-            return Some(self.get_node_text(&func_child));
-        }
-
-        // Handle method calls like `self.foo()` or `obj.method()`
-        if kind == "field_expression" || kind == "attribute" || kind == "member_expression" {
-            // Get the rightmost identifier (the method name)
-            if let Some(field) = func_child
-                .child_by_field_name("field")
-                .or_else(|| func_child.child_by_field_name("attribute"))
-                .or_else(|| func_child.child_by_field_name("property"))
-            {
-                return Some(self.get_node_text(&field));
-            }
-            // Fallback: get last child if it's an identifier
-            let mut cursor = func_child.walk();
-            let children: Vec<_> = func_child.children(&mut cursor).collect();
-            for child in children.iter().rev() {
-                if child.kind() == "identifier" || child.kind() == "property_identifier" {
-                    return Some(self.get_node_text(child));
-                }
-            }
-        }
-
-        // Handle scoped calls like `module::function()`
-        if kind == "scoped_identifier" {
-            if let Some(name) = func_child.child_by_field_name("name") {
-                return Some(self.get_node_text(&name));
-            }
-        }
-
-        None
-    }
-
-    /// Find the enclosing function node for a given AST node within its file.
-    fn find_enclosing_function(
-        &self,
-        node: &Node,
-        graph: &CodeGraph,
-        file_id: &str,
-    ) -> Option<NodeIndex> {
-        let line = node.start_position().row + 1; // 1-indexed
-        let file_nodes = graph.find_nodes_by_file(file_id);
-
-        for &idx in file_nodes {
-            let code_node = &graph.graph[idx];
-            if matches!(code_node.node_type, NodeType::Function | NodeType::Method)
-                && code_node.start_line <= line
-                && code_node.end_line >= line
-            {
-                return Some(idx);
-            }
-        }
-        None
-    }
-
-    /// Find a function node by its name (exact/fast lookup).
-    fn find_function_by_name(&self, graph: &CodeGraph, name: &str) -> Option<NodeIndex> {
-        for &idx in graph.find_nodes_by_name(name) {
-            let code_node = &graph.graph[idx];
-            if matches!(code_node.node_type, NodeType::Function | NodeType::Method) {
-                return Some(idx);
-            }
-        }
-        None
-    }
 }
 
 fn stable_hash(value: &str) -> u64 {
@@ -870,6 +724,46 @@ impl Point {
 
         // Should have: 1 File + 1 Struct + 1 impl (Class) + 1 Function = 4 nodes
         assert!(graph.graph.node_count() >= 4);
+    }
+
+    #[test]
+    fn file_node_covers_last_line_without_trailing_newline() {
+        // Trailing newline yokken File node'un end_line'ı son satırı
+        // kapsayamıyordu; son satır sorguları boş File node döndürüyordu.
+        let code = "fn foo() {}";
+        let mut parser = CodeParser::new();
+        let tree = parser.parse_tree(code, SupportedLanguage::Rust).unwrap();
+
+        let mut graph = CodeGraph::new();
+        let mut extractor = Extractor::new(code.to_string(), SupportedLanguage::Rust);
+        let file_idx = extractor.extract(&tree, &mut graph, "single.rs").unwrap();
+
+        let file_node = &graph.graph[file_idx];
+        assert_eq!(file_node.start_line, 1);
+        assert_eq!(file_node.end_line, 1);
+
+        let found = graph
+            .find_node_in_file("single.rs", 1)
+            .expect("node on line 1");
+        assert_ne!(found, file_idx, "son satır File node'a düşmemeli");
+        assert_eq!(graph.graph[found].name, "foo");
+    }
+
+    #[test]
+    fn extracts_functions_from_tsx() {
+        let code = "export function App() {\n  return <div>Hello</div>;\n}\n";
+        let mut parser = CodeParser::new();
+        let tree = parser.parse_tree(code, SupportedLanguage::Tsx).unwrap();
+        assert!(!tree.root_node().has_error());
+
+        let mut graph = CodeGraph::new();
+        let mut extractor = Extractor::new(code.to_string(), SupportedLanguage::Tsx);
+        extractor.extract(&tree, &mut graph, "App.tsx").unwrap();
+
+        assert!(
+            graph.graph.node_weights().any(|node| node.name == "App"),
+            "TSX dosyasından App fonksiyonu çıkarılamadı"
+        );
     }
 
     #[test]

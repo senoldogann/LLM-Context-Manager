@@ -159,9 +159,9 @@ EMBEDDING_MODEL=text-embedding-3-small
 EMBEDDING_TIMEOUT_SECS=30
 CCM_MAX_FILE_BYTES=2097152
 
-# MCP guvenligi
+# MCP guvenligi (strict allowlist varsayilan olarak ACIK)
 CCM_ALLOWED_ROOTS=/Users/you/projects:/Users/you/sandbox
-CCM_REQUIRE_ALLOWED_ROOTS=0
+CCM_REQUIRE_ALLOWED_ROOTS=1
 
 # MCP runtime
 CCM_MCP_ENGINE_CACHE_SIZE=8
@@ -189,7 +189,7 @@ Gelismis ayarlar:
 
 **Not:** Lokal embedding icin Ollama'nin calisiyor olmasi gerekir (`ollama serve`) ve modelin indirilmis olmasi gerekir (`ollama pull mxbai-embed-large`).
 
-**Production onerisi:** `CCM_ALLOWED_ROOTS` tanimlayin ve `CCM_REQUIRE_ALLOWED_ROOTS=1` kullanin.
+**Guvenlik:** MCP varsayilan olarak strict allowlist uygular; yalnizca `CCM_ALLOWED_ROOTS` (yoksa `CCM_PROJECT_ROOT`) altindaki dizinler indekslenebilir/okunabilir. Genis erisim gerekiyorsa `CCM_REQUIRE_ALLOWED_ROOTS=0` verilebilir; bu modda bile erisim baslangic proje kokuyle sinirli kalir.
 
 ---
 
@@ -327,8 +327,9 @@ Lokal source build icin `cargo build --release` komutu halen makinenizde `protoc
 3. Son care olarak `CCM_ALLOW_UNVERIFIED_BINARIES=1` kullanin
 
 ### "Project path is not allowed"
+- Strict allowlist modu varsayilan olarak aktiftir
 - `CCM_ALLOWED_ROOTS` icine proje kokunu ekleyin
-- Ya da `CCM_REQUIRE_ALLOWED_ROOTS=0` kullanin
+- Gercekten gerekiyorsa `CCM_REQUIRE_ALLOWED_ROOTS=0` kullanin (erisim yine baslangic proje kokuyle sinirli kalir)
 
 ### Buyuk veya binary dosyalar atlanıyor
 - Gerekirse `CCM_MAX_FILE_BYTES` degerini artirin

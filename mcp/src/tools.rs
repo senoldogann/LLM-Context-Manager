@@ -207,7 +207,7 @@ pub async fn read_graph(engine: &Arc<RetrievalEngine>, args: &Value) -> Result<T
 
         // Append neighbors if available (Graph Navigator)
         if let Some(neighbors) = engine.get_node_neighbors(&node.id).await {
-            output.push_str("\n\n### 🔗 Graph Connections\n");
+            output.push_str("\n\n### Graph Connections\n");
 
             if !neighbors.calls.is_empty() {
                 output.push_str(&format!("**Calls:** {}\n", neighbors.calls.join(", ")));

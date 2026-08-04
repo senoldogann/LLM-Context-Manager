@@ -525,7 +525,8 @@ For hybrid weight tuning, chunking controls, batch size, and embedding timeout, 
 | `CCM_HYBRID_SPATIAL_WEIGHT` | 0.08 | File proximity weight |
 | `CCM_HYBRID_RECENT_WEIGHT` | 0.02 | Recency weight |
 | `CCM_ALLOWED_ROOTS` | _(empty)_ | Allowlist for MCP project access |
-| `CCM_MCP_ENGINE_CACHE_SIZE` | 4 | Max projects held in RAM |
+| `CCM_REQUIRE_ALLOWED_ROOTS` | 1 | Strict allowlist mode (ON by default; 0 relaxes but stays within startup root) |
+| `CCM_MCP_ENGINE_CACHE_SIZE` | 8 | Max projects held in RAM |
 | `CCM_DISABLE_EMBEDDER` | 0 | Disable vector search entirely |
 
 ## Output Artifacts

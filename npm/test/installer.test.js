@@ -64,11 +64,12 @@ test('atomic writer leaves valid JSON and no temporary file', () => {
     assert.deepEqual(fs.readdirSync(directory), ['mcp.json']);
 });
 
-test('generated MCP command pins package version and configures RUST_LOG', () => {
+test('generated MCP command pins package version and configures strict allowlist', () => {
     assert.match(MCP_ARGS[1], /^@senoldogann\/context-manager@\d+\.\d+\.\d+$/);
     assert.equal(MCP_ENV.RUST_LOG, 'info');
-    assert.equal(MCP_ENV.CCM_PROJECT_ROOT, undefined);
-    assert.equal(MCP_ENV.CCM_ALLOWED_ROOTS, undefined);
+    assert.ok(MCP_ENV.CCM_PROJECT_ROOT, 'CCM_PROJECT_ROOT must be set');
+    assert.equal(MCP_ENV.CCM_ALLOWED_ROOTS, MCP_ENV.CCM_PROJECT_ROOT);
+    assert.equal(MCP_ENV.CCM_REQUIRE_ALLOWED_ROOTS, '1');
 });
 
 test('Codex installer replaces stale or disabled entry without invoking Codex binary', () => {

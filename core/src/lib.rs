@@ -7,7 +7,6 @@ pub mod graph;
 
 pub mod parser;
 
-pub mod storage;
 pub mod vector;
 
 use crate::engine::{CursorPosition, RetrievalEngine};
@@ -220,7 +219,7 @@ pub async fn index_directory(path: &str, db_path: Option<&str>) -> Result<IndexS
 
                 let file_path = entry.path();
                 let file_path_str = file_path.to_string_lossy().to_string();
-                let Some(file_id) = normalize_file_id(&project_root, file_path) else {
+                let Some(file_id) = normalize_file_id_with_root(&project_root, file_path) else {
                     continue;
                 };
                 if is_internal_index_file(&file_id) {
@@ -232,10 +231,6 @@ pub async fn index_directory(path: &str, db_path: Option<&str>) -> Result<IndexS
                     };
                     register_issue(&mut stats, issue, true);
                     continue;
-                }
-
-                if let Some(fp) = fingerprint_for_path(file_path) {
-                    manifest.files.insert(file_id.clone(), fp);
                 }
 
                 if path_is_policy_excluded(file_path) {
@@ -250,6 +245,13 @@ pub async fn index_directory(path: &str, db_path: Option<&str>) -> Result<IndexS
                     };
                     register_issue(&mut stats, issue, true);
                     continue;
+                }
+
+                // Fingerprint policy kontrolünden SONRA yazılır; build_manifest
+                // ile aynı sıralama korunur, yoksa incremental update bu dosyaları
+                // her seferinde "silinmiş" sanır.
+                if let Some(fp) = fingerprint_for_path(file_path) {
+                    manifest.files.insert(file_id.clone(), fp);
                 }
 
                 match populate_graph_for_file(&mut graph, file_path, &file_id) {
@@ -413,7 +415,7 @@ pub async fn update_index(path: &str, db_path: Option<&str>) -> Result<IndexStat
     let changed_files: Vec<PathBuf> = changed_files
         .into_iter()
         .filter(|p| {
-            normalize_file_id(&project_root, p)
+            normalize_file_id_with_root(&project_root, p)
                 .map(|id| !is_internal_index_file(&id))
                 .unwrap_or(true)
         })
@@ -568,19 +570,13 @@ fn populate_graph_for_file(
         .parse_tree(&content, lang)
         .map_err(PopulateFileError::Parse)?;
 
-    // PASS 1: Extract definitions (Files, Functions, Classes, etc.)
+    // Tanımları çıkar (Files, Functions, Classes, vb.).
+    // Calls/Imports kenarları indexleme sonunda rebuild_reference_edges ile
+    // deterministik olarak yeniden üretildiği için ayrı bir pass gerekmez.
     let mut extractor = Extractor::new(content.clone(), lang);
     extractor
         .extract(&tree, graph, file_id)
         .map_err(PopulateFileError::Extract)?;
-
-    // PASS 2: Extract references (Function Calls -> Calls edges)
-    let edges_created = extractor
-        .extract_references(&tree, graph, file_id)
-        .map_err(PopulateFileError::Extract)?;
-    if edges_created > 0 {
-        tracing::debug!("Linked {} call edges", edges_created);
-    }
 
     Ok(())
 }
@@ -604,13 +600,19 @@ struct FileFingerprint {
 
 pub(crate) fn normalize_file_id(project_root: &Path, path: &Path) -> Option<String> {
     let root = std::fs::canonicalize(project_root).unwrap_or_else(|_| project_root.to_path_buf());
+    normalize_file_id_with_root(&root, path)
+}
+
+/// Önceden canonicalize edilmiş kök ile çalışır; sıcak döngülerde root'un
+/// her çağrıda yeniden canonicalize edilmesini (ekstra syscall) önler.
+pub(crate) fn normalize_file_id_with_root(root: &Path, path: &Path) -> Option<String> {
     let abs = if path.is_absolute() {
         path.to_path_buf()
     } else {
         root.join(path)
     };
     let abs = std::fs::canonicalize(&abs).unwrap_or(abs);
-    let rel = abs.strip_prefix(&root).ok()?;
+    let rel = abs.strip_prefix(root).ok()?;
     let mut rel_str = rel.to_string_lossy().to_string();
     if rel_str.is_empty() {
         rel_str = ".".to_string();
@@ -630,6 +632,27 @@ fn is_internal_index_file(file_id: &str) -> bool {
     file_id == "./data/ccm_graph.json"
         || file_id == "./data/ccm_manifest.json"
         || file_id.starts_with("./data/ccm_db/")
+}
+
+/// Bir dosya değişikliğinin indexleyici için ilgili olup olmadığını bildirir.
+/// CLI watch modu bunu kullanır; indexleyici ile aynı politikayı tek kaynaktan
+/// uygular (policy exclusion + internal artifact + binary uzantı filtresi).
+pub fn is_index_relevant_file(project_root: &Path, path: &Path) -> bool {
+    if path_is_policy_excluded(path) {
+        return false;
+    }
+    if normalize_file_id(project_root, path).is_some_and(|file_id| is_internal_index_file(&file_id))
+    {
+        return false;
+    }
+    let extension = path
+        .extension()
+        .and_then(|value| value.to_str())
+        .map(|value| value.to_ascii_lowercase());
+    match extension {
+        Some(ext) => !EXCLUDED_FILE_EXTENSIONS.contains(&ext.as_str()),
+        None => true,
+    }
 }
 
 fn file_id_to_path(project_root: &Path, file_id: &str) -> PathBuf {
@@ -696,7 +719,7 @@ fn build_manifest(project_root: &Path) -> Result<IndexManifest> {
         }
 
         let file_path = entry.path();
-        let Some(file_id) = normalize_file_id(project_root, file_path) else {
+        let Some(file_id) = normalize_file_id_with_root(project_root, file_path) else {
             continue;
         };
         if is_internal_index_file(&file_id) {
@@ -738,9 +761,16 @@ fn diff_manifest(
 }
 
 pub(crate) fn path_is_policy_excluded(file_path: &Path) -> bool {
-    for component in file_path.components() {
-        let text = component.as_os_str().to_string_lossy().to_string();
-        if EXCLUDED_DIRECTORY_NAMES.contains(&text.as_str()) {
+    // Yalnızca dizin adları politika kapsamındadır; "build" veya "out" adlı
+    // bir dosya kendi adından dolayı dışlanmamalı.
+    let parent_components = file_path
+        .parent()
+        .map(|parent| parent.components())
+        .into_iter()
+        .flatten();
+    for component in parent_components {
+        let text = component.as_os_str().to_string_lossy();
+        if EXCLUDED_DIRECTORY_NAMES.contains(&text.as_ref()) {
             return true;
         }
     }

@@ -127,9 +127,9 @@ EMBEDDING_MODEL=text-embedding-3-small
 EMBEDDING_TIMEOUT_SECS=30
 CCM_MAX_FILE_BYTES=2097152
 
-# MCP Security
+# MCP Security (strict allowlist is ON by default)
 CCM_ALLOWED_ROOTS=/Users/you/projects:/Users/you/sandbox
-CCM_REQUIRE_ALLOWED_ROOTS=0
+CCM_REQUIRE_ALLOWED_ROOTS=1
 
 # MCP Runtime
 CCM_MCP_ENGINE_CACHE_SIZE=8
@@ -155,7 +155,7 @@ Advanced overrides:
 - `.env.example` in the repository contains chunking, batch-size, hybrid-weight, and compatibility-alias settings such as `OPENAI_API_KEY`, `CCM_SKIP_CHECKSUM`, `CCM_MCP_REQUIRE_ALLOWED_ROOTS`, `CCM_EMBED_DATA`, and `EMBEDDING_DISABLED`.
 - Hybrid scoring defaults and tuning notes live in [`docs/hybrid-ranking.md`](https://github.com/senoldogann/LLM-Context-Manager/blob/main/docs/hybrid-ranking.md).
 
-**Production Tip:** Set `CCM_ALLOWED_ROOTS` and enable `CCM_REQUIRE_ALLOWED_ROOTS=1` to restrict MCP access.
+**Security:** The installer writes a strict allowlist into every MCP config (`CCM_PROJECT_ROOT`, `CCM_ALLOWED_ROOTS`, `CCM_REQUIRE_ALLOWED_ROOTS=1`), and the MCP server itself defaults to strict mode. Widen `CCM_ALLOWED_ROOTS` only when you need access to more project roots.
 
 ---
 

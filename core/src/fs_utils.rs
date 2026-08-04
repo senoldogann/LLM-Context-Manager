@@ -23,7 +23,8 @@ pub(crate) fn detect_language(path: &Path) -> SupportedLanguage {
     match ext.as_str() {
         "rs" => SupportedLanguage::Rust,
         "py" => SupportedLanguage::Python,
-        "ts" | "js" | "tsx" | "jsx" => SupportedLanguage::TypeScript,
+        "ts" | "js" => SupportedLanguage::TypeScript,
+        "tsx" | "jsx" => SupportedLanguage::Tsx,
         "go" => SupportedLanguage::Go,
         "java" => SupportedLanguage::Java,
         "kt" | "kts" => SupportedLanguage::Kotlin,
@@ -56,6 +57,9 @@ mod language_tests {
             ("task.rb", SupportedLanguage::Ruby),
             ("index.php", SupportedLanguage::Php),
             ("App.swift", SupportedLanguage::Swift),
+            ("app.ts", SupportedLanguage::TypeScript),
+            ("app.tsx", SupportedLanguage::Tsx),
+            ("view.jsx", SupportedLanguage::Tsx),
         ];
         for (path, expected) in cases {
             assert_eq!(detect_language(Path::new(path)), expected);

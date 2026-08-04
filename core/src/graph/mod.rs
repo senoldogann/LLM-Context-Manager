@@ -1,4 +1,3 @@
-use crate::storage::GraphStorage;
 use petgraph::graph::{DiGraph, NodeIndex};
 use petgraph::visit::EdgeRef;
 use serde::{Deserialize, Serialize};
@@ -42,7 +41,6 @@ pub enum EdgeType {
 #[derive(Clone)]
 pub struct CodeGraph {
     pub graph: DiGraph<CodeNode, EdgeType>,
-    pub storage: Option<Arc<dyn GraphStorage>>,
     pub id_index: std::collections::HashMap<String, NodeIndex>,
     pub name_index: std::collections::HashMap<String, Vec<NodeIndex>>,
     pub file_nodes_index: std::collections::HashMap<String, Vec<NodeIndex>>,
@@ -52,7 +50,6 @@ impl Default for CodeGraph {
     fn default() -> Self {
         Self {
             graph: DiGraph::new(),
-            storage: None,
             id_index: std::collections::HashMap::new(),
             name_index: std::collections::HashMap::new(),
             file_nodes_index: std::collections::HashMap::new(),
@@ -65,17 +62,7 @@ impl CodeGraph {
         Self::default()
     }
 
-    pub fn with_storage(mut self, storage: Arc<dyn GraphStorage>) -> Self {
-        self.storage = Some(storage);
-        self
-    }
-
     pub fn add_node(&mut self, node: CodeNode) -> NodeIndex {
-        if let Some(storage) = &self.storage {
-            if let Err(e) = storage.save_node(&node) {
-                tracing::warn!(error = %e, "Failed to save node to storage");
-            }
-        }
         let id = node.id.clone();
         let name = node.name.clone();
         let file_id = graph_node_file_path(&node.id).to_string();
@@ -93,13 +80,6 @@ impl CodeGraph {
             .any(|edge| edge.weight() == &weight)
         {
             return;
-        }
-        if let Some(storage) = &self.storage {
-            let source_node = &self.graph[source];
-            let target_node = &self.graph[target];
-            if let Err(e) = storage.save_edge(&source_node.id, &target_node.id, weight.clone()) {
-                tracing::warn!(error = %e, "Failed to save edge to storage");
-            }
         }
         self.graph.add_edge(source, target, weight);
     }
@@ -209,18 +189,27 @@ impl CodeGraph {
 
     /// Finds the node corresponding to a specific file path.
     pub fn find_file_node(&self, file_path: &str) -> Option<NodeIndex> {
-        self.graph.node_indices().find(|&idx| {
-            let node = &self.graph[idx];
-            matches!(node.node_type, NodeType::File | NodeType::DataFile) && node.name == file_path
-        })
+        // O(n) tarama yerine dosya bazlı index kullanılır; bu fonksiyon
+        // cursor/impact/diff gibi sıcak path'lerde çağrılıyor.
+        self.file_nodes_index
+            .get(file_path)?
+            .iter()
+            .copied()
+            .find(|&idx| {
+                matches!(
+                    self.graph[idx].node_type,
+                    NodeType::File | NodeType::DataFile
+                )
+            })
     }
 
     /// Finds the deepest node within a file hierarchy that covers the given line.
     pub fn find_node_in_file(&self, file_path: &str, line: usize) -> Option<NodeIndex> {
         let file_node_idx = self.find_file_node(file_path)?;
 
-        // We want the most specific node (narrowest range)
-        let mut best_match = file_node_idx;
+        // En dar aralıklı sembol node tercih edilir; File/DataFile node yalnızca
+        // hiçbir sembol satırı kapsamıyorsa fallback olarak döner.
+        let mut best_match: Option<NodeIndex> = None;
         let mut min_len = usize::MAX;
 
         // BFS/DFS to visit all children of the file
@@ -231,31 +220,29 @@ impl CodeGraph {
 
             // Check if node covers the line
             if node.start_line <= line && node.end_line >= line {
-                let len = node.end_line - node.start_line;
-                if len < min_len {
-                    min_len = len;
-                    best_match = idx;
+                if !matches!(node.node_type, NodeType::File | NodeType::DataFile) {
+                    let len = node.end_line - node.start_line;
+                    if len < min_len {
+                        min_len = len;
+                        best_match = Some(idx);
+                    }
                 }
 
-                // Add children to stack to go deeper
-                // We only follow output edges of type Contains
-                let neighbors = self
+                // Çocuklara inmek için yalnızca Contains kenarları izlenir.
+                // find_edge kullanılmaz: aynı çift üzerinde Calls gibi ikinci bir
+                // kenar varsa belirsiz olanı döner ve Contains atlanır.
+                for edge in self
                     .graph
-                    .neighbors_directed(idx, petgraph::Direction::Outgoing);
-                for neighbor_idx in neighbors {
-                    let edge = self.graph.find_edge(idx, neighbor_idx);
-                    if let Some(edge_idx) = edge {
-                        if let Some(weight) = self.graph.edge_weight(edge_idx) {
-                            if matches!(weight, EdgeType::Contains) {
-                                stack.push(neighbor_idx);
-                            }
-                        }
+                    .edges_directed(idx, petgraph::Direction::Outgoing)
+                {
+                    if matches!(edge.weight(), EdgeType::Contains) {
+                        stack.push(edge.target());
                     }
                 }
             }
         }
 
-        Some(best_match)
+        Some(best_match.unwrap_or(file_node_idx))
     }
 
     /// Returns enclosing semantic scopes from the narrowest to the widest.
@@ -297,17 +284,8 @@ impl CodeGraph {
         matches
     }
     pub fn find_node_by_id(&self, id: &str) -> Option<CodeNode> {
-        // 1. O(1) lookup via id_index — previously was O(n) linear scan
-        if let Some(&idx) = self.id_index.get(id) {
-            return Some(self.graph[idx].clone());
-        }
-        // 2. Check persistent storage
-        if let Some(storage) = &self.storage {
-            if let Ok(Some(node)) = storage.get_node(id) {
-                return Some(node);
-            }
-        }
-        None
+        // O(1) lookup via id_index — previously was O(n) linear scan
+        self.id_index.get(id).map(|&idx| self.graph[idx].clone())
     }
 
     /// Kesin ID eşleşmesi bulunamazsa aynı dosya+tür+yakın satır ile düzeltilmiş arama yapar.
@@ -363,7 +341,6 @@ impl CodeGraph {
     pub fn get_outgoing_edges(&self, id: &str) -> Vec<(String, EdgeType)> {
         let mut edges = Vec::new();
 
-        // 1. Check RAM (if node exists in RAM)
         if let Some(idx) = self.find_node_index_by_id(id) {
             for edge in self
                 .graph
@@ -372,15 +349,8 @@ impl CodeGraph {
                 let target_node = &self.graph[edge.target()];
                 edges.push((target_node.id.clone(), edge.weight().clone()));
             }
-            return edges;
         }
 
-        // 2. Check Storage
-        if let Some(storage) = &self.storage {
-            if let Ok(stored_edges) = storage.get_edges(id) {
-                return stored_edges;
-            }
-        }
         edges
     }
 
@@ -412,7 +382,6 @@ impl CodeGraph {
         let graph: DiGraph<CodeNode, EdgeType> = serde_json::from_reader(reader)?;
         let mut g = Self {
             graph,
-            storage: None,
             id_index: std::collections::HashMap::new(),
             name_index: std::collections::HashMap::new(),
             file_nodes_index: std::collections::HashMap::new(),
@@ -476,18 +445,14 @@ impl CodeGraph {
         to_remove.insert(file_node_idx);
 
         while let Some(idx) = stack.pop() {
-            let neighbors = self
+            // find_edge belirsiz kenar döndürebilir; tüm kenarlar taranır.
+            for edge in self
                 .graph
-                .neighbors_directed(idx, petgraph::Direction::Outgoing);
-            for neighbor_idx in neighbors {
-                let edge = self.graph.find_edge(idx, neighbor_idx);
-                if let Some(edge_idx) = edge {
-                    if let Some(weight) = self.graph.edge_weight(edge_idx) {
-                        if matches!(weight, EdgeType::Contains) {
-                            to_remove.insert(neighbor_idx);
-                            stack.push(neighbor_idx);
-                        }
-                    }
+                .edges_directed(idx, petgraph::Direction::Outgoing)
+            {
+                if matches!(edge.weight(), EdgeType::Contains) {
+                    to_remove.insert(edge.target());
+                    stack.push(edge.target());
                 }
             }
         }
@@ -676,6 +641,86 @@ mod tests {
             .graph
             .node_weights()
             .all(|node| !node.id.starts_with("./a.rs")));
+    }
+
+    #[test]
+    fn remove_file_nodes_follows_contains_even_with_parallel_call_edge() {
+        // rebuild_reference_edges, Contains'tan sonra aynı node çifti üzerine
+        // Calls kenarı ekleyebilir. find_edge bu durumda Calls'u döndürürdü
+        // ve Contains kenarı izlenmeden inner node silinmeden kalırdı.
+        let mut graph = CodeGraph::new();
+
+        let file_idx = graph.add_node(CodeNode {
+            id: "./f.rs".to_string(),
+            node_type: NodeType::File,
+            name: "./f.rs".to_string(),
+            content: "".into(),
+            start_line: 1,
+            end_line: 10,
+        });
+        let outer_idx = graph.add_node(CodeNode {
+            id: "./f.rs:function:symbol:0000000000000001:0".to_string(),
+            node_type: NodeType::Function,
+            name: "outer".to_string(),
+            content: "fn outer() { fn inner() {} inner(); }".into(),
+            start_line: 1,
+            end_line: 10,
+        });
+        let inner_idx = graph.add_node(CodeNode {
+            id: "./f.rs:function:symbol:0000000000000002:0".to_string(),
+            node_type: NodeType::Function,
+            name: "inner".to_string(),
+            content: "fn inner() {}".into(),
+            start_line: 3,
+            end_line: 5,
+        });
+
+        graph.add_edge(file_idx, outer_idx, EdgeType::Contains);
+        graph.add_edge(outer_idx, inner_idx, EdgeType::Contains);
+        graph.add_edge(outer_idx, inner_idx, EdgeType::Calls);
+
+        graph.remove_file_nodes("./f.rs");
+
+        assert_eq!(graph.graph.node_count(), 0);
+    }
+
+    #[test]
+    fn find_node_in_file_follows_contains_even_with_parallel_call_edge() {
+        let mut graph = CodeGraph::new();
+
+        let file_idx = graph.add_node(CodeNode {
+            id: "./f.rs".to_string(),
+            node_type: NodeType::File,
+            name: "./f.rs".to_string(),
+            content: "".into(),
+            start_line: 1,
+            end_line: 10,
+        });
+        let outer_idx = graph.add_node(CodeNode {
+            id: "./f.rs:function:symbol:0000000000000001:0".to_string(),
+            node_type: NodeType::Function,
+            name: "outer".to_string(),
+            content: "fn outer() { fn inner() {} inner(); }".into(),
+            start_line: 1,
+            end_line: 10,
+        });
+        let inner_idx = graph.add_node(CodeNode {
+            id: "./f.rs:function:symbol:0000000000000002:0".to_string(),
+            node_type: NodeType::Function,
+            name: "inner".to_string(),
+            content: "fn inner() {}".into(),
+            start_line: 3,
+            end_line: 5,
+        });
+
+        graph.add_edge(file_idx, outer_idx, EdgeType::Contains);
+        graph.add_edge(outer_idx, inner_idx, EdgeType::Contains);
+        graph.add_edge(outer_idx, inner_idx, EdgeType::Calls);
+
+        let found = graph
+            .find_node_in_file("./f.rs", 4)
+            .expect("node for line 4");
+        assert_eq!(found, inner_idx);
     }
 
     #[test]

@@ -222,9 +222,9 @@ impl RemoteEmbedder {
                     let msg = e.to_string();
                     if msg.contains("connect") || msg.contains("refused") {
                         return Err(anyhow::anyhow!(
-                            "\n❌ Could not connect to Ollama at {}.\n\
-                            👉 Is Ollama running? Run `ollama serve` in a terminal.\n\
-                            👉 Not installed? Download it from https://ollama.com\n",
+                            "\nCould not connect to Ollama at {}.\n\
+                            Is Ollama running? Run `ollama serve` in a terminal.\n\
+                            Not installed? Download it from https://ollama.com\n",
                             self.base_url
                         ));
                     }
@@ -263,10 +263,9 @@ impl RemoteEmbedder {
                                 let body =
                                     self.read_text_with_timeout(res).await.unwrap_or_default();
 
-                                // Check if last line contains "success" or download completed
-                                if body.contains("\"status\":\"success\"")
-                                    || body.contains("pulling")
-                                {
+                                // Başarı kriteri yalnızca "success" durumudur; "pulling"
+                                // satırları ilerlemeyi gösterir ama tamamlanmayı kanıtlamaz.
+                                if body.contains("\"status\":\"success\"") {
                                     tracing::info!(
                                         model = %self.model,
                                         "Model pulled successfully. Retrying embedding."

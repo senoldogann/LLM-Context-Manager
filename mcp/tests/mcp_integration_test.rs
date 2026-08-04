@@ -317,6 +317,104 @@ fn mcp_rejects_project_outside_allowlist() -> Result<(), Box<dyn std::error::Err
 }
 
 #[test]
+fn mcp_defaults_to_strict_allowlist() -> Result<(), Box<dyn std::error::Error>> {
+    // CCM_REQUIRE_ALLOWED_ROOTS hiç verilmezse strict mod varsayılan olmalı.
+    let allowed_dir = tempdir()?;
+    let project_dir = tempdir()?;
+
+    fs::write(project_dir.path().join("main.rs"), "fn foo() {}\n")?;
+    fs::create_dir_all(project_dir.path().join("data"))?;
+
+    let mut cmd = Command::new(assert_cmd::cargo::cargo_bin!("ccm-mcp"));
+    cmd.env("CCM_DISABLE_EMBEDDER", "1")
+        .env("CCM_MCP_DEBUG", "0")
+        .env(
+            "CCM_ALLOWED_ROOTS",
+            allowed_dir.path().to_string_lossy().as_ref(),
+        )
+        .env_remove("CCM_REQUIRE_ALLOWED_ROOTS")
+        .env_remove("CCM_MCP_REQUIRE_ALLOWED_ROOTS")
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null());
+
+    let mut child = cmd.spawn()?;
+    let mut stdin = child.stdin.take().unwrap();
+    let mut reader = BufReader::new(child.stdout.take().unwrap());
+
+    let initialized = send_request(
+        &mut stdin,
+        &mut reader,
+        json!({"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}),
+    )?;
+    assert!(initialized.get("result").is_some());
+
+    let denied = send_request(
+        &mut stdin,
+        &mut reader,
+        json!({
+            "jsonrpc":"2.0","id":2,"method":"tools/call",
+            "params":{"name":"index_project","arguments":{
+                "project_path":project_dir.path().to_string_lossy()
+            }}
+        }),
+    )?;
+    assert!(tool_text(&denied).contains("not allowed") || denied.get("error").is_some());
+
+    let _ = child.kill();
+    Ok(())
+}
+
+#[test]
+fn mcp_non_strict_empty_allowlist_stays_within_default_root(
+) -> Result<(), Box<dyn std::error::Error>> {
+    // Strict mod kapalı ve allowlist boşken bile keyfi dizinler indekslenemez;
+    // yalnızca başlangıçta seçilen default proje kökü kabul edilir.
+    let default_root = tempdir()?;
+    let outside_dir = tempdir()?;
+
+    fs::write(outside_dir.path().join("main.rs"), "fn foo() {}\n")?;
+    fs::create_dir_all(outside_dir.path().join("data"))?;
+
+    let mut cmd = Command::new(assert_cmd::cargo::cargo_bin!("ccm-mcp"));
+    cmd.env("CCM_DISABLE_EMBEDDER", "1")
+        .env("CCM_MCP_DEBUG", "0")
+        .env("CCM_REQUIRE_ALLOWED_ROOTS", "0")
+        .env_remove("CCM_ALLOWED_ROOTS")
+        .env_remove("CCM_PROJECT_ROOT")
+        .current_dir(default_root.path())
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null());
+
+    let mut child = cmd.spawn()?;
+    let mut stdin = child.stdin.take().unwrap();
+    let mut reader = BufReader::new(child.stdout.take().unwrap());
+
+    let initialized = send_request(
+        &mut stdin,
+        &mut reader,
+        json!({"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}),
+    )?;
+    assert!(initialized.get("result").is_some());
+
+    let denied = send_request(
+        &mut stdin,
+        &mut reader,
+        json!({
+            "jsonrpc":"2.0","id":2,"method":"tools/call",
+            "params":{"name":"index_project","arguments":{
+                "project_path":outside_dir.path().to_string_lossy()
+            }}
+        }),
+    )?;
+    assert!(tool_text(&denied).contains("not allowed") || denied.get("error").is_some());
+
+    let _ = child.kill();
+    Ok(())
+}
+
+#[test]
 fn mcp_resolves_class_import_constructor_context_and_impact(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let dir = tempdir()?;

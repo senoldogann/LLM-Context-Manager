@@ -42,8 +42,14 @@ let checksumCache = null;
 const MCP_SERVER_NAME = 'context-manager';
 const MCP_COMMAND = 'npx';
 const MCP_ARGS = ['-y', `@senoldogann/context-manager@${VERSION}`, 'mcp'];
+// Allowlist kuruluma eklenir: MCP sunucusu yalnızca kurulum dizinindeki
+// projeye erişebilir. Geniş erişim gerekiyorsa CCM_ALLOWED_ROOTS genişletilir.
+const INSTALL_PROJECT_ROOT = process.cwd();
 const MCP_ENV = {
-    RUST_LOG: 'info'
+    RUST_LOG: 'info',
+    CCM_PROJECT_ROOT: INSTALL_PROJECT_ROOT,
+    CCM_ALLOWED_ROOTS: INSTALL_PROJECT_ROOT,
+    CCM_REQUIRE_ALLOWED_ROOTS: '1'
 };
 const ALLOWED_REDIRECT_HOSTS = new Set([
     'github.com',
@@ -108,7 +114,14 @@ async function installMcp() {
         console.log("[CCM] Add this server manually:");
         console.log(JSON.stringify({ [MCP_SERVER_NAME]: mcpConfig }, null, 2));
         console.log("[CCM] Codex example:");
-        console.log(`codex mcp add ${MCP_SERVER_NAME} --env RUST_LOG=info -- ${MCP_COMMAND} ${MCP_ARGS.join(' ')}`);
+        console.log(
+            `codex mcp add ${MCP_SERVER_NAME}` +
+                ` --env RUST_LOG=info` +
+                ` --env CCM_PROJECT_ROOT=${INSTALL_PROJECT_ROOT}` +
+                ` --env CCM_ALLOWED_ROOTS=${INSTALL_PROJECT_ROOT}` +
+                ` --env CCM_REQUIRE_ALLOWED_ROOTS=1` +
+                ` -- ${MCP_COMMAND} ${MCP_ARGS.join(' ')}`
+        );
     } else {
         console.log("[CCM] Installation complete! Restart your AI editor to see the changes.");
     }

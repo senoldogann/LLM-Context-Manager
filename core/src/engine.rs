@@ -4,7 +4,7 @@ use crate::engine::hybrid::HybridScorer;
 use crate::fs_utils::{detect_language, read_text_file_limited, FileReadError};
 use crate::git::GitIntegrator;
 use crate::graph::{CodeGraph, CodeNode, EdgeType, NodeType};
-use crate::normalize_file_id;
+use crate::normalize_file_id_with_root;
 use crate::parser::CodeParser;
 use crate::parser::SupportedLanguage;
 use crate::vector::extractor::Extractor;
@@ -76,30 +76,36 @@ impl RetrievalEngine {
     /// Indexes the current graph into the vector store.
     /// This should be called after parsing/populating the graph.
     pub async fn index_graph(&self) -> Result<()> {
-        let mut ids = Vec::new();
-        let mut texts = Vec::new();
         let embed_data_files = embed_data_files_enabled();
 
-        let graph = self.graph.read().await;
+        // Embedding metinleri toplanır toplanmaz lock bırakılır; uzak embedding
+        // çağrıları dakikalar sürebilir ve bu süre boyunca writer'lar bloklanmamalı.
+        let (ids, texts) = {
+            let graph = self.graph.read().await;
+            let mut ids = Vec::new();
+            let mut texts = Vec::new();
 
-        // O(n) over all nodes is unavoidable: every node must be visited exactly once to
-        // build its embedding text. No shortcut exists since this is a full-index operation.
-        for node in graph.graph.node_weights() {
-            // Index Functions, Classes, Structs, and Methods.
-            // We consciously exclude 'File' nodes from embeddings in Phase 3 because they are too large
-            // and duplicate the content of their children. We want granular retrieval.
-            if matches!(
-                node.node_type,
-                NodeType::Function | NodeType::Method | NodeType::Class | NodeType::Struct
-            ) || (embed_data_files && matches!(node.node_type, NodeType::DataFile))
-            {
-                // Zenginleştirilmiş embedding metni üret
-                let text_representation = build_embedding_text(node);
+            // O(n) over all nodes is unavoidable: every node must be visited exactly once to
+            // build its embedding text. No shortcut exists since this is a full-index operation.
+            for node in graph.graph.node_weights() {
+                // Index Functions, Classes, Structs, and Methods.
+                // We consciously exclude 'File' nodes from embeddings in Phase 3 because they are too large
+                // and duplicate the content of their children. We want granular retrieval.
+                if matches!(
+                    node.node_type,
+                    NodeType::Function | NodeType::Method | NodeType::Class | NodeType::Struct
+                ) || (embed_data_files && matches!(node.node_type, NodeType::DataFile))
+                {
+                    // Zenginleştirilmiş embedding metni üret
+                    let text_representation = build_embedding_text(node);
 
-                ids.push(node.id.clone());
-                texts.push(text_representation);
+                    ids.push(node.id.clone());
+                    texts.push(text_representation);
+                }
             }
-        }
+
+            (ids, texts)
+        };
 
         if !ids.is_empty() {
             tracing::info!(count = ids.len(), "Indexing nodes into vector store");
@@ -158,7 +164,7 @@ impl RetrievalEngine {
             };
             let abs_path = std::fs::canonicalize(&abs_path).unwrap_or(abs_path);
 
-            let Some(relative_path) = normalize_file_id(&root_path, &abs_path) else {
+            let Some(relative_path) = normalize_file_id_with_root(&root_path, &abs_path) else {
                 continue;
             };
             if path_is_policy_excluded(&abs_path) {
@@ -266,25 +272,6 @@ impl RetrievalEngine {
             let mut graph = self.graph.write().await;
 
             if extractor.extract(&tree, &mut graph, &relative_path).is_ok() {
-                match extractor.extract_references(&tree, &mut graph, &relative_path) {
-                    Ok(edges_created) => {
-                        if edges_created > 0 {
-                            tracing::debug!(
-                                path = %relative_path,
-                                edges = edges_created,
-                                "Linked call edges"
-                            );
-                        }
-                    }
-                    Err(e) => {
-                        tracing::warn!(
-                            path = %relative_path,
-                            error = %e,
-                            "Failed to extract references during incremental indexing"
-                        );
-                    }
-                }
-
                 // Collect ALL new nodes for this file
                 if let Some(file_node_idx) = graph.find_file_node(&relative_path) {
                     let mut stack = vec![file_node_idx];
@@ -899,7 +886,9 @@ impl RetrievalEngine {
 
         let graph = self.graph.read().await;
         let mut results = Vec::new();
-        let root = std::path::Path::new(project_root);
+        // Root bir kez canonicalize edilir; döngü içinde tekrarlanmaz.
+        let root = std::fs::canonicalize(project_root)
+            .unwrap_or_else(|_| std::path::PathBuf::from(project_root));
 
         let mut changed_files: Vec<(PathBuf, (bool, bool))> = changed_files.into_iter().collect();
         changed_files.sort_by(|(path_a, _), (path_b, _)| path_a.cmp(path_b));
@@ -909,7 +898,7 @@ impl RetrievalEngine {
                 break;
             }
             // Git returns absolute paths; convert to graph-relative "./path" format
-            let rel = match crate::normalize_file_id(root, path) {
+            let rel = match normalize_file_id_with_root(&root, path) {
                 Some(r) => r,
                 None => continue,
             };
@@ -1036,15 +1025,27 @@ impl RetrievalEngine {
             let node_name = node.name.to_lowercase();
             let node_id = node.id.to_lowercase();
             let file_path = extract_file_path(&node.id);
-
             let file_path_lower = file_path.to_lowercase();
-            let content_lower = node.content.to_lowercase();
+
+            // İçeriği küçük harfe çevirmek pahalıdır; önce ucuz alanlar taranır.
+            // Skorlama mantığında içerik yalnızca name/path eşleşmesi yokken
+            // kullanıldığı için, eşleşme varsa içerik hiç dönüştürülmez.
+            let cheap_match = node_name.contains(&normalized_query)
+                || file_path_lower.contains(&normalized_query)
+                || node_id.contains(&normalized_query);
+            let content_lower_storage = if cheap_match {
+                None
+            } else {
+                Some(node.content.to_lowercase())
+            };
+            let content_lower = content_lower_storage.as_deref().unwrap_or("");
+
             if let Some(score) = lexical_graph_score(
                 &normalized_query,
                 &node_name,
                 &node_id,
                 &file_path_lower,
-                &content_lower,
+                content_lower,
                 &node.node_type,
                 file_targeted,
             ) {
@@ -1083,14 +1084,14 @@ impl RetrievalEngine {
     pub async fn predict_context(&self, cursor: &CursorPosition) -> Result<Vec<ContextSuggestion>> {
         let mut suggestions = Vec::new();
 
-        // 1. Spatial Query: Find which node (Function/Class) the cursor is in.
-        let node_idx_opt = self
-            .graph
-            .read()
-            .await
-            .find_node_in_file(&cursor.file_path, cursor.line);
-        if let Some(node_idx) = node_idx_opt {
+        // 1. Spatial Query + 2. Structural Retrieval tek lock scope'unda yapılır.
+        // node_idx lock bırakıldıktan sonra ikinci bir lock'ta kullanılırsa araya
+        // giren bir write (incremental index) index'i geçersiz kılıp panic'e yol açar.
+        let semantic_query = {
             let graph = self.graph.read().await;
+            let Some(node_idx) = graph.find_node_in_file(&cursor.file_path, cursor.line) else {
+                return Ok(suggestions);
+            };
             let current_node = &graph.graph[node_idx];
             let scope_indices = graph.find_enclosing_scopes(&cursor.file_path, cursor.line);
             let primary_idx = scope_indices.first().copied().unwrap_or(node_idx);
@@ -1158,16 +1159,18 @@ impl RetrievalEngine {
                 });
             }
 
-            // 3. Semantic Retrieval (Hybrid): "What else is like this function?"
-            // We use the current function's signature/docstring as a query
-            let query = format!("related to {}", primary_node.name);
-            // Limiting to top 2 semantic matches to avoid noise
-            if let Ok(semantic_hits) = self.search_code(&query, 2).await {
-                for mut hit in semantic_hits {
-                    hit.reason = "Semantic Similarity to Active Node".to_string();
-                    hit.relevance_score *= 0.7; // Weigh semantic less than structural
-                    suggestions.push(hit);
-                }
+            // 3. Semantic sorgu için aktif node'un adı saklanır.
+            format!("related to {}", primary_node.name)
+        };
+
+        // Semantic Retrieval (Hybrid): "What else is like this function?"
+        // Lock bırakıldıktan sonra çalıştırılır; search_code kendi read lock'unu alır.
+        // Limiting to top 2 semantic matches to avoid noise
+        if let Ok(semantic_hits) = self.search_code(&semantic_query, 2).await {
+            for mut hit in semantic_hits {
+                hit.reason = "Semantic Similarity to Active Node".to_string();
+                hit.relevance_score *= 0.7; // Weigh semantic less than structural
+                suggestions.push(hit);
             }
         }
 
@@ -1263,7 +1266,6 @@ fn repo_priority_score(file_path: &str) -> f32 {
         || normalized.contains("/backend/")
         || normalized.contains("/server/")
         || normalized.contains("/cmd/")
-        || normalized.contains("/go-scraper/")
     {
         score += 0.30;
     }

@@ -163,9 +163,9 @@ EMBEDDING_MODEL=text-embedding-3-small
 EMBEDDING_TIMEOUT_SECS=30
 CCM_MAX_FILE_BYTES=2097152
 
-# MCP Security
+# MCP Security (strict allowlist is ON by default)
 CCM_ALLOWED_ROOTS=/Users/you/projects:/Users/you/sandbox
-CCM_REQUIRE_ALLOWED_ROOTS=0
+CCM_REQUIRE_ALLOWED_ROOTS=1
 
 # MCP Runtime
 CCM_MCP_ENGINE_CACHE_SIZE=8
@@ -192,7 +192,7 @@ Advanced overrides:
 - Hybrid weight tuning details live in [`docs/hybrid-ranking.md`](./docs/hybrid-ranking.md).
 
 **Note:** Requires Ollama running (`ollama serve`) with model pulled (`ollama pull mxbai-embed-large`).
-**Production Tip:** Set `CCM_ALLOWED_ROOTS` and enable `CCM_REQUIRE_ALLOWED_ROOTS=1` to prevent unintended project access.
+**Security:** MCP enforces a strict allowlist by default — only directories under `CCM_ALLOWED_ROOTS` (falling back to `CCM_PROJECT_ROOT`) can be indexed or read. Set `CCM_REQUIRE_ALLOWED_ROOTS=0` only if you explicitly want the relaxed mode; even then, access stays confined to the startup project root.
 
 ---
 
@@ -330,8 +330,9 @@ For local source builds, `cargo build --release` still requires `protoc` to be i
 3. As a last resort, set `CCM_ALLOW_UNVERIFIED_BINARIES=1` to bypass verification
 
 ### "Project path is not allowed"
+- Strict allowlist mode is enabled by default
 - Set `CCM_ALLOWED_ROOTS` to include the project root
-- Or disable strict mode with `CCM_REQUIRE_ALLOWED_ROOTS=0`
+- Only if you really need it, disable strict mode with `CCM_REQUIRE_ALLOWED_ROOTS=0` (access still stays within the startup project root)
 
 ### Large/binary files are skipped
 - Increase `CCM_MAX_FILE_BYTES` if you need larger text files indexed

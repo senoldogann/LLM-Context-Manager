@@ -6,6 +6,7 @@ pub enum SupportedLanguage {
     Rust,
     Python,
     TypeScript,
+    Tsx,
     Go,
     Java,
     Kotlin,
@@ -50,6 +51,8 @@ impl CodeParser {
             SupportedLanguage::Rust => tree_sitter_rust::LANGUAGE.into(),
             SupportedLanguage::Python => tree_sitter_python::LANGUAGE.into(),
             SupportedLanguage::TypeScript => tree_sitter_typescript::LANGUAGE_TYPESCRIPT.into(),
+            // JSX/TSX sözdizimi TS grammar'ında ERROR node üretir; ayrı grammar şart.
+            SupportedLanguage::Tsx => tree_sitter_typescript::LANGUAGE_TSX.into(),
             SupportedLanguage::Go => tree_sitter_go::LANGUAGE.into(),
             SupportedLanguage::Java => tree_sitter_java::LANGUAGE.into(),
             SupportedLanguage::Kotlin => tree_sitter_kotlin_ng::LANGUAGE.into(),
@@ -91,6 +94,30 @@ mod tests {
         let code = "def hello(): print('world')";
         let sexp = parser.parse(code, SupportedLanguage::Python).unwrap();
         assert!(sexp.contains("function_definition"));
+    }
+
+    #[test]
+    fn parses_tsx_with_dedicated_grammar() {
+        let mut parser = CodeParser::new();
+        let code = "export function App() {\n  return <div className=\"app\">Hello</div>;\n}";
+        let tree = parser.parse_tree(code, SupportedLanguage::Tsx).unwrap();
+        assert!(
+            !tree.root_node().has_error(),
+            "TSX parse produced ERROR nodes"
+        );
+        assert!(tree.root_node().to_sexp().contains("jsx_element"));
+    }
+
+    #[test]
+    fn typescript_grammar_rejects_jsx_syntax() {
+        // TS grammar'ının JSX'i hatalı parse ettiğini belgeleyerek
+        // ayrı Tsx grammar kararını korur.
+        let mut parser = CodeParser::new();
+        let code = "const view = <div>Hello</div>;";
+        let tree = parser
+            .parse_tree(code, SupportedLanguage::TypeScript)
+            .unwrap();
+        assert!(tree.root_node().has_error());
     }
 
     #[test]

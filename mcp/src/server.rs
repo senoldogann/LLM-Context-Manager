@@ -177,20 +177,33 @@ impl ServerState {
             ));
         }
 
+        // Cache key normalize edilir; "/repo" ile "/repo/" ayrı entry oluşturmasın.
+        let canonical_path = canonicalize_project_path(Path::new(path));
+        let cache_key = canonical_path.to_string_lossy().to_string();
+
         // Check cache (write lock needed for LRU order update)
         {
             let mut engines = self.engines.write().await;
-            if let Some(engine) = engines.get(path) {
+            if let Some(engine) = engines.get(&cache_key) {
                 return Ok(engine);
             }
         }
 
-        tracing::info!(path = %path, "Loading context for project");
+        tracing::info!(path = %cache_key, "Loading context for project");
         // Assume db at path/data/ccm_db
         // Use the MCP specific DB path
-        let db_path = format!("{}/data/ccm_db", path);
-        let graph_path = format!("{}/data/ccm_graph.json", path);
-        let manifest_path = format!("{}/data/ccm_manifest.json", path);
+        let db_path = canonical_path
+            .join("data/ccm_db")
+            .to_string_lossy()
+            .to_string();
+        let graph_path = canonical_path
+            .join("data/ccm_graph.json")
+            .to_string_lossy()
+            .to_string();
+        let manifest_path = canonical_path
+            .join("data/ccm_manifest.json")
+            .to_string_lossy()
+            .to_string();
 
         // Sanity check & Lazy Indexing
         if !Path::new(&db_path).exists()
@@ -203,7 +216,7 @@ impl ServerState {
             );
 
             // LAZY INDEXING: Incremental index for this request
-            match ccm_core::update_index(path, Some(&db_path)).await {
+            match ccm_core::update_index(&cache_key, Some(&db_path)).await {
                 Ok(stats) => {
                     tracing::info!(nodes = stats.nodes_created, "Lazy indexing complete");
                 }
@@ -221,7 +234,7 @@ impl ServerState {
             if let Ok(g) = CodeGraph::load_from_file(&graph_path) {
                 graph = g;
                 tracing::info!(
-                    path = %path,
+                    path = %cache_key,
                     nodes = graph.graph.node_count(),
                     "Loaded graph for project"
                 );
@@ -232,18 +245,21 @@ impl ServerState {
         let engine = Arc::new(RetrievalEngine::new(Arc::new(RwLock::new(graph)), store));
 
         let mut engines = self.engines.write().await;
-        if let Some(existing) = engines.get(path) {
+        if let Some(existing) = engines.get(&cache_key) {
             return Ok(existing);
         }
-        Ok(engines.insert(path.to_string(), engine))
+        Ok(engines.insert(cache_key, engine))
     }
 
     pub async fn refresh_project_engine(&self, project_path: &str) -> Result<()> {
-        let db_path = Path::new(project_path)
+        // get_engine ile aynı normalize key kullanılır ki cache tutarlı kalsın.
+        let canonical_path = canonicalize_project_path(Path::new(project_path));
+        let cache_key = canonical_path.to_string_lossy().to_string();
+        let db_path = canonical_path
             .join("data/ccm_db")
             .to_string_lossy()
             .to_string();
-        let graph_path = Path::new(project_path).join("data/ccm_graph.json");
+        let graph_path = canonical_path.join("data/ccm_graph.json");
         let graph = if graph_path.exists() {
             CodeGraph::load_from_file(&graph_path.to_string_lossy())?
         } else {
@@ -252,14 +268,11 @@ impl ServerState {
         let store = LanceDbStore::new(&db_path, "code_vectors").await?;
         let engine = Arc::new(RetrievalEngine::new(Arc::new(RwLock::new(graph)), store));
 
-        self.engines
-            .write()
-            .await
-            .insert(project_path.to_string(), engine.clone());
+        self.engines.write().await.insert(cache_key, engine.clone());
         if self
             .default_project_root
             .as_ref()
-            .is_some_and(|root| canonicalize_project_path(Path::new(project_path)) == *root)
+            .is_some_and(|root| canonical_path == *root)
         {
             *self.default_engine.write().await = engine;
         }
@@ -267,10 +280,18 @@ impl ServerState {
     }
 
     fn is_path_allowed(&self, path: &str) -> bool {
-        if self.allowed_roots.is_empty() {
-            return !self.require_allowed_roots;
-        }
         let candidate = canonicalize_project_path(Path::new(path));
+        if self.allowed_roots.is_empty() {
+            if self.require_allowed_roots {
+                return false;
+            }
+            // Strict mod kapalıyken bile keyfi yollara izin verilmez:
+            // yalnızca başlangıçta seçilen default proje kökü kabul edilir.
+            return self
+                .default_project_root
+                .as_ref()
+                .is_some_and(|root| candidate.starts_with(root));
+        }
         self.allowed_roots
             .iter()
             .any(|root| candidate.starts_with(root))
@@ -306,10 +327,12 @@ fn load_allowed_roots() -> Vec<PathBuf> {
 }
 
 fn require_allowed_roots() -> bool {
+    // Varsayılan strict: allowlist zorunlu. Geniş erişim için açıkça
+    // CCM_REQUIRE_ALLOWED_ROOTS=0 verilmesi gerekir.
     std::env::var("CCM_REQUIRE_ALLOWED_ROOTS")
         .or_else(|_| std::env::var("CCM_MCP_REQUIRE_ALLOWED_ROOTS"))
         .map(|val| matches!(val.to_lowercase().as_str(), "1" | "true" | "yes"))
-        .unwrap_or(false)
+        .unwrap_or(true)
 }
 
 fn canonicalize_project_path(path: &Path) -> PathBuf {

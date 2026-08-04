@@ -148,63 +148,22 @@ async fn main() -> anyhow::Result<()> {
 
                 let (tx, mut rx) = mpsc::channel(1);
 
-                // Create a channel to receive the events.
+                // İzleme filtresi indexleyici politikasıyla tek kaynaktan yönetilir;
+                // uzantı/dizin listeleri ayrı yerde tutulmaz (DRY).
+                let watch_root = path.clone();
                 let mut watcher =
                     notify::recommended_watcher(move |res: notify::Result<notify::Event>| {
                         match res {
                             Ok(event) => {
-                                // Filter out ignored directories and relevant extensions
                                 let is_relevant = event.paths.iter().any(|p| {
-                                    // Skip common ignored directories
-                                    for component in p.components() {
-                                        let s = component.as_os_str().to_string_lossy();
-                                        if s == "data"
-                                            || s == ".ccm"
-                                            || s == "node_modules"
-                                            || s == "target"
-                                            || s == ".git"
-                                            || s == ".agent"
-                                        {
-                                            return false;
-                                        }
-                                    }
-
-                                    if let Some(ext) = p.extension().and_then(|e| e.to_str()) {
+                                    // Araç durum dizinleri indexleyici kapsamı dışında
+                                    let skipped_dir = p.components().any(|component| {
                                         matches!(
-                                            ext,
-                                            "rs" | "py"
-                                                | "ts"
-                                                | "js"
-                                                | "tsx"
-                                                | "jsx"
-                                                | "go"
-                                                | "java"
-                                                | "kt"
-                                                | "kts"
-                                                | "cs"
-                                                | "md"
-                                                | "json"
-                                                | "yaml"
-                                                | "yml"
-                                                | "toml"
-                                                | "c"
-                                                | "h"
-                                                | "cc"
-                                                | "cpp"
-                                                | "cxx"
-                                                | "hh"
-                                                | "hpp"
-                                                | "hxx"
-                                                | "rb"
-                                                | "rake"
-                                                | "gemspec"
-                                                | "php"
-                                                | "phtml"
-                                                | "swift"
+                                            component.as_os_str().to_string_lossy().as_ref(),
+                                            ".ccm" | ".agent"
                                         )
-                                    } else {
-                                        false
-                                    }
+                                    });
+                                    !skipped_dir && ccm_core::is_index_relevant_file(&watch_root, p)
                                 });
 
                                 if is_relevant {
@@ -326,9 +285,20 @@ fn run_doctor(path: &std::path::Path, json: bool) -> anyhow::Result<()> {
         .and_then(|value| serde_json::from_str::<serde_json::Value>(&value).ok())
         .and_then(|value| value.get("schema_version").and_then(|v| v.as_u64()));
     let expected_schema = ccm_core::INDEX_SCHEMA_VERSION as u64;
-    let strict_roots = std::env::var("CCM_REQUIRE_ALLOWED_ROOTS").ok().as_deref() == Some("1");
+    // MCP sunucusuyla aynı varsayılan: allowlist strict modu varsayılan olarak açık.
+    let strict_roots = std::env::var("CCM_REQUIRE_ALLOWED_ROOTS")
+        .or_else(|_| std::env::var("CCM_MCP_REQUIRE_ALLOWED_ROOTS"))
+        .map(|val| matches!(val.to_lowercase().as_str(), "1" | "true" | "yes"))
+        .unwrap_or(true);
     let allowed_roots = std::env::var("CCM_ALLOWED_ROOTS").ok();
-    let allowed_roots_ok = allowed_roots_check(&root, strict_roots, allowed_roots.as_deref());
+    // MCP ile aynı davranış: CCM_ALLOWED_ROOTS boşsa CCM_PROJECT_ROOT zımni
+    // izinli kök olarak kabul edilir.
+    let effective_allowed_roots = allowed_roots
+        .clone()
+        .filter(|value| !value.trim().is_empty())
+        .or_else(|| std::env::var("CCM_PROJECT_ROOT").ok());
+    let allowed_roots_ok =
+        allowed_roots_check(&root, strict_roots, effective_allowed_roots.as_deref());
     let provider = std::env::var("CCM_EMBEDDING_PROVIDER")
         .or_else(|_| std::env::var("EMBEDDING_PROVIDER"))
         .unwrap_or_else(|_| "local".to_string());

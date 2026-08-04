@@ -124,17 +124,4 @@ impl GitIntegrator {
 
         Ok(changed.into_iter().collect())
     }
-
-    /// Experimental: Get changed line ranges (Hunks) for a file.
-    /// Useful for surgical re-indexing (future optimization).
-    pub fn get_changed_ranges(&self, _file_path: &Path) -> Result<Vec<(usize, usize)>> {
-        // This requires diffing logic against HEAD.
-        // For Phase 2.0, we just return "whole file" essentially or skip this complexity
-        // until we truly need sub-file incrementalism.
-        // The Plan says "Hunk Mapping". Let's implement basic diff against HEAD.
-
-        // Simplified: If we can't get diff easily, return empty (meaning "whole file").
-        // Proper implementation is complex with libgit2 diffing.
-        Ok(Vec::new())
-    }
 }
