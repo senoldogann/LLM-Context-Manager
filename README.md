@@ -10,7 +10,7 @@ English | [Turkce](./README.tr.md)
 
 > Bridge the gap between your codebase and your AI editor. CCM transforms static source code into a dynamic, queryable Knowledge Graph, enabling AI agents to navigate, understand, and reason about your project with surgical precision.
 
-> **Current release: v0.2.1.** This patch prevents UTF-8 chunking panics, repairs cross-file class/import usage edges, and hardens first-run installation.
+> **Current release: v0.3.1.** Fixes vector deletion prefix scope, strict MCP allowlist defaults, and incremental manifest sync.
 
 [![Rust](https://img.shields.io/badge/Built%20With-Rust-orange.svg?style=flat-square&logo=rust)](https://www.rust-lang.org/)
 [![MCP Ready](https://img.shields.io/badge/MCP-Compatible-blue.svg?style=flat-square&logo=google-cloud)](https://modelcontextprotocol.io/)
