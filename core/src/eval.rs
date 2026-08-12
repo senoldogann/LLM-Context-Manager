@@ -1017,7 +1017,18 @@ async fn search_code_hybrid_with_policy(
     let seed_limit = limit.saturating_mul(seed_multiplier).max(limit);
     let hits = store.search(query, seed_limit).await?;
     if hits.is_empty() {
-        return Ok(Vec::new());
+        // Production ile aynı: vector sonucu yoksa graph üzerinden lexical fallback.
+        let graph = CodeGraph::from_file(&graph_path.to_string_lossy())?;
+        let mut fallback = Vec::new();
+        for node in graph.graph.node_weights() {
+            let file_path = crate::engine::extract_file_path(&node.id);
+            if node.name.contains(query) || file_path.contains(query) {
+                fallback.push(node.id.clone());
+            }
+        }
+        fallback.sort();
+        fallback.truncate(limit);
+        return Ok(fallback);
     }
 
     let graph = CodeGraph::from_file(&graph_path.to_string_lossy())?;
@@ -1045,10 +1056,19 @@ async fn search_code_hybrid_with_policy(
         if seen.insert(id.clone()) {
             let graph_score = graph_scores.get(id).copied().unwrap_or(0.0);
             let semantic_score = semantic_scores.get(id).copied().unwrap_or(0.0);
-            let combined = scorer.combine(graph_score, semantic_score, 0.0, 0.0);
+            let spatial_score = graph
+                .find_node_by_id(id)
+                .map(|node| {
+                    crate::engine::repo_priority_score(&crate::engine::extract_file_path(&node.id))
+                })
+                .unwrap_or(0.0);
+            let combined = scorer.combine(graph_score, semantic_score, spatial_score, 0.0);
             candidates.push((id.clone(), combined));
         }
     }
+
+    // Production ile aynı filtre: düşük sinyalli adaylar elenir (graph sinyali korunur).
+    candidates.retain(|(_, combined)| *combined >= scorer.min_score);
 
     candidates.sort_by(|a, b| {
         b.1.partial_cmp(&a.1)

@@ -24,6 +24,8 @@ const SUPPORTED_PROTOCOL_VERSIONS: [&str; 3] =
 pub struct ServerState {
     pub default_engine: RwLock<Arc<RetrievalEngine>>,
     pub engines: RwLock<EngineCache>,
+    index_locks:
+        std::sync::Mutex<std::collections::HashMap<String, std::sync::Arc<tokio::sync::Mutex<()>>>>,
     default_project_root: Option<PathBuf>,
     allowed_roots: Vec<PathBuf>,
     require_allowed_roots: bool,
@@ -163,6 +165,7 @@ impl ServerState {
         Ok(Self {
             default_engine: RwLock::new(default_engine),
             engines: RwLock::new(EngineCache::new(cache_size)),
+            index_locks: std::sync::Mutex::new(std::collections::HashMap::new()),
             default_project_root,
             allowed_roots,
             require_allowed_roots,
@@ -222,16 +225,32 @@ impl ServerState {
                 "Index not found. Triggering lazy indexing."
             );
 
-            // LAZY INDEXING: Incremental index for this request
-            match ccm_core::update_index(&cache_key, Some(&db_path)).await {
-                Ok(stats) => {
-                    tracing::info!(nodes = stats.nodes_created, "Lazy indexing complete");
-                }
-                Err(e) => {
-                    return Err(anyhow::anyhow!(
-                        "Failed to auto-index project: {}. Please fix the project path or permissions.",
-                        e
-                    ));
+            // Aynı proje için eşzamanlı index çağrılarını serileştir (M6).
+            let lock = {
+                let mut locks = self.index_locks.lock().unwrap();
+                locks
+                    .entry(cache_key.clone())
+                    .or_insert_with(|| std::sync::Arc::new(tokio::sync::Mutex::new(())))
+                    .clone()
+            };
+            let _guard = lock.lock().await;
+
+            // Kilidi aldıktan sonra yeniden kontrol: başka bir çağrı index'i kurmuş olabilir.
+            if !Path::new(&db_path).exists()
+                || !Path::new(&graph_path).is_file()
+                || !Path::new(&manifest_path).is_file()
+            {
+                // LAZY INDEXING: Incremental index for this request
+                match ccm_core::update_index(&cache_key, Some(&db_path)).await {
+                    Ok(stats) => {
+                        tracing::info!(nodes = stats.nodes_created, "Lazy indexing complete");
+                    }
+                    Err(e) => {
+                        return Err(anyhow::anyhow!(
+                            "Failed to auto-index project: {}. Please fix the project path or permissions.",
+                            e
+                        ));
+                    }
                 }
             }
         }

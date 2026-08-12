@@ -66,9 +66,29 @@ async fn main() -> Result<()> {
             }
             Err(e) => {
                 tracing::error!(error = %e, "Error processing request");
-                // Send JSON-RPC error response
-                let error_response =
-                    protocol::create_error_response(None, -32603, "Internal error");
+                // JSON-RPC 2.0: hata yanıtı istek id'sini korumalıdır; id parse
+                // edilemiyorsa (örn. batch) null kullanılır. -32602 invalid params,
+                // -32603 internal error ayrımı yapılır.
+                let request_id = serde_json::from_str::<serde_json::Value>(trimmed)
+                    .ok()
+                    .and_then(|value| value.get("id").cloned());
+                let code = if e.to_string().contains("Missing")
+                    || e.to_string().contains("invalid")
+                    || e.to_string().contains("Invalid")
+                {
+                    -32602
+                } else {
+                    -32603
+                };
+                let error_response = protocol::create_error_response(
+                    request_id,
+                    code,
+                    if code == -32602 {
+                        "Invalid params"
+                    } else {
+                        "Internal error"
+                    },
+                );
                 let response_str = serde_json::to_string(&error_response)?;
                 stdout.write_all(response_str.as_bytes()).await?;
                 stdout.write_all(b"\n").await?;

@@ -1341,7 +1341,7 @@ pub(crate) fn build_embedding_text(node: &CodeNode) -> String {
     )
 }
 
-fn repo_priority_score(file_path: &str) -> f32 {
+pub(crate) fn repo_priority_score(file_path: &str) -> f32 {
     let normalized = file_path.to_ascii_lowercase();
     let mut score = 0.5_f32;
 
