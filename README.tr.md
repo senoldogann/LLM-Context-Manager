@@ -10,10 +10,10 @@
 
 > CCM, kod tabanınız ile yapay zeka editörünüz arasındaki boşluğu kapatır. Statik kaynak kodu dinamik ve sorgulanabilir bir bilgi grafına dönüştürür; böylece ajanlar projenizi daha doğru gezebilir, anlayabilir ve akıl yürütebilir.
 
-> **Güncel sürüm: v0.3.3.** v0.3.2 üzerine agentic retrieval polish: token
-> güvenli metadata-first MCP çıktısı, promote edilen policy'nin runtime'a
-> bağlanması, eval/production ranking hizalaması ve sağlamlaştırılmış CI
-> (CodeQL Rust, fixture determinism).
+> **Güncel sürüm: v0.3.4.** v0.3.3 üzerine yama: offline semantic evaluation
+> gate artık dört sentetik sorgu tipini de (`search_code`, `get_context`,
+> `read_graph`, `predict_context`) skorluyor. Önceden `predict_context`
+> atlanıyordu ve cross-repo gate eksik kalıyordu.
 
 [![Rust](https://img.shields.io/badge/Built%20With-Rust-orange.svg?style=flat-square&logo=rust)](https://www.rust-lang.org/)
 [![MCP Ready](https://img.shields.io/badge/MCP-Compatible-blue.svg?style=flat-square&logo=google-cloud)](https://modelcontextprotocol.io/)

@@ -4,9 +4,11 @@
 
 **Node.js wrapper for Cognitive Codebase Matrix (CCM)** - Enables AI agents to understand and navigate your codebase with surgical precision.
 
-**v0.3.4** ships the complete v0.3.2/v0.3.3 feature set: self-improving
-retrieval policy layer (`ccm-cli learn`), metadata-first MCP output (token-safe),
-promoted policy wired into runtime, and hardened CI.
+**v0.3.4** ships the complete v0.3.2/v0.3.3 feature set (self-improving
+retrieval policy layer via `ccm-cli learn`, metadata-first MCP output,
+promoted policy wired into runtime, hardened CI) plus the v0.3.4 patch that
+completes the offline semantic evaluation gate across all four synthetic query
+types.
 
 [![npm](https://img.shields.io/npm/v/@senoldogann/context-manager?color=orange)](https://www.npmjs.com/package/@senoldogann/context-manager)
 [![MCP](https://img.shields.io/badge/MCP-Compatible-blue)](https://modelcontextprotocol.io/)
@@ -247,7 +249,9 @@ Enable `CCM_EMBED_DATA_FILES=1` to include them in semantic search.
 ## 📝 Changelog
 
 ### v0.3.4
-- ✅ npm README now documents the full v0.3.2/v0.3.3 feature surface
+- ✅ Offline semantic gate now scores all four query types (`search_code`,
+  `get_context`, `read_graph`, `predict_context`); no more skipped tasks
+- ✅ Rust workspace bumped to 0.3.4
 
 ### v0.3.3
 - ✅ Metadata-first MCP output: `include_body`/`max_chars` opt-in snippets, server-side limit cap

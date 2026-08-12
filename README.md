@@ -10,10 +10,10 @@ English | [Turkce](./README.tr.md)
 
 > Bridge the gap between your codebase and your AI editor. CCM transforms static source code into a dynamic, queryable Knowledge Graph, enabling AI agents to navigate, understand, and reason about your project with surgical precision.
 
-> **Current release: v0.3.3.** Agentic retrieval polish on top of v0.3.2:
-> metadata-first MCP output (token-safe), promoted policy wired into runtime,
-> aligned eval/production ranking, and hardened CI (CodeQL Rust, fixture
-> determinism).
+> **Current release: v0.3.4.** Patch on top of v0.3.3: the offline semantic
+> evaluation gate now scores all four synthetic query types (`search_code`,
+> `get_context`, `read_graph`, `predict_context`). Previously `predict_context`
+> was skipped, leaving the cross-repo gate incomplete.
 
 [![Rust](https://img.shields.io/badge/Built%20With-Rust-orange.svg?style=flat-square&logo=rust)](https://www.rust-lang.org/)
 [![MCP Ready](https://img.shields.io/badge/MCP-Compatible-blue.svg?style=flat-square&logo=google-cloud)](https://modelcontextprotocol.io/)

@@ -1,5 +1,16 @@
 # Release Notes
 
+## v0.3.4 - Offline Semantic Gate Completeness
+
+- The default evaluator (`evaluate_with_mode`) now scores `predict_context`
+  queries instead of skipping them as "Unsupported query type". The synthetic
+  cross-repo fixture (180 tasks, 4 query types) now gates with zero skips;
+  `predict_context` passes 30/30 and the overall pass rate is 92.2%.
+- Shared `predict_context_suggestions` helper deduplicates the engine-call logic
+  between `evaluate_with_mode` (baseline) and `evaluate_policy` (learned
+  policy) paths.
+- Rust workspace version bumped 0.3.3 → 0.3.4.
+
 ## v0.3.3 - Agentic Retrieval Polish
 
 - MCP tools are now metadata-first: `include_body`/`max_chars` opt-in body
