@@ -59,13 +59,9 @@ pub async fn run_query(query: &str, project_path: &str) -> Result<Vec<ContextSug
         ));
     }
 
-    // Load graph (for simplicity in this prototype refactor we create new,
-    // but ideally we load from disk)
     let graph_path = std::path::Path::new(project_path).join("data/ccm_graph.json");
 
     let graph = if graph_path.exists() {
-        // Load graph logic would go here
-        // For now, we initialize empty and warn, as full persistence refactor is next
         tracing::debug!("Graph file found at {}, loading...", graph_path.display());
         CodeGraph::from_file(&graph_path.to_string_lossy())?
     } else {

@@ -6,7 +6,7 @@
 
 English | [Turkce](./README.tr.md)
 
-> **🧠 The Neural Backbone for Autonomous AI Agents**
+> **🧠 The Codebase Graph Backbone for AI Agents**
 
 > Bridge the gap between your codebase and your AI editor. CCM transforms static source code into a dynamic, queryable Knowledge Graph, enabling AI agents to navigate, understand, and reason about your project with surgical precision.
 
@@ -33,7 +33,8 @@ Modern AI coding assistants (Claude, Cursor, Windsurf) are powerful but suffer f
 | **Hallucination** | Guesses dependencies without structure |
 | **Lost Context** | Vector search finds *similar words*, not *connected logic* |
 
-CCM turns your AI from a *text predictor* into a **Senior Architect**.
+CCM turns raw code into a queryable graph so agents answer *connected logic*
+questions instead of guessing from similar words.
 
 ### The "Agent-First" Difference
 

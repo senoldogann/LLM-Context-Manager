@@ -1,61 +1,109 @@
-# Bilişsel Kod Matrisi (CCM): Sınırsız Bağlam İçin Teorik Temeller
+# Bilişsel Kod Matrisi (CCM): Teorik Temeller ve Gerçekleşen Mimari
+
+> Bu belge, CCM'nin tasarım hedeflerini **mevcut implementasyonla** birlikte anlatır.
+> "İddia" olarak etiketlenen bölümler hedeftir; "Gerçek" olarak etiketlenenler
+> v0.3.3'te çalışan davranıştır. Ayrım, dokümantasyonun kodun önüne geçmemesi
+> için bilinçlidir.
 
 ## 1. Giriş: Bağlam Penceresi Paradoksu
 
-Büyük Dil Modelleri (LLM), yazılım mühendisliğinde devrim yaratmış olsa da, temel bir kısıtlamayla karşı karşıyadır: **Bağlam Penceresi (Context Window)**. GPT-4 veya Gemini 1.5 gibi modeller milyonlarca token işleyebilse de, bu kapasite "sonsuz" değildir ve daha önemlisi, "etkin" değildir. 
+Büyük Dil Modelleri (LLM) güçlüdür ancak bağlam pencereleri sınırlıdır ve
+"ortada kaybolma" (lost-in-the-middle) etkisi geri getirme kalitesini düşürür.
+CCM, bağlamı genişletmek yerine **neyin bağlama gireceğini** yöneten bir ara
+katmandır: statik kod analizi (AST + cross-reference graph) ve anlamsal geri
+getirim (embeddings + hybrid ranking).
 
-### 1.1 Sorun Tanımı: "Ortada Kaybolma" (Lost-in-the-Middle)
-Araştırmalar (Liu et al., 2023), LLM'lerin bağlam penceresinin ortasında yer alan bilgileri geri getirmede başarısız olduğunu göstermektedir. Kod tabanları lineer metinler değil, karmaşık bağlantılara sahip hiper-yapılardır. Lineer bir bağlam penceresine 100 dosyalık bir projeyi "flat" (düz) metin olarak doldurmak, modelin dikkat mekanizmasını (attention mechanism) boğmakta ve halüsinasyonlara yol açmaktadır.
+## 2. Gerçekleşen Mimari
 
-### 1.2 Çözüm Önerisi: Bilişsel Kod Matrisi (CCM)
-CCM, LLM'in bağlam penceresini "genişletmek" yerine, bu pencereye "nein gireceğini" akıllıca yöneten bir ara katmandır. Bu katman, biyolojik bilişsel süreçleri taklit eder:
-1.  **Uzun Süreli Bellek (LTM):** Kod tabanının statik analizi (Graph).
-2.  **Çalışma Belleği (Working Memory):** O anki görevle ilgili aktif düğümler.
-3.  **Depisodik Bellek:** Kullanıcı etkileşimleri ve geçmiş kararlar.
+### 2.1 Kod Temsili: AST + Cross-Reference Graph (CPG değil)
 
-## 2. CCM'in Üç Temel Sütunu
+**İddia (hedef):** Kod Property Graphs (AST + CFG + PDG) tam türetmek.
 
-### 2.1 Kod Özellik Çizgeleri (Code Property Graphs - CPG)
-Mevcut RAG (Retrieval-Augmented Generation) sistemleri kodu "chunk"lara bölüp vektör veritabanlarına atar. Bu yaklaşım, kodun yapısal bütünlüğünü (syntax ve semantics) yok eder. 
+**Gerçek (v0.3.3):** CCM, tree-sitter ile her dilin **AST**'sini çıkarır ve
+`petgraph` üzerinde **cross-reference graph** kurar. Grafik düğümleri
+(Function/Method/Class/Struct/Module/File) ve kenarları şunlardır:
 
-CCM, kodu **CPG** olarak saklar. CPG, üç grafiğin birleşimidir:
-*   **AST (Abstract Syntax Tree):** Kodun sözdizimsel yapısı.
-*   **CFG (Control Flow Graph):** Kodun çalışma sırası.
-*   **PDG (Program Dependence Graph):** Veri ve değişkenlerin bağımlılıkları.
+- `Calls` — çağrı ilişkisi (name-match tabanlı, Phase 1'de scope-resolved
+  çözümlemeye geçiş planlıdır)
+- `Imports` — modül/dosya importları
+- `Contains` — dosya → sembol hiyerarşisi
+- `Inherits` — sınıf kalıtımı
+- `Reads` / `Writes` — sembol okuma/yazma ilişkileri (heuristic)
 
-Bu sayede, "Bu değişken nerede tanımlandı?" sorusu, vektör benzerliğiyle değil, deterministik bir grafik sorgusuyla (Graph Traversal) %100 doğrulukla cevaplanır.
+CFG ve PDG **mevcut değildir**; veri/control-flow bağımlılığı iddiası
+yapılmaz. "Bu değişken nerede tanımlandı?" gibi sorular her zaman %100
+deterministik cevaplanmaz; kenarların bir kısmı heuristic'tir ve
+`reason` alanında kaynağı belirtilir.
 
-### 2.2 Ajan Tabanlı Bellek (Agentic Memory)
-İşletim sistemlerinin bellek yönetimi (paging, swapping) prensiplerinden ilham alan bu katman, LLM'in bağlam penceresini bir "RAM" gibi kullanır.
-*   **Letta/MemGPT Yaklaşımı:** LLM, kendisi bir "Memory Manager" ajanı gibi davranarak hangi bilgilerin bağlamda kalacağına, hangilerinin diske (Vektör/Graph DB) taşınacağına karar verir.
-*   **Öz-Düzenleme:** Sistem, kullanıcının odaklandığı dosyaya göre grafikteki ilgili düğümleri "pre-fetch" (önceden getirme) yapar.
+### 2.2 Bellek Katmanları
+
+**İddia:** Uzun süreli / çalışma / episodik bellek ayrımı.
+
+**Gerçek:** İki kalıcı katman vardır:
+
+- **Uzun süreli:** `data/ccm_graph.json` (graph) + LanceDB vektör deposu
+  (`data/ccm_db`) + incremental manifest.
+- **Çalışma belleği:** `get_context` / `predict_context` ile imleç etrafındaki
+  aktif düğümler.
+
+"Episodik bellek" (kullanıcı etkileşimi geçmişi) **henüz yoktur**; v0.3.2'de
+eklenen `CCM_TRAJECTORY_LOG` (observable retrieval event'leri) bu yönde ilk
+adımdır ve Phase 3'te gerçek feedback'e bağlanması planlanır.
 
 ### 2.3 Spekülatif Geri Getirim (Speculative Retrieval)
-Kullanıcı bir soru sormadan önce, sistem kullanıcının imlecini (cursor), son değiştirdiği dosyaları ve açık olan sekmeleri izleyerek niyetini tahmin eder.
-*   **Öngörü:** Kullanıcı `user_controller.py` dosyasında `login` fonksiyonunu düzenliyorsa, sistem arka planda `auth_service.py` ve `user_model.py` dosyalarını hazırlar.
-*   **Düşük Gecikme:** Kullanıcı sorusunu sorduğunda, bağlam çoktan hazırlanmıştır.
 
-## 3. Mimari Bileşenler ve Akış
+**İddia:** IDE imleci/sekmeleri izleyip arka planda bağlam hazırlama.
+
+**Gerçek:** VS Code extension, daemon, gRPC veya cursor/sekmeleri izleme
+**mevcut değildir**. Bunun yerine MCP stdio üzerinden isteğe bağlı
+`get_context(file, line)` çağrısı, imleç pozisyonuna göre mevcut fonksiyonu ve
+komşularını döndürür (isteğe bağlı prefetch değil, senkron retrieval).
+
+## 3. Gerçek Bileşenler ve Akış
 
 ```mermaid
 graph TD
-    User[Developer] -->|IDE Action/Prompt| CCM_Client[VS Code Extension]
-    CCM_Client -->|gRPC| CCM_Core[CCM Daemon (Rust)]
-    
-    subgraph "CCM Core Engine"
-        Dispatcher --> SpecRet[Speculative Retrieval]
-        Dispatcher --> GraphEngine[Graph Engine (Petgraph)]
-        Dispatcher --> VectorEngine[Vector Store (LanceDB)]
-        
-        SpecRet -->|Cursor Context| Predictor[Intent Predictor]
-        GraphEngine <-->|Read/Write| Storage[Embedded DB (Sled)]
-        
-        Predictor -->|Prefetch Hints| MemoryMgr[Agentic Memory Manager]
-        MemoryMgr -->|Context Optimization| LLM_Interface[LLM Context Builder]
-    end
-    
-    LLM_Interface -->|Optimized Context| External_LLM[GPT-4o / Claude 3.5]
+    Agent[AI Agent / MCP Host] -->|JSON-RPC stdio| MCP[MCP Server ccm-mcp]
+    MCP -->|tools/call| Tools[9 MCP Tool]
+    Tools --> Engine[RetrievalEngine]
+    Engine --> Graph[CodeGraph petgraph]
+    Engine --> Vector[LanceDB code_vectors]
+    Engine --> Policy[RetrievalPolicy store]
+    CLI[ccm-cli index/eval/learn] -->|update_index| Graph
+    CLI -->|evaluate_policy| Vector
 ```
 
-## 4. Sonuç ve Gelecek Vizyonu
-CCM, kodlama asistanlarını "otomatik tamamlama" araçlarından "bilişsel ortaklara" dönüştürmeyi hedefler. Sadece kodu değil, kodun *anlamını* ve *ilişkilerini* bilen bir sistem, yazılım mühendisliğinin geleceğidir.
+Dağıtım: `ccm-cli` (CLI), `ccm-mcp` (MCP stdio sunucusu), `ccm-core`
+(paylaşılan kütüphane), npm wrapper (binary indirme + host kurulumu).
+
+## 4. Retrieval ve Öğrenme
+
+- **Hybrid ranking:** `score = w_g*graph + w_s*semantic + w_spatial*spatial +
+  w_r*recency`; ağırlıklar `RetrievalPolicy`'de versioned'dır (baseline =
+  üretim varsayılanları).
+- **Self-improvement (Phase 1):** `ccm-cli learn {fixtures,optimize,report}`
+  deterministik sentetik corpus üzerinde policy adaylarını train'de optimize
+  eder, holdout'ta promotion gate'ten geçirir. Evaluator optimizasyon sırasında
+  dokunulmaz; `Rejected` bilimsel sonuçtur, CI kırmızısı değildir.
+- **Kanıt sınırı:** Şu ana kadarki en güçlü kanıt *yapısal* golden task'lardır
+  (deterministik). Gerçek anlamsal (embedder) geri getirim kalitesi Phase 2'de
+  gerçek repo'larla ölçülecek; bu belge o tamamlanana kadar anlamsal başarı
+  iddiası taşımaz.
+
+## 5. İddia vs Gerçek Özeti
+
+| İddia | Gerçek (v0.3.3) |
+|---|---|
+| CPG (AST+CFG+PDG) | AST + cross-reference graph (Calls/Imports/Contains/Inherits/Reads/Writes) |
+| Daemon + gRPC + VS Code extension | CLI + MCP stdio server |
+| Spekülatif cursor izleme | Senkron `get_context(file, line)` |
+| Episodik bellek | Trajectory log (v0.3.2+, Phase 3'te feedback'e bağlanacak) |
+| Hybrid retrieval | Evet, policy versioned |
+| Self-improvement | Phase 1 proof-of-mechanism; gerçek repo kanıtı Phase 2'de |
+
+## 6. Sonuç
+
+CCM, kod tabanını sorgulanabilir bir grafiğe dönüştürüp ajanlara token-verimli,
+deterministik ve izlenebilir bağlam sunmayı hedefler. Bu doküman, hedef ile
+implementasyon arasındaki makası kapatmak için "iddia" ve "gerçek" ayrımını
+açık tutar; her yeni sürümde bu tablo güncellenmelidir.

@@ -8,11 +8,11 @@
 
 > **🧠 Otonom Yapay Zeka Ajanlari Icin Norel Omurga**
 
-> CCM, kod tabaniniz ile yapay zeka editorunuz arasindaki boslugu kapatir. Statik kaynak kodu dinamik ve sorgulanabilir bir bilgi grafina donusturur; boylece ajanlar projenizi daha dogru gezebilir, anlayabilir ve akil yurutme yapabilir.
+> CCM, kod tabanınız ile yapay zeka editörünüz arasındaki boşluğu kapatır. Statik kaynak kodu dinamik ve sorgulanabilir bir bilgi grafına dönüştürür; böylece ajanlar projenizi daha doğru gezebilir, anlayabilir ve akıl yürütebilir.
 
-> **Guncel surum: v0.3.3.** v0.3.2 uzerine agentic retrieval polish: token
-> guvenli metadata-first MCP ciktisi, promote edilen policy'nin runtime'a
-> baglanmasi, eval/production ranking hizalamasi ve saglamlastirilmis CI
+> **Güncel sürüm: v0.3.3.** v0.3.2 üzerine agentic retrieval polish: token
+> güvenli metadata-first MCP çıktısı, promote edilen policy'nin runtime'a
+> bağlanması, eval/production ranking hizalaması ve sağlamlaştırılmış CI
 > (CodeQL Rust, fixture determinism).
 
 [![Rust](https://img.shields.io/badge/Built%20With-Rust-orange.svg?style=flat-square&logo=rust)](https://www.rust-lang.org/)
@@ -47,16 +47,16 @@ CCM, ham kod yiginlari vermek yerine **AI-Optimized Context** uretir:
 
 ## Temel Ozellikler
 
-### Bagli Zeka (Graph Navigator)
-- **Iki Asamali Indexleme** - Fonksiyon tanimlarini cagri noktalarina baglar
-- **Arttirmali Guncelleme** - Ilk calismadan sonra yalnizca eklenen, degisen, yeniden adlandirilan veya silinen dosyalari isler
-- **Derin Gezinti** - "Bunu kim cagiriyor?" gibi sorulara daha dogru cevap verir
+### Bağlı Zeka (Graph Navigator)
+- **İki Aşamalı İndeksleme** - Fonksiyon tanımlarını çağrı noktalarına bağlar
+- **Artırmalı Güncelleme** - İlk çalışmadan sonra yalnızca eklenen, değişen, yeniden adlandırılan veya silinen dosyaları işler
+- **Derin Gezinti** - "Bunu kim çağırıyor?" gibi sorulara daha doğru cevap verir
 
-### Yuksek Performansli Cekirdek
-- **Rust Tabanli** - Hizli indexleme ve sorgulama
-- **Toplu Embedding** - Buyuk kod bloklarini kisa surede isler
-- **LanceDB** - Dusuk gecikmeli vektor depolama
-- **Tree-sitter** - Rust, Python, TypeScript, Go, Java, Kotlin, C#, C, C++, Ruby, PHP ve Swift icin saglam AST analizi
+### Yüksek Performanslı Çekirdek
+- **Rust Tabanlı** - Hızlı indeksleme ve sorgulama
+- **Toplu Embedding** - Büyük kod bloklarını kısa sürede işler
+- **LanceDB** - Düşük gecikmeli vektör depolama
+- **Tree-sitter** - Rust, Python, TypeScript, Go, Java, Kotlin, C#, C, C++, Ruby, PHP ve Swift için sağlam AST analizi
 
 ### Production Sertlestirme
 - **Binary Checksums** - Release artifact'lari `checksums.txt` ile dogrulanir
@@ -103,7 +103,7 @@ Beklenen sonuc:
 
 | Host | Durum | Kurulum Yolu |
 |------|-------|--------------|
-| Codex | Destekleniyor | `~/.codex/config.toml` atomik olarak guncellenir |
+| Codex | Destekleniyor | `~/.codex/config.toml` atomik olarak güncellenir |
 | Cursor | Destekleniyor | `~/.cursor/mcp.json` |
 | Claude Desktop | Destekleniyor | Yerel desktop config |
 | Antigravity | Destekleniyor | Yerel host config |
@@ -173,7 +173,7 @@ CCM_MCP_DEBUG=0
 # Opsiyonel: embedding'i kapat
 CCM_DISABLE_EMBEDDER=0
 
-# Opsiyonel: md/json/yaml dosyalarini vektor aramaya dahil et
+# Opsiyonel: md/json/yaml dosyalarını vektör aramaya dahil et
 CCM_EMBED_DATA_FILES=0
 
 # Binary checksum dogrulama (0 = zorunlu, 1 = bypass)
@@ -186,7 +186,7 @@ CCM_DOWNLOAD_ATTEMPTS=3
 
 Gelismis ayarlar:
 - `CCM_PROJECT_ROOT`, npm wrapper ve MCP fallback engine icin varsayilan proje kokunu sabitler.
-- `CCM_DB_PATH`, varsayilan MCP vektor veritabani konumunu degistirir.
+- `CCM_DB_PATH`, varsayılan MCP vektör veritabanı konumunu değiştirir.
 - Chunking, batch size, hibrit agirliklar ve `OPENAI_API_KEY`, `CCM_SKIP_CHECKSUM`, `CCM_MCP_REQUIRE_ALLOWED_ROOTS`, `CCM_EMBED_DATA`, `EMBEDDING_DISABLED` gibi uyumluluk alias'lari icin `.env.example` dosyasina bakin.
 - Hibrit skor agirliklari icin [`docs/hybrid-ranking.md`](./docs/hybrid-ranking.md) dosyasini kullanin.
 
@@ -236,7 +236,7 @@ ccm-cli eval --tasks eval/golden_tasks.v3.ccm.json
 
 ### Arttirmali indexleme davranisi
 
-Ilk `index` tum projeyi indeksler. Sonraki `index_project` veya `index --watch` calismalari dosya manifestini karsilastirir; yalnizca yeni ya da degisen dosyalari gunceller ve silinen dosyalarin node'larini kaldirir. Hicbir sey degismediyse vektor veritabani bastan olusturulmaz.
+İlk `index` tüm projeyi indeksler. Sonraki `index_project` veya `index --watch` çalışmaları dosya manifestini karşılaştırır; yalnızca yeni ya da değişen dosyaları günceller ve silinen dosyaların node'larını kaldırır. Hiçbir şey değişmediyse vektör veritabanı baştan oluşturulmaz.
 
 ---
 
@@ -334,7 +334,7 @@ Lokal source build icin `cargo build --release` komutu halen makinenizde `protoc
 - `CCM_ALLOWED_ROOTS` icine proje kokunu ekleyin
 - Gercekten gerekiyorsa `CCM_REQUIRE_ALLOWED_ROOTS=0` kullanin (erisim yine baslangic proje kokuyle sinirli kalir)
 
-### Buyuk veya binary dosyalar atlanıyor
+### Büyük veya binary dosyalar atlanıyor
 - Gerekirse `CCM_MAX_FILE_BYTES` degerini artirin
 
 ### Data dosyalari search'te gorunmuyor

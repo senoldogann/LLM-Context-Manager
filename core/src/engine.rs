@@ -712,7 +712,9 @@ impl RetrievalEngine {
             }
             let rel = match edge.weight() {
                 crate::graph::EdgeType::Calls => "Calls",
+                crate::graph::EdgeType::CallAmbiguous => "Calls (ambiguous name match)",
                 crate::graph::EdgeType::Imports => "Imports",
+                crate::graph::EdgeType::ImportAmbiguous => "Imports (ambiguous name match)",
                 crate::graph::EdgeType::Defines => "Defines",
                 crate::graph::EdgeType::Contains => "Contains",
                 crate::graph::EdgeType::Inherits => "Inherits",

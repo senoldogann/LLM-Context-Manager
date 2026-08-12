@@ -27,11 +27,16 @@ pub struct CodeNode {
     pub end_line: usize,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
 pub enum EdgeType {
     Calls,
+    /// Aynı isimde birden çok hedef olduğunda üretilen belirsiz çağrı kenarı.
+    /// Name-match tabanlıdır; scope-resolved doğrulama yapılmamıştır (Phase 1).
+    CallAmbiguous,
     Defines,
     Imports,
+    /// Birden çok aynı isimli hedef olduğunda üretilen belirsiz import kenarı.
+    ImportAmbiguous,
     Contains,
     Inherits,
     Reads,
@@ -122,7 +127,7 @@ impl CodeGraph {
             })
             .collect();
 
-        let mut references: HashSet<(NodeIndex, NodeIndex, bool)> = HashSet::new();
+        let mut references: HashSet<(NodeIndex, NodeIndex, EdgeType)> = HashSet::new();
         for source_idx in source_indices {
             let source = &self.graph[source_idx];
             let source_file = graph_node_file_path(&source.id);
@@ -138,14 +143,21 @@ impl CodeGraph {
                         graph_node_file_path(&self.graph[*target_idx].id) == source_file
                     })
                     .collect();
-                let resolved_targets: Vec<_> = if same_file_targets.is_empty() {
+                let (resolved_targets, ambiguous): (Vec<_>, bool) = if same_file_targets.is_empty()
+                {
                     if targets.len() == 1 {
-                        targets.clone()
+                        (targets.clone(), false)
                     } else {
                         continue;
                     }
+                } else if same_file_targets.len() == 1 {
+                    (same_file_targets, false)
                 } else {
-                    same_file_targets
+                    // Aynı dosyada aynı isimde birden çok hedef (overload,
+                    // shadowing): hangisinin kastedildiği name-match ile
+                    // bilinemez. Yanlış kenar üretmek yerine belirsiz kenar
+                    // üret ve görünür kıl.
+                    (same_file_targets, true)
                 };
 
                 for target_idx in resolved_targets {
@@ -154,35 +166,31 @@ impl CodeGraph {
                     }
                     let target = &self.graph[target_idx];
                     let edge_type = if call_like {
-                        EdgeType::Calls
+                        if ambiguous {
+                            EdgeType::CallAmbiguous
+                        } else {
+                            EdgeType::Calls
+                        }
                     } else if matches!(
                         target.node_type,
                         NodeType::Class | NodeType::Struct | NodeType::Module
                     ) {
-                        EdgeType::Imports
+                        if ambiguous {
+                            EdgeType::ImportAmbiguous
+                        } else {
+                            EdgeType::Imports
+                        }
                     } else {
                         continue;
                     };
-                    references.insert((
-                        source_idx,
-                        target_idx,
-                        matches!(edge_type, EdgeType::Calls),
-                    ));
+                    references.insert((source_idx, target_idx, edge_type));
                 }
             }
         }
 
         let count = references.len();
-        for (source, target, is_call) in references {
-            self.add_edge(
-                source,
-                target,
-                if is_call {
-                    EdgeType::Calls
-                } else {
-                    EdgeType::Imports
-                },
-            );
+        for (source, target, edge_type) in references {
+            self.add_edge(source, target, edge_type);
         }
         count
     }
@@ -811,6 +819,69 @@ mod tests {
                 .count(),
             0
         );
+    }
+
+    #[test]
+    fn rebuild_reference_edges_marks_same_file_overloads_ambiguous() {
+        use petgraph::visit::EdgeRef;
+        let mut graph = CodeGraph::new();
+        let file_idx = graph.add_node(CodeNode {
+            id: "./src/a.rs".into(),
+            node_type: NodeType::File,
+            name: "./src/a.rs".into(),
+            content: String::new().into(),
+            start_line: 1,
+            end_line: 10,
+        });
+        let caller_idx = graph.add_node(CodeNode {
+            id: "./src/a.rs:function_item:1:0".into(),
+            node_type: NodeType::Function,
+            name: "run".into(),
+            content: "fn run() { helper(); }".into(),
+            start_line: 1,
+            end_line: 3,
+        });
+        let helper_a = graph.add_node(CodeNode {
+            id: "./src/a.rs:function_item:4:0".into(),
+            node_type: NodeType::Function,
+            name: "helper".into(),
+            content: "fn helper() {}".into(),
+            start_line: 4,
+            end_line: 5,
+        });
+        let helper_b = graph.add_node(CodeNode {
+            id: "./src/a.rs:function_item:6:0".into(),
+            node_type: NodeType::Function,
+            name: "helper".into(),
+            content: "fn helper(x: u32) {}".into(),
+            start_line: 6,
+            end_line: 7,
+        });
+        graph.add_edge(file_idx, caller_idx, EdgeType::Contains);
+        graph.add_edge(file_idx, helper_a, EdgeType::Contains);
+        graph.add_edge(file_idx, helper_b, EdgeType::Contains);
+
+        graph.rebuild_reference_edges();
+
+        let mut ambiguous = 0usize;
+        let mut from_caller = 0usize;
+        for edge in graph.graph.edge_references() {
+            if matches!(
+                edge.weight(),
+                EdgeType::CallAmbiguous | EdgeType::ImportAmbiguous
+            ) {
+                ambiguous += 1;
+                if edge.source() == caller_idx {
+                    from_caller += 1;
+                }
+            }
+        }
+        assert!(
+            ambiguous >= 2,
+            "overload kenarları ambiguous işaretlenmeli ({} >= 2)",
+            ambiguous
+        );
+        assert_eq!(from_caller, 2, "çağıran iki belirsiz hedefe de bağlanmalı");
     }
 
     #[test]
