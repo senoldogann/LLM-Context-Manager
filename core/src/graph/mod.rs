@@ -295,8 +295,16 @@ impl CodeGraph {
             return Some(node);
         }
 
-        let (path_part, kind_part, row_part) = parse_node_id(id)?;
-        let target_row: usize = row_part.parse().ok()?;
+        // Hedef id stable (symbol) formatındaysa row hash'tir; satır hedefi
+        // bilinemez, bu yüzden aynı dosya+türdeki EN YAKIN node'u döndürürüz.
+        // Legacy formatında satır hedefi doğrudan kullanılır.
+        let (path_part, kind_part, target_row): (&str, &str, Option<usize>) =
+            if let Some((path, kind)) = parse_stable_node_id(id) {
+                (path, kind, None)
+            } else {
+                let (path, kind, row) = parse_node_id(id)?;
+                (path, kind, row.parse().ok())
+            };
 
         let mut best: Option<&CodeNode> = None;
         let mut best_dist = usize::MAX;
@@ -316,7 +324,12 @@ impl CodeGraph {
             if node_path != path_part || node_kind != kind_part {
                 continue;
             }
-            let dist = node_row.abs_diff(target_row);
+            let dist = match target_row {
+                Some(target) => node_row.abs_diff(target),
+                // Stable hedef: aynı path+türdeki en erken occurrence (satır en küçük)
+                // deterministik olarak seçilir.
+                None => node_row,
+            };
             if dist < best_dist && dist <= 200 {
                 best_dist = dist;
                 best = Some(node);

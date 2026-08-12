@@ -28,6 +28,11 @@ jobs:
       - name: Regenerate synthetic fixture (deterministic, offline)
         run: ./target/release/ccm-cli learn fixtures
 
+      - name: Enforce fixture determinism
+        run: |
+          git diff --exit-code -- eval/fixtures/golden_tasks.synthetic.json \
+            eval/fixtures/embeddings.ndjson
+
       - name: Optimize policy on train, gate on holdout
         env:
           CCM_EMBEDDING_FIXTURE: eval/fixtures/embeddings.ndjson

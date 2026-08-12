@@ -12,7 +12,7 @@
 - Added seeded optimizer: 52 grid candidates + top-3 hill-climb (cap 60),
   train-only evaluation, single holdout measurement of the winner.
 - Added offline hybrid evaluation: `CCM_EMBEDDING_FIXTURE` + deterministic
-  trigram-hash embeddings; `predict_context` query type for context-budget
+  token-hash embeddings; `predict_context` query type for context-budget
   measurement; per-task Recall@K, precision@K, coverage, tokens, latency metrics.
 - Added `ccm-cli learn {fixtures,optimize,report}` and `eval --policy`;
   new `self-improve.yml` CI job (offline, no secrets; Rejected is a scientific

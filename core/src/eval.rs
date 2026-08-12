@@ -596,6 +596,7 @@ pub async fn evaluate_policy(
     let mut totals = Totals::default();
     let mut results = Vec::new();
     let mut prepared_repos: HashSet<PathBuf> = HashSet::new();
+    let mut graph_cache: HashMap<PathBuf, Arc<CodeGraph>> = HashMap::new();
 
     totals.tasks = tasks_file.tasks.len();
 
@@ -669,7 +670,7 @@ pub async fn evaluate_policy(
                 match search_result {
                     Ok(hits) => {
                         ranked = hits.clone();
-                        if let Ok(graph) = CodeGraph::from_file(&graph_path.to_string_lossy()) {
+                        if let Ok(graph) = cached_graph(&graph_path, &mut graph_cache) {
                             token_hint = tokens_for_ids(&graph, &hits);
                         }
                         let (matches, matched_items) = score_hits(&task.expected, &hits);
@@ -715,7 +716,7 @@ pub async fn evaluate_policy(
                     continue;
                 }
 
-                let graph = CodeGraph::from_file(&graph_path.to_string_lossy())?;
+                let graph = cached_graph(&graph_path, &mut graph_cache)?;
                 let normalized_id = normalize_task_node_id(&repo_path, &node_id);
                 let hits = gather_graph_hits(&graph, &normalized_id)
                     .or_else(|| gather_graph_hits(&graph, &node_id));
@@ -790,7 +791,7 @@ pub async fn evaluate_policy(
 
                 let normalized_path = normalize_path(&repo_path, &file_path);
                 let hits = if task.query.kind == "predict_context" {
-                    let graph = match CodeGraph::from_file(&graph_path.to_string_lossy()) {
+                    let graph = match cached_graph(&graph_path, &mut graph_cache) {
                         Ok(graph) => graph,
                         Err(e) => {
                             result.status = "fail".to_string();
@@ -812,7 +813,7 @@ pub async fn evaluate_policy(
                             }
                         };
                     let engine = RetrievalEngine::with_policy(
-                        Arc::new(tokio::sync::RwLock::new(graph)),
+                        Arc::new(tokio::sync::RwLock::new((*graph).clone())),
                         store,
                         policy.clone(),
                     );
@@ -841,7 +842,7 @@ pub async fn evaluate_policy(
                         }
                     }
                 } else {
-                    let graph = CodeGraph::from_file(&graph_path.to_string_lossy())?;
+                    let graph = cached_graph(&graph_path, &mut graph_cache)?;
                     let hits = gather_context_hits(&graph, &normalized_path, line as usize)
                         .unwrap_or_default();
                     token_hint = tokens_for_ids(&graph, &hits);
@@ -943,6 +944,18 @@ fn tokens_for_ids(graph: &CodeGraph, ranked: &[String]) -> usize {
         .filter_map(|id| graph.find_node_by_id(id))
         .map(|node| node.content.len() / 4)
         .sum()
+}
+
+fn cached_graph(
+    graph_path: &Path,
+    cache: &mut HashMap<PathBuf, Arc<CodeGraph>>,
+) -> Result<Arc<CodeGraph>> {
+    if let Some(graph) = cache.get(graph_path) {
+        return Ok(Arc::clone(graph));
+    }
+    let graph = Arc::new(CodeGraph::from_file(&graph_path.to_string_lossy())?);
+    cache.insert(graph_path.to_path_buf(), Arc::clone(&graph));
+    Ok(graph)
 }
 
 async fn ensure_eval_index(

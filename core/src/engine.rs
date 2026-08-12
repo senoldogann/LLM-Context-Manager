@@ -762,36 +762,25 @@ impl RetrievalEngine {
             return Vec::new();
         };
 
-        // BFS: (current_idx, path_so_far)
-        let mut queue: VecDeque<(petgraph::graph::NodeIndex, Vec<petgraph::graph::NodeIndex>)> =
-            VecDeque::new();
+        // BFS: parent-pointer tabanlı (path clone'u yok → bellek patlaması önlenir).
+        // Bulunan yoldaki her düğüm için parent haritada tutulur, sonunda geri çözülür.
+        let mut queue: VecDeque<petgraph::graph::NodeIndex> = VecDeque::new();
         let mut visited = std::collections::HashSet::new();
-        queue.push_back((from_idx, vec![from_idx]));
+        let mut parent: std::collections::HashMap<
+            petgraph::graph::NodeIndex,
+            petgraph::graph::NodeIndex,
+        > = std::collections::HashMap::new();
+        queue.push_back(from_idx);
         visited.insert(from_idx);
 
-        while let Some((current, path)) = queue.pop_front() {
+        let mut found: Option<petgraph::graph::NodeIndex> = None;
+        while let Some(current) = queue.pop_front() {
             if current == to_idx {
-                return path
-                    .iter()
-                    .enumerate()
-                    .map(|(i, &idx)| {
-                        let node = &graph.graph[idx];
-                        ContextSuggestion {
-                            node_id: Some(node.id.clone()),
-                            file_path: Some(extract_file_path(&node.id)),
-                            start_line: Some(node.start_line),
-                            end_line: Some(node.end_line),
-                            node_type: Some(format!("{:?}", node.node_type)),
-                            title: format!("Step {}: {:?} {}", i + 1, node.node_type, node.name),
-                            content: node.content.to_string(),
-                            relevance_score: 1.0 - (i as f32 * 0.05),
-                            reason: format!("Call chain step {}/{}", i + 1, path.len()),
-                        }
-                    })
-                    .collect();
+                found = Some(current);
+                break;
             }
 
-            if path.len() >= max_depth {
+            if parent.len() >= max_depth && current != from_idx {
                 continue;
             }
 
@@ -805,15 +794,46 @@ impl RetrievalEngine {
                 ) {
                     let neighbor = edge.target();
                     if visited.insert(neighbor) {
-                        let mut new_path = path.clone();
-                        new_path.push(neighbor);
-                        queue.push_back((neighbor, new_path));
+                        parent.insert(neighbor, current);
+                        queue.push_back(neighbor);
                     }
                 }
             }
         }
 
-        Vec::new() // yol bulunamadı
+        let Some(found) = found else {
+            return Vec::new();
+        };
+
+        // Parent zincirini geri çöz ve path'i baştan sona sırala.
+        let mut path: Vec<petgraph::graph::NodeIndex> = Vec::new();
+        let mut cursor = found;
+        loop {
+            path.push(cursor);
+            match parent.get(&cursor) {
+                Some(prev) => cursor = *prev,
+                None => break,
+            }
+        }
+        path.reverse();
+
+        path.iter()
+            .enumerate()
+            .map(|(i, &idx)| {
+                let node = &graph.graph[idx];
+                ContextSuggestion {
+                    node_id: Some(node.id.clone()),
+                    file_path: Some(extract_file_path(&node.id)),
+                    start_line: Some(node.start_line),
+                    end_line: Some(node.end_line),
+                    node_type: Some(format!("{:?}", node.node_type)),
+                    title: format!("Step {}: {:?} {}", i + 1, node.node_type, node.name),
+                    content: node.content.to_string(),
+                    relevance_score: 1.0 - (i as f32 * 0.05),
+                    reason: format!("Call chain step {}/{}", i + 1, path.len()),
+                }
+            })
+            .collect()
     }
 
     /// Bir dosyanın değişmesi durumunda etkilenecek dosya ve node'ları döndürür.

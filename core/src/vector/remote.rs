@@ -137,43 +137,56 @@ impl RemoteEmbedder {
             format!("{}/embeddings", self.base_url.trim_end_matches('/'))
         };
 
-        let response = self
-            .send_with_timeout(
-                self.client
-                    .post(&url)
-                    .header("Authorization", format!("Bearer {}", self.api_key))
-                    .header("Content-Type", "application/json")
-                    .json(&json!({
-                        "input": texts,
-                        "model": self.model
-                    })),
-            )
-            .await
-            .context("Failed to send embedding request (OpenAI format)")?;
-
-        if !response.status().is_success() {
-            let error_text = self.read_text_with_timeout(response).await?;
-            return Err(anyhow::anyhow!("Remote API Error: {}", error_text));
-        }
-
-        let body = self.read_json_with_timeout(response).await?;
-
-        let mut embeddings = Vec::new();
-        if let Some(data) = body.get("data").and_then(|d| d.as_array()) {
-            for item in data {
-                if let Some(embedding_val) = item.get("embedding").and_then(|e| e.as_array()) {
-                    let vec: Vec<f32> = embedding_val
-                        .iter()
-                        .filter_map(|v| v.as_f64().map(|f| f as f32))
-                        .collect();
-                    embeddings.push(vec);
+        // External API kuralı: en az 1 retry + uyarı, son hata açıkça yükseltilir.
+        let mut last_error: Option<anyhow::Error> = None;
+        for attempt in 0..2 {
+            match self
+                .send_with_timeout(
+                    self.client
+                        .post(&url)
+                        .header("Authorization", format!("Bearer {}", self.api_key))
+                        .header("Content-Type", "application/json")
+                        .json(&json!({
+                            "input": texts,
+                            "model": self.model
+                        })),
+                )
+                .await
+            {
+                Ok(response) if response.status().is_success() => {
+                    let body = self.read_json_with_timeout(response).await?;
+                    let mut embeddings = Vec::new();
+                    if let Some(data) = body.get("data").and_then(|d| d.as_array()) {
+                        for item in data {
+                            if let Some(embedding_val) =
+                                item.get("embedding").and_then(|e| e.as_array())
+                            {
+                                let vec: Vec<f32> = embedding_val
+                                    .iter()
+                                    .filter_map(|v| v.as_f64().map(|f| f as f32))
+                                    .collect();
+                                embeddings.push(vec);
+                            }
+                        }
+                    } else {
+                        return Err(anyhow::anyhow!("Invalid response format from API"));
+                    }
+                    return Ok(embeddings);
+                }
+                Ok(response) => {
+                    let error_text = self.read_text_with_timeout(response).await?;
+                    last_error = Some(anyhow::anyhow!("Remote API Error: {}", error_text));
+                }
+                Err(e) => {
+                    last_error = Some(e);
                 }
             }
-        } else {
-            return Err(anyhow::anyhow!("Invalid response format from API"));
+            if attempt == 0 {
+                tracing::warn!(attempt, error = %last_error.as_ref().unwrap(), "OpenAI embed retry");
+            }
         }
 
-        Ok(embeddings)
+        Err(last_error.unwrap_or_else(|| anyhow::anyhow!("OpenAI embedding request failed")))
     }
 
     async fn embed_ollama(&self, texts: Vec<String>) -> Result<Vec<Vec<f32>>> {
