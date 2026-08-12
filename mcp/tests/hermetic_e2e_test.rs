@@ -165,9 +165,16 @@ fn hermetic_mcp_all_tools_e2e_on_synthetic_repo() {
     );
     assert_no_error(&resp, "4 find_nodes");
     let find_text = text_of(&resp);
-    assert!(find_text.contains("compute_tax"), "find_nodes: {}", find_text);
+    assert!(
+        find_text.contains("compute_tax"),
+        "find_nodes: {}",
+        find_text
+    );
     // Metadata-first çıktı: node_id mevcut, gövde yok.
-    assert!(!find_text.contains("fn compute_tax"), "varsayılan body içermemeli");
+    assert!(
+        !find_text.contains("fn compute_tax"),
+        "varsayılan body içermemeli"
+    );
 
     // 7. read_graph: find_nodes çıktısından ilk node id'yi çöz.
     let node_id = find_text

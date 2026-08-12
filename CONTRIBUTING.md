@@ -34,6 +34,28 @@ cargo clippy -- -D warnings
 3.  Push to your fork and submit a Pull Request to `main`.
 4.  Fill out the PR Template clearly.
 
+## 📦 Release Checklist (vX.Y.Z)
+
+1. `cargo fmt --all -- --check` + `cargo clippy --workspace --all-targets -- -D warnings`
+2. `cargo test --workspace` + `npm test --prefix npm` (hermetic MCP e2e dahil)
+3. Structural golden gate: `CCM_DISABLE_EMBEDDER=1 ccm-cli eval --tasks
+   eval/golden_tasks.v3.ccm.json` (search_code hariç 50/50, regresyon 0)
+4. Gerçek anlamsal eval (Ollama varsa): `eval --tasks golden_tasks.v3.ccm.json
+   --report eval/report.semantic.json`; sonucu README'de güncelle
+5. Self-improve: `CCM_EMBEDDING_FIXTURE=... ccm-cli learn optimize --seed 42`
+   (Promote veya Rejected; ikisi de geçerli)
+6. Version bump: `core/cli/mcp Cargo.toml` + `Cargo.lock` + `npm/package.json`
+   + `npm/package-lock.json` + README/RELEASE_NOTES
+7. Tag `vX.Y.Z` push → Release workflow (quality-gate → 5 platform build →
+   publish-npm) yeşil; npm `latest` doğrula
+8. GitHub release notlarını `RELEASE_NOTES.md`'den üret
+
+### 1.0 İçin Açık Maddeler (cutline)
+- Gerçek repo corpus'unda anlamsal (embedder) eval CI'ya kalıcı bağlanmalı
+- Trajectory feedback (açılan/düzenlenen dosya) öğrenme döngüsüne bağlanmalı
+- MCP progress/cancellation (`notifications/progress`, `-32800`)
+- Sembol çözümlemesi scope/qualified-name seviyesine çekilmeli (Phase 1 devamı)
+
 ## 🏗 Architecture
 
 *   `core`: The brain. Contains logic for Graph, Vector Store, and Parsing.
