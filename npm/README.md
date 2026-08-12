@@ -4,9 +4,9 @@
 
 **Node.js wrapper for Cognitive Codebase Matrix (CCM)** - Enables AI agents to understand and navigate your codebase with surgical precision.
 
-**v0.3.3** adds agentic retrieval polish: metadata-first MCP output (token-safe),
-promoted policy wired into runtime, aligned eval/production ranking, and
-hardened CI (CodeQL Rust, fixture determinism).
+**v0.3.4** ships the complete v0.3.2/v0.3.3 feature set: self-improving
+retrieval policy layer (`ccm-cli learn`), metadata-first MCP output (token-safe),
+promoted policy wired into runtime, and hardened CI.
 
 [![npm](https://img.shields.io/npm/v/@senoldogann/context-manager?color=orange)](https://www.npmjs.com/package/@senoldogann/context-manager)
 [![MCP](https://img.shields.io/badge/MCP-Compatible-blue)](https://modelcontextprotocol.io/)
@@ -75,6 +75,10 @@ The npm wrapper downloads pre-built binaries and passes commands through:
 | `npx @senoldogann/context-manager mcp` | Run MCP server directly |
 | `npx @senoldogann/context-manager doctor --path <dir>` | Diagnose config and index health |
 | `npx @senoldogann/context-manager eval --tasks <file>` | Run evaluation tasks |
+| `npx @senoldogann/context-manager learn fixtures` | Generate deterministic synthetic corpus + embedding fixture |
+| `npx @senoldogann/context-manager learn optimize --tasks <file>` | Optimize retrieval policy on train, gate on holdout |
+| `npx @senoldogann/context-manager learn report` | Print Baseline vs Learned report |
+| `npx @senoldogann/context-manager eval --policy <file>` | Evaluate with a specific retrieval policy |
 
 ### Supported Hosts
 
@@ -171,6 +175,29 @@ Once configured, ask your AI agent:
 
 > "What functions call `parse_config`?"
 
+## 🧠 Self-Improving Retrieval (v0.3.2+)
+
+CCM can learn a better retrieval policy from experience and prove it on a
+holdout set before activating it:
+
+```bash
+# 1. Generate the deterministic synthetic corpus (repo_a=train, repo_b=holdout)
+npx @senoldogann/context-manager learn fixtures
+
+# 2. Optimize on train, gate on holdout (Rejected is a valid scientific result)
+CCM_EMBEDDING_FIXTURE=eval/fixtures/embeddings.ndjson \
+  npx @senoldogann/context-manager learn optimize --seed 42
+
+# 3. Read the Baseline vs Learned report
+npx @senoldogann/context-manager learn report
+```
+
+- Policies and history live under `data/ccm_learn/` (`policies.json`,
+  `history.jsonl`); the evaluator is immutable during optimization.
+- `CCM_EMBEDDING_FIXTURE` enables offline hybrid evaluation without an embedder.
+- `CCM_TRAJECTORY_LOG=1` records observable retrieval events to
+  `data/ccm_learn/experiences.jsonl` (off by default).
+
 ---
 
 ## 📦 For Developers
@@ -218,6 +245,27 @@ Enable `CCM_EMBED_DATA_FILES=1` to include them in semantic search.
 ---
 
 ## 📝 Changelog
+
+### v0.3.4
+- ✅ npm README now documents the full v0.3.2/v0.3.3 feature surface
+
+### v0.3.3
+- ✅ Metadata-first MCP output: `include_body`/`max_chars` opt-in snippets, server-side limit cap
+- ✅ Promoted retrieval policy wired into runtime (`PolicyStore::active`)
+- ✅ Eval hybrid ranking aligned with production; per-repo graph cache
+- ✅ `search_code` chunk dedup; parent-pointer BFS for call chains
+- ✅ OpenAI embedder retry; fuzzy stable-id drift resolution
+- ✅ Trajectory records real latency/tool/request id
+- ✅ MCP index writes serialized per project; JSON-RPC id/error fixes
+- ✅ CodeQL analyzes Rust; CI protoc hardened; fixture determinism enforced
+
+### v0.3.2
+- ✅ Versioned `RetrievalPolicy` + `PolicyStore` + history
+- ✅ Deterministic train/holdout splitter and promotion gate (sign test, token guard)
+- ✅ Seeded optimizer: 52 grid candidates + top-3 hill-climb
+- ✅ Offline hybrid eval via `CCM_EMBEDDING_FIXTURE`
+- ✅ `ccm-cli learn {fixtures,optimize,report}` + `eval --policy`
+- ✅ Deterministic synthetic corpus (180 tasks, cross-repo holdout)
 
 ### v0.2.1
 - ✅ UTF-8-safe semantic chunking prevents panics on Turkish, Finnish, and emoji content
