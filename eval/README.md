@@ -60,7 +60,20 @@ If the repository index is missing, the evaluator builds it automatically before
 ## Recorded Results
 
 ```
-See the checked-in reports in `eval/report.*.json` for the latest recorded runs.
+See the checked-in reports for the latest recorded runs:
+
+- `report.semantic.json` — v0.3.3 gerçek Ollama embedder ile (56 task, 94.6%
+  pass; search_code 3/6). CI structural gate `search_code`'u ölçmez; bu rapor
+  gerçek anlamsal geri getirimi gösterir.
+- `report.phase3_baseline.json` — structural-only CI gate baseline (50/50
+  structural task).
+- `eval/fixtures/learn/report.json` — sentetik self-improvement (proof of
+  mechanism).
+
+> Eski 102-task corpus'undan üretilen `report.hybrid.json`, `report.compare.json`
+> ve `report.ccm.json` stale idi ve "Node not found" hatalarıyla yanıltıcıydı;
+> kaldırıldı. `golden_tasks.v3.json` (102 task) arşiv olarak durur, üretim
+> corpus'u `golden_tasks.v3.ccm.json` (56 task).
 ```
 
 ## Adding New Tasks

@@ -298,7 +298,9 @@ ccm-cli eval --tasks eval/golden_tasks.json --compare
 If the evaluation index is missing, CCM bootstraps it automatically before scoring.
 Semantic `search_code` tasks still require a configured embedder.
 
-**Latest Recorded Results:** See the checked-in reports under [`eval/`](./eval).
+**Latest Recorded Results:** Real semantic evaluation with the Ollama embedder
+(v0.3.3): 56/56 tasks, 94.6% pass (search_code 3/6); structural-only gate is
+50/50 100%. See [`eval/report.semantic.json`](./eval/report.semantic.json).
 
 ---
 
