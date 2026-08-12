@@ -168,9 +168,11 @@ async fn generate_repo(
     }
 
     // Embedder kapalı: yalnızca graph/manifest gerekir; ağ çağrısı yapılmaz.
+    // Değişiklik process-global env'i etkiler; tamamlanınca önceki değer geri yüklenir.
     // İndeks mutlaka canonical (mutlak) yolla kurulur; relative yolla kurulan
     // indekslerde node id'leri bazen "./eval/..." biçiminde üretilir ve bu
     // determinizmi bozar.
+    let prev_disable = std::env::var("CCM_DISABLE_EMBEDDER").ok();
     let canonical_repo = std::fs::canonicalize(repo_path).with_context(|| {
         format!(
             "fixture repo canonicalize edilemedi: {}",
@@ -181,6 +183,10 @@ async fn generate_repo(
     crate::update_index(&canonical_repo.to_string_lossy(), None)
         .await
         .with_context(|| format!("fixture repo indeksi kurulamadı: {}", repo_path.display()))?;
+    match prev_disable {
+        Some(value) => std::env::set_var("CCM_DISABLE_EMBEDDER", value),
+        None => std::env::remove_var("CCM_DISABLE_EMBEDDER"),
+    }
 
     let graph_path = repo_path.join("data").join("ccm_graph.json");
     let graph = CodeGraph::from_file(&graph_path.to_string_lossy())

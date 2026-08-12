@@ -270,7 +270,7 @@ fn metrics_from(report: &EvalReport) -> PolicyMetrics {
     }
 }
 
-/// Deterministik candidate uzayı (~56 aday): ağırlık profilleri, semantic_hits,
+/// Deterministik candidate uzayı (52 aday): ağırlık profilleri, semantic_hits,
 /// pencere bütçeleri, top_k, tek alan perturbasyonları ve eşik varyantları.
 /// Version'lar 2'den başlar (baseline=1). Plan hedefi ~60 adaydır; cap
 /// `MAX_CANDIDATES_DEFAULT` hill-climb için yer bırakır.
@@ -647,11 +647,7 @@ mod tests {
         let a = candidate_policies(&baseline);
         let b = candidate_policies(&baseline);
         assert_eq!(a.len(), b.len());
-        assert!(
-            a.len() >= 40,
-            "candidate uzayı plan hedefi ~60'a yakın olmalı: {}",
-            a.len()
-        );
+        assert_eq!(a.len(), 52, "candidate uzayı 52 olmalı: {}", a.len());
         let versions: Vec<u32> = a.iter().map(|policy| policy.version).collect();
         assert_eq!(versions[0], 2);
         for pair in versions.windows(2) {

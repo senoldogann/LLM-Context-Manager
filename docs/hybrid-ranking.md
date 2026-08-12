@@ -87,7 +87,7 @@ karşılığıdır. Öğrenme döngüsü:
    25 `search_code` + 25 `get_context` + 25 `read_graph` + 15 `predict_context` =
    90 task, toplam 180).
 2. `ccm-cli learn optimize` train sette aday policy'leri değerlendirir (sabit
-   seed 42, SplitMix64; ~56 grid adayı + top-3 başlangıç noktasından hill-climb,
+   seed 42, SplitMix64; 52 grid adayı + top-3 başlangıç noktasından hill-climb,
    cap 60), winner'ı holdout'ta tek kez ölçer ve promotion gate'ten geçirir;
    sonuç `data/ccm_learn/` altındaki `policies.json` + `history.jsonl` ve
    `eval/fixtures/learn/report.json` içine yazılır. Aynı rapor, gerçek repo

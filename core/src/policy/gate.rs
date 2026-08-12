@@ -196,6 +196,29 @@ pub fn evaluate_promotion(
 ) -> PromotionDecision {
     let mut failures: Vec<String> = Vec::new();
 
+    // No-op koruması: hiçbir şey değişmemişse (n_eff=0 ya da candidate == baseline)
+    // promote etmek anlamsızdır; sign testi 0<0 ile boşuna geçer.
+    let candidate_is_baseline = candidate_holdout.results.iter().all(|result| {
+        baseline_holdout
+            .results
+            .iter()
+            .find(|base| base.id == result.id)
+            .map(|base| {
+                base.matches == result.matches
+                    && base.tokens_estimated == result.tokens_estimated
+                    && base.status == result.status
+            })
+            .unwrap_or(false)
+    });
+    let n_eff = changed_tasks(baseline_holdout, candidate_holdout);
+    if candidate_is_baseline || n_eff == 0 {
+        return PromotionDecision {
+            promoted: false,
+            reason: "no-op: candidate baseline ile aynı sonucu üretiyor (n_eff=0)".to_string(),
+            overfit_warning: None,
+        };
+    }
+
     for kind in query_type_set(baseline_holdout, candidate_holdout) {
         let base = query_type_pass_rate(baseline_holdout, &kind);
         let cand = query_type_pass_rate(candidate_holdout, &kind);
@@ -231,7 +254,6 @@ pub fn evaluate_promotion(
         ));
     }
 
-    let n_eff = changed_tasks(baseline_holdout, candidate_holdout);
     let required = sign_test_k(n_eff, options.alpha);
     let improved = improved_tasks(baseline_holdout, candidate_holdout);
     if recall_gain < options.recall_improvement && improved < required {
@@ -427,5 +449,49 @@ mod tests {
         };
         let q = quality(&report);
         assert!((q - (0.7 * 100.0 + 0.3 * 1.0)).abs() < 1e-9);
+    }
+
+    #[test]
+    fn noop_candidate_is_rejected() {
+        let mut baseline = EvalReport {
+            schema_version: 1,
+            generated_at: 0,
+            totals: crate::eval::Totals {
+                tasks: 1,
+                scored: 1,
+                passed: 1,
+                failed: 0,
+                skipped: 0,
+            },
+            results: vec![TaskResult {
+                id: "t".into(),
+                query_type: "search_code".into(),
+                status: "pass".into(),
+                detail: String::new(),
+                matches: 1,
+                expected_min_recall: 1,
+                max_rank: 5,
+                matched_items: vec![],
+                recall_at_k: Some(1.0),
+                precision_at_k: Some(1.0),
+                relevant_coverage: Some(1.0),
+                tokens_estimated: Some(100),
+                latency_ms: Some(1.0),
+                ranked: Some(vec!["a".into()]),
+                missing_relevant: Some(vec![]),
+                retrieved_unused: Some(vec![]),
+                policy_version: Some(1),
+            }],
+        };
+        let candidate = baseline.clone();
+        let decision = evaluate_promotion(
+            &baseline,
+            &candidate,
+            &baseline,
+            &candidate,
+            &PromotionOptions::default(),
+        );
+        assert!(!decision.promoted, "no-op promote edilmemeli");
+        let _ = &mut baseline;
     }
 }

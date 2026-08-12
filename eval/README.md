@@ -95,7 +95,7 @@ Sonuç raporu `eval/fixtures/learn/report.json`; policy store ve history
 `predict_context` task'ları, policy'nin context bütçesini (semantic hit sayısı,
 pencere büyüklükleri) ölçülebilir kılan plan dışı ek sinyaldir (ağırlıklar
 seed-priority skorlamada sıralamayı değiştirmez); `get_context`/`read_graph`/
-`search_code` regression guard'larıdır. Optimizer ~56 grid adayı üretir ve
+`search_code` regression guard'larıdır. Optimizer 52 grid adayı üretir ve
 top-3 başlangıç noktasından hill-climb yapar (cap 60). Golden task şemasına
 `split` ve `task_type` opsiyonel alanları eklendi (eski dosyalar değişmeden
 parse edilir). `learn report`, sentetik holdout birincil tablosuna ek olarak

@@ -38,6 +38,7 @@ impl HashEmbedder {
 
 /// Metni deterministik trigram-hash vektöre çevirir.
 pub fn embed_text(text: &str, dim: usize) -> Vec<f32> {
+    let dim = dim.max(1);
     let mut vector = vec![0.0f32; dim.max(1)];
     for trigram in trigrams(text) {
         let hash = fnv1a(trigram.as_bytes());
