@@ -6,7 +6,7 @@ use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use crate::engine::hybrid::HybridScorer;
-use crate::engine::{CursorPosition, RetrievalEngine};
+use crate::engine::{ContextSuggestion, CursorPosition, RetrievalEngine};
 use crate::graph::CodeGraph;
 use crate::policy::{RetrievalPolicy, TaskType};
 use crate::vector::store::LanceDbStore;
@@ -567,6 +567,67 @@ pub async fn evaluate_with_mode(tasks_file: GoldenTasksFile, mode: EvalMode) -> 
                     }
                 }
             }
+            "predict_context" => {
+                let Some(file_path) = task.query.file_path.clone() else {
+                    result.status = "fail".to_string();
+                    result.detail = "Missing query.file_path".to_string();
+                    totals.failed += 1;
+                    results.push(result);
+                    continue;
+                };
+                let Some(line) = task.query.line else {
+                    result.status = "fail".to_string();
+                    result.detail = "Missing query.line".to_string();
+                    totals.failed += 1;
+                    results.push(result);
+                    continue;
+                };
+
+                if !graph_path.exists() {
+                    result.detail = format!("Missing graph at {}", graph_path.display());
+                    totals.skipped += 1;
+                    results.push(result);
+                    continue;
+                }
+
+                let graph = CodeGraph::from_file(&graph_path.to_string_lossy())?;
+                let normalized_path = normalize_path(&repo_path, &file_path);
+                match predict_context_suggestions(
+                    &db_path,
+                    &graph,
+                    &normalized_path,
+                    line as usize,
+                    task.query.column.unwrap_or(0) as usize,
+                    &RetrievalPolicy::baseline(),
+                )
+                .await
+                {
+                    Ok(suggestions) => {
+                        let hits: Vec<String> = suggestions
+                            .into_iter()
+                            .filter_map(|suggestion| suggestion.node_id)
+                            .collect();
+                        let (matches, matched_items) = score_hits(&task.expected, &hits);
+                        result.matches = matches;
+                        result.matched_items = matched_items;
+                        if matches >= expected_min_recall as usize {
+                            result.status = "pass".to_string();
+                            result.detail = "Recall threshold met".to_string();
+                            totals.passed += 1;
+                        } else {
+                            result.status = "fail".to_string();
+                            result.detail = "Recall below threshold".to_string();
+                            totals.failed += 1;
+                        }
+                        totals.scored += 1;
+                    }
+                    Err(e) => {
+                        result.status = "fail".to_string();
+                        result.detail = format!("Predict failed: {}", e);
+                        totals.failed += 1;
+                    }
+                }
+            }
             other => {
                 result.detail = format!("Unsupported query type: {}", other);
                 totals.skipped += 1;
@@ -801,28 +862,16 @@ pub async fn evaluate_policy(
                             continue;
                         }
                     };
-                    let store =
-                        match LanceDbStore::new(&db_path.to_string_lossy(), "code_vectors").await {
-                            Ok(store) => store,
-                            Err(e) => {
-                                result.status = "fail".to_string();
-                                result.detail = format!("Store open failed: {}", e);
-                                totals.failed += 1;
-                                results.push(result);
-                                continue;
-                            }
-                        };
-                    let engine = RetrievalEngine::with_policy(
-                        Arc::new(tokio::sync::RwLock::new((*graph).clone())),
-                        store,
-                        policy.clone(),
-                    );
-                    let cursor = CursorPosition {
-                        file_path: normalized_path.clone(),
-                        line: line as usize,
-                        column: task.query.column.unwrap_or(0) as usize,
-                    };
-                    match engine.predict_context(&cursor).await {
+                    match predict_context_suggestions(
+                        &db_path,
+                        graph.as_ref(),
+                        &normalized_path,
+                        line as usize,
+                        task.query.column.unwrap_or(0) as usize,
+                        policy,
+                    )
+                    .await
+                    {
                         Ok(suggestions) => {
                             token_hint = suggestions
                                 .iter()
@@ -996,6 +1045,32 @@ async fn ensure_eval_index(
     }
 
     Ok(())
+}
+
+/// Cursor konumunda context tahminini engine üzerinden üretir; node id'leri
+/// yerine ham `ContextSuggestion` döner. Böylece token hesabı ve node
+/// eşleştirmesi aynı kaynaktan yapılır. `evaluate_with_mode` (baseline) ve
+/// `evaluate_policy` (öğrenilen policy) ortak kullanır.
+async fn predict_context_suggestions(
+    db_path: &Path,
+    graph: &CodeGraph,
+    file_path: &str,
+    line: usize,
+    column: usize,
+    policy: &RetrievalPolicy,
+) -> Result<Vec<ContextSuggestion>> {
+    let store = LanceDbStore::new(&db_path.to_string_lossy(), "code_vectors").await?;
+    let engine = RetrievalEngine::with_policy(
+        Arc::new(tokio::sync::RwLock::new(graph.clone())),
+        store,
+        policy.clone(),
+    );
+    let cursor = CursorPosition {
+        file_path: file_path.to_string(),
+        line,
+        column,
+    };
+    engine.predict_context(&cursor).await
 }
 
 async fn search_code(db_path: &Path, query: &str, limit: usize) -> Result<Vec<String>> {
