@@ -62,10 +62,18 @@ npx @senoldogann/context-manager install
   "context-manager": {
     "command": "npx",
     "args": ["-y", "@senoldogann/context-manager", "mcp"],
-    "env": { "RUST_LOG": "info" }
+    "env": {
+      "RUST_LOG": "info",
+      "CCM_ALLOWED_ROOTS": "/path/to/your/project",
+      "CCM_REQUIRE_ALLOWED_ROOTS": "true"
+    }
   }
 }
 ```
+
+> `CCM_REQUIRE_ALLOWED_ROOTS` varsayılan olarak açıktır; `CCM_ALLOWED_ROOTS`
+> boş bırakılırsa sunucu tüm proje erişimini reddeder. Her proje kökünü
+> `:` ayracıyla ekleyebilirsiniz: `/repo1:/repo2`.
 
 ### Minimal environment (~/.ccm/.env)
 ```ini

@@ -24,8 +24,6 @@
 
 ## v0.2.1 - UTF-8 Safety, Retrieval Accuracy & Installer Reliability
 
-## v0.2.1 - UTF-8 Safety, Retrieval Accuracy & Installer Reliability
-
 - Fixed the UTF-8 chunk boundary panic triggered by multibyte Turkish, Finnish, punctuation, and emoji characters.
 - Rebuilt cross-file reference edges deterministically after full and incremental indexing, including imports, constructors, and type annotations.
 - Corrected stable node ID file-path extraction and ranked code symbols above generic data-file path matches.

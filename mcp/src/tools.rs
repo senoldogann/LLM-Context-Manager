@@ -33,19 +33,70 @@ fn format_suggestion_metadata(suggestion: &ccm_core::engine::ContextSuggestion) 
     }
 }
 
-fn format_suggestions_output(suggestions: &[ccm_core::engine::ContextSuggestion]) -> String {
+const DEFAULT_MAX_LIMIT: usize = 50;
+const DEFAULT_MAX_BODY_CHARS: usize = 4_000;
+
+fn format_suggestions_output(
+    suggestions: &[ccm_core::engine::ContextSuggestion],
+    include_body: bool,
+    max_body_chars: usize,
+) -> String {
     let mut output = String::new();
+    let mut total_chars = 0usize;
+    let mut truncated = 0usize;
     for suggestion in suggestions {
         output.push_str(&format!(
-            "## {} (Score: {:.2})\n**Reason:** {}\n{}\n```\n{}\n```\n\n---\n",
+            "## {} (Score: {:.2})\n**Reason:** {}\n{}",
             suggestion.title,
             suggestion.relevance_score,
             suggestion.reason,
             format_suggestion_metadata(suggestion),
-            suggestion.content
+        ));
+        if include_body && !suggestion.content.is_empty() {
+            let remaining = max_body_chars.saturating_sub(total_chars);
+            if remaining > 0 {
+                let body: String = suggestion.content.chars().take(remaining).collect();
+                output.push_str(&format!("```\n{}\n```", body));
+                total_chars += body.chars().count();
+                if body.chars().count() < suggestion.content.chars().count() {
+                    truncated += 1;
+                    output.push_str("\n*(body truncated)*");
+                }
+            } else {
+                truncated += 1;
+            }
+        } else {
+            truncated += 1;
+        }
+        output.push_str("\n\n---\n");
+    }
+    if truncated > 0 {
+        output.push_str(&format!(
+            "_Note: {} result(s) omitted body (include_body=true with max_chars to include)._\n",
+            truncated
         ));
     }
     output
+}
+
+fn limit_from_args(args: &Value, default: usize) -> usize {
+    args.get("limit")
+        .and_then(|v| v.as_u64())
+        .map(|v| (v as usize).clamp(1, DEFAULT_MAX_LIMIT))
+        .unwrap_or(default)
+}
+
+fn max_chars_from_args(args: &Value) -> usize {
+    args.get("max_chars")
+        .and_then(|v| v.as_u64())
+        .map(|v| v as usize)
+        .unwrap_or(DEFAULT_MAX_BODY_CHARS)
+}
+
+fn include_body_from_args(args: &Value) -> bool {
+    args.get("include_body")
+        .and_then(|v| v.as_bool())
+        .unwrap_or(false)
 }
 
 /// Tool: get_context
@@ -98,7 +149,11 @@ pub async fn get_context(engine: &Arc<RetrievalEngine>, args: &Value) -> Result<
     Ok(ToolResult {
         content: vec![ToolResultContent {
             content_type: "text".to_string(),
-            text: format_suggestions_output(&suggestions),
+            text: format_suggestions_output(
+                &suggestions,
+                include_body_from_args(args),
+                max_chars_from_args(args),
+            ),
         }],
         is_error: None,
     })
@@ -123,8 +178,8 @@ pub async fn search_code(engine: &Arc<RetrievalEngine>, args: &Value) -> Result<
         });
     }
 
-    let limit = args.get("limit").and_then(|v| v.as_u64()).unwrap_or(5) as usize;
-    let hits = engine.search_code_hybrid(query, limit.max(1)).await?;
+    let limit = limit_from_args(args, 5);
+    let hits = engine.search_code_hybrid(query, limit).await?;
     tracing::debug!(hits = hits.len(), query = %query, "search_code results");
 
     if hits.is_empty() {
@@ -140,7 +195,11 @@ pub async fn search_code(engine: &Arc<RetrievalEngine>, args: &Value) -> Result<
     Ok(ToolResult {
         content: vec![ToolResultContent {
             content_type: "text".to_string(),
-            text: format_suggestions_output(&hits),
+            text: format_suggestions_output(
+                &hits,
+                include_body_from_args(args),
+                max_chars_from_args(args),
+            ),
         }],
         is_error: None,
     })
@@ -164,8 +223,8 @@ pub async fn find_nodes(engine: &Arc<RetrievalEngine>, args: &Value) -> Result<T
         });
     }
 
-    let limit = args.get("limit").and_then(|v| v.as_u64()).unwrap_or(10) as usize;
-    let matches = engine.find_graph_nodes(query, limit.max(1)).await;
+    let limit = limit_from_args(args, 10);
+    let matches = engine.find_graph_nodes(query, limit).await;
 
     if matches.is_empty() {
         return Ok(ToolResult {
@@ -180,7 +239,11 @@ pub async fn find_nodes(engine: &Arc<RetrievalEngine>, args: &Value) -> Result<T
     Ok(ToolResult {
         content: vec![ToolResultContent {
             content_type: "text".to_string(),
-            text: format_suggestions_output(&matches),
+            text: format_suggestions_output(
+                &matches,
+                include_body_from_args(args),
+                max_chars_from_args(args),
+            ),
         }],
         is_error: None,
     })
@@ -459,9 +522,8 @@ pub async fn find_usages(engine: &Arc<RetrievalEngine>, args: &Value) -> Result<
 
     let project_path = args.get("project_path").and_then(|v| v.as_str());
     let normalized_id = normalize_graph_node_id(node_id, project_path)?;
-    let limit = args.get("limit").and_then(|v| v.as_u64()).unwrap_or(20) as usize;
-
-    let usages = engine.find_usages(&normalized_id, limit.max(1)).await;
+    let limit = limit_from_args(args, 20);
+    let usages = engine.find_usages(&normalized_id, limit).await;
 
     if usages.is_empty() {
         return Ok(ToolResult {
@@ -480,7 +542,11 @@ pub async fn find_usages(engine: &Arc<RetrievalEngine>, args: &Value) -> Result<
                 "## Usages of `{}` ({} found)\n\n{}",
                 node_id,
                 usages.len(),
-                format_suggestions_output(&usages)
+                format_suggestions_output(
+                    &usages,
+                    include_body_from_args(args),
+                    max_chars_from_args(args),
+                )
             ),
         }],
         is_error: None,
@@ -529,7 +595,11 @@ pub async fn trace_call_chain(engine: &Arc<RetrievalEngine>, args: &Value) -> Re
                 from_id,
                 to_id,
                 chain.len(),
-                format_suggestions_output(&chain)
+                format_suggestions_output(
+                    &chain,
+                    include_body_from_args(args),
+                    max_chars_from_args(args),
+                )
             ),
         }],
         is_error: None,
@@ -556,9 +626,8 @@ pub async fn impact_of_change(engine: &Arc<RetrievalEngine>, args: &Value) -> Re
 
     let project_path = args.get("project_path").and_then(|v| v.as_str());
     let normalized = normalize_graph_path(file, project_path)?;
-    let limit = args.get("limit").and_then(|v| v.as_u64()).unwrap_or(30) as usize;
-
-    let impacted = engine.impact_of_change(&normalized, limit.max(1)).await;
+    let limit = limit_from_args(args, 30);
+    let impacted = engine.impact_of_change(&normalized, limit).await;
 
     if impacted.is_empty() {
         return Ok(ToolResult {
@@ -580,7 +649,11 @@ pub async fn impact_of_change(engine: &Arc<RetrievalEngine>, args: &Value) -> Re
                 "## Impact of changing `{}` ({} dependents)\n\n{}",
                 file,
                 impacted.len(),
-                format_suggestions_output(&impacted)
+                format_suggestions_output(
+                    &impacted,
+                    include_body_from_args(args),
+                    max_chars_from_args(args),
+                )
             ),
         }],
         is_error: None,
@@ -596,9 +669,8 @@ pub async fn diff_context(engine: &Arc<RetrievalEngine>, args: &Value) -> Result
         .ok_or_else(|| anyhow::anyhow!("Missing 'project_path' argument"))?;
 
     let days = args.get("days").and_then(|v| v.as_u64()).unwrap_or(7) as u32;
-    let limit = args.get("limit").and_then(|v| v.as_u64()).unwrap_or(30) as usize;
-
-    let nodes = engine.diff_context(project_path, days, limit.max(1)).await;
+    let limit = limit_from_args(args, 30);
+    let nodes = engine.diff_context(project_path, days, limit).await;
 
     if nodes.is_empty() {
         return Ok(ToolResult {
@@ -620,7 +692,11 @@ pub async fn diff_context(engine: &Arc<RetrievalEngine>, args: &Value) -> Result
                 "## Recently Changed Code (last {} days, {} nodes)\n\n{}",
                 days,
                 nodes.len(),
-                format_suggestions_output(&nodes)
+                format_suggestions_output(
+                    &nodes,
+                    include_body_from_args(args),
+                    max_chars_from_args(args),
+                )
             ),
         }],
         is_error: None,

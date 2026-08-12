@@ -142,7 +142,14 @@ impl ServerState {
         }
 
         let store = LanceDbStore::new(&db_path, "code_vectors").await?;
-        let default_engine = Arc::new(RetrievalEngine::new(Arc::new(RwLock::new(graph)), store));
+        let policy_path = std::path::Path::new(&db_path)
+            .parent()
+            .map(|parent| parent.join("ccm_learn/policies.json"));
+        let default_engine = Arc::new(RetrievalEngine::new_with_active_policy(
+            Arc::new(RwLock::new(graph)),
+            store,
+            policy_path.as_deref(),
+        ));
         let cache_size = engine_cache_size();
         let require_allowed_roots = require_allowed_roots();
         let allowed_roots = load_allowed_roots();
@@ -242,7 +249,14 @@ impl ServerState {
         }
 
         let store = LanceDbStore::new(&db_path, "code_vectors").await?;
-        let engine = Arc::new(RetrievalEngine::new(Arc::new(RwLock::new(graph)), store));
+        let policy_path = std::path::Path::new(&db_path)
+            .parent()
+            .map(|parent| parent.join("ccm_learn/policies.json"));
+        let engine = Arc::new(RetrievalEngine::new_with_active_policy(
+            Arc::new(RwLock::new(graph)),
+            store,
+            policy_path.as_deref(),
+        ));
 
         let mut engines = self.engines.write().await;
         if let Some(existing) = engines.get(&cache_key) {
@@ -266,7 +280,14 @@ impl ServerState {
             CodeGraph::new()
         };
         let store = LanceDbStore::new(&db_path, "code_vectors").await?;
-        let engine = Arc::new(RetrievalEngine::new(Arc::new(RwLock::new(graph)), store));
+        let policy_path = std::path::Path::new(&db_path)
+            .parent()
+            .map(|parent| parent.join("ccm_learn/policies.json"));
+        let engine = Arc::new(RetrievalEngine::new_with_active_policy(
+            Arc::new(RwLock::new(graph)),
+            store,
+            policy_path.as_deref(),
+        ));
 
         self.engines.write().await.insert(cache_key, engine.clone());
         if self
@@ -442,7 +463,9 @@ fn handle_list_tools(id: Option<Value>) -> Result<JsonRpcResponse> {
                 "properties": {
                     "file": { "type": "string", "description": "The file path" },
                     "line": { "type": "integer", "description": "The line number" },
-                    "project_path": { "type": "string", "description": "Optional absolute path to the project root. If provided, uses the index in that project." }
+                    "project_path": { "type": "string", "description": "Optional absolute path to the project root. If provided, uses the index in that project." },
+                    "include_body": { "type": "boolean", "description": "Include node body snippets. Defaults to false (metadata only)." },
+                    "max_chars": { "type": "integer", "description": "Maximum total body characters to include. Defaults to 4000." }
                 },
                 "required": ["file", "line"]
             }),
@@ -455,7 +478,9 @@ fn handle_list_tools(id: Option<Value>) -> Result<JsonRpcResponse> {
                 "properties": {
                     "query": { "type": "string", "description": "The search query (e.g. 'how does authentication work?')" },
                     "limit": { "type": "integer", "description": "Optional maximum number of results to return. Defaults to 5." },
-                    "project_path": { "type": "string", "description": "Optional absolute path to the project root. If provided, uses the index in that project." }
+                    "project_path": { "type": "string", "description": "Optional absolute path to the project root. If provided, uses the index in that project." },
+                    "include_body": { "type": "boolean", "description": "Include node body snippets. Defaults to false (metadata only)." },
+                    "max_chars": { "type": "integer", "description": "Maximum total body characters to include. Defaults to 4000." }
                 },
                 "required": ["query"]
             }),
@@ -468,7 +493,9 @@ fn handle_list_tools(id: Option<Value>) -> Result<JsonRpcResponse> {
                 "properties": {
                     "query": { "type": "string", "description": "A node name, file path fragment, or node ID fragment to search for." },
                     "limit": { "type": "integer", "description": "Optional maximum number of matches to return. Defaults to 10." },
-                    "project_path": { "type": "string", "description": "Optional absolute path to the project root. If provided, uses the index in that project." }
+                    "project_path": { "type": "string", "description": "Optional absolute path to the project root. If provided, uses the index in that project." },
+                    "include_body": { "type": "boolean", "description": "Include node body snippets. Defaults to false (metadata only)." },
+                    "max_chars": { "type": "integer", "description": "Maximum total body characters to include. Defaults to 4000." }
                 },
                 "required": ["query"]
             }),
@@ -480,7 +507,9 @@ fn handle_list_tools(id: Option<Value>) -> Result<JsonRpcResponse> {
                 "type": "object",
                 "properties": {
                     "node_id": { "type": "string", "description": "The ID of the node to retrieve." },
-                    "project_path": { "type": "string", "description": "Optional absolute path to the project root. If provided, uses the index in that project." }
+                    "project_path": { "type": "string", "description": "Optional absolute path to the project root. If provided, uses the index in that project." },
+                    "include_body": { "type": "boolean", "description": "Include node body snippets. Defaults to false (metadata only)." },
+                    "max_chars": { "type": "integer", "description": "Maximum total body characters to include. Defaults to 4000." }
                 },
                 "required": ["node_id"]
             }),
@@ -504,7 +533,9 @@ fn handle_list_tools(id: Option<Value>) -> Result<JsonRpcResponse> {
                 "properties": {
                     "node_id": { "type": "string", "description": "Node ID to find usages for (from read_graph or search_code results)." },
                     "limit": { "type": "integer", "description": "Max usages to return. Defaults to 20." },
-                    "project_path": { "type": "string", "description": "Optional absolute path to the project root." }
+                    "project_path": { "type": "string", "description": "Optional absolute path to the project root." },
+                    "include_body": { "type": "boolean", "description": "Include node body snippets. Defaults to false (metadata only)." },
+                    "max_chars": { "type": "integer", "description": "Maximum total body characters to include. Defaults to 4000." }
                 },
                 "required": ["node_id"]
             }),
@@ -518,7 +549,9 @@ fn handle_list_tools(id: Option<Value>) -> Result<JsonRpcResponse> {
                     "from_id": { "type": "string", "description": "Starting node ID." },
                     "to_id": { "type": "string", "description": "Target node ID." },
                     "max_depth": { "type": "integer", "description": "Max hops to search. Defaults to 8." },
-                    "project_path": { "type": "string", "description": "Optional absolute path to the project root." }
+                    "project_path": { "type": "string", "description": "Optional absolute path to the project root." },
+                    "include_body": { "type": "boolean", "description": "Include node body snippets. Defaults to false (metadata only)." },
+                    "max_chars": { "type": "integer", "description": "Maximum total body characters to include. Defaults to 4000." }
                 },
                 "required": ["from_id", "to_id"]
             }),
@@ -531,7 +564,9 @@ fn handle_list_tools(id: Option<Value>) -> Result<JsonRpcResponse> {
                 "properties": {
                     "file": { "type": "string", "description": "Relative path of the file to analyze (e.g. 'src/engine.rs')." },
                     "limit": { "type": "integer", "description": "Max dependents to return. Defaults to 30." },
-                    "project_path": { "type": "string", "description": "Optional absolute path to the project root." }
+                    "project_path": { "type": "string", "description": "Optional absolute path to the project root." },
+                    "include_body": { "type": "boolean", "description": "Include node body snippets. Defaults to false (metadata only)." },
+                    "max_chars": { "type": "integer", "description": "Maximum total body characters to include. Defaults to 4000." }
                 },
                 "required": ["file"]
             }),
@@ -544,7 +579,9 @@ fn handle_list_tools(id: Option<Value>) -> Result<JsonRpcResponse> {
                 "properties": {
                     "project_path": { "type": "string", "description": "Absolute path to the project root (must be a git repo)." },
                     "days": { "type": "integer", "description": "Days to look back in git history. Defaults to 7." },
-                    "limit": { "type": "integer", "description": "Max nodes to return. Defaults to 30." }
+                    "limit": { "type": "integer", "description": "Max nodes to return. Defaults to 30." },
+                    "include_body": { "type": "boolean", "description": "Include node body snippets. Defaults to false (metadata only)." },
+                    "max_chars": { "type": "integer", "description": "Maximum total body characters to include. Defaults to 4000." }
                 },
                 "required": ["project_path"]
             }),
@@ -565,6 +602,16 @@ async fn handle_call_tool(
         .and_then(|v| v.as_str())
         .ok_or_else(|| anyhow::anyhow!("Missing tool name"))?;
     let arguments = params.get("arguments").cloned().unwrap_or(json!({}));
+
+    // Trajectory bağlamı: MCP istekleri ajan bazında ayrışsın. Server stdio
+    // döngüsü sıralı olduğu için env set/restore güvenlidir; session yoksa
+    // engine varsayılanı ("cli") kullanılır.
+    if ccm_core::trajectory::trajectory_enabled() {
+        std::env::set_var("CCM_TRAJECTORY_TOOL", tool_name);
+        if let Some(request_id) = params.get("id").and_then(|v| v.as_str()) {
+            std::env::set_var("CCM_TRAJECTORY_REQUEST_ID", request_id);
+        }
+    }
 
     // Extract project_path if present
     let project_path = arguments.get("project_path").and_then(|v| v.as_str());

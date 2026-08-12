@@ -77,6 +77,45 @@ impl RetrievalEngine {
         }
     }
 
+    /// Runtime için policy store'dan aktif policy'yi yükler; store yoksa veya
+    /// aktif policy yoksa baseline kullanılır. Böylece promote edilen policy
+    /// gerçek arama yoluna uygulanır (H1 düzeltmesi).
+    pub fn new_with_active_policy(
+        graph: Arc<RwLock<CodeGraph>>,
+        vector_store: LanceDbStore,
+        store_path: Option<&std::path::Path>,
+    ) -> Self {
+        let mut policy = RetrievalPolicy::baseline();
+        if let Some(path) = store_path {
+            match crate::policy::store::PolicyStore::load(path) {
+                Ok(store) => {
+                    let active = store.active();
+                    if active.version != 1 {
+                        tracing::info!(
+                            version = active.version,
+                            task_type = %active.task_type.as_str(),
+                            "Aktif retrieval policy yüklendi"
+                        );
+                        policy = active.clone();
+                    }
+                }
+                Err(error) => {
+                    tracing::warn!(
+                        error = %error,
+                        path = %path.display(),
+                        "Policy store yüklenemedi; baseline kullanılıyor"
+                    );
+                }
+            }
+        }
+        policy = policy.with_env_overrides();
+        Self {
+            graph,
+            vector_store,
+            active_policy: policy,
+        }
+    }
+
     /// Belirli bir policy ile engine kurar (evaluation/optimizer yolu).
     pub fn with_policy(
         graph: Arc<RwLock<CodeGraph>>,
@@ -384,6 +423,7 @@ impl RetrievalEngine {
         };
 
         let mut results = Vec::new();
+        let mut seen_node_ids: HashSet<String> = HashSet::new();
         let graph = self.graph.read().await;
         for (id, content, score) in hits {
             // Distance in LanceDB is usually L2 or Cosine distance.
@@ -392,6 +432,12 @@ impl RetrievalEngine {
 
             // 1. Strip chunk suffix if present (e.g., "func:10:20#chunk0" -> "func:10:20")
             let node_id = id.split('#').next().unwrap_or(&id);
+
+            // Aynı node'un birden fazla chunk'ı sonuç kümesini doldurmasın:
+            // en yüksek benzerlikli chunk kazanır (search_code_hybrid ile aynı kural).
+            if !seen_node_ids.insert(node_id.to_string()) {
+                continue;
+            }
 
             // 2. Lookup the real Node in the Graph to get metadata (Name, Type)
             let mut title = "Semantic Match".to_string();
@@ -1110,6 +1156,7 @@ impl RetrievalEngine {
     /// Predicts relevant code context based on the user's cursor position.
     /// Uses a hybrid approach: Graph (Structural) + Vector (Semantic).
     pub async fn predict_context(&self, cursor: &CursorPosition) -> Result<Vec<ContextSuggestion>> {
+        let started = std::time::Instant::now();
         let mut suggestions = Vec::new();
 
         // 1. Spatial Query + 2. Structural Retrieval tek lock scope'unda yapılır.
@@ -1210,6 +1257,7 @@ impl RetrievalEngine {
             &suggestions,
             self.active_policy.version,
             self.active_policy.task_type,
+            started.elapsed().as_millis() as u64,
         );
         Ok(suggestions)
     }
@@ -1400,6 +1448,7 @@ fn record_search_event(
     policy_version: u32,
     task_type: crate::policy::TaskType,
 ) {
+    let started = std::time::Instant::now();
     let items: Vec<RetrievalResultItem> = results
         .iter()
         .enumerate()
@@ -1413,13 +1462,15 @@ fn record_search_event(
     let estimated_tokens: usize = results.iter().map(|result| result.content.len() / 4).sum();
     record_if_enabled(RetrievalEvent {
         session_id: std::env::var("CCM_TRAJECTORY_SESSION").unwrap_or_else(|_| "cli".to_string()),
+        tool_name: std::env::var("CCM_TRAJECTORY_TOOL").ok(),
+        request_id: std::env::var("CCM_TRAJECTORY_REQUEST_ID").ok(),
         task_type,
         policy_version,
         query: Some(query.to_string()),
         cursor: None,
         results: items,
         estimated_tokens,
-        latency_ms: 0,
+        latency_ms: started.elapsed().as_millis() as u64,
         timestamp_ms: crate::trajectory::now_ms(),
     });
 }
@@ -1429,6 +1480,7 @@ fn record_predict_event(
     results: &[ContextSuggestion],
     policy_version: u32,
     task_type: crate::policy::TaskType,
+    latency_ms: u64,
 ) {
     let items: Vec<RetrievalResultItem> = results
         .iter()
@@ -1443,6 +1495,8 @@ fn record_predict_event(
     let estimated_tokens: usize = results.iter().map(|result| result.content.len() / 4).sum();
     record_if_enabled(RetrievalEvent {
         session_id: std::env::var("CCM_TRAJECTORY_SESSION").unwrap_or_else(|_| "cli".to_string()),
+        tool_name: std::env::var("CCM_TRAJECTORY_TOOL").ok(),
+        request_id: std::env::var("CCM_TRAJECTORY_REQUEST_ID").ok(),
         task_type,
         policy_version,
         query: None,
@@ -1452,7 +1506,7 @@ fn record_predict_event(
         }),
         results: items,
         estimated_tokens,
-        latency_ms: 0,
+        latency_ms,
         timestamp_ms: crate::trajectory::now_ms(),
     });
 }

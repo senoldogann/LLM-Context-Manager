@@ -499,7 +499,8 @@ fn mcp_resolves_class_import_constructor_context_and_impact(
         json!({
             "jsonrpc":"2.0","id":5,"method":"tools/call",
             "params":{"name":"get_context","arguments":{
-                "file":"camera.py","line":4,"project_path":project_root
+                "file":"camera.py","line":4,"project_path":project_root,
+                "include_body":true
             }}
         }),
     )?;
@@ -507,11 +508,26 @@ fn mcp_resolves_class_import_constructor_context_and_impact(
     assert!(context_text.contains("Current: open_camera"));
     assert!(context_text.contains("def open_camera"));
 
-    let graph = send_request(
+    // Varsayılan (metadata-only) çıktı body içermez ama node kimliği taşır.
+    let context_meta = send_request(
         &mut stdin,
         &mut reader,
         json!({
             "jsonrpc":"2.0","id":6,"method":"tools/call",
+            "params":{"name":"get_context","arguments":{
+                "file":"camera.py","line":4,"project_path":project_root
+            }}
+        }),
+    )?;
+    let context_meta_text = tool_text(&context_meta);
+    assert!(context_meta_text.contains("Current: open_camera"));
+    assert!(context_meta_text.contains("def open_camera") == false);
+
+    let graph = send_request(
+        &mut stdin,
+        &mut reader,
+        json!({
+            "jsonrpc":"2.0","id":7,"method":"tools/call",
             "params":{"name":"read_graph","arguments":{
                 "node_id":node_id,"project_path":project_root
             }}

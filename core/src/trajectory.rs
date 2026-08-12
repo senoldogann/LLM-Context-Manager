@@ -24,6 +24,10 @@ pub struct RetrievalResultItem {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RetrievalEvent {
     pub session_id: String,
+    #[serde(default)]
+    pub tool_name: Option<String>,
+    #[serde(default)]
+    pub request_id: Option<String>,
     pub task_type: TaskType,
     pub policy_version: u32,
     pub query: Option<String>,
@@ -51,6 +55,13 @@ pub fn record_if_enabled(event: RetrievalEvent) {
     }
 }
 
+/// Trajectory aktif mi? (MCP layer env bağlamını koşullu kurmak için kullanır.)
+pub fn trajectory_enabled() -> bool {
+    std::env::var("CCM_TRAJECTORY_LOG")
+        .map(|value| matches!(value.to_lowercase().as_str(), "1" | "true" | "yes"))
+        .unwrap_or(false)
+}
+
 pub fn append_event(path: &PathBuf, event: &RetrievalEvent) -> Result<()> {
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent)?;
@@ -63,12 +74,6 @@ pub fn append_event(path: &PathBuf, event: &RetrievalEvent) -> Result<()> {
         .open(path)?;
     file.write_all(line.as_bytes())?;
     Ok(())
-}
-
-fn trajectory_enabled() -> bool {
-    std::env::var("CCM_TRAJECTORY_LOG")
-        .map(|value| matches!(value.to_lowercase().as_str(), "1" | "true" | "yes"))
-        .unwrap_or(false)
 }
 
 fn default_path() -> PathBuf {
@@ -94,6 +99,8 @@ mod tests {
         let path = dir.path().join("experiences.jsonl");
         let event = RetrievalEvent {
             session_id: "s1".into(),
+            tool_name: Some("search_code".into()),
+            request_id: Some("req-1".into()),
             task_type: TaskType::BugFix,
             policy_version: 1,
             query: Some("find where compute_tax is implemented".into()),
