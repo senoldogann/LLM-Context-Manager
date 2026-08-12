@@ -1,0 +1,6075 @@
+{
+  "schema_version": 1,
+  "tasks": [
+    {
+      "expected": {
+        "file_paths": [
+          "./src/report.rs"
+        ],
+        "max_rank": 5,
+        "min_recall": 1,
+        "node_ids": [
+          "./src/report.rs:function_item:symbol:39b2191bb94f600c:0"
+        ]
+      },
+      "id": "syn-a-search-001",
+      "notes": "Deterministic synthetic fixture task",
+      "priority": 1,
+      "query": {
+        "text": "find where build_sales_report is implemented",
+        "type": "search_code"
+      },
+      "repo": {
+        "languages": [
+          "rust"
+        ],
+        "name": "repo_a",
+        "path": "eval/fixtures/repos/repo_a"
+      },
+      "split": "train",
+      "tags": [
+        "synthetic",
+        "search_code",
+        "direct",
+        "train"
+      ],
+      "task_type": "bug_fix"
+    },
+    {
+      "expected": {
+        "file_paths": [
+          "./src/db.rs"
+        ],
+        "max_rank": 5,
+        "min_recall": 1,
+        "node_ids": [
+          "./src/db.rs:function_item:symbol:ecc29345aea9e14b:0"
+        ]
+      },
+      "id": "syn-a-search-002",
+      "notes": "Deterministic synthetic fixture task",
+      "priority": 1,
+      "query": {
+        "text": "find where insert_audit is implemented",
+        "type": "search_code"
+      },
+      "repo": {
+        "languages": [
+          "rust"
+        ],
+        "name": "repo_a",
+        "path": "eval/fixtures/repos/repo_a"
+      },
+      "split": "train",
+      "tags": [
+        "synthetic",
+        "search_code",
+        "direct",
+        "train"
+      ],
+      "task_type": "feature"
+    },
+    {
+      "expected": {
+        "file_paths": [
+          "./src/order.rs"
+        ],
+        "max_rank": 5,
+        "min_recall": 1,
+        "node_ids": [
+          "./src/order.rs:struct_item:symbol:5d271f14710d8747:0"
+        ]
+      },
+      "id": "syn-a-search-003",
+      "notes": "Deterministic synthetic fixture task",
+      "priority": 1,
+      "query": {
+        "text": "find where OrderLine is implemented",
+        "type": "search_code"
+      },
+      "repo": {
+        "languages": [
+          "rust"
+        ],
+        "name": "repo_a",
+        "path": "eval/fixtures/repos/repo_a"
+      },
+      "split": "train",
+      "tags": [
+        "synthetic",
+        "search_code",
+        "direct",
+        "train"
+      ],
+      "task_type": "refactor"
+    },
+    {
+      "expected": {
+        "file_paths": [
+          "./src/db.rs"
+        ],
+        "max_rank": 5,
+        "min_recall": 1,
+        "node_ids": [
+          "./src/db.rs:struct_item:symbol:3d764731b2aa98a7:0"
+        ]
+      },
+      "id": "syn-a-search-004",
+      "notes": "Deterministic synthetic fixture task",
+      "priority": 1,
+      "query": {
+        "text": "find where Connection is implemented",
+        "type": "search_code"
+      },
+      "repo": {
+        "languages": [
+          "rust"
+        ],
+        "name": "repo_a",
+        "path": "eval/fixtures/repos/repo_a"
+      },
+      "split": "train",
+      "tags": [
+        "synthetic",
+        "search_code",
+        "direct",
+        "train"
+      ],
+      "task_type": "investigation"
+    },
+    {
+      "expected": {
+        "file_paths": [
+          "./src/report.rs"
+        ],
+        "max_rank": 5,
+        "min_recall": 1,
+        "node_ids": [
+          "./src/report.rs:struct_item:symbol:1daea9daf4ebe583:0"
+        ]
+      },
+      "id": "syn-a-search-005",
+      "notes": "Deterministic synthetic fixture task",
+      "priority": 1,
+      "query": {
+        "text": "find where SalesReport is implemented",
+        "type": "search_code"
+      },
+      "repo": {
+        "languages": [
+          "rust"
+        ],
+        "name": "repo_a",
+        "path": "eval/fixtures/repos/repo_a"
+      },
+      "split": "train",
+      "tags": [
+        "synthetic",
+        "search_code",
+        "direct",
+        "train"
+      ],
+      "task_type": "test"
+    },
+    {
+      "expected": {
+        "file_paths": [
+          "./src/notify.rs"
+        ],
+        "max_rank": 5,
+        "min_recall": 1,
+        "node_ids": [
+          "./src/notify.rs:function_item:symbol:22ac52366cd9be3f:0"
+        ]
+      },
+      "id": "syn-a-search-006",
+      "notes": "Deterministic synthetic fixture task",
+      "priority": 1,
+      "query": {
+        "text": "find where dispatch is implemented",
+        "type": "search_code"
+      },
+      "repo": {
+        "languages": [
+          "rust"
+        ],
+        "name": "repo_a",
+        "path": "eval/fixtures/repos/repo_a"
+      },
+      "split": "train",
+      "tags": [
+        "synthetic",
+        "search_code",
+        "direct",
+        "train"
+      ],
+      "task_type": "unknown"
+    },
+    {
+      "expected": {
+        "file_paths": [
+          "./src/tax.rs"
+        ],
+        "max_rank": 5,
+        "min_recall": 1,
+        "node_ids": [
+          "./src/tax.rs:function_item:symbol:8d92d6eb6e400a93:0"
+        ]
+      },
+      "id": "syn-a-search-007",
+      "notes": "Deterministic synthetic fixture task",
+      "priority": 1,
+      "query": {
+        "text": "find where compute_tax_for_region is implemented",
+        "type": "search_code"
+      },
+      "repo": {
+        "languages": [
+          "rust"
+        ],
+        "name": "repo_a",
+        "path": "eval/fixtures/repos/repo_a"
+      },
+      "split": "train",
+      "tags": [
+        "synthetic",
+        "search_code",
+        "direct",
+        "train"
+      ],
+      "task_type": "bug_fix"
+    },
+    {
+      "expected": {
+        "file_paths": [
+          "./src/report.rs"
+        ],
+        "max_rank": 5,
+        "min_recall": 1,
+        "node_ids": [
+          "./src/report.rs:function_item:symbol:16b60621c1b03160:0"
+        ]
+      },
+      "id": "syn-a-search-008",
+      "notes": "Deterministic synthetic fixture task",
+      "priority": 1,
+      "query": {
+        "text": "find where daily_summary is implemented",
+        "type": "search_code"
+      },
+      "repo": {
+        "languages": [
+          "rust"
+        ],
+        "name": "repo_a",
+        "path": "eval/fixtures/repos/repo_a"
+      },
+      "split": "train",
+      "tags": [
+        "synthetic",
+        "search_code",
+        "direct",
+        "train"
+      ],
+      "task_type": "feature"
+    },
+    {
+      "expected": {
+        "file_paths": [
+          "./src/config.rs"
+        ],
+        "max_rank": 5,
+        "min_recall": 1,
+        "node_ids": [
+          "./src/config.rs:function_item:symbol:6ff726c4074a016a:0"
+        ]
+      },
+      "id": "syn-a-search-009",
+      "notes": "Deterministic synthetic fixture task",
+      "priority": 1,
+      "query": {
+        "text": "find where default_config is implemented",
+        "type": "search_code"
+      },
+      "repo": {
+        "languages": [
+          "rust"
+        ],
+        "name": "repo_a",
+        "path": "eval/fixtures/repos/repo_a"
+      },
+      "split": "train",
+      "tags": [
+        "synthetic",
+        "search_code",
+        "direct",
+        "train"
+      ],
+      "task_type": "refactor"
+    },
+    {
+      "expected": {
+        "file_paths": [
+          "./src/utils.rs"
+        ],
+        "max_rank": 5,
+        "min_recall": 1,
+        "node_ids": [
+          "./src/utils.rs:function_item:symbol:07925729778a41b3:0"
+        ]
+      },
+      "id": "syn-a-search-010",
+      "notes": "Deterministic synthetic fixture task",
+      "priority": 1,
+      "query": {
+        "text": "find where cents_to_display is implemented",
+        "type": "search_code"
+      },
+      "repo": {
+        "languages": [
+          "rust"
+        ],
+        "name": "repo_a",
+        "path": "eval/fixtures/repos/repo_a"
+      },
+      "split": "train",
+      "tags": [
+        "synthetic",
+        "search_code",
+        "direct",
+        "train"
+      ],
+      "task_type": "investigation"
+    },
+    {
+      "expected": {
+        "file_paths": [
+          "./src/config.rs"
+        ],
+        "max_rank": 5,
+        "min_recall": 1,
+        "node_ids": [
+          "./src/config.rs:function_item:symbol:f32114e08ce1f7be:0"
+        ]
+      },
+      "id": "syn-a-search-011",
+      "notes": "Deterministic synthetic fixture task",
+      "priority": 1,
+      "query": {
+        "text": "find where currency_symbol is implemented",
+        "type": "search_code"
+      },
+      "repo": {
+        "languages": [
+          "rust"
+        ],
+        "name": "repo_a",
+        "path": "eval/fixtures/repos/repo_a"
+      },
+      "split": "train",
+      "tags": [
+        "synthetic",
+        "search_code",
+        "direct",
+        "train"
+      ],
+      "task_type": "test"
+    },
+    {
+      "expected": {
+        "file_paths": [
+          "./src/db.rs"
+        ],
+        "max_rank": 5,
+        "min_recall": 1,
+        "node_ids": [
+          "./src/db.rs:function_item:symbol:ab34fcd5f1b2144d:0"
+        ]
+      },
+      "id": "syn-a-search-012",
+      "notes": "Deterministic synthetic fixture task",
+      "priority": 1,
+      "query": {
+        "text": "find where find_item is implemented",
+        "type": "search_code"
+      },
+      "repo": {
+        "languages": [
+          "rust"
+        ],
+        "name": "repo_a",
+        "path": "eval/fixtures/repos/repo_a"
+      },
+      "split": "train",
+      "tags": [
+        "synthetic",
+        "search_code",
+        "direct",
+        "train"
+      ],
+      "task_type": "unknown"
+    },
+    {
+      "expected": {
+        "file_paths": [
+          "./src/pricing.rs"
+        ],
+        "max_rank": 5,
+        "min_recall": 1,
+        "node_ids": [
+          "./src/pricing.rs:function_item:symbol:c85634cafef55daa:0"
+        ]
+      },
+      "id": "syn-a-search-013",
+      "notes": "Deterministic synthetic fixture task",
+      "priority": 1,
+      "query": {
+        "text": "find where apply_discount is implemented",
+        "type": "search_code"
+      },
+      "repo": {
+        "languages": [
+          "rust"
+        ],
+        "name": "repo_a",
+        "path": "eval/fixtures/repos/repo_a"
+      },
+      "split": "train",
+      "tags": [
+        "synthetic",
+        "search_code",
+        "direct",
+        "train"
+      ],
+      "task_type": "bug_fix"
+    },
+    {
+      "expected": {
+        "file_paths": [
+          "./src/shipping.rs"
+        ],
+        "max_rank": 5,
+        "min_recall": 1,
+        "node_ids": [
+          "./src/shipping.rs:function_item:symbol:90834a8f7b4b7f5f:0"
+        ]
+      },
+      "id": "syn-a-search-014",
+      "notes": "Deterministic synthetic fixture task",
+      "priority": 1,
+      "query": {
+        "text": "find where schedule is implemented",
+        "type": "search_code"
+      },
+      "repo": {
+        "languages": [
+          "rust"
+        ],
+        "name": "repo_a",
+        "path": "eval/fixtures/repos/repo_a"
+      },
+      "split": "train",
+      "tags": [
+        "synthetic",
+        "search_code",
+        "direct",
+        "train"
+      ],
+      "task_type": "feature"
+    },
+    {
+      "expected": {
+        "file_paths": [
+          "./src/main.rs"
+        ],
+        "max_rank": 5,
+        "min_recall": 1,
+        "node_ids": [
+          "./src/main.rs:function_item:symbol:b43bc420a15e77f0:0"
+        ]
+      },
+      "id": "syn-a-search-015",
+      "notes": "Deterministic synthetic fixture task",
+      "priority": 1,
+      "query": {
+        "text": "find where main is implemented",
+        "type": "search_code"
+      },
+      "repo": {
+        "languages": [
+          "rust"
+        ],
+        "name": "repo_a",
+        "path": "eval/fixtures/repos/repo_a"
+      },
+      "split": "train",
+      "tags": [
+        "synthetic",
+        "search_code",
+        "direct",
+        "train"
+      ],
+      "task_type": "refactor"
+    },
+    {
+      "expected": {
+        "file_paths": [
+          "./src/shipping.rs"
+        ],
+        "max_rank": 5,
+        "min_recall": 1,
+        "node_ids": [
+          "./src/shipping.rs:function_item:symbol:9515e7805f23f5de:0"
+        ]
+      },
+      "id": "syn-a-search-016",
+      "notes": "Deterministic synthetic fixture task",
+      "priority": 1,
+      "query": {
+        "text": "find where estimate_days is implemented",
+        "type": "search_code"
+      },
+      "repo": {
+        "languages": [
+          "rust"
+        ],
+        "name": "repo_a",
+        "path": "eval/fixtures/repos/repo_a"
+      },
+      "split": "train",
+      "tags": [
+        "synthetic",
+        "search_code",
+        "direct",
+        "train"
+      ],
+      "task_type": "investigation"
+    },
+    {
+      "expected": {
+        "file_paths": [
+          "./src/inventory.rs"
+        ],
+        "max_rank": 5,
+        "min_recall": 1,
+        "node_ids": [
+          "./src/inventory.rs:function_item:symbol:d05bef496cf60f0b:0"
+        ]
+      },
+      "id": "syn-a-search-017",
+      "notes": "Deterministic synthetic fixture task",
+      "priority": 1,
+      "query": {
+        "text": "find where reserve_stock is implemented",
+        "type": "search_code"
+      },
+      "repo": {
+        "languages": [
+          "rust"
+        ],
+        "name": "repo_a",
+        "path": "eval/fixtures/repos/repo_a"
+      },
+      "split": "train",
+      "tags": [
+        "synthetic",
+        "search_code",
+        "direct",
+        "train"
+      ],
+      "task_type": "test"
+    },
+    {
+      "expected": {
+        "file_paths": [
+          "./src/tax.rs"
+        ],
+        "max_rank": 5,
+        "min_recall": 1,
+        "node_ids": [
+          "./src/tax.rs:function_item:symbol:a5119714814c8e6e:0"
+        ]
+      },
+      "id": "syn-a-search-018",
+      "notes": "Deterministic synthetic fixture task",
+      "priority": 1,
+      "query": {
+        "text": "find where compute_tax is implemented",
+        "type": "search_code"
+      },
+      "repo": {
+        "languages": [
+          "rust"
+        ],
+        "name": "repo_a",
+        "path": "eval/fixtures/repos/repo_a"
+      },
+      "split": "train",
+      "tags": [
+        "synthetic",
+        "search_code",
+        "direct",
+        "train"
+      ],
+      "task_type": "unknown"
+    },
+    {
+      "expected": {
+        "file_paths": [
+          "./src/utils.rs"
+        ],
+        "max_rank": 5,
+        "min_recall": 1,
+        "node_ids": [
+          "./src/utils.rs:function_item:symbol:3c59ab538128f87c:0"
+        ]
+      },
+      "id": "syn-a-search-019",
+      "notes": "Deterministic synthetic fixture task",
+      "priority": 1,
+      "query": {
+        "text": "find where sku_normalize is implemented",
+        "type": "search_code"
+      },
+      "repo": {
+        "languages": [
+          "rust"
+        ],
+        "name": "repo_a",
+        "path": "eval/fixtures/repos/repo_a"
+      },
+      "split": "train",
+      "tags": [
+        "synthetic",
+        "search_code",
+        "direct",
+        "train"
+      ],
+      "task_type": "bug_fix"
+    },
+    {
+      "expected": {
+        "file_paths": [
+          "./src/pricing.rs"
+        ],
+        "max_rank": 5,
+        "min_recall": 1,
+        "node_ids": [
+          "./src/pricing.rs:function_item:symbol:b394a57255643f64:0"
+        ]
+      },
+      "id": "syn-a-search-020",
+      "notes": "Deterministic synthetic fixture task",
+      "priority": 1,
+      "query": {
+        "text": "find where compute_total is implemented",
+        "type": "search_code"
+      },
+      "repo": {
+        "languages": [
+          "rust"
+        ],
+        "name": "repo_a",
+        "path": "eval/fixtures/repos/repo_a"
+      },
+      "split": "train",
+      "tags": [
+        "synthetic",
+        "search_code",
+        "direct",
+        "train"
+      ],
+      "task_type": "feature"
+    },
+    {
+      "expected": {
+        "file_paths": [
+          "./src/db.rs"
+        ],
+        "max_rank": 5,
+        "min_recall": 1,
+        "node_ids": [
+          "./src/db.rs:function_item:symbol:06133baab8c55982:0"
+        ]
+      },
+      "id": "syn-a-search-021",
+      "notes": "Deterministic synthetic fixture task",
+      "priority": 1,
+      "query": {
+        "text": "find where query_orders is implemented",
+        "type": "search_code"
+      },
+      "repo": {
+        "languages": [
+          "rust"
+        ],
+        "name": "repo_a",
+        "path": "eval/fixtures/repos/repo_a"
+      },
+      "split": "train",
+      "tags": [
+        "synthetic",
+        "search_code",
+        "direct",
+        "train"
+      ],
+      "task_type": "refactor"
+    },
+    {
+      "expected": {
+        "file_paths": [
+          "./src/audit.rs"
+        ],
+        "max_rank": 5,
+        "min_recall": 1,
+        "node_ids": [
+          "./src/audit.rs:function_item:symbol:206827ea6ce5d0e3:0"
+        ]
+      },
+      "id": "syn-a-search-022",
+      "notes": "Deterministic synthetic fixture task",
+      "priority": 1,
+      "query": {
+        "text": "find where audit_label is implemented",
+        "type": "search_code"
+      },
+      "repo": {
+        "languages": [
+          "rust"
+        ],
+        "name": "repo_a",
+        "path": "eval/fixtures/repos/repo_a"
+      },
+      "split": "train",
+      "tags": [
+        "synthetic",
+        "search_code",
+        "direct",
+        "train"
+      ],
+      "task_type": "investigation"
+    },
+    {
+      "expected": {
+        "file_paths": [
+          "./src/utils.rs"
+        ],
+        "max_rank": 5,
+        "min_recall": 1,
+        "node_ids": [
+          "./src/utils.rs:function_item:symbol:bd0141c0bff1c644:0"
+        ]
+      },
+      "id": "syn-a-search-023",
+      "notes": "Deterministic synthetic fixture task",
+      "priority": 1,
+      "query": {
+        "text": "find where is_valid_sku is implemented",
+        "type": "search_code"
+      },
+      "repo": {
+        "languages": [
+          "rust"
+        ],
+        "name": "repo_a",
+        "path": "eval/fixtures/repos/repo_a"
+      },
+      "split": "train",
+      "tags": [
+        "synthetic",
+        "search_code",
+        "direct",
+        "train"
+      ],
+      "task_type": "test"
+    },
+    {
+      "expected": {
+        "file_paths": [
+          "./src/inventory.rs"
+        ],
+        "max_rank": 5,
+        "min_recall": 1,
+        "node_ids": [
+          "./src/inventory.rs:function_item:symbol:85ecf917ee9b58be:0"
+        ]
+      },
+      "id": "syn-a-search-024",
+      "notes": "Deterministic synthetic fixture task",
+      "priority": 1,
+      "query": {
+        "text": "find where lookup_item is implemented",
+        "type": "search_code"
+      },
+      "repo": {
+        "languages": [
+          "rust"
+        ],
+        "name": "repo_a",
+        "path": "eval/fixtures/repos/repo_a"
+      },
+      "split": "train",
+      "tags": [
+        "synthetic",
+        "search_code",
+        "direct",
+        "train"
+      ],
+      "task_type": "unknown"
+    },
+    {
+      "expected": {
+        "file_paths": [
+          "./src/audit.rs"
+        ],
+        "max_rank": 5,
+        "min_recall": 1,
+        "node_ids": [
+          "./src/audit.rs:function_item:symbol:05edc6dbb742390e:0"
+        ]
+      },
+      "id": "syn-a-search-025",
+      "notes": "Deterministic synthetic fixture task",
+      "priority": 1,
+      "query": {
+        "text": "find where recent_events is implemented",
+        "type": "search_code"
+      },
+      "repo": {
+        "languages": [
+          "rust"
+        ],
+        "name": "repo_a",
+        "path": "eval/fixtures/repos/repo_a"
+      },
+      "split": "train",
+      "tags": [
+        "synthetic",
+        "search_code",
+        "direct",
+        "train"
+      ],
+      "task_type": "bug_fix"
+    },
+    {
+      "expected": {
+        "file_paths": [
+          "./src/inventory.rs"
+        ],
+        "max_rank": 5,
+        "min_recall": 1,
+        "node_ids": [
+          "./src/inventory.rs:function_item:symbol:5269794ad7655a6f:0"
+        ]
+      },
+      "id": "syn-a-context-001",
+      "notes": "Deterministic synthetic fixture task",
+      "priority": 1,
+      "query": {
+        "file_path": "./src/inventory.rs",
+        "line": 29,
+        "type": "get_context"
+      },
+      "repo": {
+        "languages": [
+          "rust"
+        ],
+        "name": "repo_a",
+        "path": "eval/fixtures/repos/repo_a"
+      },
+      "split": "train",
+      "tags": [
+        "synthetic",
+        "get_context",
+        "train"
+      ],
+      "task_type": "feature"
+    },
+    {
+      "expected": {
+        "file_paths": [
+          "./src/utils.rs"
+        ],
+        "max_rank": 5,
+        "min_recall": 1,
+        "node_ids": [
+          "./src/utils.rs:function_item:symbol:b763cd3f287ca27a:0"
+        ]
+      },
+      "id": "syn-a-context-002",
+      "notes": "Deterministic synthetic fixture task",
+      "priority": 1,
+      "query": {
+        "file_path": "./src/utils.rs",
+        "line": 13,
+        "type": "get_context"
+      },
+      "repo": {
+        "languages": [
+          "rust"
+        ],
+        "name": "repo_a",
+        "path": "eval/fixtures/repos/repo_a"
+      },
+      "split": "train",
+      "tags": [
+        "synthetic",
+        "get_context",
+        "train"
+      ],
+      "task_type": "refactor"
+    },
+    {
+      "expected": {
+        "file_paths": [
+          "./src/audit.rs"
+        ],
+        "max_rank": 5,
+        "min_recall": 1,
+        "node_ids": [
+          "./src/audit.rs:impl_item:symbol:744fd9aa14e134ed:0"
+        ]
+      },
+      "id": "syn-a-context-003",
+      "notes": "Deterministic synthetic fixture task",
+      "priority": 1,
+      "query": {
+        "file_path": "./src/audit.rs",
+        "line": 16,
+        "type": "get_context"
+      },
+      "repo": {
+        "languages": [
+          "rust"
+        ],
+        "name": "repo_a",
+        "path": "eval/fixtures/repos/repo_a"
+      },
+      "split": "train",
+      "tags": [
+        "synthetic",
+        "get_context",
+        "train"
+      ],
+      "task_type": "investigation"
+    },
+    {
+      "expected": {
+        "file_paths": [
+          "./src/order.rs"
+        ],
+        "max_rank": 5,
+        "min_recall": 1,
+        "node_ids": [
+          "./src/order.rs:function_item:symbol:e31f3cf8d5037e59:0"
+        ]
+      },
+      "id": "syn-a-context-004",
+      "notes": "Deterministic synthetic fixture task",
+      "priority": 1,
+      "query": {
+        "file_path": "./src/order.rs",
+        "line": 23,
+        "type": "get_context"
+      },
+      "repo": {
+        "languages": [
+          "rust"
+        ],
+        "name": "repo_a",
+        "path": "eval/fixtures/repos/repo_a"
+      },
+      "split": "train",
+      "tags": [
+        "synthetic",
+        "get_context",
+        "train"
+      ],
+      "task_type": "test"
+    },
+    {
+      "expected": {
+        "file_paths": [
+          "./src/order.rs"
+        ],
+        "max_rank": 5,
+        "min_recall": 1,
+        "node_ids": [
+          "./src/order.rs:function_item:symbol:0f9a366afc883757:0"
+        ]
+      },
+      "id": "syn-a-context-005",
+      "notes": "Deterministic synthetic fixture task",
+      "priority": 1,
+      "query": {
+        "file_path": "./src/order.rs",
+        "line": 27,
+        "type": "get_context"
+      },
+      "repo": {
+        "languages": [
+          "rust"
+        ],
+        "name": "repo_a",
+        "path": "eval/fixtures/repos/repo_a"
+      },
+      "split": "train",
+      "tags": [
+        "synthetic",
+        "get_context",
+        "train"
+      ],
+      "task_type": "unknown"
+    },
+    {
+      "expected": {
+        "file_paths": [
+          "./src/db.rs"
+        ],
+        "max_rank": 5,
+        "min_recall": 1,
+        "node_ids": [
+          "./src/db.rs:impl_item:symbol:92da5d5150c25674:0"
+        ]
+      },
+      "id": "syn-a-context-006",
+      "notes": "Deterministic synthetic fixture task",
+      "priority": 1,
+      "query": {
+        "file_path": "./src/db.rs",
+        "line": 17,
+        "type": "get_context"
+      },
+      "repo": {
+        "languages": [
+          "rust"
+        ],
+        "name": "repo_a",
+        "path": "eval/fixtures/repos/repo_a"
+      },
+      "split": "train",
+      "tags": [
+        "synthetic",
+        "get_context",
+        "train"
+      ],
+      "task_type": "bug_fix"
+    },
+    {
+      "expected": {
+        "file_paths": [
+          "./src/pricing.rs"
+        ],
+        "max_rank": 5,
+        "min_recall": 1,
+        "node_ids": [
+          "./src/pricing.rs:function_item:symbol:8afbdc3fb9ab22b6:0"
+        ]
+      },
+      "id": "syn-a-context-007",
+      "notes": "Deterministic synthetic fixture task",
+      "priority": 1,
+      "query": {
+        "file_path": "./src/pricing.rs",
+        "line": 14,
+        "type": "get_context"
+      },
+      "repo": {
+        "languages": [
+          "rust"
+        ],
+        "name": "repo_a",
+        "path": "eval/fixtures/repos/repo_a"
+      },
+      "split": "train",
+      "tags": [
+        "synthetic",
+        "get_context",
+        "train"
+      ],
+      "task_type": "feature"
+    },
+    {
+      "expected": {
+        "file_paths": [
+          "./src/order.rs"
+        ],
+        "max_rank": 5,
+        "min_recall": 1,
+        "node_ids": [
+          "./src/order.rs:function_item:symbol:3c5d214b2ce5da7f:0"
+        ]
+      },
+      "id": "syn-a-context-008",
+      "notes": "Deterministic synthetic fixture task",
+      "priority": 1,
+      "query": {
+        "file_path": "./src/order.rs",
+        "line": 31,
+        "type": "get_context"
+      },
+      "repo": {
+        "languages": [
+          "rust"
+        ],
+        "name": "repo_a",
+        "path": "eval/fixtures/repos/repo_a"
+      },
+      "split": "train",
+      "tags": [
+        "synthetic",
+        "get_context",
+        "train"
+      ],
+      "task_type": "refactor"
+    },
+    {
+      "expected": {
+        "file_paths": [
+          "./src/db.rs"
+        ],
+        "max_rank": 5,
+        "min_recall": 1,
+        "node_ids": [
+          "./src/db.rs:function_item:symbol:ca6e4222940d4ab1:0"
+        ]
+      },
+      "id": "syn-a-context-009",
+      "notes": "Deterministic synthetic fixture task",
+      "priority": 1,
+      "query": {
+        "file_path": "./src/db.rs",
+        "line": 34,
+        "type": "get_context"
+      },
+      "repo": {
+        "languages": [
+          "rust"
+        ],
+        "name": "repo_a",
+        "path": "eval/fixtures/repos/repo_a"
+      },
+      "split": "train",
+      "tags": [
+        "synthetic",
+        "get_context",
+        "train"
+      ],
+      "task_type": "investigation"
+    },
+    {
+      "expected": {
+        "file_paths": [
+          "./src/notify.rs"
+        ],
+        "max_rank": 5,
+        "min_recall": 1,
+        "node_ids": [
+          "./src/notify.rs:function_item:symbol:a641edd4981d5bff:0"
+        ]
+      },
+      "id": "syn-a-context-010",
+      "notes": "Deterministic synthetic fixture task",
+      "priority": 1,
+      "query": {
+        "file_path": "./src/notify.rs",
+        "line": 11,
+        "type": "get_context"
+      },
+      "repo": {
+        "languages": [
+          "rust"
+        ],
+        "name": "repo_a",
+        "path": "eval/fixtures/repos/repo_a"
+      },
+      "split": "train",
+      "tags": [
+        "synthetic",
+        "get_context",
+        "train"
+      ],
+      "task_type": "test"
+    },
+    {
+      "expected": {
+        "file_paths": [
+          "./src/audit.rs"
+        ],
+        "max_rank": 5,
+        "min_recall": 1,
+        "node_ids": [
+          "./src/audit.rs:function_item:symbol:49fce726f7062f2d:0"
+        ]
+      },
+      "id": "syn-a-context-011",
+      "notes": "Deterministic synthetic fixture task",
+      "priority": 1,
+      "query": {
+        "file_path": "./src/audit.rs",
+        "line": 4,
+        "type": "get_context"
+      },
+      "repo": {
+        "languages": [
+          "rust"
+        ],
+        "name": "repo_a",
+        "path": "eval/fixtures/repos/repo_a"
+      },
+      "split": "train",
+      "tags": [
+        "synthetic",
+        "get_context",
+        "train"
+      ],
+      "task_type": "unknown"
+    },
+    {
+      "expected": {
+        "file_paths": [
+          "./src/shipping.rs"
+        ],
+        "max_rank": 5,
+        "min_recall": 1,
+        "node_ids": [
+          "./src/shipping.rs:struct_item:symbol:adf1d6c390174111:0"
+        ]
+      },
+      "id": "syn-a-context-012",
+      "notes": "Deterministic synthetic fixture task",
+      "priority": 1,
+      "query": {
+        "file_path": "./src/shipping.rs",
+        "line": 31,
+        "type": "get_context"
+      },
+      "repo": {
+        "languages": [
+          "rust"
+        ],
+        "name": "repo_a",
+        "path": "eval/fixtures/repos/repo_a"
+      },
+      "split": "train",
+      "tags": [
+        "synthetic",
+        "get_context",
+        "train"
+      ],
+      "task_type": "bug_fix"
+    },
+    {
+      "expected": {
+        "file_paths": [
+          "./src/order.rs"
+        ],
+        "max_rank": 5,
+        "min_recall": 1,
+        "node_ids": [
+          "./src/order.rs:struct_item:symbol:f101692979b2d945:0"
+        ]
+      },
+      "id": "syn-a-context-013",
+      "notes": "Deterministic synthetic fixture task",
+      "priority": 1,
+      "query": {
+        "file_path": "./src/order.rs",
+        "line": 3,
+        "type": "get_context"
+      },
+      "repo": {
+        "languages": [
+          "rust"
+        ],
+        "name": "repo_a",
+        "path": "eval/fixtures/repos/repo_a"
+      },
+      "split": "train",
+      "tags": [
+        "synthetic",
+        "get_context",
+        "train"
+      ],
+      "task_type": "feature"
+    },
+    {
+      "expected": {
+        "file_paths": [
+          "./src/config.rs"
+        ],
+        "max_rank": 5,
+        "min_recall": 1,
+        "node_ids": [
+          "./src/config.rs:function_item:symbol:ffb9760e0361a8b1:0"
+        ]
+      },
+      "id": "syn-a-context-014",
+      "notes": "Deterministic synthetic fixture task",
+      "priority": 1,
+      "query": {
+        "file_path": "./src/config.rs",
+        "line": 23,
+        "type": "get_context"
+      },
+      "repo": {
+        "languages": [
+          "rust"
+        ],
+        "name": "repo_a",
+        "path": "eval/fixtures/repos/repo_a"
+      },
+      "split": "train",
+      "tags": [
+        "synthetic",
+        "get_context",
+        "train"
+      ],
+      "task_type": "refactor"
+    },
+    {
+      "expected": {
+        "file_paths": [
+          "./src/db.rs"
+        ],
+        "max_rank": 5,
+        "min_recall": 1,
+        "node_ids": [
+          "./src/db.rs:struct_item:symbol:aa069ccab40657db:0"
+        ]
+      },
+      "id": "syn-a-context-015",
+      "notes": "Deterministic synthetic fixture task",
+      "priority": 1,
+      "query": {
+        "file_path": "./src/db.rs",
+        "line": 8,
+        "type": "get_context"
+      },
+      "repo": {
+        "languages": [
+          "rust"
+        ],
+        "name": "repo_a",
+        "path": "eval/fixtures/repos/repo_a"
+      },
+      "split": "train",
+      "tags": [
+        "synthetic",
+        "get_context",
+        "train"
+      ],
+      "task_type": "investigation"
+    },
+    {
+      "expected": {
+        "file_paths": [
+          "./src/report.rs"
+        ],
+        "max_rank": 5,
+        "min_recall": 1,
+        "node_ids": [
+          "./src/report.rs:function_item:symbol:907b1f6b5c630876:0"
+        ]
+      },
+      "id": "syn-a-context-016",
+      "notes": "Deterministic synthetic fixture task",
+      "priority": 1,
+      "query": {
+        "file_path": "./src/report.rs",
+        "line": 16,
+        "type": "get_context"
+      },
+      "repo": {
+        "languages": [
+          "rust"
+        ],
+        "name": "repo_a",
+        "path": "eval/fixtures/repos/repo_a"
+      },
+      "split": "train",
+      "tags": [
+        "synthetic",
+        "get_context",
+        "train"
+      ],
+      "task_type": "test"
+    },
+    {
+      "expected": {
+        "file_paths": [
+          "./src/notify.rs"
+        ],
+        "max_rank": 5,
+        "min_recall": 1,
+        "node_ids": [
+          "./src/notify.rs:function_item:symbol:e4f548bb540e8db8:0"
+        ]
+      },
+      "id": "syn-a-context-017",
+      "notes": "Deterministic synthetic fixture task",
+      "priority": 1,
+      "query": {
+        "file_path": "./src/notify.rs",
+        "line": 1,
+        "type": "get_context"
+      },
+      "repo": {
+        "languages": [
+          "rust"
+        ],
+        "name": "repo_a",
+        "path": "eval/fixtures/repos/repo_a"
+      },
+      "split": "train",
+      "tags": [
+        "synthetic",
+        "get_context",
+        "train"
+      ],
+      "task_type": "unknown"
+    },
+    {
+      "expected": {
+        "file_paths": [
+          "./src/config.rs"
+        ],
+        "max_rank": 5,
+        "min_recall": 1,
+        "node_ids": [
+          "./src/config.rs:struct_item:symbol:a970a63873bdc000:0"
+        ]
+      },
+      "id": "syn-a-context-018",
+      "notes": "Deterministic synthetic fixture task",
+      "priority": 1,
+      "query": {
+        "file_path": "./src/config.rs",
+        "line": 1,
+        "type": "get_context"
+      },
+      "repo": {
+        "languages": [
+          "rust"
+        ],
+        "name": "repo_a",
+        "path": "eval/fixtures/repos/repo_a"
+      },
+      "split": "train",
+      "tags": [
+        "synthetic",
+        "get_context",
+        "train"
+      ],
+      "task_type": "bug_fix"
+    },
+    {
+      "expected": {
+        "file_paths": [
+          "./src/notify.rs"
+        ],
+        "max_rank": 5,
+        "min_recall": 1,
+        "node_ids": [
+          "./src/notify.rs:function_item:symbol:6d7e7f6aeb2bb25b:0"
+        ]
+      },
+      "id": "syn-a-context-019",
+      "notes": "Deterministic synthetic fixture task",
+      "priority": 1,
+      "query": {
+        "file_path": "./src/notify.rs",
+        "line": 6,
+        "type": "get_context"
+      },
+      "repo": {
+        "languages": [
+          "rust"
+        ],
+        "name": "repo_a",
+        "path": "eval/fixtures/repos/repo_a"
+      },
+      "split": "train",
+      "tags": [
+        "synthetic",
+        "get_context",
+        "train"
+      ],
+      "task_type": "feature"
+    },
+    {
+      "expected": {
+        "file_paths": [
+          "./src/db.rs"
+        ],
+        "max_rank": 5,
+        "min_recall": 1,
+        "node_ids": [
+          "./src/db.rs:function_item:symbol:a3bacfa117457757:0"
+        ]
+      },
+      "id": "syn-a-context-020",
+      "notes": "Deterministic synthetic fixture task",
+      "priority": 1,
+      "query": {
+        "file_path": "./src/db.rs",
+        "line": 43,
+        "type": "get_context"
+      },
+      "repo": {
+        "languages": [
+          "rust"
+        ],
+        "name": "repo_a",
+        "path": "eval/fixtures/repos/repo_a"
+      },
+      "split": "train",
+      "tags": [
+        "synthetic",
+        "get_context",
+        "train"
+      ],
+      "task_type": "refactor"
+    },
+    {
+      "expected": {
+        "file_paths": [
+          "./src/shipping.rs"
+        ],
+        "max_rank": 5,
+        "min_recall": 1,
+        "node_ids": [
+          "./src/shipping.rs:function_item:symbol:f26750c83c395a55:0"
+        ]
+      },
+      "id": "syn-a-context-021",
+      "notes": "Deterministic synthetic fixture task",
+      "priority": 1,
+      "query": {
+        "file_path": "./src/shipping.rs",
+        "line": 11,
+        "type": "get_context"
+      },
+      "repo": {
+        "languages": [
+          "rust"
+        ],
+        "name": "repo_a",
+        "path": "eval/fixtures/repos/repo_a"
+      },
+      "split": "train",
+      "tags": [
+        "synthetic",
+        "get_context",
+        "train"
+      ],
+      "task_type": "investigation"
+    },
+    {
+      "expected": {
+        "file_paths": [
+          "./src/validation.rs"
+        ],
+        "max_rank": 5,
+        "min_recall": 1,
+        "node_ids": [
+          "./src/validation.rs:function_item:symbol:6fb5f6d256542014:0"
+        ]
+      },
+      "id": "syn-a-context-022",
+      "notes": "Deterministic synthetic fixture task",
+      "priority": 1,
+      "query": {
+        "file_path": "./src/validation.rs",
+        "line": 15,
+        "type": "get_context"
+      },
+      "repo": {
+        "languages": [
+          "rust"
+        ],
+        "name": "repo_a",
+        "path": "eval/fixtures/repos/repo_a"
+      },
+      "split": "train",
+      "tags": [
+        "synthetic",
+        "get_context",
+        "train"
+      ],
+      "task_type": "test"
+    },
+    {
+      "expected": {
+        "file_paths": [
+          "./src/validation.rs"
+        ],
+        "max_rank": 5,
+        "min_recall": 1,
+        "node_ids": [
+          "./src/validation.rs:function_item:symbol:cf18a0e846a361ee:0"
+        ]
+      },
+      "id": "syn-a-context-023",
+      "notes": "Deterministic synthetic fixture task",
+      "priority": 1,
+      "query": {
+        "file_path": "./src/validation.rs",
+        "line": 3,
+        "type": "get_context"
+      },
+      "repo": {
+        "languages": [
+          "rust"
+        ],
+        "name": "repo_a",
+        "path": "eval/fixtures/repos/repo_a"
+      },
+      "split": "train",
+      "tags": [
+        "synthetic",
+        "get_context",
+        "train"
+      ],
+      "task_type": "unknown"
+    },
+    {
+      "expected": {
+        "file_paths": [
+          "./src/audit.rs"
+        ],
+        "max_rank": 5,
+        "min_recall": 1,
+        "node_ids": [
+          "./src/audit.rs:function_item:symbol:3842e390e616fc42:0"
+        ]
+      },
+      "id": "syn-a-context-024",
+      "notes": "Deterministic synthetic fixture task",
+      "priority": 1,
+      "query": {
+        "file_path": "./src/audit.rs",
+        "line": 12,
+        "type": "get_context"
+      },
+      "repo": {
+        "languages": [
+          "rust"
+        ],
+        "name": "repo_a",
+        "path": "eval/fixtures/repos/repo_a"
+      },
+      "split": "train",
+      "tags": [
+        "synthetic",
+        "get_context",
+        "train"
+      ],
+      "task_type": "bug_fix"
+    },
+    {
+      "expected": {
+        "file_paths": [
+          "./src/db.rs"
+        ],
+        "max_rank": 5,
+        "min_recall": 1,
+        "node_ids": [
+          "./src/db.rs:function_item:symbol:aa74b52227146bc0:0"
+        ]
+      },
+      "id": "syn-a-context-025",
+      "notes": "Deterministic synthetic fixture task",
+      "priority": 1,
+      "query": {
+        "file_path": "./src/db.rs",
+        "line": 18,
+        "type": "get_context"
+      },
+      "repo": {
+        "languages": [
+          "rust"
+        ],
+        "name": "repo_a",
+        "path": "eval/fixtures/repos/repo_a"
+      },
+      "split": "train",
+      "tags": [
+        "synthetic",
+        "get_context",
+        "train"
+      ],
+      "task_type": "feature"
+    },
+    {
+      "expected": {
+        "file_paths": [
+          "./src/tax.rs"
+        ],
+        "max_rank": 5,
+        "min_recall": 1,
+        "node_ids": [
+          "./src/tax.rs:function_item:symbol:338a017a3add3a8a:0"
+        ]
+      },
+      "id": "syn-a-graph-001",
+      "notes": "Deterministic synthetic fixture task",
+      "priority": 1,
+      "query": {
+        "node_id": "./src/tax.rs:function_item:symbol:338a017a3add3a8a:0",
+        "type": "read_graph"
+      },
+      "repo": {
+        "languages": [
+          "rust"
+        ],
+        "name": "repo_a",
+        "path": "eval/fixtures/repos/repo_a"
+      },
+      "split": "train",
+      "tags": [
+        "synthetic",
+        "read_graph",
+        "train"
+      ],
+      "task_type": "refactor"
+    },
+    {
+      "expected": {
+        "file_paths": [
+          "./src/db.rs"
+        ],
+        "max_rank": 5,
+        "min_recall": 1,
+        "node_ids": [
+          "./src/db.rs:function_item:symbol:32b6a28258c7a541:0"
+        ]
+      },
+      "id": "syn-a-graph-002",
+      "notes": "Deterministic synthetic fixture task",
+      "priority": 1,
+      "query": {
+        "node_id": "./src/db.rs:function_item:symbol:32b6a28258c7a541:0",
+        "type": "read_graph"
+      },
+      "repo": {
+        "languages": [
+          "rust"
+        ],
+        "name": "repo_a",
+        "path": "eval/fixtures/repos/repo_a"
+      },
+      "split": "train",
+      "tags": [
+        "synthetic",
+        "read_graph",
+        "train"
+      ],
+      "task_type": "investigation"
+    },
+    {
+      "expected": {
+        "file_paths": [
+          "./src/inventory.rs"
+        ],
+        "max_rank": 5,
+        "min_recall": 1,
+        "node_ids": [
+          "./src/inventory.rs:struct_item:symbol:cf5312c28f00a1c6:0"
+        ]
+      },
+      "id": "syn-a-graph-003",
+      "notes": "Deterministic synthetic fixture task",
+      "priority": 1,
+      "query": {
+        "node_id": "./src/inventory.rs:struct_item:symbol:cf5312c28f00a1c6:0",
+        "type": "read_graph"
+      },
+      "repo": {
+        "languages": [
+          "rust"
+        ],
+        "name": "repo_a",
+        "path": "eval/fixtures/repos/repo_a"
+      },
+      "split": "train",
+      "tags": [
+        "synthetic",
+        "read_graph",
+        "train"
+      ],
+      "task_type": "test"
+    },
+    {
+      "expected": {
+        "file_paths": [
+          "./src/db.rs"
+        ],
+        "max_rank": 5,
+        "min_recall": 1,
+        "node_ids": [
+          "./src/db.rs:function_item:symbol:695acbde8fea0be3:0"
+        ]
+      },
+      "id": "syn-a-graph-004",
+      "notes": "Deterministic synthetic fixture task",
+      "priority": 1,
+      "query": {
+        "node_id": "./src/db.rs:function_item:symbol:695acbde8fea0be3:0",
+        "type": "read_graph"
+      },
+      "repo": {
+        "languages": [
+          "rust"
+        ],
+        "name": "repo_a",
+        "path": "eval/fixtures/repos/repo_a"
+      },
+      "split": "train",
+      "tags": [
+        "synthetic",
+        "read_graph",
+        "train"
+      ],
+      "task_type": "unknown"
+    },
+    {
+      "expected": {
+        "file_paths": [
+          "./src/validation.rs"
+        ],
+        "max_rank": 5,
+        "min_recall": 1,
+        "node_ids": [
+          "./src/validation.rs:function_item:symbol:df05d8d7e8782e6f:0"
+        ]
+      },
+      "id": "syn-a-graph-005",
+      "notes": "Deterministic synthetic fixture task",
+      "priority": 1,
+      "query": {
+        "node_id": "./src/validation.rs:function_item:symbol:df05d8d7e8782e6f:0",
+        "type": "read_graph"
+      },
+      "repo": {
+        "languages": [
+          "rust"
+        ],
+        "name": "repo_a",
+        "path": "eval/fixtures/repos/repo_a"
+      },
+      "split": "train",
+      "tags": [
+        "synthetic",
+        "read_graph",
+        "train"
+      ],
+      "task_type": "bug_fix"
+    },
+    {
+      "expected": {
+        "file_paths": [
+          "./src/report.rs"
+        ],
+        "max_rank": 5,
+        "min_recall": 1,
+        "node_ids": [
+          "./src/report.rs:function_item:symbol:39b2191bb94f600c:0"
+        ]
+      },
+      "id": "syn-a-graph-006",
+      "notes": "Deterministic synthetic fixture task",
+      "priority": 1,
+      "query": {
+        "node_id": "./src/report.rs:function_item:symbol:39b2191bb94f600c:0",
+        "type": "read_graph"
+      },
+      "repo": {
+        "languages": [
+          "rust"
+        ],
+        "name": "repo_a",
+        "path": "eval/fixtures/repos/repo_a"
+      },
+      "split": "train",
+      "tags": [
+        "synthetic",
+        "read_graph",
+        "train"
+      ],
+      "task_type": "feature"
+    },
+    {
+      "expected": {
+        "file_paths": [
+          "./src/db.rs"
+        ],
+        "max_rank": 5,
+        "min_recall": 1,
+        "node_ids": [
+          "./src/db.rs:function_item:symbol:ecc29345aea9e14b:0"
+        ]
+      },
+      "id": "syn-a-graph-007",
+      "notes": "Deterministic synthetic fixture task",
+      "priority": 1,
+      "query": {
+        "node_id": "./src/db.rs:function_item:symbol:ecc29345aea9e14b:0",
+        "type": "read_graph"
+      },
+      "repo": {
+        "languages": [
+          "rust"
+        ],
+        "name": "repo_a",
+        "path": "eval/fixtures/repos/repo_a"
+      },
+      "split": "train",
+      "tags": [
+        "synthetic",
+        "read_graph",
+        "train"
+      ],
+      "task_type": "refactor"
+    },
+    {
+      "expected": {
+        "file_paths": [
+          "./src/order.rs"
+        ],
+        "max_rank": 5,
+        "min_recall": 1,
+        "node_ids": [
+          "./src/order.rs:struct_item:symbol:5d271f14710d8747:0"
+        ]
+      },
+      "id": "syn-a-graph-008",
+      "notes": "Deterministic synthetic fixture task",
+      "priority": 1,
+      "query": {
+        "node_id": "./src/order.rs:struct_item:symbol:5d271f14710d8747:0",
+        "type": "read_graph"
+      },
+      "repo": {
+        "languages": [
+          "rust"
+        ],
+        "name": "repo_a",
+        "path": "eval/fixtures/repos/repo_a"
+      },
+      "split": "train",
+      "tags": [
+        "synthetic",
+        "read_graph",
+        "train"
+      ],
+      "task_type": "investigation"
+    },
+    {
+      "expected": {
+        "file_paths": [
+          "./src/db.rs"
+        ],
+        "max_rank": 5,
+        "min_recall": 1,
+        "node_ids": [
+          "./src/db.rs:struct_item:symbol:3d764731b2aa98a7:0"
+        ]
+      },
+      "id": "syn-a-graph-009",
+      "notes": "Deterministic synthetic fixture task",
+      "priority": 1,
+      "query": {
+        "node_id": "./src/db.rs:struct_item:symbol:3d764731b2aa98a7:0",
+        "type": "read_graph"
+      },
+      "repo": {
+        "languages": [
+          "rust"
+        ],
+        "name": "repo_a",
+        "path": "eval/fixtures/repos/repo_a"
+      },
+      "split": "train",
+      "tags": [
+        "synthetic",
+        "read_graph",
+        "train"
+      ],
+      "task_type": "test"
+    },
+    {
+      "expected": {
+        "file_paths": [
+          "./src/report.rs"
+        ],
+        "max_rank": 5,
+        "min_recall": 1,
+        "node_ids": [
+          "./src/report.rs:struct_item:symbol:1daea9daf4ebe583:0"
+        ]
+      },
+      "id": "syn-a-graph-010",
+      "notes": "Deterministic synthetic fixture task",
+      "priority": 1,
+      "query": {
+        "node_id": "./src/report.rs:struct_item:symbol:1daea9daf4ebe583:0",
+        "type": "read_graph"
+      },
+      "repo": {
+        "languages": [
+          "rust"
+        ],
+        "name": "repo_a",
+        "path": "eval/fixtures/repos/repo_a"
+      },
+      "split": "train",
+      "tags": [
+        "synthetic",
+        "read_graph",
+        "train"
+      ],
+      "task_type": "unknown"
+    },
+    {
+      "expected": {
+        "file_paths": [
+          "./src/notify.rs"
+        ],
+        "max_rank": 5,
+        "min_recall": 1,
+        "node_ids": [
+          "./src/notify.rs:function_item:symbol:22ac52366cd9be3f:0"
+        ]
+      },
+      "id": "syn-a-graph-011",
+      "notes": "Deterministic synthetic fixture task",
+      "priority": 1,
+      "query": {
+        "node_id": "./src/notify.rs:function_item:symbol:22ac52366cd9be3f:0",
+        "type": "read_graph"
+      },
+      "repo": {
+        "languages": [
+          "rust"
+        ],
+        "name": "repo_a",
+        "path": "eval/fixtures/repos/repo_a"
+      },
+      "split": "train",
+      "tags": [
+        "synthetic",
+        "read_graph",
+        "train"
+      ],
+      "task_type": "bug_fix"
+    },
+    {
+      "expected": {
+        "file_paths": [
+          "./src/tax.rs"
+        ],
+        "max_rank": 5,
+        "min_recall": 1,
+        "node_ids": [
+          "./src/tax.rs:function_item:symbol:8d92d6eb6e400a93:0"
+        ]
+      },
+      "id": "syn-a-graph-012",
+      "notes": "Deterministic synthetic fixture task",
+      "priority": 1,
+      "query": {
+        "node_id": "./src/tax.rs:function_item:symbol:8d92d6eb6e400a93:0",
+        "type": "read_graph"
+      },
+      "repo": {
+        "languages": [
+          "rust"
+        ],
+        "name": "repo_a",
+        "path": "eval/fixtures/repos/repo_a"
+      },
+      "split": "train",
+      "tags": [
+        "synthetic",
+        "read_graph",
+        "train"
+      ],
+      "task_type": "feature"
+    },
+    {
+      "expected": {
+        "file_paths": [
+          "./src/report.rs"
+        ],
+        "max_rank": 5,
+        "min_recall": 1,
+        "node_ids": [
+          "./src/report.rs:function_item:symbol:16b60621c1b03160:0"
+        ]
+      },
+      "id": "syn-a-graph-013",
+      "notes": "Deterministic synthetic fixture task",
+      "priority": 1,
+      "query": {
+        "node_id": "./src/report.rs:function_item:symbol:16b60621c1b03160:0",
+        "type": "read_graph"
+      },
+      "repo": {
+        "languages": [
+          "rust"
+        ],
+        "name": "repo_a",
+        "path": "eval/fixtures/repos/repo_a"
+      },
+      "split": "train",
+      "tags": [
+        "synthetic",
+        "read_graph",
+        "train"
+      ],
+      "task_type": "refactor"
+    },
+    {
+      "expected": {
+        "file_paths": [
+          "./src/config.rs"
+        ],
+        "max_rank": 5,
+        "min_recall": 1,
+        "node_ids": [
+          "./src/config.rs:function_item:symbol:6ff726c4074a016a:0"
+        ]
+      },
+      "id": "syn-a-graph-014",
+      "notes": "Deterministic synthetic fixture task",
+      "priority": 1,
+      "query": {
+        "node_id": "./src/config.rs:function_item:symbol:6ff726c4074a016a:0",
+        "type": "read_graph"
+      },
+      "repo": {
+        "languages": [
+          "rust"
+        ],
+        "name": "repo_a",
+        "path": "eval/fixtures/repos/repo_a"
+      },
+      "split": "train",
+      "tags": [
+        "synthetic",
+        "read_graph",
+        "train"
+      ],
+      "task_type": "investigation"
+    },
+    {
+      "expected": {
+        "file_paths": [
+          "./src/utils.rs"
+        ],
+        "max_rank": 5,
+        "min_recall": 1,
+        "node_ids": [
+          "./src/utils.rs:function_item:symbol:07925729778a41b3:0"
+        ]
+      },
+      "id": "syn-a-graph-015",
+      "notes": "Deterministic synthetic fixture task",
+      "priority": 1,
+      "query": {
+        "node_id": "./src/utils.rs:function_item:symbol:07925729778a41b3:0",
+        "type": "read_graph"
+      },
+      "repo": {
+        "languages": [
+          "rust"
+        ],
+        "name": "repo_a",
+        "path": "eval/fixtures/repos/repo_a"
+      },
+      "split": "train",
+      "tags": [
+        "synthetic",
+        "read_graph",
+        "train"
+      ],
+      "task_type": "test"
+    },
+    {
+      "expected": {
+        "file_paths": [
+          "./src/config.rs"
+        ],
+        "max_rank": 5,
+        "min_recall": 1,
+        "node_ids": [
+          "./src/config.rs:function_item:symbol:f32114e08ce1f7be:0"
+        ]
+      },
+      "id": "syn-a-graph-016",
+      "notes": "Deterministic synthetic fixture task",
+      "priority": 1,
+      "query": {
+        "node_id": "./src/config.rs:function_item:symbol:f32114e08ce1f7be:0",
+        "type": "read_graph"
+      },
+      "repo": {
+        "languages": [
+          "rust"
+        ],
+        "name": "repo_a",
+        "path": "eval/fixtures/repos/repo_a"
+      },
+      "split": "train",
+      "tags": [
+        "synthetic",
+        "read_graph",
+        "train"
+      ],
+      "task_type": "unknown"
+    },
+    {
+      "expected": {
+        "file_paths": [
+          "./src/db.rs"
+        ],
+        "max_rank": 5,
+        "min_recall": 1,
+        "node_ids": [
+          "./src/db.rs:function_item:symbol:ab34fcd5f1b2144d:0"
+        ]
+      },
+      "id": "syn-a-graph-017",
+      "notes": "Deterministic synthetic fixture task",
+      "priority": 1,
+      "query": {
+        "node_id": "./src/db.rs:function_item:symbol:ab34fcd5f1b2144d:0",
+        "type": "read_graph"
+      },
+      "repo": {
+        "languages": [
+          "rust"
+        ],
+        "name": "repo_a",
+        "path": "eval/fixtures/repos/repo_a"
+      },
+      "split": "train",
+      "tags": [
+        "synthetic",
+        "read_graph",
+        "train"
+      ],
+      "task_type": "bug_fix"
+    },
+    {
+      "expected": {
+        "file_paths": [
+          "./src/pricing.rs"
+        ],
+        "max_rank": 5,
+        "min_recall": 1,
+        "node_ids": [
+          "./src/pricing.rs:function_item:symbol:c85634cafef55daa:0"
+        ]
+      },
+      "id": "syn-a-graph-018",
+      "notes": "Deterministic synthetic fixture task",
+      "priority": 1,
+      "query": {
+        "node_id": "./src/pricing.rs:function_item:symbol:c85634cafef55daa:0",
+        "type": "read_graph"
+      },
+      "repo": {
+        "languages": [
+          "rust"
+        ],
+        "name": "repo_a",
+        "path": "eval/fixtures/repos/repo_a"
+      },
+      "split": "train",
+      "tags": [
+        "synthetic",
+        "read_graph",
+        "train"
+      ],
+      "task_type": "feature"
+    },
+    {
+      "expected": {
+        "file_paths": [
+          "./src/shipping.rs"
+        ],
+        "max_rank": 5,
+        "min_recall": 1,
+        "node_ids": [
+          "./src/shipping.rs:function_item:symbol:90834a8f7b4b7f5f:0"
+        ]
+      },
+      "id": "syn-a-graph-019",
+      "notes": "Deterministic synthetic fixture task",
+      "priority": 1,
+      "query": {
+        "node_id": "./src/shipping.rs:function_item:symbol:90834a8f7b4b7f5f:0",
+        "type": "read_graph"
+      },
+      "repo": {
+        "languages": [
+          "rust"
+        ],
+        "name": "repo_a",
+        "path": "eval/fixtures/repos/repo_a"
+      },
+      "split": "train",
+      "tags": [
+        "synthetic",
+        "read_graph",
+        "train"
+      ],
+      "task_type": "refactor"
+    },
+    {
+      "expected": {
+        "file_paths": [
+          "./src/main.rs"
+        ],
+        "max_rank": 5,
+        "min_recall": 1,
+        "node_ids": [
+          "./src/main.rs:function_item:symbol:b43bc420a15e77f0:0"
+        ]
+      },
+      "id": "syn-a-graph-020",
+      "notes": "Deterministic synthetic fixture task",
+      "priority": 1,
+      "query": {
+        "node_id": "./src/main.rs:function_item:symbol:b43bc420a15e77f0:0",
+        "type": "read_graph"
+      },
+      "repo": {
+        "languages": [
+          "rust"
+        ],
+        "name": "repo_a",
+        "path": "eval/fixtures/repos/repo_a"
+      },
+      "split": "train",
+      "tags": [
+        "synthetic",
+        "read_graph",
+        "train"
+      ],
+      "task_type": "investigation"
+    },
+    {
+      "expected": {
+        "file_paths": [
+          "./src/shipping.rs"
+        ],
+        "max_rank": 5,
+        "min_recall": 1,
+        "node_ids": [
+          "./src/shipping.rs:function_item:symbol:9515e7805f23f5de:0"
+        ]
+      },
+      "id": "syn-a-graph-021",
+      "notes": "Deterministic synthetic fixture task",
+      "priority": 1,
+      "query": {
+        "node_id": "./src/shipping.rs:function_item:symbol:9515e7805f23f5de:0",
+        "type": "read_graph"
+      },
+      "repo": {
+        "languages": [
+          "rust"
+        ],
+        "name": "repo_a",
+        "path": "eval/fixtures/repos/repo_a"
+      },
+      "split": "train",
+      "tags": [
+        "synthetic",
+        "read_graph",
+        "train"
+      ],
+      "task_type": "test"
+    },
+    {
+      "expected": {
+        "file_paths": [
+          "./src/inventory.rs"
+        ],
+        "max_rank": 5,
+        "min_recall": 1,
+        "node_ids": [
+          "./src/inventory.rs:function_item:symbol:d05bef496cf60f0b:0"
+        ]
+      },
+      "id": "syn-a-graph-022",
+      "notes": "Deterministic synthetic fixture task",
+      "priority": 1,
+      "query": {
+        "node_id": "./src/inventory.rs:function_item:symbol:d05bef496cf60f0b:0",
+        "type": "read_graph"
+      },
+      "repo": {
+        "languages": [
+          "rust"
+        ],
+        "name": "repo_a",
+        "path": "eval/fixtures/repos/repo_a"
+      },
+      "split": "train",
+      "tags": [
+        "synthetic",
+        "read_graph",
+        "train"
+      ],
+      "task_type": "unknown"
+    },
+    {
+      "expected": {
+        "file_paths": [
+          "./src/tax.rs"
+        ],
+        "max_rank": 5,
+        "min_recall": 1,
+        "node_ids": [
+          "./src/tax.rs:function_item:symbol:a5119714814c8e6e:0"
+        ]
+      },
+      "id": "syn-a-graph-023",
+      "notes": "Deterministic synthetic fixture task",
+      "priority": 1,
+      "query": {
+        "node_id": "./src/tax.rs:function_item:symbol:a5119714814c8e6e:0",
+        "type": "read_graph"
+      },
+      "repo": {
+        "languages": [
+          "rust"
+        ],
+        "name": "repo_a",
+        "path": "eval/fixtures/repos/repo_a"
+      },
+      "split": "train",
+      "tags": [
+        "synthetic",
+        "read_graph",
+        "train"
+      ],
+      "task_type": "bug_fix"
+    },
+    {
+      "expected": {
+        "file_paths": [
+          "./src/utils.rs"
+        ],
+        "max_rank": 5,
+        "min_recall": 1,
+        "node_ids": [
+          "./src/utils.rs:function_item:symbol:3c59ab538128f87c:0"
+        ]
+      },
+      "id": "syn-a-graph-024",
+      "notes": "Deterministic synthetic fixture task",
+      "priority": 1,
+      "query": {
+        "node_id": "./src/utils.rs:function_item:symbol:3c59ab538128f87c:0",
+        "type": "read_graph"
+      },
+      "repo": {
+        "languages": [
+          "rust"
+        ],
+        "name": "repo_a",
+        "path": "eval/fixtures/repos/repo_a"
+      },
+      "split": "train",
+      "tags": [
+        "synthetic",
+        "read_graph",
+        "train"
+      ],
+      "task_type": "feature"
+    },
+    {
+      "expected": {
+        "file_paths": [
+          "./src/pricing.rs"
+        ],
+        "max_rank": 5,
+        "min_recall": 1,
+        "node_ids": [
+          "./src/pricing.rs:function_item:symbol:b394a57255643f64:0"
+        ]
+      },
+      "id": "syn-a-graph-025",
+      "notes": "Deterministic synthetic fixture task",
+      "priority": 1,
+      "query": {
+        "node_id": "./src/pricing.rs:function_item:symbol:b394a57255643f64:0",
+        "type": "read_graph"
+      },
+      "repo": {
+        "languages": [
+          "rust"
+        ],
+        "name": "repo_a",
+        "path": "eval/fixtures/repos/repo_a"
+      },
+      "split": "train",
+      "tags": [
+        "synthetic",
+        "read_graph",
+        "train"
+      ],
+      "task_type": "refactor"
+    },
+    {
+      "expected": {
+        "file_paths": [
+          "./src/db.rs"
+        ],
+        "max_rank": 5,
+        "min_recall": 1,
+        "node_ids": [
+          "./src/db.rs:function_item:symbol:06133baab8c55982:0"
+        ]
+      },
+      "id": "syn-a-predict-001",
+      "notes": "Deterministic synthetic fixture task",
+      "priority": 1,
+      "query": {
+        "file_path": "./src/db.rs",
+        "line": 24,
+        "type": "predict_context"
+      },
+      "repo": {
+        "languages": [
+          "rust"
+        ],
+        "name": "repo_a",
+        "path": "eval/fixtures/repos/repo_a"
+      },
+      "split": "train",
+      "tags": [
+        "synthetic",
+        "predict_context",
+        "train"
+      ],
+      "task_type": "investigation"
+    },
+    {
+      "expected": {
+        "file_paths": [
+          "./src/audit.rs"
+        ],
+        "max_rank": 5,
+        "min_recall": 1,
+        "node_ids": [
+          "./src/audit.rs:function_item:symbol:206827ea6ce5d0e3:0"
+        ]
+      },
+      "id": "syn-a-predict-002",
+      "notes": "Deterministic synthetic fixture task",
+      "priority": 1,
+      "query": {
+        "file_path": "./src/audit.rs",
+        "line": 17,
+        "type": "predict_context"
+      },
+      "repo": {
+        "languages": [
+          "rust"
+        ],
+        "name": "repo_a",
+        "path": "eval/fixtures/repos/repo_a"
+      },
+      "split": "train",
+      "tags": [
+        "synthetic",
+        "predict_context",
+        "train"
+      ],
+      "task_type": "test"
+    },
+    {
+      "expected": {
+        "file_paths": [
+          "./src/utils.rs"
+        ],
+        "max_rank": 5,
+        "min_recall": 1,
+        "node_ids": [
+          "./src/utils.rs:function_item:symbol:bd0141c0bff1c644:0"
+        ]
+      },
+      "id": "syn-a-predict-003",
+      "notes": "Deterministic synthetic fixture task",
+      "priority": 1,
+      "query": {
+        "file_path": "./src/utils.rs",
+        "line": 9,
+        "type": "predict_context"
+      },
+      "repo": {
+        "languages": [
+          "rust"
+        ],
+        "name": "repo_a",
+        "path": "eval/fixtures/repos/repo_a"
+      },
+      "split": "train",
+      "tags": [
+        "synthetic",
+        "predict_context",
+        "train"
+      ],
+      "task_type": "unknown"
+    },
+    {
+      "expected": {
+        "file_paths": [
+          "./src/inventory.rs"
+        ],
+        "max_rank": 5,
+        "min_recall": 1,
+        "node_ids": [
+          "./src/inventory.rs:function_item:symbol:85ecf917ee9b58be:0"
+        ]
+      },
+      "id": "syn-a-predict-004",
+      "notes": "Deterministic synthetic fixture task",
+      "priority": 1,
+      "query": {
+        "file_path": "./src/inventory.rs",
+        "line": 25,
+        "type": "predict_context"
+      },
+      "repo": {
+        "languages": [
+          "rust"
+        ],
+        "name": "repo_a",
+        "path": "eval/fixtures/repos/repo_a"
+      },
+      "split": "train",
+      "tags": [
+        "synthetic",
+        "predict_context",
+        "train"
+      ],
+      "task_type": "bug_fix"
+    },
+    {
+      "expected": {
+        "file_paths": [
+          "./src/audit.rs"
+        ],
+        "max_rank": 5,
+        "min_recall": 1,
+        "node_ids": [
+          "./src/audit.rs:function_item:symbol:05edc6dbb742390e:0"
+        ]
+      },
+      "id": "syn-a-predict-005",
+      "notes": "Deterministic synthetic fixture task",
+      "priority": 1,
+      "query": {
+        "file_path": "./src/audit.rs",
+        "line": 8,
+        "type": "predict_context"
+      },
+      "repo": {
+        "languages": [
+          "rust"
+        ],
+        "name": "repo_a",
+        "path": "eval/fixtures/repos/repo_a"
+      },
+      "split": "train",
+      "tags": [
+        "synthetic",
+        "predict_context",
+        "train"
+      ],
+      "task_type": "feature"
+    },
+    {
+      "expected": {
+        "file_paths": [
+          "./src/inventory.rs"
+        ],
+        "max_rank": 5,
+        "min_recall": 1,
+        "node_ids": [
+          "./src/inventory.rs:function_item:symbol:5269794ad7655a6f:0"
+        ]
+      },
+      "id": "syn-a-predict-006",
+      "notes": "Deterministic synthetic fixture task",
+      "priority": 1,
+      "query": {
+        "file_path": "./src/inventory.rs",
+        "line": 29,
+        "type": "predict_context"
+      },
+      "repo": {
+        "languages": [
+          "rust"
+        ],
+        "name": "repo_a",
+        "path": "eval/fixtures/repos/repo_a"
+      },
+      "split": "train",
+      "tags": [
+        "synthetic",
+        "predict_context",
+        "train"
+      ],
+      "task_type": "refactor"
+    },
+    {
+      "expected": {
+        "file_paths": [
+          "./src/utils.rs"
+        ],
+        "max_rank": 5,
+        "min_recall": 1,
+        "node_ids": [
+          "./src/utils.rs:function_item:symbol:b763cd3f287ca27a:0"
+        ]
+      },
+      "id": "syn-a-predict-007",
+      "notes": "Deterministic synthetic fixture task",
+      "priority": 1,
+      "query": {
+        "file_path": "./src/utils.rs",
+        "line": 13,
+        "type": "predict_context"
+      },
+      "repo": {
+        "languages": [
+          "rust"
+        ],
+        "name": "repo_a",
+        "path": "eval/fixtures/repos/repo_a"
+      },
+      "split": "train",
+      "tags": [
+        "synthetic",
+        "predict_context",
+        "train"
+      ],
+      "task_type": "investigation"
+    },
+    {
+      "expected": {
+        "file_paths": [
+          "./src/audit.rs"
+        ],
+        "max_rank": 5,
+        "min_recall": 1,
+        "node_ids": [
+          "./src/audit.rs:impl_item:symbol:744fd9aa14e134ed:0"
+        ]
+      },
+      "id": "syn-a-predict-008",
+      "notes": "Deterministic synthetic fixture task",
+      "priority": 1,
+      "query": {
+        "file_path": "./src/audit.rs",
+        "line": 16,
+        "type": "predict_context"
+      },
+      "repo": {
+        "languages": [
+          "rust"
+        ],
+        "name": "repo_a",
+        "path": "eval/fixtures/repos/repo_a"
+      },
+      "split": "train",
+      "tags": [
+        "synthetic",
+        "predict_context",
+        "train"
+      ],
+      "task_type": "test"
+    },
+    {
+      "expected": {
+        "file_paths": [
+          "./src/order.rs"
+        ],
+        "max_rank": 5,
+        "min_recall": 1,
+        "node_ids": [
+          "./src/order.rs:function_item:symbol:e31f3cf8d5037e59:0"
+        ]
+      },
+      "id": "syn-a-predict-009",
+      "notes": "Deterministic synthetic fixture task",
+      "priority": 1,
+      "query": {
+        "file_path": "./src/order.rs",
+        "line": 23,
+        "type": "predict_context"
+      },
+      "repo": {
+        "languages": [
+          "rust"
+        ],
+        "name": "repo_a",
+        "path": "eval/fixtures/repos/repo_a"
+      },
+      "split": "train",
+      "tags": [
+        "synthetic",
+        "predict_context",
+        "train"
+      ],
+      "task_type": "unknown"
+    },
+    {
+      "expected": {
+        "file_paths": [
+          "./src/order.rs"
+        ],
+        "max_rank": 5,
+        "min_recall": 1,
+        "node_ids": [
+          "./src/order.rs:function_item:symbol:0f9a366afc883757:0"
+        ]
+      },
+      "id": "syn-a-predict-010",
+      "notes": "Deterministic synthetic fixture task",
+      "priority": 1,
+      "query": {
+        "file_path": "./src/order.rs",
+        "line": 27,
+        "type": "predict_context"
+      },
+      "repo": {
+        "languages": [
+          "rust"
+        ],
+        "name": "repo_a",
+        "path": "eval/fixtures/repos/repo_a"
+      },
+      "split": "train",
+      "tags": [
+        "synthetic",
+        "predict_context",
+        "train"
+      ],
+      "task_type": "bug_fix"
+    },
+    {
+      "expected": {
+        "file_paths": [
+          "./src/db.rs"
+        ],
+        "max_rank": 5,
+        "min_recall": 1,
+        "node_ids": [
+          "./src/db.rs:impl_item:symbol:92da5d5150c25674:0"
+        ]
+      },
+      "id": "syn-a-predict-011",
+      "notes": "Deterministic synthetic fixture task",
+      "priority": 1,
+      "query": {
+        "file_path": "./src/db.rs",
+        "line": 17,
+        "type": "predict_context"
+      },
+      "repo": {
+        "languages": [
+          "rust"
+        ],
+        "name": "repo_a",
+        "path": "eval/fixtures/repos/repo_a"
+      },
+      "split": "train",
+      "tags": [
+        "synthetic",
+        "predict_context",
+        "train"
+      ],
+      "task_type": "feature"
+    },
+    {
+      "expected": {
+        "file_paths": [
+          "./src/pricing.rs"
+        ],
+        "max_rank": 5,
+        "min_recall": 1,
+        "node_ids": [
+          "./src/pricing.rs:function_item:symbol:8afbdc3fb9ab22b6:0"
+        ]
+      },
+      "id": "syn-a-predict-012",
+      "notes": "Deterministic synthetic fixture task",
+      "priority": 1,
+      "query": {
+        "file_path": "./src/pricing.rs",
+        "line": 14,
+        "type": "predict_context"
+      },
+      "repo": {
+        "languages": [
+          "rust"
+        ],
+        "name": "repo_a",
+        "path": "eval/fixtures/repos/repo_a"
+      },
+      "split": "train",
+      "tags": [
+        "synthetic",
+        "predict_context",
+        "train"
+      ],
+      "task_type": "refactor"
+    },
+    {
+      "expected": {
+        "file_paths": [
+          "./src/order.rs"
+        ],
+        "max_rank": 5,
+        "min_recall": 1,
+        "node_ids": [
+          "./src/order.rs:function_item:symbol:3c5d214b2ce5da7f:0"
+        ]
+      },
+      "id": "syn-a-predict-013",
+      "notes": "Deterministic synthetic fixture task",
+      "priority": 1,
+      "query": {
+        "file_path": "./src/order.rs",
+        "line": 31,
+        "type": "predict_context"
+      },
+      "repo": {
+        "languages": [
+          "rust"
+        ],
+        "name": "repo_a",
+        "path": "eval/fixtures/repos/repo_a"
+      },
+      "split": "train",
+      "tags": [
+        "synthetic",
+        "predict_context",
+        "train"
+      ],
+      "task_type": "investigation"
+    },
+    {
+      "expected": {
+        "file_paths": [
+          "./src/db.rs"
+        ],
+        "max_rank": 5,
+        "min_recall": 1,
+        "node_ids": [
+          "./src/db.rs:function_item:symbol:ca6e4222940d4ab1:0"
+        ]
+      },
+      "id": "syn-a-predict-014",
+      "notes": "Deterministic synthetic fixture task",
+      "priority": 1,
+      "query": {
+        "file_path": "./src/db.rs",
+        "line": 34,
+        "type": "predict_context"
+      },
+      "repo": {
+        "languages": [
+          "rust"
+        ],
+        "name": "repo_a",
+        "path": "eval/fixtures/repos/repo_a"
+      },
+      "split": "train",
+      "tags": [
+        "synthetic",
+        "predict_context",
+        "train"
+      ],
+      "task_type": "test"
+    },
+    {
+      "expected": {
+        "file_paths": [
+          "./src/notify.rs"
+        ],
+        "max_rank": 5,
+        "min_recall": 1,
+        "node_ids": [
+          "./src/notify.rs:function_item:symbol:a641edd4981d5bff:0"
+        ]
+      },
+      "id": "syn-a-predict-015",
+      "notes": "Deterministic synthetic fixture task",
+      "priority": 1,
+      "query": {
+        "file_path": "./src/notify.rs",
+        "line": 11,
+        "type": "predict_context"
+      },
+      "repo": {
+        "languages": [
+          "rust"
+        ],
+        "name": "repo_a",
+        "path": "eval/fixtures/repos/repo_a"
+      },
+      "split": "train",
+      "tags": [
+        "synthetic",
+        "predict_context",
+        "train"
+      ],
+      "task_type": "unknown"
+    },
+    {
+      "expected": {
+        "file_paths": [
+          "./src/rooms.rs"
+        ],
+        "max_rank": 5,
+        "min_recall": 1,
+        "node_ids": [
+          "./src/rooms.rs:function_item:symbol:c3503878270bf178:0"
+        ]
+      },
+      "id": "syn-b-search-001",
+      "notes": "Deterministic synthetic fixture task",
+      "priority": 1,
+      "query": {
+        "text": "find where default is implemented",
+        "type": "search_code"
+      },
+      "repo": {
+        "languages": [
+          "rust"
+        ],
+        "name": "repo_b",
+        "path": "eval/fixtures/repos/repo_b"
+      },
+      "split": "holdout",
+      "tags": [
+        "synthetic",
+        "search_code",
+        "direct",
+        "holdout"
+      ],
+      "task_type": "bug_fix"
+    },
+    {
+      "expected": {
+        "file_paths": [
+          "./src/notifications.rs"
+        ],
+        "max_rank": 5,
+        "min_recall": 1,
+        "node_ids": [
+          "./src/notifications.rs:function_item:symbol:c8d6f61d353b08d8:0"
+        ]
+      },
+      "id": "syn-b-search-002",
+      "notes": "Deterministic synthetic fixture task",
+      "priority": 1,
+      "query": {
+        "text": "find where send_booking_confirmation is implemented",
+        "type": "search_code"
+      },
+      "repo": {
+        "languages": [
+          "rust"
+        ],
+        "name": "repo_b",
+        "path": "eval/fixtures/repos/repo_b"
+      },
+      "split": "holdout",
+      "tags": [
+        "synthetic",
+        "search_code",
+        "direct",
+        "holdout"
+      ],
+      "task_type": "feature"
+    },
+    {
+      "expected": {
+        "file_paths": [
+          "./src/reports.rs"
+        ],
+        "max_rank": 5,
+        "min_recall": 1,
+        "node_ids": [
+          "./src/reports.rs:function_item:symbol:b322b9c5f7a6fa0d:0"
+        ]
+      },
+      "id": "syn-b-search-003",
+      "notes": "Deterministic synthetic fixture task",
+      "priority": 1,
+      "query": {
+        "text": "find where occupancy_report is implemented",
+        "type": "search_code"
+      },
+      "repo": {
+        "languages": [
+          "rust"
+        ],
+        "name": "repo_b",
+        "path": "eval/fixtures/repos/repo_b"
+      },
+      "split": "holdout",
+      "tags": [
+        "synthetic",
+        "search_code",
+        "direct",
+        "holdout"
+      ],
+      "task_type": "refactor"
+    },
+    {
+      "expected": {
+        "file_paths": [
+          "./src/booking.rs"
+        ],
+        "max_rank": 5,
+        "min_recall": 1,
+        "node_ids": [
+          "./src/booking.rs:function_item:symbol:6f4599bb7dbdcf07:0"
+        ]
+      },
+      "id": "syn-b-search-004",
+      "notes": "Deterministic synthetic fixture task",
+      "priority": 1,
+      "query": {
+        "text": "find where check_in is implemented",
+        "type": "search_code"
+      },
+      "repo": {
+        "languages": [
+          "rust"
+        ],
+        "name": "repo_b",
+        "path": "eval/fixtures/repos/repo_b"
+      },
+      "split": "holdout",
+      "tags": [
+        "synthetic",
+        "search_code",
+        "direct",
+        "holdout"
+      ],
+      "task_type": "investigation"
+    },
+    {
+      "expected": {
+        "file_paths": [
+          "./src/rooms.rs"
+        ],
+        "max_rank": 5,
+        "min_recall": 1,
+        "node_ids": [
+          "./src/rooms.rs:impl_item:symbol:94ee677e85218251:0"
+        ]
+      },
+      "id": "syn-b-search-005",
+      "notes": "Deterministic synthetic fixture task",
+      "priority": 1,
+      "query": {
+        "text": "find where Default is implemented",
+        "type": "search_code"
+      },
+      "repo": {
+        "languages": [
+          "rust"
+        ],
+        "name": "repo_b",
+        "path": "eval/fixtures/repos/repo_b"
+      },
+      "split": "holdout",
+      "tags": [
+        "synthetic",
+        "search_code",
+        "direct",
+        "holdout"
+      ],
+      "task_type": "test"
+    },
+    {
+      "expected": {
+        "file_paths": [
+          "./src/receipt.rs"
+        ],
+        "max_rank": 5,
+        "min_recall": 1,
+        "node_ids": [
+          "./src/receipt.rs:function_item:symbol:f909d41294b9b9ee:0"
+        ]
+      },
+      "id": "syn-b-search-006",
+      "notes": "Deterministic synthetic fixture task",
+      "priority": 1,
+      "query": {
+        "text": "find where render_html is implemented",
+        "type": "search_code"
+      },
+      "repo": {
+        "languages": [
+          "rust"
+        ],
+        "name": "repo_b",
+        "path": "eval/fixtures/repos/repo_b"
+      },
+      "split": "holdout",
+      "tags": [
+        "synthetic",
+        "search_code",
+        "direct",
+        "holdout"
+      ],
+      "task_type": "unknown"
+    },
+    {
+      "expected": {
+        "file_paths": [
+          "./src/store.rs"
+        ],
+        "max_rank": 5,
+        "min_recall": 1,
+        "node_ids": [
+          "./src/store.rs:function_item:symbol:849117df8d7ac81d:0"
+        ]
+      },
+      "id": "syn-b-search-007",
+      "notes": "Deterministic synthetic fixture task",
+      "priority": 1,
+      "query": {
+        "text": "find where next_customer_id is implemented",
+        "type": "search_code"
+      },
+      "repo": {
+        "languages": [
+          "rust"
+        ],
+        "name": "repo_b",
+        "path": "eval/fixtures/repos/repo_b"
+      },
+      "split": "holdout",
+      "tags": [
+        "synthetic",
+        "search_code",
+        "direct",
+        "holdout"
+      ],
+      "task_type": "bug_fix"
+    },
+    {
+      "expected": {
+        "file_paths": [
+          "./src/store.rs"
+        ],
+        "max_rank": 5,
+        "min_recall": 1,
+        "node_ids": [
+          "./src/store.rs:impl_item:symbol:74607685fc355b0d:0"
+        ]
+      },
+      "id": "syn-b-search-008",
+      "notes": "Deterministic synthetic fixture task",
+      "priority": 1,
+      "query": {
+        "text": "find where Connection is implemented",
+        "type": "search_code"
+      },
+      "repo": {
+        "languages": [
+          "rust"
+        ],
+        "name": "repo_b",
+        "path": "eval/fixtures/repos/repo_b"
+      },
+      "split": "holdout",
+      "tags": [
+        "synthetic",
+        "search_code",
+        "direct",
+        "holdout"
+      ],
+      "task_type": "feature"
+    },
+    {
+      "expected": {
+        "file_paths": [
+          "./src/booking.rs"
+        ],
+        "max_rank": 5,
+        "min_recall": 1,
+        "node_ids": [
+          "./src/booking.rs:struct_item:symbol:fe560797e5ca0beb:0"
+        ]
+      },
+      "id": "syn-b-search-009",
+      "notes": "Deterministic synthetic fixture task",
+      "priority": 1,
+      "query": {
+        "text": "find where Booking is implemented",
+        "type": "search_code"
+      },
+      "repo": {
+        "languages": [
+          "rust"
+        ],
+        "name": "repo_b",
+        "path": "eval/fixtures/repos/repo_b"
+      },
+      "split": "holdout",
+      "tags": [
+        "synthetic",
+        "search_code",
+        "direct",
+        "holdout"
+      ],
+      "task_type": "refactor"
+    },
+    {
+      "expected": {
+        "file_paths": [
+          "./src/store.rs"
+        ],
+        "max_rank": 5,
+        "min_recall": 1,
+        "node_ids": [
+          "./src/store.rs:function_item:symbol:8ace309e51208c42:0"
+        ]
+      },
+      "id": "syn-b-search-010",
+      "notes": "Deterministic synthetic fixture task",
+      "priority": 1,
+      "query": {
+        "text": "find where booking_count is implemented",
+        "type": "search_code"
+      },
+      "repo": {
+        "languages": [
+          "rust"
+        ],
+        "name": "repo_b",
+        "path": "eval/fixtures/repos/repo_b"
+      },
+      "split": "holdout",
+      "tags": [
+        "synthetic",
+        "search_code",
+        "direct",
+        "holdout"
+      ],
+      "task_type": "investigation"
+    },
+    {
+      "expected": {
+        "file_paths": [
+          "./src/booking.rs"
+        ],
+        "max_rank": 5,
+        "min_recall": 1,
+        "node_ids": [
+          "./src/booking.rs:function_item:symbol:a3d843f61bb7fcbd:0"
+        ]
+      },
+      "id": "syn-b-search-011",
+      "notes": "Deterministic synthetic fixture task",
+      "priority": 1,
+      "query": {
+        "text": "find where create is implemented",
+        "type": "search_code"
+      },
+      "repo": {
+        "languages": [
+          "rust"
+        ],
+        "name": "repo_b",
+        "path": "eval/fixtures/repos/repo_b"
+      },
+      "split": "holdout",
+      "tags": [
+        "synthetic",
+        "search_code",
+        "direct",
+        "holdout"
+      ],
+      "task_type": "test"
+    },
+    {
+      "expected": {
+        "file_paths": [
+          "./src/housekeeping.rs"
+        ],
+        "max_rank": 5,
+        "min_recall": 1,
+        "node_ids": [
+          "./src/housekeeping.rs:function_item:symbol:167005b57176eb80:0"
+        ]
+      },
+      "id": "syn-b-search-012",
+      "notes": "Deterministic synthetic fixture task",
+      "priority": 1,
+      "query": {
+        "text": "find where rooms_needing_cleaning is implemented",
+        "type": "search_code"
+      },
+      "repo": {
+        "languages": [
+          "rust"
+        ],
+        "name": "repo_b",
+        "path": "eval/fixtures/repos/repo_b"
+      },
+      "split": "holdout",
+      "tags": [
+        "synthetic",
+        "search_code",
+        "direct",
+        "holdout"
+      ],
+      "task_type": "unknown"
+    },
+    {
+      "expected": {
+        "file_paths": [
+          "./src/rooms.rs"
+        ],
+        "max_rank": 5,
+        "min_recall": 1,
+        "node_ids": [
+          "./src/rooms.rs:function_item:symbol:2260499dec705999:0"
+        ]
+      },
+      "id": "syn-b-search-013",
+      "notes": "Deterministic synthetic fixture task",
+      "priority": 1,
+      "query": {
+        "text": "find where find_room_by_number is implemented",
+        "type": "search_code"
+      },
+      "repo": {
+        "languages": [
+          "rust"
+        ],
+        "name": "repo_b",
+        "path": "eval/fixtures/repos/repo_b"
+      },
+      "split": "holdout",
+      "tags": [
+        "synthetic",
+        "search_code",
+        "direct",
+        "holdout"
+      ],
+      "task_type": "bug_fix"
+    },
+    {
+      "expected": {
+        "file_paths": [
+          "./src/store.rs"
+        ],
+        "max_rank": 5,
+        "min_recall": 1,
+        "node_ids": [
+          "./src/store.rs:function_item:symbol:5a581ee16e51010b:0"
+        ]
+      },
+      "id": "syn-b-search-014",
+      "notes": "Deterministic synthetic fixture task",
+      "priority": 1,
+      "query": {
+        "text": "find where connect is implemented",
+        "type": "search_code"
+      },
+      "repo": {
+        "languages": [
+          "rust"
+        ],
+        "name": "repo_b",
+        "path": "eval/fixtures/repos/repo_b"
+      },
+      "split": "holdout",
+      "tags": [
+        "synthetic",
+        "search_code",
+        "direct",
+        "holdout"
+      ],
+      "task_type": "feature"
+    },
+    {
+      "expected": {
+        "file_paths": [
+          "./src/rates.rs"
+        ],
+        "max_rank": 5,
+        "min_recall": 1,
+        "node_ids": [
+          "./src/rates.rs:function_item:symbol:073c0e6b5ac3a0f9:0"
+        ]
+      },
+      "id": "syn-b-search-015",
+      "notes": "Deterministic synthetic fixture task",
+      "priority": 1,
+      "query": {
+        "text": "find where compute_rate is implemented",
+        "type": "search_code"
+      },
+      "repo": {
+        "languages": [
+          "rust"
+        ],
+        "name": "repo_b",
+        "path": "eval/fixtures/repos/repo_b"
+      },
+      "split": "holdout",
+      "tags": [
+        "synthetic",
+        "search_code",
+        "direct",
+        "holdout"
+      ],
+      "task_type": "refactor"
+    },
+    {
+      "expected": {
+        "file_paths": [
+          "./src/store.rs"
+        ],
+        "max_rank": 5,
+        "min_recall": 1,
+        "node_ids": [
+          "./src/store.rs:function_item:symbol:0bf22d646bda5048:0"
+        ]
+      },
+      "id": "syn-b-search-016",
+      "notes": "Deterministic synthetic fixture task",
+      "priority": 1,
+      "query": {
+        "text": "find where list_bookings is implemented",
+        "type": "search_code"
+      },
+      "repo": {
+        "languages": [
+          "rust"
+        ],
+        "name": "repo_b",
+        "path": "eval/fixtures/repos/repo_b"
+      },
+      "split": "holdout",
+      "tags": [
+        "synthetic",
+        "search_code",
+        "direct",
+        "holdout"
+      ],
+      "task_type": "investigation"
+    },
+    {
+      "expected": {
+        "file_paths": [
+          "./src/payment.rs"
+        ],
+        "max_rank": 5,
+        "min_recall": 1,
+        "node_ids": [
+          "./src/payment.rs:function_item:symbol:539d5ed29c39d390:0"
+        ]
+      },
+      "id": "syn-b-search-017",
+      "notes": "Deterministic synthetic fixture task",
+      "priority": 1,
+      "query": {
+        "text": "find where charge is implemented",
+        "type": "search_code"
+      },
+      "repo": {
+        "languages": [
+          "rust"
+        ],
+        "name": "repo_b",
+        "path": "eval/fixtures/repos/repo_b"
+      },
+      "split": "holdout",
+      "tags": [
+        "synthetic",
+        "search_code",
+        "direct",
+        "holdout"
+      ],
+      "task_type": "test"
+    },
+    {
+      "expected": {
+        "file_paths": [
+          "./src/store.rs"
+        ],
+        "max_rank": 5,
+        "min_recall": 1,
+        "node_ids": [
+          "./src/store.rs:function_item:symbol:17632a4141c8dc6f:0"
+        ]
+      },
+      "id": "syn-b-search-018",
+      "notes": "Deterministic synthetic fixture task",
+      "priority": 1,
+      "query": {
+        "text": "find where remove_booking is implemented",
+        "type": "search_code"
+      },
+      "repo": {
+        "languages": [
+          "rust"
+        ],
+        "name": "repo_b",
+        "path": "eval/fixtures/repos/repo_b"
+      },
+      "split": "holdout",
+      "tags": [
+        "synthetic",
+        "search_code",
+        "direct",
+        "holdout"
+      ],
+      "task_type": "unknown"
+    },
+    {
+      "expected": {
+        "file_paths": [
+          "./src/store.rs"
+        ],
+        "max_rank": 5,
+        "min_recall": 1,
+        "node_ids": [
+          "./src/store.rs:function_item:symbol:7e353086126c3a56:0"
+        ]
+      },
+      "id": "syn-b-search-019",
+      "notes": "Deterministic synthetic fixture task",
+      "priority": 1,
+      "query": {
+        "text": "find where mark_room_clean is implemented",
+        "type": "search_code"
+      },
+      "repo": {
+        "languages": [
+          "rust"
+        ],
+        "name": "repo_b",
+        "path": "eval/fixtures/repos/repo_b"
+      },
+      "split": "holdout",
+      "tags": [
+        "synthetic",
+        "search_code",
+        "direct",
+        "holdout"
+      ],
+      "task_type": "bug_fix"
+    },
+    {
+      "expected": {
+        "file_paths": [
+          "./src/rooms.rs"
+        ],
+        "max_rank": 5,
+        "min_recall": 1,
+        "node_ids": [
+          "./src/rooms.rs:function_item:symbol:75018035c09ac6ff:0"
+        ]
+      },
+      "id": "syn-b-search-020",
+      "notes": "Deterministic synthetic fixture task",
+      "priority": 1,
+      "query": {
+        "text": "find where pick_room is implemented",
+        "type": "search_code"
+      },
+      "repo": {
+        "languages": [
+          "rust"
+        ],
+        "name": "repo_b",
+        "path": "eval/fixtures/repos/repo_b"
+      },
+      "split": "holdout",
+      "tags": [
+        "synthetic",
+        "search_code",
+        "direct",
+        "holdout"
+      ],
+      "task_type": "feature"
+    },
+    {
+      "expected": {
+        "file_paths": [
+          "./src/customer.rs"
+        ],
+        "max_rank": 5,
+        "min_recall": 1,
+        "node_ids": [
+          "./src/customer.rs:function_item:symbol:9e1c453cfecca01f:0"
+        ]
+      },
+      "id": "syn-b-search-021",
+      "notes": "Deterministic synthetic fixture task",
+      "priority": 1,
+      "query": {
+        "text": "find where is_member is implemented",
+        "type": "search_code"
+      },
+      "repo": {
+        "languages": [
+          "rust"
+        ],
+        "name": "repo_b",
+        "path": "eval/fixtures/repos/repo_b"
+      },
+      "split": "holdout",
+      "tags": [
+        "synthetic",
+        "search_code",
+        "direct",
+        "holdout"
+      ],
+      "task_type": "refactor"
+    },
+    {
+      "expected": {
+        "file_paths": [
+          "./src/availability.rs"
+        ],
+        "max_rank": 5,
+        "min_recall": 1,
+        "node_ids": [
+          "./src/availability.rs:function_item:symbol:33f0e6a9bd92985f:0"
+        ]
+      },
+      "id": "syn-b-search-022",
+      "notes": "Deterministic synthetic fixture task",
+      "priority": 1,
+      "query": {
+        "text": "find where is_available is implemented",
+        "type": "search_code"
+      },
+      "repo": {
+        "languages": [
+          "rust"
+        ],
+        "name": "repo_b",
+        "path": "eval/fixtures/repos/repo_b"
+      },
+      "split": "holdout",
+      "tags": [
+        "synthetic",
+        "search_code",
+        "direct",
+        "holdout"
+      ],
+      "task_type": "investigation"
+    },
+    {
+      "expected": {
+        "file_paths": [
+          "./src/store.rs"
+        ],
+        "max_rank": 5,
+        "min_recall": 1,
+        "node_ids": [
+          "./src/store.rs:function_item:symbol:b0115ac7ade6f17b:0"
+        ]
+      },
+      "id": "syn-b-search-023",
+      "notes": "Deterministic synthetic fixture task",
+      "priority": 1,
+      "query": {
+        "text": "find where booking_total_cents is implemented",
+        "type": "search_code"
+      },
+      "repo": {
+        "languages": [
+          "rust"
+        ],
+        "name": "repo_b",
+        "path": "eval/fixtures/repos/repo_b"
+      },
+      "split": "holdout",
+      "tags": [
+        "synthetic",
+        "search_code",
+        "direct",
+        "holdout"
+      ],
+      "task_type": "test"
+    },
+    {
+      "expected": {
+        "file_paths": [
+          "./src/payment.rs"
+        ],
+        "max_rank": 5,
+        "min_recall": 1,
+        "node_ids": [
+          "./src/payment.rs:function_item:symbol:8d7a4c5bc6c2daae:0"
+        ]
+      },
+      "id": "syn-b-search-024",
+      "notes": "Deterministic synthetic fixture task",
+      "priority": 1,
+      "query": {
+        "text": "find where refund is implemented",
+        "type": "search_code"
+      },
+      "repo": {
+        "languages": [
+          "rust"
+        ],
+        "name": "repo_b",
+        "path": "eval/fixtures/repos/repo_b"
+      },
+      "split": "holdout",
+      "tags": [
+        "synthetic",
+        "search_code",
+        "direct",
+        "holdout"
+      ],
+      "task_type": "unknown"
+    },
+    {
+      "expected": {
+        "file_paths": [
+          "./src/availability.rs"
+        ],
+        "max_rank": 5,
+        "min_recall": 1,
+        "node_ids": [
+          "./src/availability.rs:impl_item:symbol:1dad1d9f4a86f032:0"
+        ]
+      },
+      "id": "syn-b-search-025",
+      "notes": "Deterministic synthetic fixture task",
+      "priority": 1,
+      "query": {
+        "text": "find where DateRange is implemented",
+        "type": "search_code"
+      },
+      "repo": {
+        "languages": [
+          "rust"
+        ],
+        "name": "repo_b",
+        "path": "eval/fixtures/repos/repo_b"
+      },
+      "split": "holdout",
+      "tags": [
+        "synthetic",
+        "search_code",
+        "direct",
+        "holdout"
+      ],
+      "task_type": "bug_fix"
+    },
+    {
+      "expected": {
+        "file_paths": [
+          "./src/payment.rs"
+        ],
+        "max_rank": 5,
+        "min_recall": 1,
+        "node_ids": [
+          "./src/payment.rs:function_item:symbol:c024fe23008940c3:0"
+        ]
+      },
+      "id": "syn-b-context-001",
+      "notes": "Deterministic synthetic fixture task",
+      "priority": 1,
+      "query": {
+        "file_path": "./src/payment.rs",
+        "line": 12,
+        "type": "get_context"
+      },
+      "repo": {
+        "languages": [
+          "rust"
+        ],
+        "name": "repo_b",
+        "path": "eval/fixtures/repos/repo_b"
+      },
+      "split": "holdout",
+      "tags": [
+        "synthetic",
+        "get_context",
+        "holdout"
+      ],
+      "task_type": "feature"
+    },
+    {
+      "expected": {
+        "file_paths": [
+          "./src/utils.rs"
+        ],
+        "max_rank": 5,
+        "min_recall": 1,
+        "node_ids": [
+          "./src/utils.rs:function_item:symbol:e01cbf4bf725dd8d:0"
+        ]
+      },
+      "id": "syn-b-context-002",
+      "notes": "Deterministic synthetic fixture task",
+      "priority": 1,
+      "query": {
+        "file_path": "./src/utils.rs",
+        "line": 1,
+        "type": "get_context"
+      },
+      "repo": {
+        "languages": [
+          "rust"
+        ],
+        "name": "repo_b",
+        "path": "eval/fixtures/repos/repo_b"
+      },
+      "split": "holdout",
+      "tags": [
+        "synthetic",
+        "get_context",
+        "holdout"
+      ],
+      "task_type": "refactor"
+    },
+    {
+      "expected": {
+        "file_paths": [
+          "./src/availability.rs"
+        ],
+        "max_rank": 5,
+        "min_recall": 1,
+        "node_ids": [
+          "./src/availability.rs:function_item:symbol:7bc195bf609f602c:0"
+        ]
+      },
+      "id": "syn-b-context-003",
+      "notes": "Deterministic synthetic fixture task",
+      "priority": 1,
+      "query": {
+        "file_path": "./src/availability.rs",
+        "line": 13,
+        "type": "get_context"
+      },
+      "repo": {
+        "languages": [
+          "rust"
+        ],
+        "name": "repo_b",
+        "path": "eval/fixtures/repos/repo_b"
+      },
+      "split": "holdout",
+      "tags": [
+        "synthetic",
+        "get_context",
+        "holdout"
+      ],
+      "task_type": "investigation"
+    },
+    {
+      "expected": {
+        "file_paths": [
+          "./src/reports.rs"
+        ],
+        "max_rank": 5,
+        "min_recall": 1,
+        "node_ids": [
+          "./src/reports.rs:function_item:symbol:b436f517358ad266:0"
+        ]
+      },
+      "id": "syn-b-context-004",
+      "notes": "Deterministic synthetic fixture task",
+      "priority": 1,
+      "query": {
+        "file_path": "./src/reports.rs",
+        "line": 8,
+        "type": "get_context"
+      },
+      "repo": {
+        "languages": [
+          "rust"
+        ],
+        "name": "repo_b",
+        "path": "eval/fixtures/repos/repo_b"
+      },
+      "split": "holdout",
+      "tags": [
+        "synthetic",
+        "get_context",
+        "holdout"
+      ],
+      "task_type": "test"
+    },
+    {
+      "expected": {
+        "file_paths": [
+          "./src/reports.rs"
+        ],
+        "max_rank": 5,
+        "min_recall": 1,
+        "node_ids": [
+          "./src/reports.rs:function_item:symbol:8e8516a402423913:0"
+        ]
+      },
+      "id": "syn-b-context-005",
+      "notes": "Deterministic synthetic fixture task",
+      "priority": 1,
+      "query": {
+        "file_path": "./src/reports.rs",
+        "line": 12,
+        "type": "get_context"
+      },
+      "repo": {
+        "languages": [
+          "rust"
+        ],
+        "name": "repo_b",
+        "path": "eval/fixtures/repos/repo_b"
+      },
+      "split": "holdout",
+      "tags": [
+        "synthetic",
+        "get_context",
+        "holdout"
+      ],
+      "task_type": "unknown"
+    },
+    {
+      "expected": {
+        "file_paths": [
+          "./src/customer.rs"
+        ],
+        "max_rank": 5,
+        "min_recall": 1,
+        "node_ids": [
+          "./src/customer.rs:function_item:symbol:151e840ac2b2a082:0"
+        ]
+      },
+      "id": "syn-b-context-006",
+      "notes": "Deterministic synthetic fixture task",
+      "priority": 1,
+      "query": {
+        "file_path": "./src/customer.rs",
+        "line": 9,
+        "type": "get_context"
+      },
+      "repo": {
+        "languages": [
+          "rust"
+        ],
+        "name": "repo_b",
+        "path": "eval/fixtures/repos/repo_b"
+      },
+      "split": "holdout",
+      "tags": [
+        "synthetic",
+        "get_context",
+        "holdout"
+      ],
+      "task_type": "bug_fix"
+    },
+    {
+      "expected": {
+        "file_paths": [
+          "./src/rooms.rs"
+        ],
+        "max_rank": 5,
+        "min_recall": 1,
+        "node_ids": [
+          "./src/rooms.rs:function_item:symbol:8e11d8dd841b1077:0"
+        ]
+      },
+      "id": "syn-b-context-007",
+      "notes": "Deterministic synthetic fixture task",
+      "priority": 1,
+      "query": {
+        "file_path": "./src/rooms.rs",
+        "line": 21,
+        "type": "get_context"
+      },
+      "repo": {
+        "languages": [
+          "rust"
+        ],
+        "name": "repo_b",
+        "path": "eval/fixtures/repos/repo_b"
+      },
+      "split": "holdout",
+      "tags": [
+        "synthetic",
+        "get_context",
+        "holdout"
+      ],
+      "task_type": "feature"
+    },
+    {
+      "expected": {
+        "file_paths": [
+          "./src/rooms.rs"
+        ],
+        "max_rank": 5,
+        "min_recall": 1,
+        "node_ids": [
+          "./src/rooms.rs:struct_item:symbol:48aa63439f93a860:0"
+        ]
+      },
+      "id": "syn-b-context-008",
+      "notes": "Deterministic synthetic fixture task",
+      "priority": 1,
+      "query": {
+        "file_path": "./src/rooms.rs",
+        "line": 4,
+        "type": "get_context"
+      },
+      "repo": {
+        "languages": [
+          "rust"
+        ],
+        "name": "repo_b",
+        "path": "eval/fixtures/repos/repo_b"
+      },
+      "split": "holdout",
+      "tags": [
+        "synthetic",
+        "get_context",
+        "holdout"
+      ],
+      "task_type": "refactor"
+    },
+    {
+      "expected": {
+        "file_paths": [
+          "./src/housekeeping.rs"
+        ],
+        "max_rank": 5,
+        "min_recall": 1,
+        "node_ids": [
+          "./src/housekeeping.rs:function_item:symbol:e12ac5b61c9d3d7f:0"
+        ]
+      },
+      "id": "syn-b-context-009",
+      "notes": "Deterministic synthetic fixture task",
+      "priority": 1,
+      "query": {
+        "file_path": "./src/housekeeping.rs",
+        "line": 11,
+        "type": "get_context"
+      },
+      "repo": {
+        "languages": [
+          "rust"
+        ],
+        "name": "repo_b",
+        "path": "eval/fixtures/repos/repo_b"
+      },
+      "split": "holdout",
+      "tags": [
+        "synthetic",
+        "get_context",
+        "holdout"
+      ],
+      "task_type": "investigation"
+    },
+    {
+      "expected": {
+        "file_paths": [
+          "./src/receipt.rs"
+        ],
+        "max_rank": 5,
+        "min_recall": 1,
+        "node_ids": [
+          "./src/receipt.rs:function_item:symbol:6d88ff8fa313e32d:0"
+        ]
+      },
+      "id": "syn-b-context-010",
+      "notes": "Deterministic synthetic fixture task",
+      "priority": 1,
+      "query": {
+        "file_path": "./src/receipt.rs",
+        "line": 9,
+        "type": "get_context"
+      },
+      "repo": {
+        "languages": [
+          "rust"
+        ],
+        "name": "repo_b",
+        "path": "eval/fixtures/repos/repo_b"
+      },
+      "split": "holdout",
+      "tags": [
+        "synthetic",
+        "get_context",
+        "holdout"
+      ],
+      "task_type": "test"
+    },
+    {
+      "expected": {
+        "file_paths": [
+          "./src/availability.rs"
+        ],
+        "max_rank": 5,
+        "min_recall": 1,
+        "node_ids": [
+          "./src/availability.rs:struct_item:symbol:edb0640402cfb383:0"
+        ]
+      },
+      "id": "syn-b-context-011",
+      "notes": "Deterministic synthetic fixture task",
+      "priority": 1,
+      "query": {
+        "file_path": "./src/availability.rs",
+        "line": 3,
+        "type": "get_context"
+      },
+      "repo": {
+        "languages": [
+          "rust"
+        ],
+        "name": "repo_b",
+        "path": "eval/fixtures/repos/repo_b"
+      },
+      "split": "holdout",
+      "tags": [
+        "synthetic",
+        "get_context",
+        "holdout"
+      ],
+      "task_type": "unknown"
+    },
+    {
+      "expected": {
+        "file_paths": [
+          "./src/store.rs"
+        ],
+        "max_rank": 5,
+        "min_recall": 1,
+        "node_ids": [
+          "./src/store.rs:function_item:symbol:47d6ba87b2266e62:0"
+        ]
+      },
+      "id": "syn-b-context-012",
+      "notes": "Deterministic synthetic fixture task",
+      "priority": 1,
+      "query": {
+        "file_path": "./src/store.rs",
+        "line": 27,
+        "type": "get_context"
+      },
+      "repo": {
+        "languages": [
+          "rust"
+        ],
+        "name": "repo_b",
+        "path": "eval/fixtures/repos/repo_b"
+      },
+      "split": "holdout",
+      "tags": [
+        "synthetic",
+        "get_context",
+        "holdout"
+      ],
+      "task_type": "bug_fix"
+    },
+    {
+      "expected": {
+        "file_paths": [
+          "./src/receipt.rs"
+        ],
+        "max_rank": 5,
+        "min_recall": 1,
+        "node_ids": [
+          "./src/receipt.rs:function_item:symbol:35872f7312eca4c4:0"
+        ]
+      },
+      "id": "syn-b-context-013",
+      "notes": "Deterministic synthetic fixture task",
+      "priority": 1,
+      "query": {
+        "file_path": "./src/receipt.rs",
+        "line": 20,
+        "type": "get_context"
+      },
+      "repo": {
+        "languages": [
+          "rust"
+        ],
+        "name": "repo_b",
+        "path": "eval/fixtures/repos/repo_b"
+      },
+      "split": "holdout",
+      "tags": [
+        "synthetic",
+        "get_context",
+        "holdout"
+      ],
+      "task_type": "feature"
+    },
+    {
+      "expected": {
+        "file_paths": [
+          "./src/booking.rs"
+        ],
+        "max_rank": 5,
+        "min_recall": 1,
+        "node_ids": [
+          "./src/booking.rs:function_item:symbol:98982b10a6028ffb:0"
+        ]
+      },
+      "id": "syn-b-context-014",
+      "notes": "Deterministic synthetic fixture task",
+      "priority": 1,
+      "query": {
+        "file_path": "./src/booking.rs",
+        "line": 30,
+        "type": "get_context"
+      },
+      "repo": {
+        "languages": [
+          "rust"
+        ],
+        "name": "repo_b",
+        "path": "eval/fixtures/repos/repo_b"
+      },
+      "split": "holdout",
+      "tags": [
+        "synthetic",
+        "get_context",
+        "holdout"
+      ],
+      "task_type": "refactor"
+    },
+    {
+      "expected": {
+        "file_paths": [
+          "./src/customer.rs"
+        ],
+        "max_rank": 5,
+        "min_recall": 1,
+        "node_ids": [
+          "./src/customer.rs:struct_item:symbol:397410ee7bdb1b1d:0"
+        ]
+      },
+      "id": "syn-b-context-015",
+      "notes": "Deterministic synthetic fixture task",
+      "priority": 1,
+      "query": {
+        "file_path": "./src/customer.rs",
+        "line": 3,
+        "type": "get_context"
+      },
+      "repo": {
+        "languages": [
+          "rust"
+        ],
+        "name": "repo_b",
+        "path": "eval/fixtures/repos/repo_b"
+      },
+      "split": "holdout",
+      "tags": [
+        "synthetic",
+        "get_context",
+        "holdout"
+      ],
+      "task_type": "investigation"
+    },
+    {
+      "expected": {
+        "file_paths": [
+          "./src/store.rs"
+        ],
+        "max_rank": 5,
+        "min_recall": 1,
+        "node_ids": [
+          "./src/store.rs:struct_item:symbol:61cb56f37bf1828e:0"
+        ]
+      },
+      "id": "syn-b-context-016",
+      "notes": "Deterministic synthetic fixture task",
+      "priority": 1,
+      "query": {
+        "file_path": "./src/store.rs",
+        "line": 6,
+        "type": "get_context"
+      },
+      "repo": {
+        "languages": [
+          "rust"
+        ],
+        "name": "repo_b",
+        "path": "eval/fixtures/repos/repo_b"
+      },
+      "split": "holdout",
+      "tags": [
+        "synthetic",
+        "get_context",
+        "holdout"
+      ],
+      "task_type": "test"
+    },
+    {
+      "expected": {
+        "file_paths": [
+          "./src/rates.rs"
+        ],
+        "max_rank": 5,
+        "min_recall": 1,
+        "node_ids": [
+          "./src/rates.rs:function_item:symbol:dcea79ca8d7470b4:0"
+        ]
+      },
+      "id": "syn-b-context-017",
+      "notes": "Deterministic synthetic fixture task",
+      "priority": 1,
+      "query": {
+        "file_path": "./src/rates.rs",
+        "line": 10,
+        "type": "get_context"
+      },
+      "repo": {
+        "languages": [
+          "rust"
+        ],
+        "name": "repo_b",
+        "path": "eval/fixtures/repos/repo_b"
+      },
+      "split": "holdout",
+      "tags": [
+        "synthetic",
+        "get_context",
+        "holdout"
+      ],
+      "task_type": "unknown"
+    },
+    {
+      "expected": {
+        "file_paths": [
+          "./src/availability.rs"
+        ],
+        "max_rank": 5,
+        "min_recall": 1,
+        "node_ids": [
+          "./src/availability.rs:function_item:symbol:771140826935addc:0"
+        ]
+      },
+      "id": "syn-b-context-018",
+      "notes": "Deterministic synthetic fixture task",
+      "priority": 1,
+      "query": {
+        "file_path": "./src/availability.rs",
+        "line": 25,
+        "type": "get_context"
+      },
+      "repo": {
+        "languages": [
+          "rust"
+        ],
+        "name": "repo_b",
+        "path": "eval/fixtures/repos/repo_b"
+      },
+      "split": "holdout",
+      "tags": [
+        "synthetic",
+        "get_context",
+        "holdout"
+      ],
+      "task_type": "bug_fix"
+    },
+    {
+      "expected": {
+        "file_paths": [
+          "./src/rates.rs"
+        ],
+        "max_rank": 5,
+        "min_recall": 1,
+        "node_ids": [
+          "./src/rates.rs:function_item:symbol:ffcf543c422843f4:0"
+        ]
+      },
+      "id": "syn-b-context-019",
+      "notes": "Deterministic synthetic fixture task",
+      "priority": 1,
+      "query": {
+        "file_path": "./src/rates.rs",
+        "line": 14,
+        "type": "get_context"
+      },
+      "repo": {
+        "languages": [
+          "rust"
+        ],
+        "name": "repo_b",
+        "path": "eval/fixtures/repos/repo_b"
+      },
+      "split": "holdout",
+      "tags": [
+        "synthetic",
+        "get_context",
+        "holdout"
+      ],
+      "task_type": "feature"
+    },
+    {
+      "expected": {
+        "file_paths": [
+          "./src/main.rs"
+        ],
+        "max_rank": 5,
+        "min_recall": 1,
+        "node_ids": [
+          "./src/main.rs:function_item:symbol:b43bc420a15e77f0:0"
+        ]
+      },
+      "id": "syn-b-context-020",
+      "notes": "Deterministic synthetic fixture task",
+      "priority": 1,
+      "query": {
+        "file_path": "./src/main.rs",
+        "line": 16,
+        "type": "get_context"
+      },
+      "repo": {
+        "languages": [
+          "rust"
+        ],
+        "name": "repo_b",
+        "path": "eval/fixtures/repos/repo_b"
+      },
+      "split": "holdout",
+      "tags": [
+        "synthetic",
+        "get_context",
+        "holdout"
+      ],
+      "task_type": "refactor"
+    },
+    {
+      "expected": {
+        "file_paths": [
+          "./src/store.rs"
+        ],
+        "max_rank": 5,
+        "min_recall": 1,
+        "node_ids": [
+          "./src/store.rs:function_item:symbol:e902ac2985c2b600:0"
+        ]
+      },
+      "id": "syn-b-context-021",
+      "notes": "Deterministic synthetic fixture task",
+      "priority": 1,
+      "query": {
+        "file_path": "./src/store.rs",
+        "line": 17,
+        "type": "get_context"
+      },
+      "repo": {
+        "languages": [
+          "rust"
+        ],
+        "name": "repo_b",
+        "path": "eval/fixtures/repos/repo_b"
+      },
+      "split": "holdout",
+      "tags": [
+        "synthetic",
+        "get_context",
+        "holdout"
+      ],
+      "task_type": "investigation"
+    },
+    {
+      "expected": {
+        "file_paths": [
+          "./src/utils.rs"
+        ],
+        "max_rank": 5,
+        "min_recall": 1,
+        "node_ids": [
+          "./src/utils.rs:function_item:symbol:068d9c95db08d5e0:0"
+        ]
+      },
+      "id": "syn-b-context-022",
+      "notes": "Deterministic synthetic fixture task",
+      "priority": 1,
+      "query": {
+        "file_path": "./src/utils.rs",
+        "line": 13,
+        "type": "get_context"
+      },
+      "repo": {
+        "languages": [
+          "rust"
+        ],
+        "name": "repo_b",
+        "path": "eval/fixtures/repos/repo_b"
+      },
+      "split": "holdout",
+      "tags": [
+        "synthetic",
+        "get_context",
+        "holdout"
+      ],
+      "task_type": "test"
+    },
+    {
+      "expected": {
+        "file_paths": [
+          "./src/utils.rs"
+        ],
+        "max_rank": 5,
+        "min_recall": 1,
+        "node_ids": [
+          "./src/utils.rs:function_item:symbol:07925729778a41b3:0"
+        ]
+      },
+      "id": "syn-b-context-023",
+      "notes": "Deterministic synthetic fixture task",
+      "priority": 1,
+      "query": {
+        "file_path": "./src/utils.rs",
+        "line": 5,
+        "type": "get_context"
+      },
+      "repo": {
+        "languages": [
+          "rust"
+        ],
+        "name": "repo_b",
+        "path": "eval/fixtures/repos/repo_b"
+      },
+      "split": "holdout",
+      "tags": [
+        "synthetic",
+        "get_context",
+        "holdout"
+      ],
+      "task_type": "unknown"
+    },
+    {
+      "expected": {
+        "file_paths": [
+          "./src/availability.rs"
+        ],
+        "max_rank": 5,
+        "min_recall": 1,
+        "node_ids": [
+          "./src/availability.rs:function_item:symbol:a6df80ba2c07bb1b:0"
+        ]
+      },
+      "id": "syn-b-context-024",
+      "notes": "Deterministic synthetic fixture task",
+      "priority": 1,
+      "query": {
+        "file_path": "./src/availability.rs",
+        "line": 9,
+        "type": "get_context"
+      },
+      "repo": {
+        "languages": [
+          "rust"
+        ],
+        "name": "repo_b",
+        "path": "eval/fixtures/repos/repo_b"
+      },
+      "split": "holdout",
+      "tags": [
+        "synthetic",
+        "get_context",
+        "holdout"
+      ],
+      "task_type": "bug_fix"
+    },
+    {
+      "expected": {
+        "file_paths": [
+          "./src/customer.rs"
+        ],
+        "max_rank": 5,
+        "min_recall": 1,
+        "node_ids": [
+          "./src/customer.rs:function_item:symbol:77c8d838aeb45ab9:0"
+        ]
+      },
+      "id": "syn-b-context-025",
+      "notes": "Deterministic synthetic fixture task",
+      "priority": 1,
+      "query": {
+        "file_path": "./src/customer.rs",
+        "line": 18,
+        "type": "get_context"
+      },
+      "repo": {
+        "languages": [
+          "rust"
+        ],
+        "name": "repo_b",
+        "path": "eval/fixtures/repos/repo_b"
+      },
+      "split": "holdout",
+      "tags": [
+        "synthetic",
+        "get_context",
+        "holdout"
+      ],
+      "task_type": "feature"
+    },
+    {
+      "expected": {
+        "file_paths": [
+          "./src/store.rs"
+        ],
+        "max_rank": 5,
+        "min_recall": 1,
+        "node_ids": [
+          "./src/store.rs:function_item:symbol:ed5ec7a23d4882f5:0"
+        ]
+      },
+      "id": "syn-b-graph-001",
+      "notes": "Deterministic synthetic fixture task",
+      "priority": 1,
+      "query": {
+        "node_id": "./src/store.rs:function_item:symbol:ed5ec7a23d4882f5:0",
+        "type": "read_graph"
+      },
+      "repo": {
+        "languages": [
+          "rust"
+        ],
+        "name": "repo_b",
+        "path": "eval/fixtures/repos/repo_b"
+      },
+      "split": "holdout",
+      "tags": [
+        "synthetic",
+        "read_graph",
+        "holdout"
+      ],
+      "task_type": "refactor"
+    },
+    {
+      "expected": {
+        "file_paths": [
+          "./src/housekeeping.rs"
+        ],
+        "max_rank": 5,
+        "min_recall": 1,
+        "node_ids": [
+          "./src/housekeeping.rs:function_item:symbol:d5be9dd1424ed4bc:0"
+        ]
+      },
+      "id": "syn-b-graph-002",
+      "notes": "Deterministic synthetic fixture task",
+      "priority": 1,
+      "query": {
+        "node_id": "./src/housekeeping.rs:function_item:symbol:d5be9dd1424ed4bc:0",
+        "type": "read_graph"
+      },
+      "repo": {
+        "languages": [
+          "rust"
+        ],
+        "name": "repo_b",
+        "path": "eval/fixtures/repos/repo_b"
+      },
+      "split": "holdout",
+      "tags": [
+        "synthetic",
+        "read_graph",
+        "holdout"
+      ],
+      "task_type": "investigation"
+    },
+    {
+      "expected": {
+        "file_paths": [
+          "./src/notifications.rs"
+        ],
+        "max_rank": 5,
+        "min_recall": 1,
+        "node_ids": [
+          "./src/notifications.rs:function_item:symbol:a15ff934bc36d6c6:0"
+        ]
+      },
+      "id": "syn-b-graph-003",
+      "notes": "Deterministic synthetic fixture task",
+      "priority": 1,
+      "query": {
+        "node_id": "./src/notifications.rs:function_item:symbol:a15ff934bc36d6c6:0",
+        "type": "read_graph"
+      },
+      "repo": {
+        "languages": [
+          "rust"
+        ],
+        "name": "repo_b",
+        "path": "eval/fixtures/repos/repo_b"
+      },
+      "split": "holdout",
+      "tags": [
+        "synthetic",
+        "read_graph",
+        "holdout"
+      ],
+      "task_type": "test"
+    },
+    {
+      "expected": {
+        "file_paths": [
+          "./src/notifications.rs"
+        ],
+        "max_rank": 5,
+        "min_recall": 1,
+        "node_ids": [
+          "./src/notifications.rs:function_item:symbol:032af54dd18e99f3:0"
+        ]
+      },
+      "id": "syn-b-graph-004",
+      "notes": "Deterministic synthetic fixture task",
+      "priority": 1,
+      "query": {
+        "node_id": "./src/notifications.rs:function_item:symbol:032af54dd18e99f3:0",
+        "type": "read_graph"
+      },
+      "repo": {
+        "languages": [
+          "rust"
+        ],
+        "name": "repo_b",
+        "path": "eval/fixtures/repos/repo_b"
+      },
+      "split": "holdout",
+      "tags": [
+        "synthetic",
+        "read_graph",
+        "holdout"
+      ],
+      "task_type": "unknown"
+    },
+    {
+      "expected": {
+        "file_paths": [
+          "./src/utils.rs"
+        ],
+        "max_rank": 5,
+        "min_recall": 1,
+        "node_ids": [
+          "./src/utils.rs:function_item:symbol:e26dd05eea4180e9:0"
+        ]
+      },
+      "id": "syn-b-graph-005",
+      "notes": "Deterministic synthetic fixture task",
+      "priority": 1,
+      "query": {
+        "node_id": "./src/utils.rs:function_item:symbol:e26dd05eea4180e9:0",
+        "type": "read_graph"
+      },
+      "repo": {
+        "languages": [
+          "rust"
+        ],
+        "name": "repo_b",
+        "path": "eval/fixtures/repos/repo_b"
+      },
+      "split": "holdout",
+      "tags": [
+        "synthetic",
+        "read_graph",
+        "holdout"
+      ],
+      "task_type": "bug_fix"
+    },
+    {
+      "expected": {
+        "file_paths": [
+          "./src/rooms.rs"
+        ],
+        "max_rank": 5,
+        "min_recall": 1,
+        "node_ids": [
+          "./src/rooms.rs:function_item:symbol:c3503878270bf178:0"
+        ]
+      },
+      "id": "syn-b-graph-006",
+      "notes": "Deterministic synthetic fixture task",
+      "priority": 1,
+      "query": {
+        "node_id": "./src/rooms.rs:function_item:symbol:c3503878270bf178:0",
+        "type": "read_graph"
+      },
+      "repo": {
+        "languages": [
+          "rust"
+        ],
+        "name": "repo_b",
+        "path": "eval/fixtures/repos/repo_b"
+      },
+      "split": "holdout",
+      "tags": [
+        "synthetic",
+        "read_graph",
+        "holdout"
+      ],
+      "task_type": "feature"
+    },
+    {
+      "expected": {
+        "file_paths": [
+          "./src/notifications.rs"
+        ],
+        "max_rank": 5,
+        "min_recall": 1,
+        "node_ids": [
+          "./src/notifications.rs:function_item:symbol:c8d6f61d353b08d8:0"
+        ]
+      },
+      "id": "syn-b-graph-007",
+      "notes": "Deterministic synthetic fixture task",
+      "priority": 1,
+      "query": {
+        "node_id": "./src/notifications.rs:function_item:symbol:c8d6f61d353b08d8:0",
+        "type": "read_graph"
+      },
+      "repo": {
+        "languages": [
+          "rust"
+        ],
+        "name": "repo_b",
+        "path": "eval/fixtures/repos/repo_b"
+      },
+      "split": "holdout",
+      "tags": [
+        "synthetic",
+        "read_graph",
+        "holdout"
+      ],
+      "task_type": "refactor"
+    },
+    {
+      "expected": {
+        "file_paths": [
+          "./src/reports.rs"
+        ],
+        "max_rank": 5,
+        "min_recall": 1,
+        "node_ids": [
+          "./src/reports.rs:function_item:symbol:b322b9c5f7a6fa0d:0"
+        ]
+      },
+      "id": "syn-b-graph-008",
+      "notes": "Deterministic synthetic fixture task",
+      "priority": 1,
+      "query": {
+        "node_id": "./src/reports.rs:function_item:symbol:b322b9c5f7a6fa0d:0",
+        "type": "read_graph"
+      },
+      "repo": {
+        "languages": [
+          "rust"
+        ],
+        "name": "repo_b",
+        "path": "eval/fixtures/repos/repo_b"
+      },
+      "split": "holdout",
+      "tags": [
+        "synthetic",
+        "read_graph",
+        "holdout"
+      ],
+      "task_type": "investigation"
+    },
+    {
+      "expected": {
+        "file_paths": [
+          "./src/booking.rs"
+        ],
+        "max_rank": 5,
+        "min_recall": 1,
+        "node_ids": [
+          "./src/booking.rs:function_item:symbol:6f4599bb7dbdcf07:0"
+        ]
+      },
+      "id": "syn-b-graph-009",
+      "notes": "Deterministic synthetic fixture task",
+      "priority": 1,
+      "query": {
+        "node_id": "./src/booking.rs:function_item:symbol:6f4599bb7dbdcf07:0",
+        "type": "read_graph"
+      },
+      "repo": {
+        "languages": [
+          "rust"
+        ],
+        "name": "repo_b",
+        "path": "eval/fixtures/repos/repo_b"
+      },
+      "split": "holdout",
+      "tags": [
+        "synthetic",
+        "read_graph",
+        "holdout"
+      ],
+      "task_type": "test"
+    },
+    {
+      "expected": {
+        "file_paths": [
+          "./src/rooms.rs"
+        ],
+        "max_rank": 5,
+        "min_recall": 1,
+        "node_ids": [
+          "./src/rooms.rs:impl_item:symbol:94ee677e85218251:0"
+        ]
+      },
+      "id": "syn-b-graph-010",
+      "notes": "Deterministic synthetic fixture task",
+      "priority": 1,
+      "query": {
+        "node_id": "./src/rooms.rs:impl_item:symbol:94ee677e85218251:0",
+        "type": "read_graph"
+      },
+      "repo": {
+        "languages": [
+          "rust"
+        ],
+        "name": "repo_b",
+        "path": "eval/fixtures/repos/repo_b"
+      },
+      "split": "holdout",
+      "tags": [
+        "synthetic",
+        "read_graph",
+        "holdout"
+      ],
+      "task_type": "unknown"
+    },
+    {
+      "expected": {
+        "file_paths": [
+          "./src/receipt.rs"
+        ],
+        "max_rank": 5,
+        "min_recall": 1,
+        "node_ids": [
+          "./src/receipt.rs:function_item:symbol:f909d41294b9b9ee:0"
+        ]
+      },
+      "id": "syn-b-graph-011",
+      "notes": "Deterministic synthetic fixture task",
+      "priority": 1,
+      "query": {
+        "node_id": "./src/receipt.rs:function_item:symbol:f909d41294b9b9ee:0",
+        "type": "read_graph"
+      },
+      "repo": {
+        "languages": [
+          "rust"
+        ],
+        "name": "repo_b",
+        "path": "eval/fixtures/repos/repo_b"
+      },
+      "split": "holdout",
+      "tags": [
+        "synthetic",
+        "read_graph",
+        "holdout"
+      ],
+      "task_type": "bug_fix"
+    },
+    {
+      "expected": {
+        "file_paths": [
+          "./src/store.rs"
+        ],
+        "max_rank": 5,
+        "min_recall": 1,
+        "node_ids": [
+          "./src/store.rs:function_item:symbol:849117df8d7ac81d:0"
+        ]
+      },
+      "id": "syn-b-graph-012",
+      "notes": "Deterministic synthetic fixture task",
+      "priority": 1,
+      "query": {
+        "node_id": "./src/store.rs:function_item:symbol:849117df8d7ac81d:0",
+        "type": "read_graph"
+      },
+      "repo": {
+        "languages": [
+          "rust"
+        ],
+        "name": "repo_b",
+        "path": "eval/fixtures/repos/repo_b"
+      },
+      "split": "holdout",
+      "tags": [
+        "synthetic",
+        "read_graph",
+        "holdout"
+      ],
+      "task_type": "feature"
+    },
+    {
+      "expected": {
+        "file_paths": [
+          "./src/store.rs"
+        ],
+        "max_rank": 5,
+        "min_recall": 1,
+        "node_ids": [
+          "./src/store.rs:impl_item:symbol:74607685fc355b0d:0"
+        ]
+      },
+      "id": "syn-b-graph-013",
+      "notes": "Deterministic synthetic fixture task",
+      "priority": 1,
+      "query": {
+        "node_id": "./src/store.rs:impl_item:symbol:74607685fc355b0d:0",
+        "type": "read_graph"
+      },
+      "repo": {
+        "languages": [
+          "rust"
+        ],
+        "name": "repo_b",
+        "path": "eval/fixtures/repos/repo_b"
+      },
+      "split": "holdout",
+      "tags": [
+        "synthetic",
+        "read_graph",
+        "holdout"
+      ],
+      "task_type": "refactor"
+    },
+    {
+      "expected": {
+        "file_paths": [
+          "./src/booking.rs"
+        ],
+        "max_rank": 5,
+        "min_recall": 1,
+        "node_ids": [
+          "./src/booking.rs:struct_item:symbol:fe560797e5ca0beb:0"
+        ]
+      },
+      "id": "syn-b-graph-014",
+      "notes": "Deterministic synthetic fixture task",
+      "priority": 1,
+      "query": {
+        "node_id": "./src/booking.rs:struct_item:symbol:fe560797e5ca0beb:0",
+        "type": "read_graph"
+      },
+      "repo": {
+        "languages": [
+          "rust"
+        ],
+        "name": "repo_b",
+        "path": "eval/fixtures/repos/repo_b"
+      },
+      "split": "holdout",
+      "tags": [
+        "synthetic",
+        "read_graph",
+        "holdout"
+      ],
+      "task_type": "investigation"
+    },
+    {
+      "expected": {
+        "file_paths": [
+          "./src/store.rs"
+        ],
+        "max_rank": 5,
+        "min_recall": 1,
+        "node_ids": [
+          "./src/store.rs:function_item:symbol:8ace309e51208c42:0"
+        ]
+      },
+      "id": "syn-b-graph-015",
+      "notes": "Deterministic synthetic fixture task",
+      "priority": 1,
+      "query": {
+        "node_id": "./src/store.rs:function_item:symbol:8ace309e51208c42:0",
+        "type": "read_graph"
+      },
+      "repo": {
+        "languages": [
+          "rust"
+        ],
+        "name": "repo_b",
+        "path": "eval/fixtures/repos/repo_b"
+      },
+      "split": "holdout",
+      "tags": [
+        "synthetic",
+        "read_graph",
+        "holdout"
+      ],
+      "task_type": "test"
+    },
+    {
+      "expected": {
+        "file_paths": [
+          "./src/booking.rs"
+        ],
+        "max_rank": 5,
+        "min_recall": 1,
+        "node_ids": [
+          "./src/booking.rs:function_item:symbol:a3d843f61bb7fcbd:0"
+        ]
+      },
+      "id": "syn-b-graph-016",
+      "notes": "Deterministic synthetic fixture task",
+      "priority": 1,
+      "query": {
+        "node_id": "./src/booking.rs:function_item:symbol:a3d843f61bb7fcbd:0",
+        "type": "read_graph"
+      },
+      "repo": {
+        "languages": [
+          "rust"
+        ],
+        "name": "repo_b",
+        "path": "eval/fixtures/repos/repo_b"
+      },
+      "split": "holdout",
+      "tags": [
+        "synthetic",
+        "read_graph",
+        "holdout"
+      ],
+      "task_type": "unknown"
+    },
+    {
+      "expected": {
+        "file_paths": [
+          "./src/housekeeping.rs"
+        ],
+        "max_rank": 5,
+        "min_recall": 1,
+        "node_ids": [
+          "./src/housekeeping.rs:function_item:symbol:167005b57176eb80:0"
+        ]
+      },
+      "id": "syn-b-graph-017",
+      "notes": "Deterministic synthetic fixture task",
+      "priority": 1,
+      "query": {
+        "node_id": "./src/housekeeping.rs:function_item:symbol:167005b57176eb80:0",
+        "type": "read_graph"
+      },
+      "repo": {
+        "languages": [
+          "rust"
+        ],
+        "name": "repo_b",
+        "path": "eval/fixtures/repos/repo_b"
+      },
+      "split": "holdout",
+      "tags": [
+        "synthetic",
+        "read_graph",
+        "holdout"
+      ],
+      "task_type": "bug_fix"
+    },
+    {
+      "expected": {
+        "file_paths": [
+          "./src/rooms.rs"
+        ],
+        "max_rank": 5,
+        "min_recall": 1,
+        "node_ids": [
+          "./src/rooms.rs:function_item:symbol:2260499dec705999:0"
+        ]
+      },
+      "id": "syn-b-graph-018",
+      "notes": "Deterministic synthetic fixture task",
+      "priority": 1,
+      "query": {
+        "node_id": "./src/rooms.rs:function_item:symbol:2260499dec705999:0",
+        "type": "read_graph"
+      },
+      "repo": {
+        "languages": [
+          "rust"
+        ],
+        "name": "repo_b",
+        "path": "eval/fixtures/repos/repo_b"
+      },
+      "split": "holdout",
+      "tags": [
+        "synthetic",
+        "read_graph",
+        "holdout"
+      ],
+      "task_type": "feature"
+    },
+    {
+      "expected": {
+        "file_paths": [
+          "./src/store.rs"
+        ],
+        "max_rank": 5,
+        "min_recall": 1,
+        "node_ids": [
+          "./src/store.rs:function_item:symbol:5a581ee16e51010b:0"
+        ]
+      },
+      "id": "syn-b-graph-019",
+      "notes": "Deterministic synthetic fixture task",
+      "priority": 1,
+      "query": {
+        "node_id": "./src/store.rs:function_item:symbol:5a581ee16e51010b:0",
+        "type": "read_graph"
+      },
+      "repo": {
+        "languages": [
+          "rust"
+        ],
+        "name": "repo_b",
+        "path": "eval/fixtures/repos/repo_b"
+      },
+      "split": "holdout",
+      "tags": [
+        "synthetic",
+        "read_graph",
+        "holdout"
+      ],
+      "task_type": "refactor"
+    },
+    {
+      "expected": {
+        "file_paths": [
+          "./src/rates.rs"
+        ],
+        "max_rank": 5,
+        "min_recall": 1,
+        "node_ids": [
+          "./src/rates.rs:function_item:symbol:073c0e6b5ac3a0f9:0"
+        ]
+      },
+      "id": "syn-b-graph-020",
+      "notes": "Deterministic synthetic fixture task",
+      "priority": 1,
+      "query": {
+        "node_id": "./src/rates.rs:function_item:symbol:073c0e6b5ac3a0f9:0",
+        "type": "read_graph"
+      },
+      "repo": {
+        "languages": [
+          "rust"
+        ],
+        "name": "repo_b",
+        "path": "eval/fixtures/repos/repo_b"
+      },
+      "split": "holdout",
+      "tags": [
+        "synthetic",
+        "read_graph",
+        "holdout"
+      ],
+      "task_type": "investigation"
+    },
+    {
+      "expected": {
+        "file_paths": [
+          "./src/store.rs"
+        ],
+        "max_rank": 5,
+        "min_recall": 1,
+        "node_ids": [
+          "./src/store.rs:function_item:symbol:0bf22d646bda5048:0"
+        ]
+      },
+      "id": "syn-b-graph-021",
+      "notes": "Deterministic synthetic fixture task",
+      "priority": 1,
+      "query": {
+        "node_id": "./src/store.rs:function_item:symbol:0bf22d646bda5048:0",
+        "type": "read_graph"
+      },
+      "repo": {
+        "languages": [
+          "rust"
+        ],
+        "name": "repo_b",
+        "path": "eval/fixtures/repos/repo_b"
+      },
+      "split": "holdout",
+      "tags": [
+        "synthetic",
+        "read_graph",
+        "holdout"
+      ],
+      "task_type": "test"
+    },
+    {
+      "expected": {
+        "file_paths": [
+          "./src/payment.rs"
+        ],
+        "max_rank": 5,
+        "min_recall": 1,
+        "node_ids": [
+          "./src/payment.rs:function_item:symbol:539d5ed29c39d390:0"
+        ]
+      },
+      "id": "syn-b-graph-022",
+      "notes": "Deterministic synthetic fixture task",
+      "priority": 1,
+      "query": {
+        "node_id": "./src/payment.rs:function_item:symbol:539d5ed29c39d390:0",
+        "type": "read_graph"
+      },
+      "repo": {
+        "languages": [
+          "rust"
+        ],
+        "name": "repo_b",
+        "path": "eval/fixtures/repos/repo_b"
+      },
+      "split": "holdout",
+      "tags": [
+        "synthetic",
+        "read_graph",
+        "holdout"
+      ],
+      "task_type": "unknown"
+    },
+    {
+      "expected": {
+        "file_paths": [
+          "./src/store.rs"
+        ],
+        "max_rank": 5,
+        "min_recall": 1,
+        "node_ids": [
+          "./src/store.rs:function_item:symbol:17632a4141c8dc6f:0"
+        ]
+      },
+      "id": "syn-b-graph-023",
+      "notes": "Deterministic synthetic fixture task",
+      "priority": 1,
+      "query": {
+        "node_id": "./src/store.rs:function_item:symbol:17632a4141c8dc6f:0",
+        "type": "read_graph"
+      },
+      "repo": {
+        "languages": [
+          "rust"
+        ],
+        "name": "repo_b",
+        "path": "eval/fixtures/repos/repo_b"
+      },
+      "split": "holdout",
+      "tags": [
+        "synthetic",
+        "read_graph",
+        "holdout"
+      ],
+      "task_type": "bug_fix"
+    },
+    {
+      "expected": {
+        "file_paths": [
+          "./src/store.rs"
+        ],
+        "max_rank": 5,
+        "min_recall": 1,
+        "node_ids": [
+          "./src/store.rs:function_item:symbol:7e353086126c3a56:0"
+        ]
+      },
+      "id": "syn-b-graph-024",
+      "notes": "Deterministic synthetic fixture task",
+      "priority": 1,
+      "query": {
+        "node_id": "./src/store.rs:function_item:symbol:7e353086126c3a56:0",
+        "type": "read_graph"
+      },
+      "repo": {
+        "languages": [
+          "rust"
+        ],
+        "name": "repo_b",
+        "path": "eval/fixtures/repos/repo_b"
+      },
+      "split": "holdout",
+      "tags": [
+        "synthetic",
+        "read_graph",
+        "holdout"
+      ],
+      "task_type": "feature"
+    },
+    {
+      "expected": {
+        "file_paths": [
+          "./src/rooms.rs"
+        ],
+        "max_rank": 5,
+        "min_recall": 1,
+        "node_ids": [
+          "./src/rooms.rs:function_item:symbol:75018035c09ac6ff:0"
+        ]
+      },
+      "id": "syn-b-graph-025",
+      "notes": "Deterministic synthetic fixture task",
+      "priority": 1,
+      "query": {
+        "node_id": "./src/rooms.rs:function_item:symbol:75018035c09ac6ff:0",
+        "type": "read_graph"
+      },
+      "repo": {
+        "languages": [
+          "rust"
+        ],
+        "name": "repo_b",
+        "path": "eval/fixtures/repos/repo_b"
+      },
+      "split": "holdout",
+      "tags": [
+        "synthetic",
+        "read_graph",
+        "holdout"
+      ],
+      "task_type": "refactor"
+    },
+    {
+      "expected": {
+        "file_paths": [
+          "./src/customer.rs"
+        ],
+        "max_rank": 5,
+        "min_recall": 1,
+        "node_ids": [
+          "./src/customer.rs:function_item:symbol:9e1c453cfecca01f:0"
+        ]
+      },
+      "id": "syn-b-predict-001",
+      "notes": "Deterministic synthetic fixture task",
+      "priority": 1,
+      "query": {
+        "file_path": "./src/customer.rs",
+        "line": 22,
+        "type": "predict_context"
+      },
+      "repo": {
+        "languages": [
+          "rust"
+        ],
+        "name": "repo_b",
+        "path": "eval/fixtures/repos/repo_b"
+      },
+      "split": "holdout",
+      "tags": [
+        "synthetic",
+        "predict_context",
+        "holdout"
+      ],
+      "task_type": "investigation"
+    },
+    {
+      "expected": {
+        "file_paths": [
+          "./src/availability.rs"
+        ],
+        "max_rank": 5,
+        "min_recall": 1,
+        "node_ids": [
+          "./src/availability.rs:function_item:symbol:33f0e6a9bd92985f:0"
+        ]
+      },
+      "id": "syn-b-predict-002",
+      "notes": "Deterministic synthetic fixture task",
+      "priority": 1,
+      "query": {
+        "file_path": "./src/availability.rs",
+        "line": 18,
+        "type": "predict_context"
+      },
+      "repo": {
+        "languages": [
+          "rust"
+        ],
+        "name": "repo_b",
+        "path": "eval/fixtures/repos/repo_b"
+      },
+      "split": "holdout",
+      "tags": [
+        "synthetic",
+        "predict_context",
+        "holdout"
+      ],
+      "task_type": "test"
+    },
+    {
+      "expected": {
+        "file_paths": [
+          "./src/store.rs"
+        ],
+        "max_rank": 5,
+        "min_recall": 1,
+        "node_ids": [
+          "./src/store.rs:function_item:symbol:b0115ac7ade6f17b:0"
+        ]
+      },
+      "id": "syn-b-predict-003",
+      "notes": "Deterministic synthetic fixture task",
+      "priority": 1,
+      "query": {
+        "file_path": "./src/store.rs",
+        "line": 75,
+        "type": "predict_context"
+      },
+      "repo": {
+        "languages": [
+          "rust"
+        ],
+        "name": "repo_b",
+        "path": "eval/fixtures/repos/repo_b"
+      },
+      "split": "holdout",
+      "tags": [
+        "synthetic",
+        "predict_context",
+        "holdout"
+      ],
+      "task_type": "unknown"
+    },
+    {
+      "expected": {
+        "file_paths": [
+          "./src/payment.rs"
+        ],
+        "max_rank": 5,
+        "min_recall": 1,
+        "node_ids": [
+          "./src/payment.rs:function_item:symbol:8d7a4c5bc6c2daae:0"
+        ]
+      },
+      "id": "syn-b-predict-004",
+      "notes": "Deterministic synthetic fixture task",
+      "priority": 1,
+      "query": {
+        "file_path": "./src/payment.rs",
+        "line": 8,
+        "type": "predict_context"
+      },
+      "repo": {
+        "languages": [
+          "rust"
+        ],
+        "name": "repo_b",
+        "path": "eval/fixtures/repos/repo_b"
+      },
+      "split": "holdout",
+      "tags": [
+        "synthetic",
+        "predict_context",
+        "holdout"
+      ],
+      "task_type": "bug_fix"
+    },
+    {
+      "expected": {
+        "file_paths": [
+          "./src/availability.rs"
+        ],
+        "max_rank": 5,
+        "min_recall": 1,
+        "node_ids": [
+          "./src/availability.rs:impl_item:symbol:1dad1d9f4a86f032:0"
+        ]
+      },
+      "id": "syn-b-predict-005",
+      "notes": "Deterministic synthetic fixture task",
+      "priority": 1,
+      "query": {
+        "file_path": "./src/availability.rs",
+        "line": 8,
+        "type": "predict_context"
+      },
+      "repo": {
+        "languages": [
+          "rust"
+        ],
+        "name": "repo_b",
+        "path": "eval/fixtures/repos/repo_b"
+      },
+      "split": "holdout",
+      "tags": [
+        "synthetic",
+        "predict_context",
+        "holdout"
+      ],
+      "task_type": "feature"
+    },
+    {
+      "expected": {
+        "file_paths": [
+          "./src/payment.rs"
+        ],
+        "max_rank": 5,
+        "min_recall": 1,
+        "node_ids": [
+          "./src/payment.rs:function_item:symbol:c024fe23008940c3:0"
+        ]
+      },
+      "id": "syn-b-predict-006",
+      "notes": "Deterministic synthetic fixture task",
+      "priority": 1,
+      "query": {
+        "file_path": "./src/payment.rs",
+        "line": 12,
+        "type": "predict_context"
+      },
+      "repo": {
+        "languages": [
+          "rust"
+        ],
+        "name": "repo_b",
+        "path": "eval/fixtures/repos/repo_b"
+      },
+      "split": "holdout",
+      "tags": [
+        "synthetic",
+        "predict_context",
+        "holdout"
+      ],
+      "task_type": "refactor"
+    },
+    {
+      "expected": {
+        "file_paths": [
+          "./src/utils.rs"
+        ],
+        "max_rank": 5,
+        "min_recall": 1,
+        "node_ids": [
+          "./src/utils.rs:function_item:symbol:e01cbf4bf725dd8d:0"
+        ]
+      },
+      "id": "syn-b-predict-007",
+      "notes": "Deterministic synthetic fixture task",
+      "priority": 1,
+      "query": {
+        "file_path": "./src/utils.rs",
+        "line": 1,
+        "type": "predict_context"
+      },
+      "repo": {
+        "languages": [
+          "rust"
+        ],
+        "name": "repo_b",
+        "path": "eval/fixtures/repos/repo_b"
+      },
+      "split": "holdout",
+      "tags": [
+        "synthetic",
+        "predict_context",
+        "holdout"
+      ],
+      "task_type": "investigation"
+    },
+    {
+      "expected": {
+        "file_paths": [
+          "./src/availability.rs"
+        ],
+        "max_rank": 5,
+        "min_recall": 1,
+        "node_ids": [
+          "./src/availability.rs:function_item:symbol:7bc195bf609f602c:0"
+        ]
+      },
+      "id": "syn-b-predict-008",
+      "notes": "Deterministic synthetic fixture task",
+      "priority": 1,
+      "query": {
+        "file_path": "./src/availability.rs",
+        "line": 13,
+        "type": "predict_context"
+      },
+      "repo": {
+        "languages": [
+          "rust"
+        ],
+        "name": "repo_b",
+        "path": "eval/fixtures/repos/repo_b"
+      },
+      "split": "holdout",
+      "tags": [
+        "synthetic",
+        "predict_context",
+        "holdout"
+      ],
+      "task_type": "test"
+    },
+    {
+      "expected": {
+        "file_paths": [
+          "./src/reports.rs"
+        ],
+        "max_rank": 5,
+        "min_recall": 1,
+        "node_ids": [
+          "./src/reports.rs:function_item:symbol:b436f517358ad266:0"
+        ]
+      },
+      "id": "syn-b-predict-009",
+      "notes": "Deterministic synthetic fixture task",
+      "priority": 1,
+      "query": {
+        "file_path": "./src/reports.rs",
+        "line": 8,
+        "type": "predict_context"
+      },
+      "repo": {
+        "languages": [
+          "rust"
+        ],
+        "name": "repo_b",
+        "path": "eval/fixtures/repos/repo_b"
+      },
+      "split": "holdout",
+      "tags": [
+        "synthetic",
+        "predict_context",
+        "holdout"
+      ],
+      "task_type": "unknown"
+    },
+    {
+      "expected": {
+        "file_paths": [
+          "./src/reports.rs"
+        ],
+        "max_rank": 5,
+        "min_recall": 1,
+        "node_ids": [
+          "./src/reports.rs:function_item:symbol:8e8516a402423913:0"
+        ]
+      },
+      "id": "syn-b-predict-010",
+      "notes": "Deterministic synthetic fixture task",
+      "priority": 1,
+      "query": {
+        "file_path": "./src/reports.rs",
+        "line": 12,
+        "type": "predict_context"
+      },
+      "repo": {
+        "languages": [
+          "rust"
+        ],
+        "name": "repo_b",
+        "path": "eval/fixtures/repos/repo_b"
+      },
+      "split": "holdout",
+      "tags": [
+        "synthetic",
+        "predict_context",
+        "holdout"
+      ],
+      "task_type": "bug_fix"
+    },
+    {
+      "expected": {
+        "file_paths": [
+          "./src/customer.rs"
+        ],
+        "max_rank": 5,
+        "min_recall": 1,
+        "node_ids": [
+          "./src/customer.rs:function_item:symbol:151e840ac2b2a082:0"
+        ]
+      },
+      "id": "syn-b-predict-011",
+      "notes": "Deterministic synthetic fixture task",
+      "priority": 1,
+      "query": {
+        "file_path": "./src/customer.rs",
+        "line": 9,
+        "type": "predict_context"
+      },
+      "repo": {
+        "languages": [
+          "rust"
+        ],
+        "name": "repo_b",
+        "path": "eval/fixtures/repos/repo_b"
+      },
+      "split": "holdout",
+      "tags": [
+        "synthetic",
+        "predict_context",
+        "holdout"
+      ],
+      "task_type": "feature"
+    },
+    {
+      "expected": {
+        "file_paths": [
+          "./src/rooms.rs"
+        ],
+        "max_rank": 5,
+        "min_recall": 1,
+        "node_ids": [
+          "./src/rooms.rs:function_item:symbol:8e11d8dd841b1077:0"
+        ]
+      },
+      "id": "syn-b-predict-012",
+      "notes": "Deterministic synthetic fixture task",
+      "priority": 1,
+      "query": {
+        "file_path": "./src/rooms.rs",
+        "line": 21,
+        "type": "predict_context"
+      },
+      "repo": {
+        "languages": [
+          "rust"
+        ],
+        "name": "repo_b",
+        "path": "eval/fixtures/repos/repo_b"
+      },
+      "split": "holdout",
+      "tags": [
+        "synthetic",
+        "predict_context",
+        "holdout"
+      ],
+      "task_type": "refactor"
+    },
+    {
+      "expected": {
+        "file_paths": [
+          "./src/rooms.rs"
+        ],
+        "max_rank": 5,
+        "min_recall": 1,
+        "node_ids": [
+          "./src/rooms.rs:struct_item:symbol:48aa63439f93a860:0"
+        ]
+      },
+      "id": "syn-b-predict-013",
+      "notes": "Deterministic synthetic fixture task",
+      "priority": 1,
+      "query": {
+        "file_path": "./src/rooms.rs",
+        "line": 4,
+        "type": "predict_context"
+      },
+      "repo": {
+        "languages": [
+          "rust"
+        ],
+        "name": "repo_b",
+        "path": "eval/fixtures/repos/repo_b"
+      },
+      "split": "holdout",
+      "tags": [
+        "synthetic",
+        "predict_context",
+        "holdout"
+      ],
+      "task_type": "investigation"
+    },
+    {
+      "expected": {
+        "file_paths": [
+          "./src/housekeeping.rs"
+        ],
+        "max_rank": 5,
+        "min_recall": 1,
+        "node_ids": [
+          "./src/housekeeping.rs:function_item:symbol:e12ac5b61c9d3d7f:0"
+        ]
+      },
+      "id": "syn-b-predict-014",
+      "notes": "Deterministic synthetic fixture task",
+      "priority": 1,
+      "query": {
+        "file_path": "./src/housekeeping.rs",
+        "line": 11,
+        "type": "predict_context"
+      },
+      "repo": {
+        "languages": [
+          "rust"
+        ],
+        "name": "repo_b",
+        "path": "eval/fixtures/repos/repo_b"
+      },
+      "split": "holdout",
+      "tags": [
+        "synthetic",
+        "predict_context",
+        "holdout"
+      ],
+      "task_type": "test"
+    },
+    {
+      "expected": {
+        "file_paths": [
+          "./src/receipt.rs"
+        ],
+        "max_rank": 5,
+        "min_recall": 1,
+        "node_ids": [
+          "./src/receipt.rs:function_item:symbol:6d88ff8fa313e32d:0"
+        ]
+      },
+      "id": "syn-b-predict-015",
+      "notes": "Deterministic synthetic fixture task",
+      "priority": 1,
+      "query": {
+        "file_path": "./src/receipt.rs",
+        "line": 9,
+        "type": "predict_context"
+      },
+      "repo": {
+        "languages": [
+          "rust"
+        ],
+        "name": "repo_b",
+        "path": "eval/fixtures/repos/repo_b"
+      },
+      "split": "holdout",
+      "tags": [
+        "synthetic",
+        "predict_context",
+        "holdout"
+      ],
+      "task_type": "unknown"
+    }
+  ]
+}

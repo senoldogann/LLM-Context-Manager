@@ -6,18 +6,21 @@ use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use crate::engine::hybrid::HybridScorer;
+use crate::engine::{CursorPosition, RetrievalEngine};
 use crate::graph::CodeGraph;
+use crate::policy::{RetrievalPolicy, TaskType};
 use crate::vector::store::LanceDbStore;
 use petgraph::visit::EdgeRef;
 use petgraph::Direction;
+use std::sync::Arc;
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Clone, Deserialize)]
 pub struct GoldenTasksFile {
     pub schema_version: u32,
     pub tasks: Vec<Task>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Clone, Deserialize)]
 pub struct Task {
     pub id: String,
     pub repo: RepoRef,
@@ -26,9 +29,13 @@ pub struct Task {
     pub tags: Option<Vec<String>>,
     pub priority: Option<u8>,
     pub notes: Option<String>,
+    #[serde(default)]
+    pub task_type: Option<TaskType>,
+    #[serde(default)]
+    pub split: Option<String>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Clone, Deserialize)]
 pub struct RepoRef {
     pub name: String,
     pub path: String,
@@ -36,7 +43,7 @@ pub struct RepoRef {
     pub languages: Option<Vec<String>>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Clone, Deserialize)]
 pub struct Query {
     #[serde(rename = "type")]
     pub kind: String,
@@ -47,7 +54,7 @@ pub struct Query {
     pub column: Option<u32>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Clone, Deserialize)]
 pub struct Expected {
     pub node_ids: Option<Vec<String>>,
     pub file_paths: Option<Vec<String>>,
@@ -56,7 +63,7 @@ pub struct Expected {
     pub reason_contains: Option<Vec<String>>,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct EvalReport {
     pub schema_version: u32,
     pub generated_at: u64,
@@ -64,7 +71,7 @@ pub struct EvalReport {
     pub results: Vec<TaskResult>,
 }
 
-#[derive(Debug, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct Totals {
     pub tasks: usize,
     pub scored: usize,
@@ -73,7 +80,7 @@ pub struct Totals {
     pub skipped: usize,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct TaskResult {
     pub id: String,
     pub query_type: String,
@@ -83,6 +90,24 @@ pub struct TaskResult {
     pub expected_min_recall: u32,
     pub max_rank: u32,
     pub matched_items: Vec<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub recall_at_k: Option<f64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub precision_at_k: Option<f64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub relevant_coverage: Option<f64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tokens_estimated: Option<usize>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub latency_ms: Option<f64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ranked: Option<Vec<String>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub missing_relevant: Option<Vec<String>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub retrieved_unused: Option<Vec<String>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub policy_version: Option<u32>,
 }
 
 #[derive(Debug, Serialize)]
@@ -357,6 +382,15 @@ pub async fn evaluate_with_mode(tasks_file: GoldenTasksFile, mode: EvalMode) -> 
             expected_min_recall,
             max_rank,
             matched_items: Vec::new(),
+            recall_at_k: None,
+            precision_at_k: None,
+            relevant_coverage: None,
+            tokens_estimated: None,
+            latency_ms: None,
+            ranked: None,
+            missing_relevant: None,
+            retrieved_unused: None,
+            policy_version: None,
         };
 
         if let Err(error) =
@@ -553,6 +587,364 @@ pub async fn evaluate_with_mode(tasks_file: GoldenTasksFile, mode: EvalMode) -> 
     })
 }
 
+/// Belirli bir policy ile deterministik metrik üreten evaluation.
+/// `evaluate_with_mode`'dan bağımsızdır; mevcut pass/fail davranışı korunur.
+pub async fn evaluate_policy(
+    tasks_file: GoldenTasksFile,
+    policy: &RetrievalPolicy,
+) -> Result<EvalReport> {
+    let mut totals = Totals::default();
+    let mut results = Vec::new();
+    let mut prepared_repos: HashSet<PathBuf> = HashSet::new();
+
+    totals.tasks = tasks_file.tasks.len();
+
+    for task in tasks_file.tasks {
+        let started = std::time::Instant::now();
+        let repo_path = normalize_repo_path(&task.repo.path)?;
+        let db_path = repo_path.join("data").join("ccm_db");
+        let graph_path = repo_path.join("data").join("ccm_graph.json");
+
+        let max_rank = task.expected.max_rank.unwrap_or(5).max(1);
+        let expected_min_recall = task.expected.min_recall;
+
+        let mut result = TaskResult {
+            id: task.id.clone(),
+            query_type: task.query.kind.clone(),
+            status: "skipped".to_string(),
+            detail: String::new(),
+            matches: 0,
+            expected_min_recall,
+            max_rank,
+            matched_items: Vec::new(),
+            recall_at_k: None,
+            precision_at_k: None,
+            relevant_coverage: None,
+            tokens_estimated: None,
+            latency_ms: None,
+            ranked: None,
+            missing_relevant: None,
+            retrieved_unused: None,
+            policy_version: Some(policy.version),
+        };
+
+        if let Err(error) =
+            ensure_eval_index(&repo_path, &db_path, &graph_path, &mut prepared_repos).await
+        {
+            result.detail = format!("Failed to prepare index: {}", error);
+            totals.skipped += 1;
+            results.push(result);
+            continue;
+        }
+
+        let mut ranked: Vec<String> = Vec::new();
+        let mut token_hint: usize = 0;
+
+        match task.query.kind.as_str() {
+            "search_code" => {
+                let Some(query_text) = task.query.text.clone() else {
+                    result.status = "fail".to_string();
+                    result.detail = "Missing query.text".to_string();
+                    totals.failed += 1;
+                    results.push(result);
+                    continue;
+                };
+
+                let search_limit = policy.top_k.max(1);
+                let search_result = if graph_path.exists() {
+                    let scorer = HybridScorer::from_policy(policy);
+                    search_code_hybrid_with_policy(
+                        &db_path,
+                        &graph_path,
+                        &query_text,
+                        search_limit,
+                        &scorer,
+                        policy.seed_multiplier as usize,
+                    )
+                    .await
+                } else {
+                    search_code(&db_path, &query_text, search_limit).await
+                };
+
+                match search_result {
+                    Ok(hits) => {
+                        ranked = hits.clone();
+                        if let Ok(graph) = CodeGraph::from_file(&graph_path.to_string_lossy()) {
+                            token_hint = tokens_for_ids(&graph, &hits);
+                        }
+                        let (matches, matched_items) = score_hits(&task.expected, &hits);
+                        result.matches = matches;
+                        result.matched_items = matched_items;
+                        if matches >= expected_min_recall as usize {
+                            result.status = "pass".to_string();
+                            result.detail = "Recall threshold met".to_string();
+                            totals.passed += 1;
+                        } else {
+                            result.status = "fail".to_string();
+                            result.detail = "Recall below threshold".to_string();
+                            totals.failed += 1;
+                        }
+                        totals.scored += 1;
+                    }
+                    Err(e) => {
+                        let msg = e.to_string();
+                        if msg.contains("Embedder not initialized") {
+                            result.detail = "Embedder not configured; skipping search".to_string();
+                            totals.skipped += 1;
+                        } else {
+                            result.status = "fail".to_string();
+                            result.detail = format!("Search failed: {}", msg);
+                            totals.failed += 1;
+                        }
+                    }
+                }
+            }
+            "read_graph" => {
+                let Some(node_id) = task.query.node_id.clone() else {
+                    result.status = "fail".to_string();
+                    result.detail = "Missing query.node_id".to_string();
+                    totals.failed += 1;
+                    results.push(result);
+                    continue;
+                };
+
+                if !graph_path.exists() {
+                    result.detail = format!("Missing graph at {}", graph_path.display());
+                    totals.skipped += 1;
+                    results.push(result);
+                    continue;
+                }
+
+                let graph = CodeGraph::from_file(&graph_path.to_string_lossy())?;
+                let normalized_id = normalize_task_node_id(&repo_path, &node_id);
+                let hits = gather_graph_hits(&graph, &normalized_id)
+                    .or_else(|| gather_graph_hits(&graph, &node_id));
+
+                match hits {
+                    Some(hits) => {
+                        ranked = hits.clone();
+                        token_hint = tokens_for_ids(&graph, &hits);
+                        let resolved_ids: Option<Vec<String>> =
+                            task.expected.node_ids.as_ref().map(|ids| {
+                                ids.iter()
+                                    .map(|id| {
+                                        let norm = normalize_task_node_id(&repo_path, id);
+                                        graph
+                                            .find_node_fuzzy_by_id(&norm)
+                                            .or_else(|| graph.find_node_fuzzy_by_id(id))
+                                            .map(|n| n.id)
+                                            .unwrap_or(norm)
+                                    })
+                                    .collect()
+                            });
+                        let resolved_expected = Expected {
+                            node_ids: resolved_ids,
+                            file_paths: task.expected.file_paths.clone(),
+                            min_recall: task.expected.min_recall,
+                            max_rank: task.expected.max_rank,
+                            reason_contains: task.expected.reason_contains.clone(),
+                        };
+                        let (matches, matched_items) = score_hits(&resolved_expected, &hits);
+                        result.matches = matches;
+                        result.matched_items = matched_items;
+                        if matches >= expected_min_recall as usize {
+                            result.status = "pass".to_string();
+                            result.detail = "Recall threshold met".to_string();
+                            totals.passed += 1;
+                        } else {
+                            result.status = "fail".to_string();
+                            result.detail = "Recall below threshold".to_string();
+                            totals.failed += 1;
+                        }
+                        totals.scored += 1;
+                    }
+                    None => {
+                        result.status = "fail".to_string();
+                        result.detail = "Node not found in graph".to_string();
+                        totals.failed += 1;
+                    }
+                }
+            }
+            "get_context" | "predict_context" => {
+                let Some(file_path) = task.query.file_path.clone() else {
+                    result.status = "fail".to_string();
+                    result.detail = "Missing query.file_path".to_string();
+                    totals.failed += 1;
+                    results.push(result);
+                    continue;
+                };
+                let Some(line) = task.query.line else {
+                    result.status = "fail".to_string();
+                    result.detail = "Missing query.line".to_string();
+                    totals.failed += 1;
+                    results.push(result);
+                    continue;
+                };
+
+                if !graph_path.exists() {
+                    result.detail = format!("Missing graph at {}", graph_path.display());
+                    totals.skipped += 1;
+                    results.push(result);
+                    continue;
+                }
+
+                let normalized_path = normalize_path(&repo_path, &file_path);
+                let hits = if task.query.kind == "predict_context" {
+                    let graph = match CodeGraph::from_file(&graph_path.to_string_lossy()) {
+                        Ok(graph) => graph,
+                        Err(e) => {
+                            result.status = "fail".to_string();
+                            result.detail = format!("Graph load failed: {}", e);
+                            totals.failed += 1;
+                            results.push(result);
+                            continue;
+                        }
+                    };
+                    let store =
+                        match LanceDbStore::new(&db_path.to_string_lossy(), "code_vectors").await {
+                            Ok(store) => store,
+                            Err(e) => {
+                                result.status = "fail".to_string();
+                                result.detail = format!("Store open failed: {}", e);
+                                totals.failed += 1;
+                                results.push(result);
+                                continue;
+                            }
+                        };
+                    let engine = RetrievalEngine::with_policy(
+                        Arc::new(tokio::sync::RwLock::new(graph)),
+                        store,
+                        policy.clone(),
+                    );
+                    let cursor = CursorPosition {
+                        file_path: normalized_path.clone(),
+                        line: line as usize,
+                        column: task.query.column.unwrap_or(0) as usize,
+                    };
+                    match engine.predict_context(&cursor).await {
+                        Ok(suggestions) => {
+                            token_hint = suggestions
+                                .iter()
+                                .map(|suggestion| suggestion.content.len() / 4)
+                                .sum();
+                            suggestions
+                                .into_iter()
+                                .filter_map(|suggestion| suggestion.node_id)
+                                .collect::<Vec<String>>()
+                        }
+                        Err(e) => {
+                            result.status = "fail".to_string();
+                            result.detail = format!("Predict failed: {}", e);
+                            totals.failed += 1;
+                            results.push(result);
+                            continue;
+                        }
+                    }
+                } else {
+                    let graph = CodeGraph::from_file(&graph_path.to_string_lossy())?;
+                    let hits = gather_context_hits(&graph, &normalized_path, line as usize)
+                        .unwrap_or_default();
+                    token_hint = tokens_for_ids(&graph, &hits);
+                    hits
+                };
+
+                ranked = hits.clone();
+                let (matches, matched_items) = score_hits(&task.expected, &hits);
+                result.matches = matches;
+                result.matched_items = matched_items;
+                if matches >= expected_min_recall as usize {
+                    result.status = "pass".to_string();
+                    result.detail = "Recall threshold met".to_string();
+                    totals.passed += 1;
+                } else {
+                    result.status = "fail".to_string();
+                    result.detail = "Recall below threshold".to_string();
+                    totals.failed += 1;
+                }
+                totals.scored += 1;
+            }
+            other => {
+                result.detail = format!("Unsupported query type: {}", other);
+                totals.skipped += 1;
+            }
+        }
+
+        fill_policy_metrics(&mut result, &task, &ranked, token_hint, started.elapsed());
+        results.push(result);
+    }
+
+    Ok(EvalReport {
+        schema_version: tasks_file.schema_version,
+        generated_at: SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_secs(),
+        totals,
+        results,
+    })
+}
+
+fn fill_policy_metrics(
+    result: &mut TaskResult,
+    task: &Task,
+    ranked: &[String],
+    token_hint: usize,
+    elapsed: std::time::Duration,
+) {
+    let expected_total = task
+        .expected
+        .node_ids
+        .as_ref()
+        .map(Vec::len)
+        .or_else(|| task.expected.file_paths.as_ref().map(Vec::len))
+        .unwrap_or(0);
+    let matched = result.matches as f64;
+    let expected = expected_total as f64;
+    result.recall_at_k = Some(if expected > 0.0 {
+        matched / expected
+    } else {
+        0.0
+    });
+    result.precision_at_k = Some(if ranked.is_empty() {
+        0.0
+    } else {
+        matched / ranked.len() as f64
+    });
+    result.relevant_coverage = result.recall_at_k;
+    result.latency_ms = Some(elapsed.as_secs_f64() * 1000.0);
+    result.ranked = Some(ranked.to_vec());
+
+    let matched_set: std::collections::HashSet<&str> =
+        result.matched_items.iter().map(String::as_str).collect();
+    result.missing_relevant = Some(
+        task.expected
+            .node_ids
+            .iter()
+            .flatten()
+            .chain(task.expected.file_paths.iter().flatten())
+            .filter(|id| !matched_set.contains(id.as_str()))
+            .cloned()
+            .collect(),
+    );
+    result.retrieved_unused = Some(
+        ranked
+            .iter()
+            .filter(|id| !matched_set.contains(id.as_str()))
+            .cloned()
+            .collect(),
+    );
+    // Token tahmini: dönen içerik uzunluğu / 4 (yalnızca göreli karşılaştırma).
+    result.tokens_estimated = Some(token_hint.max(1));
+}
+
+fn tokens_for_ids(graph: &CodeGraph, ranked: &[String]) -> usize {
+    ranked
+        .iter()
+        .filter_map(|id| graph.find_node_by_id(id))
+        .map(|node| node.content.len() / 4)
+        .sum()
+}
+
 async fn ensure_eval_index(
     repo_path: &Path,
     db_path: &Path,
@@ -609,15 +1001,26 @@ async fn search_code_hybrid(
     query: &str,
     limit: usize,
 ) -> Result<Vec<String>> {
+    let scorer = HybridScorer::default();
+    search_code_hybrid_with_policy(db_path, graph_path, query, limit, &scorer, 3).await
+}
+
+async fn search_code_hybrid_with_policy(
+    db_path: &Path,
+    graph_path: &Path,
+    query: &str,
+    limit: usize,
+    scorer: &HybridScorer,
+    seed_multiplier: usize,
+) -> Result<Vec<String>> {
     let store = LanceDbStore::new(&db_path.to_string_lossy(), "code_vectors").await?;
-    let seed_limit = limit.saturating_mul(3).max(limit);
+    let seed_limit = limit.saturating_mul(seed_multiplier).max(limit);
     let hits = store.search(query, seed_limit).await?;
     if hits.is_empty() {
         return Ok(Vec::new());
     }
 
     let graph = CodeGraph::from_file(&graph_path.to_string_lossy())?;
-    let scorer = HybridScorer::default();
     let mut semantic_scores: HashMap<String, f32> = HashMap::new();
 
     for (id, _content, distance) in hits {
@@ -647,7 +1050,11 @@ async fn search_code_hybrid(
         }
     }
 
-    candidates.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
+    candidates.sort_by(|a, b| {
+        b.1.partial_cmp(&a.1)
+            .unwrap_or(std::cmp::Ordering::Equal)
+            .then_with(|| a.0.cmp(&b.0))
+    });
 
     Ok(candidates
         .into_iter()
@@ -981,6 +1388,7 @@ mod tests {
                     expected_min_recall: 1,
                     max_rank: 1,
                     matched_items: vec![],
+                    ..Default::default()
                 },
                 TaskResult {
                     id: "b".to_string(),
@@ -991,6 +1399,7 @@ mod tests {
                     expected_min_recall: 1,
                     max_rank: 1,
                     matched_items: vec![],
+                    ..Default::default()
                 },
             ],
         };
@@ -1015,6 +1424,7 @@ mod tests {
                     expected_min_recall: 1,
                     max_rank: 1,
                     matched_items: vec![],
+                    ..Default::default()
                 },
                 TaskResult {
                     id: "b".to_string(),
@@ -1025,6 +1435,7 @@ mod tests {
                     expected_min_recall: 1,
                     max_rank: 1,
                     matched_items: vec![],
+                    ..Default::default()
                 },
             ],
         };

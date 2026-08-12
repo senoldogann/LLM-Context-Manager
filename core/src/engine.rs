@@ -7,6 +7,8 @@ use crate::graph::{CodeGraph, CodeNode, EdgeType, NodeType};
 use crate::normalize_file_id_with_root;
 use crate::parser::CodeParser;
 use crate::parser::SupportedLanguage;
+use crate::policy::RetrievalPolicy;
+use crate::trajectory::{record_if_enabled, RetrievalEvent, RetrievalResultItem};
 use crate::vector::extractor::Extractor;
 use crate::vector::store::LanceDbStore;
 use crate::{
@@ -55,6 +57,7 @@ use std::sync::Arc;
 pub struct RetrievalEngine {
     pub graph: Arc<RwLock<CodeGraph>>,
     pub vector_store: LanceDbStore,
+    pub active_policy: RetrievalPolicy,
 }
 
 struct HybridCandidate {
@@ -70,6 +73,20 @@ impl RetrievalEngine {
         Self {
             graph,
             vector_store,
+            active_policy: RetrievalPolicy::baseline().with_env_overrides(),
+        }
+    }
+
+    /// Belirli bir policy ile engine kurar (evaluation/optimizer yolu).
+    pub fn with_policy(
+        graph: Arc<RwLock<CodeGraph>>,
+        vector_store: LanceDbStore,
+        policy: RetrievalPolicy,
+    ) -> Self {
+        Self {
+            graph,
+            vector_store,
+            active_policy: policy,
         }
     }
 
@@ -416,7 +433,8 @@ impl RetrievalEngine {
         query: &str,
         limit: usize,
     ) -> Result<Vec<ContextSuggestion>> {
-        let seed_limit = limit.saturating_mul(3).max(limit);
+        let seed_multiplier = self.active_policy.seed_multiplier as usize;
+        let seed_limit = limit.saturating_mul(seed_multiplier).max(limit);
         // When the embedder is disabled the vector store returns an error instead of
         // an empty result set. Treat that as a signal to fall through to the graph
         // fallback rather than surfacing an unhelpful "Internal error" to the caller.
@@ -442,7 +460,7 @@ impl RetrievalEngine {
             return Ok(self.find_graph_nodes(query, limit).await);
         }
 
-        let scorer = HybridScorer::default();
+        let scorer = HybridScorer::from_policy(&self.active_policy);
         let mut semantic_scores: HashMap<String, f32> = HashMap::new();
         let mut semantic_content: HashMap<String, String> = HashMap::new();
 
@@ -494,11 +512,11 @@ impl RetrievalEngine {
             b.combined_score
                 .partial_cmp(&a.combined_score)
                 .unwrap_or(std::cmp::Ordering::Equal)
+                .then_with(|| a.id.cmp(&b.id))
         });
 
         // düşük sinyalli adayları filtrele — yalnızca combined veya graph sinyali olan adaylar kalır
-        let min_combined = min_score_threshold("CCM_MIN_COMBINED_SCORE", 0.05);
-        candidates.retain(|c| c.combined_score >= min_combined || c.graph_score > 0.0);
+        candidates.retain(|c| c.combined_score >= scorer.min_score || c.graph_score > 0.0);
 
         let mut top_scores = Vec::new();
         for candidate in &candidates {
@@ -520,9 +538,11 @@ impl RetrievalEngine {
         let top1 = top_scores.first().copied().unwrap_or(0.0);
         let top2 = top_scores.get(1).copied().unwrap_or(0.0);
 
-        // docs/hybrid-ranking.md'deki fallback kurallarını uygula
-        let low_confidence = top1 < 0.55 || (top1 - top2) < 0.05;
-        let fallback_prefix: &str = if low_confidence {
+        // docs/hybrid-ranking.md'deki fallback kurallarını uygula.
+        // Policy `fallback_enabled=false` ise (optimizer eval'i) fallback atlanır.
+        let low_confidence =
+            top1 < scorer.confidence_threshold || (top1 - top2) < scorer.confidence_margin;
+        let fallback_prefix: &str = if low_confidence && self.active_policy.fallback_enabled {
             let top_graph = candidates.first().map(|c| c.graph_score).unwrap_or(0.0);
             let top_semantic = candidates.first().map(|c| c.semantic_score).unwrap_or(0.0);
             if top_graph >= 0.6 && top_graph >= top_semantic {
@@ -531,6 +551,7 @@ impl RetrievalEngine {
                     b.graph_score
                         .partial_cmp(&a.graph_score)
                         .unwrap_or(std::cmp::Ordering::Equal)
+                        .then_with(|| a.id.cmp(&b.id))
                 });
                 "GraphFallback "
             } else if top_semantic >= 0.6 {
@@ -539,6 +560,7 @@ impl RetrievalEngine {
                     b.semantic_score
                         .partial_cmp(&a.semantic_score)
                         .unwrap_or(std::cmp::Ordering::Equal)
+                        .then_with(|| a.id.cmp(&b.id))
                 });
                 "SemanticFallback "
             } else {
@@ -600,6 +622,12 @@ impl RetrievalEngine {
             }
         }
 
+        record_search_event(
+            query,
+            &results,
+            self.active_policy.version,
+            self.active_policy.task_type,
+        );
         Ok(results)
     }
 
@@ -1110,8 +1138,8 @@ impl RetrievalEngine {
                     &primary_node.content,
                     primary_node.start_line,
                     Some(cursor.line),
-                    120,
-                    12_000,
+                    self.active_policy.primary_window_lines,
+                    self.active_policy.primary_window_chars,
                 ),
                 relevance_score: 1.0,
                 reason: "Enclosing semantic scope".to_string(),
@@ -1151,8 +1179,8 @@ impl RetrievalEngine {
                         &neighbor.content,
                         neighbor.start_line,
                         Some(cursor.line),
-                        80,
-                        8_000,
+                        self.active_policy.related_window_lines,
+                        self.active_policy.related_window_chars,
                     ),
                     relevance_score: 0.8,
                     reason: "Structural Relation".to_string(),
@@ -1165,20 +1193,29 @@ impl RetrievalEngine {
 
         // Semantic Retrieval (Hybrid): "What else is like this function?"
         // Lock bırakıldıktan sonra çalıştırılır; search_code kendi read lock'unu alır.
-        // Limiting to top 2 semantic matches to avoid noise
-        if let Ok(semantic_hits) = self.search_code(&semantic_query, 2).await {
+        // Limiting semantic matches to the policy budget to avoid noise
+        if let Ok(semantic_hits) = self
+            .search_code(&semantic_query, self.active_policy.semantic_hits)
+            .await
+        {
             for mut hit in semantic_hits {
                 hit.reason = "Semantic Similarity to Active Node".to_string();
-                hit.relevance_score *= 0.7; // Weigh semantic less than structural
+                hit.relevance_score *= self.active_policy.semantic_discount; // Weigh semantic less than structural
                 suggestions.push(hit);
             }
         }
 
+        record_predict_event(
+            cursor,
+            &suggestions,
+            self.active_policy.version,
+            self.active_policy.task_type,
+        );
         Ok(suggestions)
     }
 }
 
-fn extract_file_path(node_id: &str) -> String {
+pub(crate) fn extract_file_path(node_id: &str) -> String {
     if let Some((path_and_kind, _)) = node_id.split_once(":symbol:") {
         if let Some((path, _kind)) = path_and_kind.rsplit_once(':') {
             return path.to_string();
@@ -1237,7 +1274,7 @@ fn lexical_graph_score(
 /// Embedding için zenginleştirilmiş metin üretir.
 /// Debug format ({:?}) yerine doğal dil kullanır; dosya yolunu ve içeriği dahil eder.
 /// Büyük içerikler daha sonra semantik sınırlarda parçalara ayrılır.
-fn build_embedding_text(node: &CodeNode) -> String {
+pub(crate) fn build_embedding_text(node: &CodeNode) -> String {
     let type_label = match node.node_type {
         NodeType::Function => "function",
         NodeType::Method => "method",
@@ -1350,18 +1387,74 @@ fn focused_content_window(
     )
 }
 
-fn min_score_threshold(env_var: &str, default: f32) -> f32 {
-    std::env::var(env_var)
-        .ok()
-        .and_then(|v| v.parse::<f32>().ok())
-        .unwrap_or(default)
-}
-
 fn embed_data_files_enabled() -> bool {
     std::env::var("CCM_EMBED_DATA_FILES")
         .or_else(|_| std::env::var("CCM_EMBED_DATA"))
         .map(|val| matches!(val.to_lowercase().as_str(), "1" | "true" | "yes"))
         .unwrap_or(false)
+}
+
+fn record_search_event(
+    query: &str,
+    results: &[ContextSuggestion],
+    policy_version: u32,
+    task_type: crate::policy::TaskType,
+) {
+    let items: Vec<RetrievalResultItem> = results
+        .iter()
+        .enumerate()
+        .map(|(rank, result)| RetrievalResultItem {
+            node_id: result.node_id.clone(),
+            file_path: result.file_path.clone(),
+            relevance_score: result.relevance_score,
+            rank: rank + 1,
+        })
+        .collect();
+    let estimated_tokens: usize = results.iter().map(|result| result.content.len() / 4).sum();
+    record_if_enabled(RetrievalEvent {
+        session_id: std::env::var("CCM_TRAJECTORY_SESSION").unwrap_or_else(|_| "cli".to_string()),
+        task_type,
+        policy_version,
+        query: Some(query.to_string()),
+        cursor: None,
+        results: items,
+        estimated_tokens,
+        latency_ms: 0,
+        timestamp_ms: crate::trajectory::now_ms(),
+    });
+}
+
+fn record_predict_event(
+    cursor: &CursorPosition,
+    results: &[ContextSuggestion],
+    policy_version: u32,
+    task_type: crate::policy::TaskType,
+) {
+    let items: Vec<RetrievalResultItem> = results
+        .iter()
+        .enumerate()
+        .map(|(rank, result)| RetrievalResultItem {
+            node_id: result.node_id.clone(),
+            file_path: result.file_path.clone(),
+            relevance_score: result.relevance_score,
+            rank: rank + 1,
+        })
+        .collect();
+    let estimated_tokens: usize = results.iter().map(|result| result.content.len() / 4).sum();
+    record_if_enabled(RetrievalEvent {
+        session_id: std::env::var("CCM_TRAJECTORY_SESSION").unwrap_or_else(|_| "cli".to_string()),
+        task_type,
+        policy_version,
+        query: None,
+        cursor: Some(crate::trajectory::CursorRef {
+            file_path: cursor.file_path.clone(),
+            line: cursor.line,
+        }),
+        results: items,
+        estimated_tokens,
+        latency_ms: 0,
+        timestamp_ms: crate::trajectory::now_ms(),
+    });
 }
 
 fn classify_incremental_read_error(path: &str, error: anyhow::Error) -> IndexIssue {

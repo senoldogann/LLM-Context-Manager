@@ -1,12 +1,18 @@
 pub mod engine;
 
 pub mod eval;
+pub mod fixtures;
 mod fs_utils;
 pub mod git;
 pub mod graph;
+pub mod hash;
 
 pub mod parser;
 
+pub mod optimize;
+pub mod policy;
+pub mod rng;
+pub mod trajectory;
 pub mod vector;
 
 use crate::engine::{CursorPosition, RetrievalEngine};

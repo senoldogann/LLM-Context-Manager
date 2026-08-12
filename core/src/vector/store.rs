@@ -1,16 +1,137 @@
 use crate::vector::remote::RemoteEmbedder;
-use anyhow::Result;
+use anyhow::{Context, Result};
 use arrow_array::{FixedSizeListArray, Float32Array, RecordBatch, StringArray};
 use arrow_schema::{DataType, Field, Schema};
 use futures::TryStreamExt;
 use lancedb::query::{ExecutableQuery, QueryBase};
 use lancedb::{connect, Connection};
+use std::collections::HashMap;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
+use std::sync::Mutex;
+
+/// NDJSON embedding fixture: doc ve query vektörleri, namespace ile ayrışır.
+#[derive(Debug, Default)]
+pub struct EmbeddingFixture {
+    pub docs: HashMap<String, Vec<f32>>,
+    pub queries: HashMap<String, Vec<f32>>,
+    pub dim: usize,
+}
+
+impl EmbeddingFixture {
+    pub fn load(path: &Path) -> Result<Self> {
+        let content = std::fs::read_to_string(path)
+            .with_context(|| format!("embedding fixture okunamadı: {}", path.display()))?;
+        let mut fixture = EmbeddingFixture::default();
+        for (line_number, line) in content.lines().enumerate() {
+            let value: serde_json::Value = serde_json::from_str(line).with_context(|| {
+                format!(
+                    "embedding fixture satırı ayrıştırılamadı: {}:{}",
+                    path.display(),
+                    line_number + 1
+                )
+            })?;
+            let kind = value.get("kind").and_then(|k| k.as_str()).unwrap_or("");
+            if kind == "meta" {
+                if let Some(dim) = value.get("dim").and_then(|d| d.as_u64()) {
+                    fixture.dim = dim as usize;
+                }
+                continue;
+            }
+            let ns = value
+                .get("ns")
+                .and_then(|k| k.as_str())
+                .unwrap_or("default");
+            let id = value
+                .get("id")
+                .and_then(|k| k.as_str())
+                .context("fixture satırında id eksik")?;
+            let vector: Vec<f32> = value
+                .get("vector")
+                .and_then(|v| v.as_array())
+                .and_then(|items| {
+                    items
+                        .iter()
+                        .map(|item| item.as_f64().map(|f| f as f32))
+                        .collect::<Option<Vec<f32>>>()
+                })
+                .context("fixture satırında geçersiz vector")?;
+            let key = format!("{}|{}", ns, id);
+            if kind == "doc" {
+                fixture.docs.insert(key, vector);
+            } else if kind == "query" {
+                fixture.queries.insert(key, vector);
+            }
+        }
+        if fixture.dim == 0 {
+            fixture.dim = fixture
+                .docs
+                .values()
+                .next()
+                .map(|vector| vector.len())
+                .unwrap_or(crate::vector::hash_embed::HASH_EMBED_DIM);
+        }
+        Ok(fixture)
+    }
+
+    pub fn doc_vector(&self, ns: &str, chunk_id: &str) -> Result<Vec<f32>> {
+        self.docs
+            .get(&format!("{}|{}", ns, chunk_id))
+            .cloned()
+            .with_context(|| {
+                format!(
+                    "embedding fixture'da eksik doc chunk: ns={} id={}",
+                    ns, chunk_id
+                )
+            })
+    }
+
+    pub fn query_vector(&self, ns: &str, query: &str) -> Result<Vec<f32>> {
+        let key = format!("{}|{}", ns, query);
+        if let Some(vector) = self.queries.get(&key) {
+            return Ok(vector.clone());
+        }
+        // Dinamik sorgular (örn. predict_context "related to X") fixture'da
+        // olamaz; aynı deterministik hash algoritmasıyla anında üretilir.
+        Ok(crate::vector::hash_embed::embed_text(query, self.dim))
+    }
+}
+
+fn fixture_cache() -> &'static Mutex<HashMap<PathBuf, Arc<EmbeddingFixture>>> {
+    static CACHE: std::sync::OnceLock<Mutex<HashMap<PathBuf, Arc<EmbeddingFixture>>>> =
+        std::sync::OnceLock::new();
+    CACHE.get_or_init(|| Mutex::new(HashMap::new()))
+}
+
+fn load_fixture_cached(path: &Path) -> Result<Arc<EmbeddingFixture>> {
+    let cache = fixture_cache();
+    if let Some(cached) = cache.lock().unwrap().get(path) {
+        return Ok(Arc::clone(cached));
+    }
+    let fixture = Arc::new(EmbeddingFixture::load(path)?);
+    cache
+        .lock()
+        .unwrap()
+        .insert(path.to_path_buf(), Arc::clone(&fixture));
+    Ok(fixture)
+}
+
+/// DB uri'sinden namespace çıkarır: `<repo>/data/ccm_db` → repo dizin adı.
+fn namespace_for_uri(uri: &str) -> String {
+    Path::new(uri)
+        .parent()
+        .and_then(Path::parent)
+        .and_then(Path::file_name)
+        .map(|name| name.to_string_lossy().to_string())
+        .unwrap_or_else(|| "default".to_string())
+}
 
 pub struct LanceDbStore {
     conn: Connection,
     table_name: String,
     embedder: Option<RemoteEmbedder>,
+    fixture: Option<Arc<EmbeddingFixture>>,
+    fixture_ns: String,
 }
 
 impl LanceDbStore {
@@ -40,10 +161,25 @@ impl LanceDbStore {
             }
         };
 
+        let fixture = match std::env::var("CCM_EMBEDDING_FIXTURE").ok() {
+            Some(path) if !path.trim().is_empty() => {
+                let fixture_path = PathBuf::from(path);
+                tracing::info!(
+                    path = %fixture_path.display(),
+                    "Embedding fixture modu etkin"
+                );
+                Some(load_fixture_cached(&fixture_path)?)
+            }
+            _ => None,
+        };
+        let fixture_ns = namespace_for_uri(uri);
+
         Ok(Self {
             conn,
             table_name: table_name.to_string(),
             embedder,
+            fixture,
+            fixture_ns,
         })
     }
 
@@ -74,15 +210,6 @@ impl LanceDbStore {
         if ids.is_empty() {
             return Ok(());
         }
-
-        let embedder = match self.embedder.as_ref() {
-            Some(e) => e,
-            None => {
-                // Determine if we should warn or just skip
-                // Ideally, we just skip vector indexing if semantic search is disabled.
-                return Ok(());
-            }
-        };
 
         let max_chars: usize = std::env::var("CCM_MAX_CHUNK_CHARS")
             .ok()
@@ -116,7 +243,9 @@ impl LanceDbStore {
             }
         }
 
-        // 1. Generate Embeddings in batches for performance
+        // 1. Generate Embeddings in batches for performance.
+        // Fixture modunda vektörler NDJSON'dan alınır (eksik chunk hata üretir);
+        // aksi halde embedder yoksa vektör indeksleme atlanır (mevcut davranış).
         let batch_size: usize = std::env::var("CCM_EMBED_BATCH_SIZE")
             .ok()
             .and_then(|v| v.parse().ok())
@@ -124,20 +253,30 @@ impl LanceDbStore {
             .max(1); // guard: chunks(0) panics at runtime
         let mut embeddings: Vec<Vec<f32>> = Vec::with_capacity(all_chunks.len());
 
-        let total_batches = all_chunks.len().div_ceil(batch_size);
-        for (batch_idx, batch) in all_chunks.chunks(batch_size).enumerate() {
-            if batch_idx % 20 == 0 || (batch_idx + 1) == total_batches {
-                tracing::info!(
-                    batch = batch_idx + 1,
-                    total = total_batches,
-                    chunks = batch.len(),
-                    "Embedding batch progress"
-                );
+        if let Some(fixture) = self.fixture.as_ref() {
+            for chunk_id in &all_chunk_ids {
+                embeddings.push(fixture.doc_vector(&self.fixture_ns, chunk_id)?);
             }
+        } else {
+            let embedder = match self.embedder.as_ref() {
+                Some(e) => e,
+                None => return Ok(()),
+            };
+            let total_batches = all_chunks.len().div_ceil(batch_size);
+            for (batch_idx, batch) in all_chunks.chunks(batch_size).enumerate() {
+                if batch_idx % 20 == 0 || (batch_idx + 1) == total_batches {
+                    tracing::info!(
+                        batch = batch_idx + 1,
+                        total = total_batches,
+                        chunks = batch.len(),
+                        "Embedding batch progress"
+                    );
+                }
 
-            let batch_texts: Vec<String> = batch.to_vec();
-            let batch_embeddings = embedder.embed(batch_texts).await?;
-            embeddings.extend(batch_embeddings);
+                let batch_texts: Vec<String> = batch.to_vec();
+                let batch_embeddings = embedder.embed(batch_texts).await?;
+                embeddings.extend(batch_embeddings);
+            }
         }
 
         // Use all_chunks and all_chunk_ids for storage
@@ -215,22 +354,24 @@ impl LanceDbStore {
 
     /// Performs semantic search and returns (id, text, distance).
     pub async fn search(&self, query: &str, limit: usize) -> Result<Vec<(String, String, f32)>> {
-        let embedder = self
-            .embedder
-            .as_ref()
-            .ok_or_else(|| anyhow::anyhow!("Embedder not initialized. Configure EMBEDDING_PROVIDER/EMBEDDING_HOST/EMBEDDING_MODEL and EMBEDDING_API_KEY (or OPENAI_API_KEY), or disable semantic search with CCM_DISABLE_EMBEDDER=1."))?;
-
         // 1. Embed Query
-        let query_vecs = embedder.embed(vec![query.to_string()]).await?;
-        let query_embedding = match query_vecs.into_iter().next() {
-            Some(vec) if !vec.is_empty() => vec,
-            Some(_) => {
-                tracing::warn!("Embedder returned an empty query vector");
-                return Ok(vec![]);
-            }
-            None => {
-                tracing::warn!("Embedder returned no query vectors");
-                return Ok(vec![]);
+        let query_embedding = if let Some(fixture) = self.fixture.as_ref() {
+            fixture.query_vector(&self.fixture_ns, query)?
+        } else {
+            let embedder = self.embedder.as_ref().ok_or_else(|| {
+                anyhow::anyhow!("Embedder not initialized. Configure EMBEDDING_PROVIDER/EMBEDDING_HOST/EMBEDDING_MODEL and EMBEDDING_API_KEY (or OPENAI_API_KEY), or disable semantic search with CCM_DISABLE_EMBEDDER=1.")
+            })?;
+            let query_vecs = embedder.embed(vec![query.to_string()]).await?;
+            match query_vecs.into_iter().next() {
+                Some(vec) if !vec.is_empty() => vec,
+                Some(_) => {
+                    tracing::warn!("Embedder returned an empty query vector");
+                    return Ok(vec![]);
+                }
+                None => {
+                    tracing::warn!("Embedder returned no query vectors");
+                    return Ok(vec![]);
+                }
             }
         };
 
@@ -283,6 +424,14 @@ impl LanceDbStore {
                 ));
             }
         }
+
+        // Eşit mesafeli hit'lerde LanceDB sırası garantili değildir; deterministik
+        // top-k için (mesafe asc, id asc) sıralanır.
+        hits.sort_by(|a, b| {
+            a.2.partial_cmp(&b.2)
+                .unwrap_or(std::cmp::Ordering::Equal)
+                .then_with(|| a.0.cmp(&b.0))
+        });
 
         Ok(hits)
     }
@@ -374,7 +523,7 @@ fn prefix_upper_bound(prefix: &str) -> Option<String> {
     None
 }
 
-fn semantic_chunks(text: &str, max_chars: usize, overlap: usize) -> Vec<String> {
+pub(crate) fn semantic_chunks(text: &str, max_chars: usize, overlap: usize) -> Vec<String> {
     let mut chunks = Vec::new();
     let mut start = 0;
 

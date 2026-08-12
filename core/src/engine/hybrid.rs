@@ -1,9 +1,10 @@
 use crate::graph::{CodeGraph, EdgeType};
 use petgraph::visit::EdgeRef;
 use petgraph::Direction;
+use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq)]
 pub struct HybridWeights {
     pub graph: f32,
     pub semantic: f32,
@@ -44,6 +45,10 @@ impl HybridWeights {
 pub struct HybridScorer {
     pub weights: HybridWeights,
     pub two_hop_decay: f32,
+    pub edge_weights: Vec<(EdgeType, f32)>,
+    pub confidence_threshold: f32,
+    pub confidence_margin: f32,
+    pub min_score: f32,
 }
 
 impl Default for HybridScorer {
@@ -57,6 +62,23 @@ impl HybridScorer {
         Self {
             weights,
             two_hop_decay: 0.60,
+            edge_weights: default_edge_weights(),
+            confidence_threshold: 0.55,
+            confidence_margin: 0.05,
+            min_score: read_env_f32("CCM_MIN_COMBINED_SCORE", 0.05),
+        }
+    }
+
+    /// Policy ağırlıklarını, kenar ağırlıklarını, fallback eşiklerini ve
+    /// min-score filtre değerini uygulayan scorer üretir.
+    pub fn from_policy(policy: &crate::policy::RetrievalPolicy) -> Self {
+        Self {
+            weights: policy.weights,
+            two_hop_decay: policy.two_hop_decay,
+            edge_weights: policy.edge_weights.clone(),
+            confidence_threshold: policy.confidence_threshold,
+            confidence_margin: policy.confidence_margin,
+            min_score: policy.min_score,
         }
     }
 
@@ -74,20 +96,16 @@ impl HybridScorer {
     }
 
     pub fn confidence(&self, score: f32, top1: f32, top2: f32) -> f32 {
-        let margin = (top1 - top2).clamp(0.0, 0.2);
+        let margin = (top1 - top2).clamp(0.0, self.confidence_margin);
         (score.clamp(0.0, 1.0) * (1.0 + margin)).clamp(0.0, 1.0)
     }
 
     pub fn edge_weight(&self, edge: &EdgeType) -> f32 {
-        match edge {
-            EdgeType::Calls => 1.00,
-            EdgeType::Inherits => 0.90,
-            EdgeType::Defines => 0.85,
-            EdgeType::Contains => 0.80,
-            EdgeType::Reads => 0.70,
-            EdgeType::Writes => 0.70,
-            EdgeType::Imports => 0.60,
-        }
+        self.edge_weights
+            .iter()
+            .find(|(kind, _)| kind == edge)
+            .map(|(_, weight)| *weight)
+            .unwrap_or(0.60)
     }
 
     pub fn collect_graph_scores(
@@ -140,6 +158,18 @@ impl HybridScorer {
 
         scores
     }
+}
+
+pub(crate) fn default_edge_weights() -> Vec<(EdgeType, f32)> {
+    vec![
+        (EdgeType::Calls, 1.00),
+        (EdgeType::Inherits, 0.90),
+        (EdgeType::Defines, 0.85),
+        (EdgeType::Contains, 0.80),
+        (EdgeType::Reads, 0.70),
+        (EdgeType::Writes, 0.70),
+        (EdgeType::Imports, 0.60),
+    ]
 }
 
 fn insert_max(scores: &mut HashMap<String, f32>, id: String, value: f32) {

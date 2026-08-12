@@ -56,6 +56,15 @@ enum Commands {
         /// Maximum allowed pass-rate regression in percentage points
         #[arg(long, default_value_t = 0.0)]
         max_regression: f64,
+
+        /// Run evaluation with a specific retrieval policy JSON
+        #[arg(long)]
+        policy: Option<PathBuf>,
+    },
+    /// Learn: deterministic synthetic fixture generation and policy optimization
+    Learn {
+        #[command(subcommand)]
+        command: LearnCommand,
     },
     /// Diagnose installation, index compatibility, and provider configuration
     Doctor {
@@ -66,6 +75,40 @@ enum Commands {
         /// Emit machine-readable JSON
         #[arg(long)]
         json: bool,
+    },
+}
+
+#[derive(Parser, Debug)]
+enum LearnCommand {
+    /// Generate synthetic repos, golden tasks, and embedding fixture
+    Fixtures {
+        /// Output directory (defaults to eval/fixtures)
+        #[arg(long, default_value = "eval/fixtures")]
+        out: PathBuf,
+    },
+    /// Optimize a retrieval policy on train tasks and gate it on holdout
+    Optimize {
+        /// Golden tasks JSON (defaults to the synthetic fixture corpus)
+        #[arg(long, default_value = "eval/fixtures/golden_tasks.synthetic.json")]
+        tasks: PathBuf,
+
+        /// Report output directory (defaults to eval/fixtures/learn)
+        #[arg(long, default_value = "eval/fixtures/learn")]
+        out: PathBuf,
+
+        /// Fixed RNG seed (default 42)
+        #[arg(long, default_value_t = 42)]
+        seed: u64,
+
+        /// Maximum number of candidate evaluations on train
+        #[arg(long, default_value_t = 60)]
+        max_candidates: usize,
+    },
+    /// Print a saved learning report
+    Report {
+        /// Report JSON path
+        #[arg(long, default_value = "eval/fixtures/learn/report.json")]
+        path: PathBuf,
     },
 }
 
@@ -208,7 +251,38 @@ async fn main() -> anyhow::Result<()> {
             min_pass_rate,
             baseline,
             max_regression,
+            policy,
         } => {
+            if let Some(policy_path) = policy {
+                if min_pass_rate > 0.0 || baseline.is_some() || max_regression > 0.0 {
+                    anyhow::bail!(
+                        "--policy ile --min-pass-rate/--baseline/--max-regression birlikte \
+                         kullanılamaz; policy evaluation'ı quality gate uygulamaz"
+                    );
+                }
+                let file = std::fs::File::open(&policy_path)?;
+                let policy: ccm_core::policy::RetrievalPolicy =
+                    serde_json::from_reader(std::io::BufReader::new(file))?;
+                let tasks_file = ccm_core::eval::load_tasks(&tasks)?;
+                let report_data = ccm_core::eval::evaluate_policy(tasks_file, &policy).await?;
+                if let Some(path) = report {
+                    let file = std::fs::File::create(&path)?;
+                    let writer = std::io::BufWriter::new(file);
+                    ccm_core::eval::write_report(writer, &report_data)?;
+                    println!("Report written to {}", path.display());
+                    let summary = ccm_core::eval::summarize_report(
+                        &report_data,
+                        Some(&path.to_string_lossy()),
+                    );
+                    println!("{}", summary);
+                } else {
+                    let stdout = std::io::stdout();
+                    let handle = stdout.lock();
+                    ccm_core::eval::write_report(handle, &report_data)?;
+                    println!();
+                }
+                return Ok(());
+            }
             if compare {
                 let report_data = ccm_core::eval::evaluate_comparison_from_path(&tasks).await?;
                 if let Some(path) = report {
@@ -267,6 +341,112 @@ async fn main() -> anyhow::Result<()> {
                 )?;
             }
         }
+        Commands::Learn { command } => match command {
+            LearnCommand::Fixtures { out } => {
+                let generated = ccm_core::fixtures::generate_all(&out).await?;
+                println!(
+                    "Synthetic fixture generated: {} tasks, {} doc vectors, {} query vectors",
+                    generated.task_count, generated.doc_vector_count, generated.query_vector_count
+                );
+                println!(
+                    "Output: {}/golden_tasks.synthetic.json, {}/embeddings.ndjson",
+                    out.display(),
+                    out.display()
+                );
+            }
+            LearnCommand::Optimize {
+                tasks,
+                out,
+                seed,
+                max_candidates,
+            } => {
+                let tasks_file = ccm_core::eval::load_tasks(&tasks)?;
+                let report = ccm_core::optimize::run_learning_pipeline(
+                    &tasks_file,
+                    &out,
+                    seed,
+                    max_candidates,
+                )
+                .await?;
+                println!(
+                    "Learning pipeline completed: {} candidates evaluated (seed {}), winner v{}",
+                    report.candidate_count, report.seed, report.winner_version
+                );
+                println!(
+                    "Holdout recall@k: baseline {:.3} -> winner {:.3}",
+                    report.holdout.baseline.mean_recall_at_k,
+                    report.holdout.winner.mean_recall_at_k
+                );
+                println!(
+                    "Holdout tokens/task: baseline {:.0} -> winner {:.0}",
+                    report.holdout.baseline.mean_tokens, report.holdout.winner.mean_tokens
+                );
+                println!("Decision: {}", report.decision.reason);
+                println!("Report: {}/report.json", out.display());
+                if let Some(overfit) = &report.decision.overfit_warning {
+                    println!("Overfit flag: {}", overfit);
+                }
+            }
+            LearnCommand::Report { path } => {
+                let content = std::fs::read_to_string(&path)?;
+                let report: ccm_core::optimize::LearningReport = serde_json::from_str(&content)?;
+                println!("Baseline vs Learned (claim: {})", report.claim);
+                println!("{:<24} {:>14} {:>14}", "", "Baseline", "Learned");
+                let row = |label: &str, pair: &ccm_core::optimize::TrainHoldoutPair| {
+                    println!(
+                        "{:<24} {:>13.3} {:>13.3}",
+                        label, pair.baseline.mean_recall_at_k, pair.winner.mean_recall_at_k
+                    );
+                };
+                println!("Holdout metrics:");
+                row("Recall@K", &report.holdout);
+                println!(
+                    "{:<24} {:>13.1} {:>13.1}",
+                    "Tokens/task",
+                    report.holdout.baseline.mean_tokens,
+                    report.holdout.winner.mean_tokens
+                );
+                println!(
+                    "{:<24} {:>13.1}% {:>13.1}%",
+                    "Pass rate", report.holdout.baseline.pass_rate, report.holdout.winner.pass_rate
+                );
+                println!(
+                    "{:<24} {:>13.3} {:>13.3}",
+                    "Precision@K",
+                    report.holdout.baseline.mean_precision_at_k,
+                    report.holdout.winner.mean_precision_at_k
+                );
+                println!(
+                    "{:<24} {:>13.1} {:>13.1}",
+                    "Latency ms",
+                    report.holdout.baseline.mean_latency_ms,
+                    report.holdout.winner.mean_latency_ms
+                );
+                println!("Decision: {}", report.decision.reason);
+                if let Some(secondary) = &report.secondary {
+                    println!();
+                    println!(
+                        "Secondary (real repo, {} tasks, structural-only — iddia taşımaz):",
+                        secondary.task_count
+                    );
+                    println!("{:<24} {:>14} {:>14}", "", "Baseline", "Learned");
+                    println!(
+                        "{:<24} {:>13.3} {:>13.3}",
+                        "Recall@K",
+                        secondary.baseline.mean_recall_at_k,
+                        secondary.winner.mean_recall_at_k
+                    );
+                    println!(
+                        "{:<24} {:>13.1} {:>13.1}",
+                        "Tokens/task", secondary.baseline.mean_tokens, secondary.winner.mean_tokens
+                    );
+                    println!(
+                        "{:<24} {:>13.1}% {:>13.1}%",
+                        "Pass rate", secondary.baseline.pass_rate, secondary.winner.pass_rate
+                    );
+                }
+            }
+        },
         Commands::Doctor { path, json } => run_doctor(&path, json)?,
     }
 

@@ -1,0 +1,4 @@
+# Ana repo indeksi bu sentetik fixture repo'larını taramasın.
+# Fixture repo'ları ayrı ayrı indekslenir; .ccmignore yalnızca
+# eval/fixtures altında tarandığında etkilidir.
+repos/

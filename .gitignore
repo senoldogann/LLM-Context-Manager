@@ -11,6 +11,15 @@ dist/
 .agent/
 docs copy/
 data/
+# Sentetik fixture repo kaynakları commit'lenir (CI offline deterministik üretim
+# için); alt dizinlerindeki `data/` build çıktıları ise yukarıdaki `data/` kuralıyla
+# hariç tutulur.
+!eval/fixtures/
+!eval/fixtures/repos/
+!eval/fixtures/repos/repo_a/
+!eval/fixtures/repos/repo_a/src/
+!eval/fixtures/repos/repo_b/
+!eval/fixtures/repos/repo_b/src/
 .ccm/
 *.log
 

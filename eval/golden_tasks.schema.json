@@ -40,7 +40,7 @@
             "properties": {
               "type": {
                 "type": "string",
-                "enum": ["search_code", "read_graph", "get_context"]
+                "enum": ["search_code", "read_graph", "get_context", "predict_context"]
               },
               "text": { "type": "string" },
               "node_id": { "type": "string" },
@@ -79,6 +79,14 @@
             "type": "integer",
             "minimum": 1,
             "maximum": 3
+          },
+          "split": {
+            "type": "string",
+            "enum": ["train", "holdout"]
+          },
+          "task_type": {
+            "type": "string",
+            "enum": ["bug_fix", "feature", "refactor", "investigation", "test", "unknown"]
           },
           "notes": { "type": "string" }
         },

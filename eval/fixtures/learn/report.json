@@ -1,0 +1,70 @@
+{
+  "schema_version": 1,
+  "generated_at": 1786552898,
+  "claim": "proof_of_mechanism",
+  "seed": 42,
+  "candidate_count": 60,
+  "decision": {
+    "promoted": false,
+    "reason": "sign testi başarısız: improved 15 < required 26 (n_eff=40)",
+    "overfit_warning": null
+  },
+  "winner_version": 22,
+  "train": {
+    "baseline": {
+      "tasks_scored": 90,
+      "pass_rate": 94.44444444444444,
+      "mean_recall_at_k": 0.9444444444444444,
+      "mean_precision_at_k": 0.22941879108545774,
+      "mean_tokens": 159.45555555555555,
+      "mean_latency_ms": 79.65037414444443
+    },
+    "winner": {
+      "tasks_scored": 90,
+      "pass_rate": 95.55555555555556,
+      "mean_recall_at_k": 0.9555555555555556,
+      "mean_precision_at_k": 0.26055595638928963,
+      "mean_tokens": 158.4777777777778,
+      "mean_latency_ms": 78.30237081111115
+    }
+  },
+  "holdout": {
+    "baseline": {
+      "tasks_scored": 90,
+      "pass_rate": 90.0,
+      "mean_recall_at_k": 0.9,
+      "mean_precision_at_k": 0.2257589369599173,
+      "mean_tokens": 207.32222222222222,
+      "mean_latency_ms": 79.85350185555556
+    },
+    "winner": {
+      "tasks_scored": 90,
+      "pass_rate": 91.11111111111111,
+      "mean_recall_at_k": 0.9111111111111111,
+      "mean_precision_at_k": 0.26881449251547285,
+      "mean_tokens": 202.6,
+      "mean_latency_ms": 78.83754725555559
+    }
+  },
+  "secondary": {
+    "corpus": "eval/golden_tasks.v3.ccm.json",
+    "task_count": 50,
+    "note": "structural-only (read_graph+get_context); gerçek corpus search_code CI'da embedder gerektirir — ikincil tablo iddia taşımaz",
+    "baseline": {
+      "tasks_scored": 50,
+      "pass_rate": 100.0,
+      "mean_recall_at_k": 1.0,
+      "mean_precision_at_k": 0.13523596246937764,
+      "mean_tokens": 9304.88,
+      "mean_latency_ms": 146.69856996000001
+    },
+    "winner": {
+      "tasks_scored": 50,
+      "pass_rate": 100.0,
+      "mean_recall_at_k": 1.0,
+      "mean_precision_at_k": 0.13523596246937764,
+      "mean_tokens": 9304.88,
+      "mean_latency_ms": 146.53180826000005
+    }
+  }
+}

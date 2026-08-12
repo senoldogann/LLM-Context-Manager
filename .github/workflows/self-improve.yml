@@ -1,0 +1,56 @@
+name: self-improve
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+    branches: ["main"]
+  workflow_dispatch:
+
+jobs:
+  learn:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@4cda84d5c5c54efe2404f9d843567869ab1699d4 # stable
+
+      - name: Install protoc
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y protobuf-compiler
+
+      - name: Build (release)
+        run: cargo build --release
+
+      - name: Regenerate synthetic fixture (deterministic, offline)
+        run: ./target/release/ccm-cli learn fixtures
+
+      - name: Optimize policy on train, gate on holdout
+        env:
+          CCM_EMBEDDING_FIXTURE: eval/fixtures/embeddings.ndjson
+        run: >-
+          ./target/release/ccm-cli learn optimize
+          --tasks eval/fixtures/golden_tasks.synthetic.json
+          --out eval/fixtures/learn
+          --seed 42
+          --max-candidates 60
+
+      - name: Report promotion decision
+        # Rejected bir CI hatası DEĞİL, normal bir bilimsel sonuçtur; karar
+        # report.json'a yazılır ve job yalnızca gerçek hatalarda kırmızı olur.
+        if: always()
+        run: |
+          jq -r '.decision | "promotion_result=" + (.promoted|tostring) + " reason=" + .reason' \
+            eval/fixtures/learn/report.json
+
+      - name: Upload learning report
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: self-improve-report
+          path: |
+            eval/fixtures/learn/report.json
+            data/ccm_learn/history.jsonl
+            data/ccm_learn/policies.json
