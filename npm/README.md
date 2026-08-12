@@ -4,9 +4,9 @@
 
 **Node.js wrapper for Cognitive Codebase Matrix (CCM)** - Enables AI agents to understand and navigate your codebase with surgical precision.
 
-**v0.3.2** adds the self-improving retrieval policy layer (Phase 1: proof of
-mechanism) on top of v0.3.1's vector deletion, strict MCP allowlist, and
-incremental manifest fixes.
+**v0.3.3** adds agentic retrieval polish: metadata-first MCP output (token-safe),
+promoted policy wired into runtime, aligned eval/production ranking, and
+hardened CI (CodeQL Rust, fixture determinism).
 
 [![npm](https://img.shields.io/npm/v/@senoldogann/context-manager?color=orange)](https://www.npmjs.com/package/@senoldogann/context-manager)
 [![MCP](https://img.shields.io/badge/MCP-Compatible-blue)](https://modelcontextprotocol.io/)

@@ -1,5 +1,24 @@
 # Release Notes
 
+## v0.3.3 - Agentic Retrieval Polish
+
+- MCP tools are now metadata-first: `include_body`/`max_chars` opt-in body
+  snippets, server-side limit cap (50), default metadata-only output — stops
+  agent context blowup on `impact_of_change`/`trace_call_chain`/`search_code`.
+- Promoted retrieval policy is now wired into runtime: MCP engines load
+  `PolicyStore::active()` (`new_with_active_policy`); the learned policy
+  actually affects searches instead of being a report artifact.
+- Eval hybrid ranking aligned with production (lexical fallback, spatial score,
+  min_score filter); per-repo graph cache makes learning runs faster.
+- `search_code` chunk dedup; `trace_call_chain` parent-pointer BFS (no path
+  cloning); OpenAI embedder retry-with-warning; fuzzy stable-id drift resolution.
+- Trajectory logger now records real latency, tool name and request id; MCP sets
+  trajectory context per tool call (Phase 3 feedback collection ready).
+- MCP index writes serialized per project (concurrent `index_project`/lazy
+  indexing safe); JSON-RPC errors preserve request id and use -32602/-32603.
+- SKILL.md manual MCP config fixed for strict allowlist; CodeQL now analyzes
+  Rust; CI protoc install hardened; self-improve enforces fixture determinism.
+
 ## v0.3.2 - Self-Improving Retrieval Policy (Phase 1: proof of mechanism)
 
 - Added versioned `RetrievalPolicy` + `PolicyStore` + append-only history

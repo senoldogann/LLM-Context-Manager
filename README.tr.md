@@ -10,9 +10,10 @@
 
 > CCM, kod tabaniniz ile yapay zeka editorunuz arasindaki boslugu kapatir. Statik kaynak kodu dinamik ve sorgulanabilir bir bilgi grafina donusturur; boylece ajanlar projenizi daha dogru gezebilir, anlayabilir ve akil yurutme yapabilir.
 
-> **Guncel surum: v0.3.2.** v0.3.1'deki vektor silme prefix kapsami, MCP strict
-> allowlist ve artimli indeks manifest senkronizasyonu duzeltmelerinin uzerine
-> self-improving retrieval policy katmani (Phase 1: proof of mechanism) eklendi.
+> **Guncel surum: v0.3.3.** v0.3.2 uzerine agentic retrieval polish: token
+> guvenli metadata-first MCP ciktisi, promote edilen policy'nin runtime'a
+> baglanmasi, eval/production ranking hizalamasi ve saglamlastirilmis CI
+> (CodeQL Rust, fixture determinism).
 
 [![Rust](https://img.shields.io/badge/Built%20With-Rust-orange.svg?style=flat-square&logo=rust)](https://www.rust-lang.org/)
 [![MCP Ready](https://img.shields.io/badge/MCP-Compatible-blue.svg?style=flat-square&logo=google-cloud)](https://modelcontextprotocol.io/)
