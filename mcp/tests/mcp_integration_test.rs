@@ -521,7 +521,7 @@ fn mcp_resolves_class_import_constructor_context_and_impact(
     )?;
     let context_meta_text = tool_text(&context_meta);
     assert!(context_meta_text.contains("Current: open_camera"));
-    assert!(context_meta_text.contains("def open_camera") == false);
+    assert!(!context_meta_text.contains("def open_camera"));
 
     let graph = send_request(
         &mut stdin,
