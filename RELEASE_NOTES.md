@@ -1,5 +1,29 @@
 # Release Notes
 
+## v0.3.2 - Self-Improving Retrieval Policy (Phase 1: proof of mechanism)
+
+- Added versioned `RetrievalPolicy` + `PolicyStore` + append-only history
+  (`data/ccm_learn/policies.json`, `history.jsonl`); baseline equals the previous
+  production defaults exactly.
+- Added deterministic train/holdout splitter (sha256, 75% threshold, search_code
+  floor) and promotion gate: per-query-type regression guard, recall/token
+  improvement with sign test, token guard (<= 1.05x), overfit warning.
+  Evaluator is immutable during optimization; only the policy is mutable.
+- Added seeded optimizer: 52 grid candidates + top-3 hill-climb (cap 60),
+  train-only evaluation, single holdout measurement of the winner.
+- Added offline hybrid evaluation: `CCM_EMBEDDING_FIXTURE` + deterministic
+  trigram-hash embeddings; `predict_context` query type for context-budget
+  measurement; per-task Recall@K, precision@K, coverage, tokens, latency metrics.
+- Added `ccm-cli learn {fixtures,optimize,report}` and `eval --policy`;
+  new `self-improve.yml` CI job (offline, no secrets; Rejected is a scientific
+  result, not a CI failure).
+- Added observable-only trajectory logger (`CCM_TRAJECTORY_LOG`, off by default).
+- Added deterministic synthetic corpus (repo_a train / repo_b holdout, 180 tasks)
+  as Phase 1 proof-of-mechanism benchmark; real-repo structural secondary table
+  included in the report.
+
+## v0.2.1 - UTF-8 Safety, Retrieval Accuracy & Installer Reliability
+
 ## v0.2.1 - UTF-8 Safety, Retrieval Accuracy & Installer Reliability
 
 - Fixed the UTF-8 chunk boundary panic triggered by multibyte Turkish, Finnish, punctuation, and emoji characters.
