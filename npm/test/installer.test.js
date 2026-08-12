@@ -100,6 +100,8 @@ test('Codex installer replaces stale or disabled entry without invoking Codex bi
     assert.match(content, /@senoldogann\/context-manager@0\.2\.1/);
     assert.match(content, /enabled = true/);
     assert.match(content, /CCM_PROJECT_ROOT = "\/projects\/current"/);
+    assert.match(content, /CCM_ALLOWED_ROOTS = "\/projects\/current"/);
+    assert.match(content, /CCM_REQUIRE_ALLOWED_ROOTS = "1"/);
     assert.doesNotMatch(content, /command = "old"/);
     assert.equal(
         content.match(/\[mcp_servers\.context-manager\]/g).length,
