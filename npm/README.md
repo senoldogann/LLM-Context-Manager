@@ -4,11 +4,9 @@
 
 **Node.js wrapper for Cognitive Codebase Matrix (CCM)** - Enables AI agents to understand and navigate your codebase with surgical precision.
 
-**v0.3.5** ships the complete v0.3.2/v0.3.3 feature set (self-improving
-retrieval policy layer via `ccm-cli learn`, metadata-first MCP output,
-promoted policy wired into runtime, hardened CI) plus the v0.3.4 Rust patch
-that completes the offline semantic evaluation gate across all four synthetic
-query types.
+**v0.3.6** aligns the npm wrapper with the Rust binaries and GitHub release,
+ships the canonical `SKILL.md`, repairs incomplete vector indexes, and makes
+metadata-first MCP body controls match the published tool schema.
 
 [![npm](https://img.shields.io/npm/v/@senoldogann/context-manager?color=orange)](https://www.npmjs.com/package/@senoldogann/context-manager)
 [![MCP](https://img.shields.io/badge/MCP-Compatible-blue)](https://modelcontextprotocol.io/)
@@ -210,12 +208,14 @@ This package handles:
 2. Resumable, retrying compressed binary download from GitHub Releases
 3. Global persistence in `~/.ccm`
 
-For a manual maintainer release, run the commands from this `npm/` directory:
+After the GitHub release workflow succeeds, publish its reviewed npm artifact:
 
 ```bash
-npm test
-npm pack --dry-run
-npm publish --access public --provenance
+VERSION=$(node -p "require('./package.json').version")
+gh release download "v${VERSION}" \
+  --pattern "senoldogann-context-manager-${VERSION}.tgz" \
+  --dir .
+npm publish "./senoldogann-context-manager-${VERSION}.tgz" --access public
 ```
 
 Running `npm publish` from the repository root fails because the root intentionally has no `package.json`.
@@ -247,6 +247,13 @@ Enable `CCM_EMBED_DATA_FILES=1` to include them in semantic search.
 ---
 
 ## 📝 Changelog
+
+### v0.3.6
+- ✅ npm, Rust crates, GitHub tag and binary assets share one version
+- ✅ Canonical `SKILL.md` is included in the npm tarball
+- ✅ Incomplete LanceDB indexes trigger a full rebuild instead of silent empty search
+- ✅ `read_graph` honors `include_body` and `max_chars`
+- ✅ Release workflow rejects version skew and attaches a verified npm tarball to the GitHub release
 
 ### v0.3.5
 - ✅ npm README now documents the v0.3.4 Rust release (offline semantic gate

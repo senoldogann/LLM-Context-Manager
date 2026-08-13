@@ -393,8 +393,15 @@ pub async fn evaluate_with_mode(tasks_file: GoldenTasksFile, mode: EvalMode) -> 
             policy_version: None,
         };
 
-        if let Err(error) =
-            ensure_eval_index(&repo_path, &db_path, &graph_path, &mut prepared_repos).await
+        let require_vector_table = task.query.kind == "search_code";
+        if let Err(error) = ensure_eval_index(
+            &repo_path,
+            &db_path,
+            &graph_path,
+            require_vector_table,
+            &mut prepared_repos,
+        )
+        .await
         {
             result.detail = format!("Failed to prepare index: {}", error);
             totals.skipped += 1;
@@ -691,7 +698,7 @@ pub async fn evaluate_policy(
         };
 
         if let Err(error) =
-            ensure_eval_index(&repo_path, &db_path, &graph_path, &mut prepared_repos).await
+            ensure_eval_index(&repo_path, &db_path, &graph_path, true, &mut prepared_repos).await
         {
             result.detail = format!("Failed to prepare index: {}", error);
             totals.skipped += 1;
@@ -1011,9 +1018,11 @@ async fn ensure_eval_index(
     repo_path: &Path,
     db_path: &Path,
     graph_path: &Path,
+    require_vector_table: bool,
     prepared_repos: &mut HashSet<PathBuf>,
 ) -> Result<()> {
-    if db_path.exists() && graph_path.exists() {
+    let vector_table_path = db_path.join("code_vectors.lance");
+    if graph_path.exists() && (!require_vector_table || vector_table_path.exists()) {
         return Ok(());
     }
 
@@ -1036,8 +1045,11 @@ async fn ensure_eval_index(
 
     prepared_repos.insert(repo_key);
 
-    if !db_path.exists() {
-        return Err(anyhow::anyhow!("Missing index at {}", db_path.display()));
+    if require_vector_table && !vector_table_path.exists() {
+        return Err(anyhow::anyhow!(
+            "Missing vector table at {}",
+            vector_table_path.display()
+        ));
     }
 
     if !graph_path.exists() {

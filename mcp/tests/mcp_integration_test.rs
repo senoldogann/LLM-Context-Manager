@@ -533,13 +533,30 @@ fn mcp_resolves_class_import_constructor_context_and_impact(
             }}
         }),
     )?;
-    assert!(tool_text(&graph).contains("Node Details: YoloDetector"));
+    let graph_text = tool_text(&graph);
+    assert!(graph_text.contains("Node Details: YoloDetector"));
+    assert!(!graph_text.contains("class YoloDetector"));
+
+    let graph_with_body = send_request(
+        &mut stdin,
+        &mut reader,
+        json!({
+            "jsonrpc":"2.0","id":8,"method":"tools/call",
+            "params":{"name":"read_graph","arguments":{
+                "node_id":node_id,"project_path":project_root,
+                "include_body":true,"max_chars":8
+            }}
+        }),
+    )?;
+    let graph_with_body_text = tool_text(&graph_with_body);
+    assert!(graph_with_body_text.contains("class Yo"));
+    assert!(graph_with_body_text.contains("body truncated by max_chars"));
 
     let impact = send_request(
         &mut stdin,
         &mut reader,
         json!({
-            "jsonrpc":"2.0","id":7,"method":"tools/call",
+            "jsonrpc":"2.0","id":9,"method":"tools/call",
             "params":{"name":"impact_of_change","arguments":{
                 "file":"detector.py","project_path":project_root
             }}

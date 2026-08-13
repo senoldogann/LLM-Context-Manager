@@ -3,7 +3,7 @@ name: context-manager
 description: "Cognitive Codebase Matrix (CCM) MCP skill for deep codebase intelligence. Gives AI agents a queryable knowledge graph over any project: semantic hybrid search, call chain tracing, blast-radius analysis, and cursor-aware context retrieval — all via 9 MCP tools. WHEN: understand a large codebase, find callers/callees, map blast radius, retrieve cursor context, trace a call chain, inspect a graph node, get recently changed code, or index a project before starting work."
 origin: https://github.com/senoldogann/LLM-Context-Manager
 terminal_state: invoke_tool_chain("index_project", then search/context/graph/impact tools based on task)
-version: 1.0
+version: 1.1
 license: MIT
 ---
 
@@ -37,9 +37,9 @@ Trigger phrases: "understand the codebase", "find usages of", "what calls X", "w
 - User says "just give me the file" without needing cross-file reasoning
 
 <HARD-GATE>
-You MUST call `index_project` before any other tool on a fresh project session.
-If the project was already indexed in this conversation, you MAY skip `index_project` and call tools directly.
-NEVER assume a project is indexed without explicit mention or evidence.
+Use `index_project` when you need an explicit refresh or index statistics. Other
+tools may lazily create a missing index on first use, but they still require an
+allowed `project_path` and may take longer on that first call.
 </HARD-GATE>
 
 ## Execution Boundaries
@@ -47,7 +47,8 @@ NEVER assume a project is indexed without explicit mention or evidence.
 - **Boundary 1:** All file paths MUST be relative to project root (e.g. `src/main.rs`, not `/Users/dev/my-app/src/main.rs`)
 - **Boundary 2:** Node IDs MUST be used exactly as returned by tools (never guessed or constructed)
 - **Boundary 3:** If a tool returns empty results, check node_id/file format BEFORE escalating
-- **Boundary 4:** `max_depth` in trace_call_chain should be 6–15; default (6) may miss distant paths
+- **Boundary 4:** `max_depth` in trace_call_chain should be 8–15; default (8) may miss distant paths
+- **Boundary 5:** Retrieval limits are capped at 50 results; body output is opt-in with `include_body=true`
 
 ## MCP Setup
 
@@ -64,6 +65,7 @@ npx @senoldogann/context-manager install
     "args": ["-y", "@senoldogann/context-manager", "mcp"],
     "env": {
       "RUST_LOG": "info",
+      "CCM_PROJECT_ROOT": "/path/to/your/project",
       "CCM_ALLOWED_ROOTS": "/path/to/your/project",
       "CCM_REQUIRE_ALLOWED_ROOTS": "true"
     }
@@ -71,9 +73,9 @@ npx @senoldogann/context-manager install
 }
 ```
 
-> `CCM_REQUIRE_ALLOWED_ROOTS` varsayılan olarak açıktır; `CCM_ALLOWED_ROOTS`
-> boş bırakılırsa sunucu tüm proje erişimini reddeder. Her proje kökünü
-> `:` ayracıyla ekleyebilirsiniz: `/repo1:/repo2`.
+> `CCM_REQUIRE_ALLOWED_ROOTS` varsayılan olarak açıktır. `CCM_ALLOWED_ROOTS`
+> boşsa `CCM_PROJECT_ROOT` izin verilen tek kök olur; ikisi de boşsa erişim
+> reddedilir. Birden çok kökü platform path ayracıyla ekleyebilirsiniz.
 
 ### Minimal environment (~/.ccm/.env)
 ```ini
@@ -232,7 +234,7 @@ Index or refresh the code graph for a project. Safe to call repeatedly — perfo
 }
 ```
 
-**When:** Always call before the first query in a new session, or after editing files.
+**When:** Call for an explicit refresh, after editing files, or when you need index statistics. A missing index can also be created lazily by the first retrieval call.
 
 ---
 
@@ -244,8 +246,10 @@ Hybrid semantic + graph search. Combines vector similarity and graph centrality 
 | Parameter | Type | Required | Default | Notes |
 |-----------|------|----------|---------|-------|
 | `query` | string | yes | — | Natural language or code term |
-| `project_path` | string | yes | — | Absolute path to project root |
-| `limit` | integer | no | 5 | Max results to return |
+| `project_path` | string | no | — | Absolute project root; otherwise startup root |
+| `limit` | integer | no | 5 | Max results; server cap is 50 |
+| `include_body` | boolean | no | false | Include source snippets |
+| `max_chars` | integer | no | 4000 | Total snippet character budget |
 
 **Example**
 ```json
@@ -274,7 +278,9 @@ Cursor-aware context retrieval. Given a file path and line number, returns the m
 |-----------|------|----------|-------|
 | `file` | string | yes | Relative path from project root (e.g. `src/main.rs`) |
 | `line` | integer | yes | 1-based line number |
-| `project_path` | string | yes | Absolute path to project root |
+| `project_path` | string | no | Absolute project root; otherwise startup root |
+| `include_body` | boolean | no | Include source snippets; defaults to false |
+| `max_chars` | integer | no | Total snippet budget; defaults to 4000 |
 
 **Example**
 ```json
@@ -300,8 +306,10 @@ Find graph nodes by name, file path fragment, or node ID fragment. Returns match
 | Parameter | Type | Required | Default | Notes |
 |-----------|------|----------|---------|-------|
 | `query` | string | yes | — | Function name, file path, or node ID fragment |
-| `project_path` | string | yes | — | Absolute path to project root |
-| `limit` | integer | no | 10 | Max results |
+| `project_path` | string | no | — | Absolute project root; otherwise startup root |
+| `limit` | integer | no | 10 | Max results; server cap is 50 |
+| `include_body` | boolean | no | false | Include source snippets |
+| `max_chars` | integer | no | 4000 | Total snippet character budget |
 
 **Example**
 ```json
@@ -326,21 +334,24 @@ Inspect a specific node's full details and its direct graph connections (calls, 
 
 | Parameter | Type | Required | Notes |
 |-----------|------|----------|-------|
-| `node_id` | string | yes | Exact node ID from `find_nodes` or `search_code` output. Format: `./path/to/file.rs:node_type:line:col` |
-| `project_path` | string | yes | Absolute path to project root |
+| `node_id` | string | yes | Exact stable node ID returned by CCM |
+| `project_path` | string | no | Absolute project root; otherwise startup root |
+| `include_body` | boolean | no | Include node source; defaults to false |
+| `max_chars` | integer | no | Source character budget; defaults to 4000 |
 
 **Example**
 ```json
 {
   "name": "read_graph",
   "arguments": {
-    "node_id": "./core/src/lib.rs:function_item:310:0",
-    "project_path": "/Users/dev/my-app"
+    "node_id": "./core/src/lib.rs:function_item:symbol:8a21f1c749fa299e:0",
+    "project_path": "/Users/dev/my-app",
+    "include_body": true
   }
 }
 ```
 
-**Output:** Node name, type, line range, source content, plus `Calls`, `Called By`, `Contains` edge lists.
+**Output:** Node metadata plus `Calls`, `Called By`, `Contains`; source is included only when requested.
 
 **When:** You have a node_id and want to understand exactly what it connects to in one call.
 
@@ -354,14 +365,17 @@ Find all callers of a given node (reverse-edge traversal). Answers "who uses thi
 | Parameter | Type | Required | Notes |
 |-----------|------|----------|-------|
 | `node_id` | string | yes | Exact node ID |
-| `project_path` | string | yes | Absolute path to project root |
+| `project_path` | string | no | Absolute project root; otherwise startup root |
+| `limit` | integer | no | Max usages; default 20, cap 50 |
+| `include_body` | boolean | no | Include source snippets; defaults to false |
+| `max_chars` | integer | no | Total snippet budget; defaults to 4000 |
 
 **Example**
 ```json
 {
   "name": "find_usages",
   "arguments": {
-    "node_id": "./core/src/lib.rs:function_item:310:0",
+    "node_id": "./core/src/lib.rs:function_item:symbol:8a21f1c749fa299e:0",
     "project_path": "/Users/dev/my-app"
   }
 }
@@ -380,16 +394,18 @@ BFS path search between two nodes. Finds how node A eventually calls node B thro
 |-----------|------|----------|---------|-------|
 | `from_id` | string | yes | — | Starting node ID |
 | `to_id` | string | yes | — | Target node ID |
-| `project_path` | string | yes | — | Absolute path to project root |
-| `max_depth` | integer | no | 6 | BFS traversal depth limit |
+| `project_path` | string | no | — | Absolute project root; otherwise startup root |
+| `max_depth` | integer | no | 8 | BFS traversal depth limit |
+| `include_body` | boolean | no | false | Include source snippets |
+| `max_chars` | integer | no | 4000 | Total snippet character budget |
 
 **Example**
 ```json
 {
   "name": "trace_call_chain",
   "arguments": {
-    "from_id": "./cli/src/main.rs:function_item:1:0",
-    "to_id": "./core/src/engine.rs:function_item:50:0",
+    "from_id": "./cli/src/main.rs:function_item:symbol:3157c2840c8be120:0",
+    "to_id": "./core/src/engine.rs:function_item:symbol:bcf83e87f1a4c5d2:0",
     "project_path": "/Users/dev/my-app",
     "max_depth": 8
   }
@@ -409,7 +425,10 @@ Compute the blast radius of changing a file. Returns all nodes and files that de
 | Parameter | Type | Required | Notes |
 |-----------|------|----------|-------|
 | `file` | string | yes | Relative path from project root |
-| `project_path` | string | yes | Absolute path to project root |
+| `project_path` | string | no | Absolute project root; otherwise startup root |
+| `limit` | integer | no | Max dependents; default 30, cap 50 |
+| `include_body` | boolean | no | Include source snippets; defaults to false |
+| `max_chars` | integer | no | Total snippet budget; defaults to 4000 |
 
 **Example**
 ```json
@@ -435,7 +454,9 @@ Returns code context for recently changed files using git history. Ranks by rece
 |-----------|------|----------|---------|-------|
 | `project_path` | string | yes | — | Absolute path to project root |
 | `days` | integer | no | 7 | Look-back window in days |
-| `limit` | integer | no | 10 | Max results |
+| `limit` | integer | no | 30 | Max results; server cap is 50 |
+| `include_body` | boolean | no | false | Include source snippets |
+| `max_chars` | integer | no | 4000 | Total snippet character budget |
 
 **Example**
 ```json
@@ -460,7 +481,7 @@ All tools return markdown-formatted text:
 ```
 ## <Title> (Score: 0.87)
 **Reason:** <why this result was selected>
-**Node ID:** ./path/to/file.rs:function_item:42:0
+**Node ID:** ./path/to/file.rs:function_item:symbol:8a21f1c749fa299e:0
 **File:** path/to/file.rs
 **Node Type:** function_item
 **Range:** 42-68
@@ -480,15 +501,16 @@ fn example() { ... }
 
 ## Node ID Format
 
-Node IDs follow a rigid format:
+New indexes produce stable symbol IDs:
 ```
-./relative/path/to/file.ext:node_type:start_line:column
+./relative/path/to/file.ext:node_type:symbol:stable_hash:occurrence
 ```
 
 Examples:
-- `./core/src/lib.rs:function_item:310:0`
-- `./src/auth/token.py:class_definition:15:0`
-- `./api/routes.ts:function_declaration:88:2`
+- `./core/src/lib.rs:function_item:symbol:8a21f1c749fa299e:0`
+- `./src/auth/token.py:class_definition:symbol:0bc7e2b2a113ef04:0`
+
+Older indexes may still return line-based IDs. Treat both formats as opaque.
 
 Always use node_ids **exactly as returned** by tools. Do not guess or construct them manually.
 
@@ -496,10 +518,10 @@ Always use node_ids **exactly as returned** by tools. Do not guess or construct 
 
 | Anti-Pattern | Risk | Solution |
 |--------------|------|----------|
-| **Not indexing first** | All queries fail with "graph not indexed" | ALWAYS call `index_project` on fresh session (safe to repeat) |
+| **Assuming the first query is cheap** | Lazy indexing can make it slow | Call `index_project` first when explicit progress or timing matters |
 | **Mixing absolute + relative paths** | Tool returns "path outside project root" | Use ONLY relative paths (`core/src/lib.rs`, never `/Users/.../core/src/lib.rs`) |
 | **Manually constructing node_ids** | Wrong format breaks downstream tools | Use `find_nodes` output; NEVER guess the node_id format |
-| **Low `max_depth` in trace_call_chain** | Misses the actual path between functions | Default is 6; increase to 10–15 for deeper chains |
+| **Low `max_depth` in trace_call_chain** | Misses the actual path between functions | Default is 8; increase to 10–15 for deeper chains |
 | **Reading `search_code` score without understanding weights** | Over-trusting weak results | Always check the `Reason` field; score reflects hybrid rank, not absolute confidence |
 | **Editing a core file without `impact_of_change`** | Silent cascade failures in dependent code | Always run blast-radius check BEFORE editing |
 | **Assuming project is indexed from session history** | Stale data, missing recent edits | Re-run `index_project` after significant file changes |
@@ -513,10 +535,10 @@ Always use node_ids **exactly as returned** by tools. Do not guess or construct 
 | Tool Output | What It Means | Action |
 |-------------|---------------|--------|
 | `No context found for src/main.rs:100` | Graph doesn't have that file indexed | Re-run `index_project` or verify path is relative |
-| `Node not found with ID: ./core/src/lib.rs:function_item:310:0` | The node_id format is wrong or file changed | Use `find_nodes` to re-discover the correct node_id |
+| `Node not found with ID: ...` | The opaque node ID is stale or the file changed | Use `find_nodes` to re-discover the current node ID |
 | `No graph nodes found for query: 'UserService'` | Name doesn't exist in this codebase or is indexed differently | Try partial queries (e.g. `User` or `Service` separately) |
 | Empty result from `trace_call_chain` | No path exists within `max_depth` (common for distant calls) | Increase `max_depth` to 15–20 or check if path exists manually |
-| `Node ID: ./path/file.ext:node_type:line:col` contains multiple colons | This is correct node_id format | Always preserve the exact string; pass it verbatim to other tools |
+| A Node ID contains `:symbol:` and several colons | This is the stable ID format | Preserve the exact string and pass it verbatim |
 
 ## Supported Languages
 
@@ -585,7 +607,7 @@ Before considering a task complete:
 ## Source & References
 
 **Repository:** https://github.com/senoldogann/LLM-Context-Manager  
-**npm Package:** `@senoldogann/context-manager` (v0.1.31+)  
+**npm Package:** `@senoldogann/context-manager` (v0.3.6+)
 **Built with:** Rust, Tree-sitter, LanceDB, Petgraph  
 **License:** MIT  
 

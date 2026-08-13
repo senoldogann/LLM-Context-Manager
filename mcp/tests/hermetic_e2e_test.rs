@@ -195,7 +195,9 @@ fn hermetic_mcp_all_tools_e2e_on_synthetic_repo() {
         }),
     );
     assert_no_error(&resp, "5 read_graph");
-    assert!(text_of(&resp).contains("compute_tax"));
+    let graph_text = text_of(&resp);
+    assert!(graph_text.contains("Node Details: compute_tax"));
+    assert!(!graph_text.contains("fn compute_tax"));
 
     // 8. get_context: tax.rs'de compute_tax satırı.
     let resp = send(

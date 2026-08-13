@@ -376,10 +376,17 @@ impl LanceDbStore {
         };
 
         // 2. Open Table
-        let table = match self.conn.open_table(&self.table_name).execute().await {
-            Ok(t) => t,
-            Err(_) => return Ok(vec![]),
-        };
+        let table = self
+            .conn
+            .open_table(&self.table_name)
+            .execute()
+            .await
+            .with_context(|| {
+                format!(
+                    "Vector table '{}' is missing or unreadable; rebuild the CCM index",
+                    self.table_name
+                )
+            })?;
 
         // 3. Vector Search
         let results = table

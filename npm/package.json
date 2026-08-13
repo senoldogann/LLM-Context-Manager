@@ -1,6 +1,6 @@
 {
     "name": "@senoldogann/context-manager",
-    "version": "0.3.5",
+    "version": "0.3.6",
     "description": "LLM Context Manager MCP Server & CLI wrapper using npx",
     "repository": {
         "type": "git",
@@ -13,13 +13,15 @@
     "main": "bin/ccm.js",
     "files": [
         "bin",
-        "README.md"
+        "README.md",
+        "SKILL.md"
     ],
     "bin": {
         "ccm-cli": "bin/ccm.js",
         "ccm-mcp": "bin/ccm.js"
     },
     "scripts": {
+        "prepack": "node scripts/sync-skill.js",
         "test": "node --test test/*.test.js"
     },
     "keywords": [

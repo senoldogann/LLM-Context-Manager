@@ -1,5 +1,21 @@
 # Release Notes
 
+## v0.3.6 - Distribution and Contract Alignment
+
+- Rust crates, npm package, GitHub tag and binary download paths now use the
+  same version; release CI rejects any future skew before building.
+- npm tarballs now include the canonical `SKILL.md` generated from the repo
+  root during `prepack`.
+- `SKILL.md` now documents stable symbol node IDs, lazy indexing, allowlist
+  fallback, correct tool defaults and metadata-first body controls.
+- `read_graph` now honors `include_body` and `max_chars`; metadata-only output
+  is the real default across retrieval tools.
+- Missing LanceDB vector tables trigger a full index rebuild and semantic
+  search reports corrupt/missing tables explicitly instead of returning an
+  unexplained empty result.
+- Release CI verifies tag/package consistency and live CLI/MCP assets, then
+  attaches a reviewed npm tarball to the GitHub release for manual publication.
+
 ## v0.3.4 - Offline Semantic Gate Completeness
 
 - The default evaluator (`evaluate_with_mode`) now scores `predict_context`

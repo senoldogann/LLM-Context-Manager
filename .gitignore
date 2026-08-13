@@ -1,5 +1,6 @@
 # Rust
 target/
+npm/SKILL.md
 **/*.rs.bk
 
 # Node/JS

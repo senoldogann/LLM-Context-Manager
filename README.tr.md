@@ -10,10 +10,9 @@
 
 > CCM, kod tabanınız ile yapay zeka editörünüz arasındaki boşluğu kapatır. Statik kaynak kodu dinamik ve sorgulanabilir bir bilgi grafına dönüştürür; böylece ajanlar projenizi daha doğru gezebilir, anlayabilir ve akıl yürütebilir.
 
-> **Güncel sürüm: v0.3.4.** v0.3.3 üzerine yama: offline semantic evaluation
-> gate artık dört sentetik sorgu tipini de (`search_code`, `get_context`,
-> `read_graph`, `predict_context`) skorluyor. Önceden `predict_context`
-> atlanıyordu ve cross-repo gate eksik kalıyordu.
+> **Güncel sürüm: v0.3.6.** Rust crate'leri, npm wrapper, GitHub asset'leri ve
+> agent skill artık tek sürüm altında yayınlanıyor. Bu sürüm ayrıca kısmi index
+> onarımını ve metadata-first MCP çıktı sözleşmesini sağlamlaştırıyor.
 
 [![Rust](https://img.shields.io/badge/Built%20With-Rust-orange.svg?style=flat-square&logo=rust)](https://www.rust-lang.org/)
 [![MCP Ready](https://img.shields.io/badge/MCP-Compatible-blue.svg?style=flat-square&logo=google-cloud)](https://modelcontextprotocol.io/)
@@ -112,7 +111,7 @@ Editor otomatik tespit edilmezse installer'in verdigi manuel MCP config'i kullan
 
 ### 🤖 Ajan Skill'i
 
-CCM, tum 9 MCP aracini, node_id formatini, onerilen akisi ve yaygin hatalari anlatan bir [`SKILL.md`](SKILL.md) ile geliyor — hicbir tahmin yapmadan.
+CCM, tum 9 MCP aracini, stable node ID formatini, onerilen akisi ve yaygin hatalari anlatan bir [`SKILL.md`](SKILL.md) ile geliyor. Dosya hem kaynak repoda hem npm paketinde bulunur.
 
 Ajan skill dizininize kopyalayin, birinci sinif arac referansi olarak kullanin:
 ```bash
@@ -288,7 +287,7 @@ CCM, golden task tabanli bir evaluation framework ile gelir:
 ccm-cli eval --tasks eval/golden_tasks.v3.ccm.json
 
 # Structural vs hybrid karsilastir
-ccm-cli eval --tasks eval/golden_tasks.json --compare
+ccm-cli eval --tasks eval/golden_tasks.v3.ccm.json --compare
 ```
 
 Evaluation index'i yoksa CCM skorlama oncesi otomatik hazirlar.

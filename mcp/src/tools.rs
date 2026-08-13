@@ -65,14 +65,12 @@ fn format_suggestions_output(
             } else {
                 truncated += 1;
             }
-        } else {
-            truncated += 1;
         }
         output.push_str("\n\n---\n");
     }
     if truncated > 0 {
         output.push_str(&format!(
-            "_Note: {} result(s) omitted body (include_body=true with max_chars to include)._\n",
+            "_Note: {} result body or bodies were truncated by max_chars._\n",
             truncated
         ));
     }
@@ -264,9 +262,17 @@ pub async fn read_graph(engine: &Arc<RetrievalEngine>, args: &Value) -> Result<T
 
     if let Some(node) = node_opt {
         let mut output = format!(
-            "## Node Details: {}\n\n**Type:** {:?}\n**ID:** {}\n**Range:** Lines {}-{}\n\n```\n{}\n```",
-            node.name, node.node_type, node.id, node.start_line, node.end_line, node.content
+            "## Node Details: {}\n\n**Type:** {:?}\n**ID:** {}\n**Range:** Lines {}-{}",
+            node.name, node.node_type, node.id, node.start_line, node.end_line
         );
+        if include_body_from_args(args) && !node.content.is_empty() {
+            let max_chars = max_chars_from_args(args);
+            let body: String = node.content.chars().take(max_chars).collect();
+            output.push_str(&format!("\n\n```\n{}\n```", body));
+            if body.chars().count() < node.content.chars().count() {
+                output.push_str("\n*(body truncated by max_chars)*");
+            }
+        }
 
         // Append neighbors if available (Graph Navigator)
         if let Some(neighbors) = engine.get_node_neighbors(&node.id).await {

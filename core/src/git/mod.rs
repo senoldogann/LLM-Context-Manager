@@ -46,14 +46,22 @@ impl GitIntegrator {
                 || status.contains(Status::WT_RENAMED)
                 || status.contains(Status::WT_DELETED)
             {
-                if let Some(path_str) = entry.path() {
-                    let full_path = workdir.join(path_str);
-                    if full_path.exists()
-                        || status.contains(Status::WT_DELETED)
-                        || status.contains(Status::INDEX_DELETED)
-                    {
-                        changed_files.push(full_path);
+                let path_str = match entry.path() {
+                    Ok(path) => path,
+                    Err(error) => {
+                        tracing::warn!(
+                            error = %error,
+                            "UTF-8 olmayan Git status yolu atlandı"
+                        );
+                        continue;
                     }
+                };
+                let full_path = workdir.join(path_str);
+                if full_path.exists()
+                    || status.contains(Status::WT_DELETED)
+                    || status.contains(Status::INDEX_DELETED)
+                {
+                    changed_files.push(full_path);
                 }
             }
         }

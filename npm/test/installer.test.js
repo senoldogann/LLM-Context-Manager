@@ -4,6 +4,7 @@ const os = require('node:os');
 const path = require('node:path');
 const test = require('node:test');
 const zlib = require('node:zlib');
+const { execFileSync } = require('node:child_process');
 
 const {
     MCP_ARGS,
@@ -120,4 +121,13 @@ test('compressed release binary is restored byte-for-byte', async () => {
     await extractGzip(compressed, restored);
 
     assert.deepEqual(fs.readFileSync(restored), expected);
+});
+
+test('npm package ships the canonical agent skill', () => {
+    const packageRoot = path.resolve(__dirname, '..');
+    execFileSync(process.execPath, [path.join(packageRoot, 'scripts/sync-skill.js')]);
+
+    const packagedSkill = fs.readFileSync(path.join(packageRoot, 'SKILL.md'), 'utf8');
+    const canonicalSkill = fs.readFileSync(path.resolve(packageRoot, '..', 'SKILL.md'), 'utf8');
+    assert.equal(packagedSkill, canonicalSkill);
 });

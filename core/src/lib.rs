@@ -349,11 +349,22 @@ pub async fn update_index(path: &str, db_path: Option<&str>) -> Result<IndexStat
 
     let graph_path = parent_dir.join("ccm_graph.json");
     let manifest_path = parent_dir.join("ccm_manifest.json");
+    let vector_table_path = db_path_buf.join("code_vectors.lance");
 
-    if !graph_path.exists() {
+    let embedder_disabled = std::env::var("CCM_DISABLE_EMBEDDER")
+        .or_else(|_| std::env::var("EMBEDDING_DISABLED"))
+        .map(|value| matches!(value.to_lowercase().as_str(), "1" | "true" | "yes"))
+        .unwrap_or(false);
+    let fixture_enabled = std::env::var("CCM_EMBEDDING_FIXTURE")
+        .ok()
+        .is_some_and(|value| !value.trim().is_empty());
+    let vector_table_required = fixture_enabled || !embedder_disabled;
+
+    if !graph_path.exists() || (vector_table_required && !vector_table_path.exists()) {
         info!(
-            "Graph not found at {}, performing full index",
-            graph_path.display()
+            graph = %graph_path.display(),
+            vector_table = %vector_table_path.display(),
+            "Index artifacts are incomplete. Performing full index."
         );
         return index_directory(path, db_path).await;
     }

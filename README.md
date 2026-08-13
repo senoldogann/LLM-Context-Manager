@@ -10,10 +10,9 @@ English | [Turkce](./README.tr.md)
 
 > Bridge the gap between your codebase and your AI editor. CCM transforms static source code into a dynamic, queryable Knowledge Graph, enabling AI agents to navigate, understand, and reason about your project with surgical precision.
 
-> **Current release: v0.3.4.** Patch on top of v0.3.3: the offline semantic
-> evaluation gate now scores all four synthetic query types (`search_code`,
-> `get_context`, `read_graph`, `predict_context`). Previously `predict_context`
-> was skipped, leaving the cross-repo gate incomplete.
+> **Current release: v0.3.6.** Rust crates, npm wrapper, GitHub assets and the
+> agent skill now ship as one versioned unit. This release also hardens partial
+> index recovery and aligns metadata-first MCP output with its published schema.
 
 [![Rust](https://img.shields.io/badge/Built%20With-Rust-orange.svg?style=flat-square&logo=rust)](https://www.rust-lang.org/)
 [![MCP Ready](https://img.shields.io/badge/MCP-Compatible-blue.svg?style=flat-square&logo=google-cloud)](https://modelcontextprotocol.io/)
@@ -113,7 +112,7 @@ If your editor is not auto-detected, use the manual MCP config printed by the in
 
 ### 🤖 Agent Skill
 
-CCM ships a [`SKILL.md`](SKILL.md) that AI agents (Claude Code, Copilot, Codex, Cursor) can load to understand all 9 MCP tools, node_id format, recommended flow, and common pitfalls — with zero guesswork.
+CCM ships a [`SKILL.md`](SKILL.md) in both the source repository and npm tarball. AI agents can load it to understand all 9 MCP tools, stable node IDs, recommended flow, and common pitfalls.
 
 Copy it into your agent's skill directory and it becomes a first-class tool reference:
 ```bash
@@ -221,7 +220,7 @@ ccm-cli index --path . --watch
 ccm-cli doctor --path .
 
 # Evaluate retrieval quality
-ccm-cli eval --tasks eval/golden_tasks.json
+ccm-cli eval --tasks eval/golden_tasks.v3.ccm.json
 ```
 
 ### MCP Tools
@@ -292,7 +291,7 @@ CCM includes a golden task evaluation framework:
 ccm-cli eval --tasks eval/golden_tasks.v3.ccm.json
 
 # Compare structural vs hybrid scoring
-ccm-cli eval --tasks eval/golden_tasks.json --compare
+ccm-cli eval --tasks eval/golden_tasks.v3.ccm.json --compare
 ```
 
 If the evaluation index is missing, CCM bootstraps it automatically before scoring.
