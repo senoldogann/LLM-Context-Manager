@@ -10,7 +10,7 @@ English | [Turkce](./README.tr.md)
 
 > Bridge the gap between your codebase and your AI editor. CCM transforms static source code into a dynamic, queryable Knowledge Graph, enabling AI agents to navigate, understand, and reason about your project with surgical precision.
 
-> **Current release: v0.3.6.** Rust crates, npm wrapper, GitHub assets and the
+> **Current release: v0.3.7.** Rust crates, npm wrapper, GitHub assets and the
 > agent skill now ship as one versioned unit. This release also hardens partial
 > index recovery and aligns metadata-first MCP output with its published schema.
 
@@ -240,6 +240,10 @@ ccm-cli eval --tasks eval/golden_tasks.v3.ccm.json
 ### Incremental indexing behavior
 
 The first `index` builds the complete index. Later `index_project` or `index --watch` runs compare the filesystem manifest and update only changed or newly created files while removing deleted-file nodes. The vector database is not rebuilt when nothing changed. Cross-file reference edges are refreshed from the in-memory semantic graph so callers remain accurate after a symbol changes.
+
+For large repositories, MCP `index_project` returns before the client's timeout
+and continues in the background. Call the tool again to poll until it returns
+the final indexing statistics.
 
 ---
 

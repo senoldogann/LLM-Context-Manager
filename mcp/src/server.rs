@@ -8,7 +8,7 @@ use tokio::sync::RwLock;
 
 use crate::protocol::{
     create_error_response, create_success_response, JsonRpcRequest, JsonRpcResponse,
-    ServerCapabilities, ServerInfo, ToolDefinition, ToolsCapability,
+    ResourcesCapability, ServerCapabilities, ServerInfo, ToolDefinition, ToolsCapability,
 };
 use crate::tools;
 
@@ -26,6 +26,12 @@ pub struct ServerState {
     pub engines: RwLock<EngineCache>,
     index_locks:
         std::sync::Mutex<std::collections::HashMap<String, std::sync::Arc<tokio::sync::Mutex<()>>>>,
+    pub(crate) index_jobs: std::sync::Mutex<
+        std::collections::HashMap<
+            String,
+            tokio::sync::watch::Receiver<Option<crate::protocol::ToolResult>>,
+        >,
+    >,
     default_project_root: Option<PathBuf>,
     allowed_roots: Vec<PathBuf>,
     require_allowed_roots: bool,
@@ -72,6 +78,29 @@ impl EngineCache {
 }
 
 impl ServerState {
+    pub(crate) fn project_index_lock(
+        &self,
+        project_path: &str,
+    ) -> std::sync::Arc<tokio::sync::Mutex<()>> {
+        let canonical_path = canonicalize_project_path(Path::new(project_path));
+        let cache_key = canonical_path.to_string_lossy().to_string();
+        let mut locks = self.index_locks.lock().unwrap();
+        locks
+            .entry(cache_key)
+            .or_insert_with(|| std::sync::Arc::new(tokio::sync::Mutex::new(())))
+            .clone()
+    }
+
+    pub(crate) fn index_job_in_progress(&self, project_path: &str) -> bool {
+        let canonical_path = canonicalize_project_path(Path::new(project_path));
+        let cache_key = canonical_path.to_string_lossy().to_string();
+        self.index_jobs
+            .lock()
+            .unwrap()
+            .get(&cache_key)
+            .is_some_and(|receiver| receiver.borrow().is_none())
+    }
+
     pub async fn new() -> Result<Self> {
         tracing::info!("Initializing CCM Core Engine for MCP...");
 
@@ -166,6 +195,7 @@ impl ServerState {
             default_engine: RwLock::new(default_engine),
             engines: RwLock::new(EngineCache::new(cache_size)),
             index_locks: std::sync::Mutex::new(std::collections::HashMap::new()),
+            index_jobs: std::sync::Mutex::new(std::collections::HashMap::new()),
             default_project_root,
             allowed_roots,
             require_allowed_roots,
@@ -190,6 +220,12 @@ impl ServerState {
         // Cache key normalize edilir; "/repo" ile "/repo/" ayrı entry oluşturmasın.
         let canonical_path = canonicalize_project_path(Path::new(path));
         let cache_key = canonical_path.to_string_lossy().to_string();
+
+        if self.index_job_in_progress(&cache_key) {
+            return Err(anyhow::anyhow!(
+                "Project indexing is in progress. Retry this tool after index_project reports completion."
+            ));
+        }
 
         // Check cache (write lock needed for LRU order update)
         {
@@ -226,13 +262,7 @@ impl ServerState {
             );
 
             // Aynı proje için eşzamanlı index çağrılarını serileştir (M6).
-            let lock = {
-                let mut locks = self.index_locks.lock().unwrap();
-                locks
-                    .entry(cache_key.clone())
-                    .or_insert_with(|| std::sync::Arc::new(tokio::sync::Mutex::new(())))
-                    .clone()
-            };
+            let lock = self.project_index_lock(&cache_key);
             let _guard = lock.lock().await;
 
             // Kilidi aldıktan sonra yeniden kontrol: başka bir çağrı index'i kurmuş olabilir.
@@ -405,7 +435,7 @@ fn normalize_path(path: &Path) -> PathBuf {
 /// Main request dispatcher.
 /// Returns Ok(Some(response)) for requests, Ok(None) for notifications.
 pub async fn handle_request(
-    state: &ServerState,
+    state: &Arc<ServerState>,
     raw_request: &str,
 ) -> Result<Option<JsonRpcResponse>> {
     let request: JsonRpcRequest = serde_json::from_str(raw_request)?;
@@ -425,6 +455,14 @@ pub async fn handle_request(
             }
         }
         "tools/list" => handle_list_tools(request.id).map(Some),
+        "resources/list" => Ok(Some(create_success_response(
+            request.id,
+            json!({ "resources": [] }),
+        ))),
+        "resources/templates/list" => Ok(Some(create_success_response(
+            request.id,
+            json!({ "resourceTemplates": [] }),
+        ))),
         "tools/call" => handle_call_tool(state, request.id, request.params)
             .await
             .map(Some),
@@ -448,6 +486,10 @@ fn handle_initialize(id: Option<Value>, params: Option<&Value>) -> Result<JsonRp
         "protocolVersion": negotiate_protocol_version(params),
         "capabilities": ServerCapabilities {
             tools: ToolsCapability { list_changed: false },
+            resources: ResourcesCapability {
+                subscribe: false,
+                list_changed: false,
+            },
         },
         "serverInfo": ServerInfo {
             name: "ccm-mcp".to_string(),
@@ -611,7 +653,7 @@ fn handle_list_tools(id: Option<Value>) -> Result<JsonRpcResponse> {
 }
 
 async fn handle_call_tool(
-    state: &ServerState,
+    state: &Arc<ServerState>,
     id: Option<Value>,
     params: Option<Value>,
 ) -> Result<JsonRpcResponse> {
@@ -645,7 +687,7 @@ async fn handle_call_tool(
             ));
         }
 
-        let result = tools::index_project(state, &arguments).await?;
+        let result = tools::index_project(state.clone(), &arguments).await?;
         return Ok(create_success_response(id, json!(result)));
     }
 

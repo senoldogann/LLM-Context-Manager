@@ -4,8 +4,8 @@
 
 **Node.js wrapper for Cognitive Codebase Matrix (CCM)** - Enables AI agents to understand and navigate your codebase with surgical precision.
 
-**v0.3.6** aligns the npm wrapper with the Rust binaries and GitHub release,
-ships the canonical `SKILL.md`, repairs incomplete vector indexes, and makes
+**v0.3.7** completes Codex MCP discovery compatibility, installs the canonical
+`SKILL.md`, repairs incomplete vector indexes, and makes
 metadata-first MCP body controls match the published tool schema.
 
 [![npm](https://img.shields.io/npm/v/@senoldogann/context-manager?color=orange)](https://www.npmjs.com/package/@senoldogann/context-manager)
@@ -79,6 +79,10 @@ The npm wrapper downloads pre-built binaries and passes commands through:
 | `npx @senoldogann/context-manager learn optimize --tasks <file>` | Optimize retrieval policy on train, gate on holdout |
 | `npx @senoldogann/context-manager learn report` | Print Baseline vs Learned report |
 | `npx @senoldogann/context-manager eval --policy <file>` | Evaluate with a specific retrieval policy |
+
+Large MCP `index_project` runs continue in the server after an early
+acknowledgement. Call `index_project` again to poll for completion instead of
+keeping one client request open until timeout.
 
 ### Supported Hosts
 
@@ -247,6 +251,10 @@ Enable `CCM_EMBED_DATA_FILES=1` to include them in semantic search.
 ---
 
 ## 📝 Changelog
+
+### v0.3.7
+- ✅ Codex discovery calls `resources/list` and `resources/templates/list` return valid empty lists
+- ✅ `install` updates the canonical agent `SKILL.md` together with MCP configuration
 
 ### v0.3.6
 - ✅ npm, Rust crates, GitHub tag and binary assets share one version

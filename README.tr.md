@@ -10,9 +10,9 @@
 
 > CCM, kod tabanınız ile yapay zeka editörünüz arasındaki boşluğu kapatır. Statik kaynak kodu dinamik ve sorgulanabilir bir bilgi grafına dönüştürür; böylece ajanlar projenizi daha doğru gezebilir, anlayabilir ve akıl yürütebilir.
 
-> **Güncel sürüm: v0.3.6.** Rust crate'leri, npm wrapper, GitHub asset'leri ve
-> agent skill artık tek sürüm altında yayınlanıyor. Bu sürüm ayrıca kısmi index
-> onarımını ve metadata-first MCP çıktı sözleşmesini sağlamlaştırıyor.
+> **Güncel sürüm: v0.3.7.** Codex MCP keşif çağrıları artık resources ve
+> resource templates için geçerli boş listeler döndürüyor. Kurucu ayrıca MCP
+> yapılandırmasıyla birlikte güncel agent skill dosyasını da yüklüyor.
 
 [![Rust](https://img.shields.io/badge/Built%20With-Rust-orange.svg?style=flat-square&logo=rust)](https://www.rust-lang.org/)
 [![MCP Ready](https://img.shields.io/badge/MCP-Compatible-blue.svg?style=flat-square&logo=google-cloud)](https://modelcontextprotocol.io/)
@@ -236,6 +236,10 @@ ccm-cli eval --tasks eval/golden_tasks.v3.ccm.json
 ### Arttirmali indexleme davranisi
 
 İlk `index` tüm projeyi indeksler. Sonraki `index_project` veya `index --watch` çalışmaları dosya manifestini karşılaştırır; yalnızca yeni ya da değişen dosyaları günceller ve silinen dosyaların node'larını kaldırır. Hiçbir şey değişmediyse vektör veritabanı baştan oluşturulmaz.
+
+Büyük repolarda MCP `index_project`, istemci zaman aşımından önce yanıt verir ve
+indeksleme arka planda sürer. Son indeksleme istatistikleri gelene kadar aynı
+aracı tekrar çağırarak durumu sorgulayabilirsiniz.
 
 ---
 

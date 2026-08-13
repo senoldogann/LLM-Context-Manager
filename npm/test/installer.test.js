@@ -10,6 +10,7 @@ const {
     MCP_ARGS,
     MCP_ENV,
     extractGzip,
+    installAgentSkill,
     installCodexTomlConfig,
     installJsonConfig,
     writeJsonAtomic
@@ -130,4 +131,23 @@ test('npm package ships the canonical agent skill', () => {
     const packagedSkill = fs.readFileSync(path.join(packageRoot, 'SKILL.md'), 'utf8');
     const canonicalSkill = fs.readFileSync(path.resolve(packageRoot, '..', 'SKILL.md'), 'utf8');
     assert.equal(packagedSkill, canonicalSkill);
+});
+
+test('installer writes the packaged agent skill atomically', () => {
+    const { directory } = tempConfig();
+    const sourcePath = path.join(directory, 'source-SKILL.md');
+    const expected = '# CCM skill\n\nCurrent contract.\n';
+    fs.writeFileSync(sourcePath, expected);
+
+    installAgentSkill(directory, sourcePath);
+
+    const installedPath = path.join(
+        directory,
+        '.agents',
+        'skills',
+        'context-manager',
+        'SKILL.md'
+    );
+    assert.equal(fs.readFileSync(installedPath, 'utf8'), expected);
+    assert.deepEqual(fs.readdirSync(path.dirname(installedPath)), ['SKILL.md']);
 });

@@ -86,7 +86,7 @@ fn hermetic_mcp_all_tools_e2e_on_synthetic_repo() {
     let stdout = child.stdout.take().unwrap();
     let mut reader = BufReader::new(stdout);
 
-    // 3. initialize + tools/list: 9 araç.
+    // 3. initialize + resource keşfi + tools/list: Codex akışı ve 9 araç.
     let resp = send(
         &mut stdin,
         &mut reader,
@@ -94,13 +94,33 @@ fn hermetic_mcp_all_tools_e2e_on_synthetic_repo() {
     );
     assert_no_error(&resp, "0 initialize");
     assert!(resp["result"]["protocolVersion"].as_str().is_some());
+    assert_eq!(
+        resp["result"]["capabilities"]["resources"],
+        json!({ "subscribe": false, "listChanged": false })
+    );
 
     let resp = send(
         &mut stdin,
         &mut reader,
-        json!({"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}),
+        json!({"jsonrpc":"2.0","id":1,"method":"resources/list","params":{}}),
     );
-    assert_no_error(&resp, "1 tools/list");
+    assert_no_error(&resp, "1 resources/list");
+    assert_eq!(resp["result"]["resources"], json!([]));
+
+    let resp = send(
+        &mut stdin,
+        &mut reader,
+        json!({"jsonrpc":"2.0","id":2,"method":"resources/templates/list","params":{}}),
+    );
+    assert_no_error(&resp, "2 resources/templates/list");
+    assert_eq!(resp["result"]["resourceTemplates"], json!([]));
+
+    let resp = send(
+        &mut stdin,
+        &mut reader,
+        json!({"jsonrpc":"2.0","id":3,"method":"tools/list","params":{}}),
+    );
+    assert_no_error(&resp, "3 tools/list");
     let tools: Vec<String> = resp["result"]["tools"]
         .as_array()
         .unwrap_or(&vec![])

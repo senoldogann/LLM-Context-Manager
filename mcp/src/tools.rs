@@ -413,13 +413,134 @@ fn normalize_relative_graph_path(path: &Path) -> Result<String> {
 
 /// Tool: index_project
 /// Manually triggers a re-index of the specified project.
-pub async fn index_project(state: &crate::server::ServerState, args: &Value) -> Result<ToolResult> {
+pub async fn index_project(
+    state: Arc<crate::server::ServerState>,
+    args: &Value,
+) -> Result<ToolResult> {
     let project_path = args
         .get("project_path")
         .and_then(|v| v.as_str())
         .ok_or_else(|| anyhow::anyhow!("Missing 'project_path' argument"))?;
 
+    let canonical_path = std::fs::canonicalize(project_path)
+        .unwrap_or_else(|_| std::path::PathBuf::from(project_path));
+    let job_key = canonical_path.to_string_lossy().to_string();
+
+    let existing = state.index_jobs.lock().unwrap().get(&job_key).cloned();
+    if let Some(receiver) = existing {
+        if let Some(result) = receiver.borrow().clone() {
+            state.index_jobs.lock().unwrap().remove(&job_key);
+            return Ok(result);
+        }
+        return Ok(index_in_progress_result(project_path));
+    }
+
     tracing::info!(path = %project_path, "Starting manual index");
+    let (sender, mut receiver) = tokio::sync::watch::channel(None);
+    state
+        .index_jobs
+        .lock()
+        .unwrap()
+        .insert(job_key.clone(), receiver.clone());
+
+    let job_state = state.clone();
+    let job_path = project_path.to_string();
+    tokio::spawn(async move {
+        let worker_state = job_state.clone();
+        let worker_path = job_path.clone();
+        let worker =
+            tokio::spawn(async move { run_index_project(&worker_state, &worker_path).await });
+        let result = match worker.await {
+            Ok(result) => result,
+            Err(error) => index_task_failed_result(&job_path, &error.to_string()),
+        };
+        let _ = sender.send(Some(result));
+    });
+
+    let timeout_ms = std::env::var("CCM_INDEX_RESPONSE_TIMEOUT_MS").ok();
+    let timeout_secs = std::env::var("CCM_INDEX_RESPONSE_TIMEOUT_SECS").ok();
+    let wait_duration = index_response_timeout(timeout_ms.as_deref(), timeout_secs.as_deref());
+
+    match tokio::time::timeout(wait_duration, receiver.changed()).await {
+        Ok(Ok(())) => {
+            if let Some(result) = receiver.borrow().clone() {
+                state.index_jobs.lock().unwrap().remove(&job_key);
+                return Ok(result);
+            }
+        }
+        Ok(Err(error)) => {
+            state.index_jobs.lock().unwrap().remove(&job_key);
+            return Ok(index_task_failed_result(project_path, &error.to_string()));
+        }
+        Err(_) => {}
+    }
+
+    Ok(index_started_result(project_path))
+}
+
+fn index_response_timeout(
+    timeout_ms: Option<&str>,
+    timeout_secs: Option<&str>,
+) -> std::time::Duration {
+    const DEFAULT_MILLIS: u64 = 30_000;
+    const MAX_MILLIS: u64 = 60_000;
+
+    let millis = timeout_ms
+        .and_then(|value| value.parse::<u64>().ok())
+        .filter(|value| *value > 0)
+        .or_else(|| {
+            timeout_secs
+                .and_then(|value| value.parse::<u64>().ok())
+                .filter(|value| *value > 0)
+                .map(|value| value.saturating_mul(1_000))
+        })
+        .unwrap_or(DEFAULT_MILLIS)
+        .min(MAX_MILLIS);
+    std::time::Duration::from_millis(millis)
+}
+
+fn index_started_result(project_path: &str) -> ToolResult {
+    ToolResult {
+        content: vec![ToolResultContent {
+            content_type: "text".to_string(),
+            text: format!(
+                "Project indexing started in the background for {}. Call index_project again to check status; other tools become available when indexing completes.",
+                project_path
+            ),
+        }],
+        is_error: None,
+    }
+}
+
+fn index_in_progress_result(project_path: &str) -> ToolResult {
+    ToolResult {
+        content: vec![ToolResultContent {
+            content_type: "text".to_string(),
+            text: format!(
+                "Project indexing is still in progress for {}. Call index_project again later to retrieve the final result.",
+                project_path
+            ),
+        }],
+        is_error: None,
+    }
+}
+
+fn index_task_failed_result(project_path: &str, detail: &str) -> ToolResult {
+    ToolResult {
+        content: vec![ToolResultContent {
+            content_type: "text".to_string(),
+            text: format!(
+                "Background indexing failed for {}: {}. Call index_project to retry.",
+                project_path, detail
+            ),
+        }],
+        is_error: Some(true),
+    }
+}
+
+async fn run_index_project(state: &crate::server::ServerState, project_path: &str) -> ToolResult {
+    let lock = state.project_index_lock(project_path);
+    let _guard = lock.lock().await;
 
     // Shared db path inside project
     let db_path = std::path::Path::new(project_path)
@@ -430,7 +551,18 @@ pub async fn index_project(state: &crate::server::ServerState, args: &Value) -> 
     match ccm_core::update_index(project_path, Some(&db_path)).await {
         Ok(stats) => {
             // Refresh both the explicit project cache and the default startup engine.
-            state.refresh_project_engine(project_path).await?;
+            if let Err(error) = state.refresh_project_engine(project_path).await {
+                return ToolResult {
+                    content: vec![ToolResultContent {
+                        content_type: "text".to_string(),
+                        text: format!(
+                            "Indexing completed but the engine refresh failed: {}",
+                            error
+                        ),
+                    }],
+                    is_error: Some(true),
+                };
+            }
 
             let message = if stats.files_indexed == 0
                 && stats.files_failed == 0
@@ -486,24 +618,24 @@ pub async fn index_project(state: &crate::server::ServerState, args: &Value) -> 
                 );
                 lines.join("\n")
             };
-            Ok(ToolResult {
+            ToolResult {
                 content: vec![ToolResultContent {
                     content_type: "text".to_string(),
                     text: message,
                 }],
                 is_error: None,
-            })
+            }
         }
         Err(e) => {
             let error_msg = format!("Indexing failed: {}", e);
             tracing::warn!(error = %e, "Indexing failed");
-            Ok(ToolResult {
+            ToolResult {
                 content: vec![ToolResultContent {
                     content_type: "text".to_string(),
                     text: error_msg,
                 }],
                 is_error: Some(true),
-            })
+            }
         }
     }
 }
@@ -711,7 +843,24 @@ pub async fn diff_context(engine: &Arc<RetrievalEngine>, args: &Value) -> Result
 
 #[cfg(test)]
 mod tests {
-    use super::{normalize_graph_node_id, normalize_graph_path};
+    use super::{index_response_timeout, normalize_graph_node_id, normalize_graph_path};
+    use std::time::Duration;
+
+    #[test]
+    fn index_response_timeout_is_capped_below_client_timeout() {
+        assert_eq!(
+            index_response_timeout(Some("999999"), None),
+            Duration::from_secs(60)
+        );
+        assert_eq!(
+            index_response_timeout(None, Some("999")),
+            Duration::from_secs(60)
+        );
+        assert_eq!(
+            index_response_timeout(Some("1"), Some("999")),
+            Duration::from_millis(1)
+        );
+    }
 
     #[test]
     fn relative_paths_get_graph_prefix() {

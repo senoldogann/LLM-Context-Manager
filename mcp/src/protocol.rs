@@ -48,10 +48,19 @@ pub struct ServerInfo {
 #[derive(Debug, Serialize)]
 pub struct ServerCapabilities {
     pub tools: ToolsCapability,
+    pub resources: ResourcesCapability,
 }
 
 #[derive(Debug, Serialize)]
 pub struct ToolsCapability {
+    #[serde(rename = "listChanged")]
+    pub list_changed: bool,
+}
+
+#[derive(Debug, Serialize)]
+pub struct ResourcesCapability {
+    #[serde(rename = "subscribe")]
+    pub subscribe: bool,
     #[serde(rename = "listChanged")]
     pub list_changed: bool,
 }
@@ -66,14 +75,14 @@ pub struct ToolDefinition {
 }
 
 /// MCP Tool Call Result
-#[derive(Debug, Serialize)]
+#[derive(Clone, Debug, Serialize)]
 pub struct ToolResult {
     pub content: Vec<ToolResultContent>,
     #[serde(rename = "isError", skip_serializing_if = "Option::is_none")]
     pub is_error: Option<bool>,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Clone, Debug, Serialize)]
 pub struct ToolResultContent {
     #[serde(rename = "type")]
     pub content_type: String,

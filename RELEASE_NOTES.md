@@ -1,5 +1,18 @@
 # Release Notes
 
+## v0.3.7 - Codex MCP Discovery Compatibility
+
+- `resources/list` artık Codex keşif akışı için geçerli boş `resources` listesi
+  döndürüyor.
+- `resources/templates/list` geçerli boş `resourceTemplates` listesi döndürüyor.
+- `initialize` yanıtı resources capability sözleşmesini açıkça ilan ediyor.
+- Hermetic MCP testi gerçek subprocess üzerinde Codex'in initialize, resources,
+  templates ve tools keşif sırasını doğruluyor.
+- npm `install` komutu MCP yapılandırmasıyla birlikte canonical `SKILL.md`
+  dosyasını `~/.agents/skills/context-manager/` altına atomik olarak yüklüyor.
+- Büyük repo `index_project` çağrıları istemci zaman aşımından önce yanıt verip
+  sunucuda arka planda devam ediyor; tekrar çağrı durum veya nihai sonucu dönüyor.
+
 ## v0.3.6 - Distribution and Contract Alignment
 
 - Rust crates, npm package, GitHub tag and binary download paths now use the

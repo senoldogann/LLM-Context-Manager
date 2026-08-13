@@ -2,6 +2,7 @@ use serde_json::json;
 use std::fs;
 use std::io::{BufRead, BufReader, Write};
 use std::process::{Command, Stdio};
+use std::time::{Duration, Instant};
 use tempfile::tempdir;
 
 fn send_request(
@@ -20,6 +21,101 @@ fn tool_text(response: &serde_json::Value) -> &str {
     response["result"]["content"][0]["text"]
         .as_str()
         .unwrap_or_default()
+}
+
+#[test]
+fn mcp_large_index_returns_before_client_timeout_and_supports_polling(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let dir = tempdir()?;
+    let project_root = dir.path();
+    fs::create_dir_all(project_root.join("src"))?;
+    for index in 0..300 {
+        fs::write(
+            project_root.join("src").join(format!("module_{index}.rs")),
+            format!("pub fn function_{index}() -> usize {{ {index} }}\n"),
+        )?;
+    }
+
+    let mut cmd = Command::new(assert_cmd::cargo::cargo_bin!("ccm-mcp"));
+    cmd.env("CCM_DISABLE_EMBEDDER", "1")
+        .env("CCM_MCP_DEBUG", "0")
+        .env("CCM_INDEX_RESPONSE_TIMEOUT_MS", "1")
+        .env("CCM_ALLOWED_ROOTS", project_root.to_string_lossy().as_ref())
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null());
+
+    let mut child = cmd.spawn()?;
+    let mut stdin = child.stdin.take().unwrap();
+    let stdout = child.stdout.take().unwrap();
+    let mut reader = BufReader::new(stdout);
+    let initialized = send_request(
+        &mut stdin,
+        &mut reader,
+        json!({"jsonrpc":"2.0","id":0,"method":"initialize","params":{}}),
+    )?;
+    assert!(initialized.get("result").is_some());
+
+    let request = json!({
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "tools/call",
+        "params": {
+            "name": "index_project",
+            "arguments": { "project_path": project_root }
+        }
+    });
+
+    let started_at = Instant::now();
+    let started = send_request(&mut stdin, &mut reader, request.clone())?;
+    assert!(
+        started_at.elapsed() < Duration::from_secs(5),
+        "background index acknowledgement exceeded five seconds"
+    );
+    assert!(tool_text(&started).contains("started in the background"));
+
+    let in_progress = send_request(&mut stdin, &mut reader, request.clone())?;
+    assert!(tool_text(&in_progress).contains("still in progress"));
+
+    let retrieval = send_request(
+        &mut stdin,
+        &mut reader,
+        json!({
+            "jsonrpc":"2.0",
+            "id":2,
+            "method":"tools/call",
+            "params":{
+                "name":"get_context",
+                "arguments":{
+                    "file":"src/module_0.rs",
+                    "line":1,
+                    "project_path":project_root
+                }
+            }
+        }),
+    )?;
+    assert_eq!(retrieval["error"]["code"], -32603);
+    assert!(retrieval["error"]["message"]
+        .as_str()
+        .unwrap_or_default()
+        .contains("Failed to load project context"));
+
+    let deadline = Instant::now() + Duration::from_secs(30);
+    loop {
+        std::thread::sleep(Duration::from_millis(100));
+        let response = send_request(&mut stdin, &mut reader, request.clone())?;
+        let text = tool_text(&response);
+        if text.contains("Project index refreshed successfully") {
+            break;
+        }
+        assert!(
+            Instant::now() < deadline,
+            "background index did not finish before deadline: {text}"
+        );
+    }
+
+    let _ = child.kill();
+    Ok(())
 }
 
 #[test]

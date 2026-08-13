@@ -1,5 +1,6 @@
 use anyhow::{Context, Result};
 use serde_json::Value;
+use std::sync::Arc;
 use tokio::io::{AsyncBufRead, AsyncBufReadExt, AsyncWriteExt, BufReader};
 
 mod protocol;
@@ -25,7 +26,7 @@ async fn main() -> Result<()> {
     let mut reader = BufReader::new(stdin);
 
     // Initialize the server state
-    let server_state = server::ServerState::new().await?;
+    let server_state = Arc::new(server::ServerState::new().await?);
 
     tracing::info!("CCM MCP Server started. Waiting for JSON-RPC messages on stdin...");
     let debug = std::env::var("CCM_MCP_DEBUG")

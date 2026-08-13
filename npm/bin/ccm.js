@@ -109,6 +109,8 @@ async function installMcp() {
         installedCount++;
     }
 
+    installAgentSkill(home, path.join(__dirname, '..', 'SKILL.md'));
+
     if (installedCount === 0) {
         console.log("[CCM] No supported MCP config directories found.");
         console.log("[CCM] Add this server manually:");
@@ -125,6 +127,18 @@ async function installMcp() {
     } else {
         console.log("[CCM] Installation complete! Restart your AI editor to see the changes.");
     }
+}
+
+function installAgentSkill(home, sourcePath) {
+    if (!fs.existsSync(sourcePath)) {
+        throw new Error(`Packaged SKILL.md is missing: ${sourcePath}`);
+    }
+
+    const skillDirectory = path.join(home, '.agents', 'skills', MCP_SERVER_NAME);
+    const skillPath = path.join(skillDirectory, 'SKILL.md');
+    fs.mkdirSync(skillDirectory, { recursive: true });
+    writeTextAtomic(skillPath, fs.readFileSync(sourcePath, 'utf8'));
+    console.log('[CCM] ✓ Successfully updated: ~/.agents/skills/context-manager/SKILL.md');
 }
 
 function installJsonConfig(configPath, mcpConfig) {
@@ -553,6 +567,7 @@ module.exports = {
     MCP_ARGS,
     MCP_ENV,
     extractGzip,
+    installAgentSkill,
     installCodexTomlConfig,
     installJsonConfig,
     parseChecksums,

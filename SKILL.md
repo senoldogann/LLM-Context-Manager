@@ -218,6 +218,10 @@ PASS TO next skill/task/plan
 ### 1. `index_project`
 Index or refresh the code graph for a project. Safe to call repeatedly — performs incremental updates.
 
+For large repositories, the call returns before the client timeout and indexing
+continues in the MCP server. Call `index_project` again to poll: it reports
+`still in progress` until the final indexing result is available.
+
 **Parameters**
 
 | Parameter | Type | Required | Notes |
@@ -607,7 +611,7 @@ Before considering a task complete:
 ## Source & References
 
 **Repository:** https://github.com/senoldogann/LLM-Context-Manager  
-**npm Package:** `@senoldogann/context-manager` (v0.3.6+)
+**npm Package:** `@senoldogann/context-manager` (v0.3.7+)
 **Built with:** Rust, Tree-sitter, LanceDB, Petgraph  
 **License:** MIT  
 
