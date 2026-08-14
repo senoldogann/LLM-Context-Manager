@@ -7,7 +7,11 @@ use serde_json::{json, Value};
 use std::io::{BufRead, BufReader, Write};
 use std::process::{Command, Stdio};
 
-const GUARDIAN_ROOT: &str = "/Users/dogan/Desktop/guardian";
+fn guardian_root() -> std::path::PathBuf {
+    std::env::var_os("CCM_GUARDIAN_ROOT")
+        .map(std::path::PathBuf::from)
+        .unwrap_or_else(|| std::path::PathBuf::from("/Users/dogan/Desktop/guardian"))
+}
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -51,15 +55,15 @@ fn assert_no_error(resp: &Value, step: &str) {
 fn guardian_mcp_all_tools_e2e() {
     // Guard: project must exist
     assert!(
-        std::path::Path::new(GUARDIAN_ROOT).exists(),
+        guardian_root().exists(),
         "Guardian project not found at {}",
-        GUARDIAN_ROOT
+        guardian_root().display()
     );
 
     println!("\n╔══════════════════════════════════════════════════════════╗");
     println!("║   Guardian MCP End-to-End Test  (real project)          ║");
     println!("╚══════════════════════════════════════════════════════════╝");
-    println!("  Project: {}", GUARDIAN_ROOT);
+    println!("  Project: {}", guardian_root().display());
 
     // -----------------------------------------------------------------------
     // Spawn MCP server
@@ -67,7 +71,7 @@ fn guardian_mcp_all_tools_e2e() {
     let mut child = Command::new(assert_cmd::cargo::cargo_bin!("ccm-mcp"))
         .env("CCM_DISABLE_EMBEDDER", "1") // no OpenAI key needed
         .env("CCM_MCP_DEBUG", "0")
-        .env("CCM_ALLOWED_ROOTS", GUARDIAN_ROOT)
+        .env("CCM_ALLOWED_ROOTS", guardian_root())
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::null()) // suppress tracing noise in test output
@@ -153,7 +157,7 @@ fn guardian_mcp_all_tools_e2e() {
             "method": "tools/call",
             "params": {
                 "name": "index_project",
-                "arguments": { "project_path": GUARDIAN_ROOT }
+                "arguments": { "project_path": guardian_root() }
             }
         }),
     );
@@ -180,7 +184,7 @@ fn guardian_mcp_all_tools_e2e() {
                 "name": "search_code",
                 "arguments": {
                     "query": "AI audit critique generation severity",
-                    "project_path": GUARDIAN_ROOT
+                    "project_path": guardian_root()
                 }
             }
         }),
@@ -219,7 +223,7 @@ fn guardian_mcp_all_tools_e2e() {
                 "arguments": {
                     "file": "src-tauri/src/ai_client.rs",
                     "line": 1,
-                    "project_path": GUARDIAN_ROOT
+                    "project_path": guardian_root()
                 }
             }
         }),
@@ -247,7 +251,7 @@ fn guardian_mcp_all_tools_e2e() {
                 "name": "find_nodes",
                 "arguments": {
                     "query": "AiClient",
-                    "project_path": GUARDIAN_ROOT
+                    "project_path": guardian_root()
                 }
             }
         }),
@@ -293,7 +297,7 @@ fn guardian_mcp_all_tools_e2e() {
                 "name": "read_graph",
                 "arguments": {
                     "node_id": &node_id,
-                    "project_path": GUARDIAN_ROOT
+                    "project_path": guardian_root()
                 }
             }
         }),
@@ -321,7 +325,7 @@ fn guardian_mcp_all_tools_e2e() {
                 "name": "find_usages",
                 "arguments": {
                     "node_id": &node_id,
-                    "project_path": GUARDIAN_ROOT
+                    "project_path": guardian_root()
                 }
             }
         }),
@@ -350,7 +354,7 @@ fn guardian_mcp_all_tools_e2e() {
                 "arguments": {
                     "from_id": "./src-tauri/src/triage.rs::TriageResult",
                     "to_id":   "./src-tauri/src/context.rs::ProjectContext",
-                    "project_path": GUARDIAN_ROOT
+                    "project_path": guardian_root()
                 }
             }
         }),
@@ -374,7 +378,7 @@ fn guardian_mcp_all_tools_e2e() {
                 "name": "impact_of_change",
                 "arguments": {
                     "file": "src-tauri/src/ai_client.rs",
-                    "project_path": GUARDIAN_ROOT
+                    "project_path": guardian_root()
                 }
             }
         }),
@@ -407,7 +411,7 @@ fn guardian_mcp_all_tools_e2e() {
             "params": {
                 "name": "diff_context",
                 "arguments": {
-                    "project_path": GUARDIAN_ROOT,
+                    "project_path": guardian_root(),
                     "days": 30
                 }
             }
@@ -443,7 +447,7 @@ fn guardian_mcp_all_tools_e2e() {
             "method": "tools/call",
             "params": {
                 "name": "index_project",
-                "arguments": { "project_path": GUARDIAN_ROOT }
+                "arguments": { "project_path": guardian_root() }
             }
         }),
     );

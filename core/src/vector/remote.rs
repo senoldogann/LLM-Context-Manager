@@ -18,6 +18,7 @@ pub struct RemoteEmbedder {
     base_url: String,
     provider: Provider,
     timeout: Duration,
+    max_embed_chars: usize,
 }
 
 impl RemoteEmbedder {
@@ -35,6 +36,11 @@ impl RemoteEmbedder {
             .unwrap_or(30);
         let timeout = Duration::from_secs(timeout_secs);
         let client = build_http_client(timeout)?;
+        let max_embed_chars: usize = env::var("CCM_MAX_EMBED_CHARS")
+            .ok()
+            .and_then(|val| val.parse::<usize>().ok())
+            .filter(|val| *val > 0)
+            .unwrap_or(6000);
 
         Ok(Self {
             client,
@@ -43,6 +49,7 @@ impl RemoteEmbedder {
             base_url,
             provider,
             timeout,
+            max_embed_chars,
         })
     }
 
@@ -217,9 +224,9 @@ impl RemoteEmbedder {
                         .json(&json!({
                             "model": self.model,
                             "input": texts.iter().map(|t| {
-                                if t.len() > 6000 {
+                                if t.len() > self.max_embed_chars {
                                     // Safe char boundary truncation
-                                    t.chars().take(6000).collect::<String>()
+                                    t.chars().take(self.max_embed_chars).collect::<String>()
                                 } else {
                                     t.clone()
                                 }

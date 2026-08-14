@@ -477,7 +477,14 @@ async fn build_index_generation(
             }
             None => {
                 let error = outcome.populate_error.expect("populate error");
-                if !matches!(detect_language(&outcome.file_path), SupportedLanguage::Data) {
+                // Belirlenimci içerik hataları (çok büyük dosya, binary NUL)
+                // dosyanın kalıcı olarak indekslenemez olduğunu gösterir; tek
+                // dosya TÜM full index'i bloke etmemelidir (diğer dosyalar için
+                // tam index geçerlidir). Geri kalan hatalar (non-UTF8, parse,
+                // geçici IO) v0.3.8 güvencesiyle active index'i korur.
+                if !matches!(detect_language(&outcome.file_path), SupportedLanguage::Data)
+                    && !populate_error_is_unindexable_content(&error)
+                {
                     fatal_supported_failures += 1;
                 }
                 let issue = issue_from_populate_error(&outcome.file_id, error);
@@ -1247,6 +1254,21 @@ enum PopulateFileError {
     Read(FileReadError),
     Parse(anyhow::Error),
     Extract(anyhow::Error),
+}
+
+/// Belirlenimci biçimde indekslenemez içerik hatası mı?
+///
+/// `TooLarge` (dosya her zaman sınırın üstünde) ve `BinaryNul` (gerçek binary
+/// dosya) dosyanın kalıcı olarak indekslenemez olduğunu söyler; bu dosyalar
+/// atlanıp uyarı kaydedilir ve full index diğer dosyalarla tamamlanır. Buna
+/// karşılık non-UTF8 / parse / geçici IO hataları ya editörün yarım yazması
+/// (transient) ya da gerçek bir sorun olabilir; v0.3.8 güvencesi gereği bu
+/// durumlarda aktif index korunur.
+fn populate_error_is_unindexable_content(error: &PopulateFileError) -> bool {
+    matches!(
+        error,
+        PopulateFileError::Read(FileReadError::TooLarge { .. } | FileReadError::BinaryNul { .. })
+    )
 }
 
 impl std::fmt::Display for PopulateFileError {

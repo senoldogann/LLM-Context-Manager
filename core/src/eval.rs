@@ -691,15 +691,21 @@ pub async fn evaluate_policy(
             policy_version: Some(policy.version),
         };
 
-        let artifacts = match ensure_eval_index(&repo_path, true, &mut prepared_repos).await {
-            Ok(artifacts) => artifacts,
-            Err(error) => {
-                result.detail = format!("Failed to prepare index: {}", error);
-                totals.skipped += 1;
-                results.push(result);
-                continue;
-            }
-        };
+        // Yalnız search_code görevleri vektör tablosu gerektirir; structural
+        // görevler (get_context/read_graph/predict_context) grafikle çalışır.
+        // Embedder kapalı ortamlarda (CI/taze checkout) structural ikincil
+        // korpus boşuna "Missing vector table" ile skip edilmemeli.
+        let require_vector_table = task.query.kind == "search_code";
+        let artifacts =
+            match ensure_eval_index(&repo_path, require_vector_table, &mut prepared_repos).await {
+                Ok(artifacts) => artifacts,
+                Err(error) => {
+                    result.detail = format!("Failed to prepare index: {}", error);
+                    totals.skipped += 1;
+                    results.push(result);
+                    continue;
+                }
+            };
         let db_path = artifacts.db_path;
         let graph_path = artifacts.graph_path;
 

@@ -381,6 +381,43 @@ async fn full_rebuild_invalid_supported_source_preserves_active_generation() -> 
 }
 
 #[tokio::test]
+async fn full_rebuild_skips_oversized_supported_file_instead_of_aborting() -> Result<()> {
+    let _env_guard = ENV_LOCK.lock().await;
+    std::env::set_var("CCM_DISABLE_EMBEDDER", "1");
+    let project = tempdir()?;
+    std::fs::write(project.path().join("main.rs"), "fn alpha() {}\n")?;
+    // 2MB üstü tek bir kaynak dosyası full index'i TÜMÜYLE iptal etmemeli;
+    // deterministik TooLarge dosyaları atlanıp uyarı kaydedilir.
+    let oversized = project.path().join("generated_bundle.rs");
+    let mut content = String::from("// generated bundle\n");
+    content.push_str(&"// padding line\n".repeat(140_000));
+    assert!(content.len() > 2 * 1024 * 1024);
+    std::fs::write(&oversized, content)?;
+
+    let stats = ccm_core::index_directory(project.path().to_string_lossy().as_ref(), None).await?;
+    assert_eq!(
+        stats.files_indexed, 1,
+        "oversized dosya atlanmalı, main.rs indexlenmeli"
+    );
+    assert_eq!(stats.files_failed, 1);
+    assert!(
+        stats
+            .failed_files
+            .iter()
+            .any(|issue| issue.path.contains("generated_bundle.rs")),
+        "TooLarge dosyası uyarı olarak kaydedilmeli"
+    );
+
+    let artifacts = artifacts(project.path(), None)?;
+    let graph = CodeGraph::from_file(artifacts.graph_path.to_string_lossy().as_ref())?;
+    assert!(
+        graph.graph.node_weights().any(|node| node.name == "alpha"),
+        "main.rs node'ları index'te olmalı"
+    );
+    Ok(())
+}
+
+#[tokio::test]
 async fn empty_semantic_corpus_is_stable_without_a_vector_table() -> Result<()> {
     let _env_guard = ENV_LOCK.lock().await;
     let project = tempdir()?;

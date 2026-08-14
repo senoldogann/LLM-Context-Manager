@@ -473,7 +473,9 @@ impl RetrievalEngine {
                 node_type: None,
                 title,
                 content,
-                relevance_score: 1.0 - score, // Rough normalization
+                // Graf üzerinde bulunamayan hit'ler de aynı ölçeği kullanır
+                // (1/(1+dist)); aksi halde iki normalizasyon karşılaştırılamaz.
+                relevance_score: HybridScorer::semantic_score(score),
                 reason: format!("Vector Similarity (Dist: {:.4})", score),
             });
         }
@@ -781,25 +783,27 @@ impl RetrievalEngine {
             return Vec::new();
         };
 
-        // BFS: parent-pointer tabanlı (path clone'u yok → bellek patlaması önlenir).
-        // Bulunan yoldaki her düğüm için parent haritada tutulur, sonunda geri çözülür.
-        let mut queue: VecDeque<petgraph::graph::NodeIndex> = VecDeque::new();
+        // BFS: parent-pointer tabanlı (path clone'u yok → bellek patlaması
+        // önlenir). Kuyrukta her düğümle birlikte gerçek BFS derinliği taşınır;
+        // max_depth bir "keşfedilen node bütçesi" değil, adım sınırıdır. Geniş
+        // çağrı grafiklerinde bütçe erken dolup derin zincirlerin kaçmaması için.
+        let mut queue: VecDeque<(petgraph::graph::NodeIndex, usize)> = VecDeque::new();
         let mut visited = std::collections::HashSet::new();
         let mut parent: std::collections::HashMap<
             petgraph::graph::NodeIndex,
             petgraph::graph::NodeIndex,
         > = std::collections::HashMap::new();
-        queue.push_back(from_idx);
+        queue.push_back((from_idx, 0));
         visited.insert(from_idx);
 
         let mut found: Option<petgraph::graph::NodeIndex> = None;
-        while let Some(current) = queue.pop_front() {
+        while let Some((current, depth)) = queue.pop_front() {
             if current == to_idx {
                 found = Some(current);
                 break;
             }
 
-            if parent.len() >= max_depth && current != from_idx {
+            if depth >= max_depth {
                 continue;
             }
 
@@ -816,7 +820,7 @@ impl RetrievalEngine {
                     let neighbor = edge.target();
                     if visited.insert(neighbor) {
                         parent.insert(neighbor, current);
-                        queue.push_back(neighbor);
+                        queue.push_back((neighbor, depth + 1));
                     }
                 }
             }
@@ -1694,6 +1698,80 @@ mod retrieval_regression_tests {
 
         std::env::remove_var("CCM_TRAJECTORY_LOG");
         std::env::remove_var("CCM_TRAJECTORY_PATH");
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn trace_call_chain_max_depth_counts_hops_not_discovered_nodes() -> anyhow::Result<()> {
+        let directory = tempfile::tempdir()?;
+        std::env::set_var("CCM_DISABLE_EMBEDDER", "1");
+
+        let mut graph = CodeGraph::new();
+        let mut ids: Vec<String> = Vec::new();
+        for index in 0..5 {
+            let id = format!("./src/chain.rs:function_item:symbol:{:016x}:0", index + 1);
+            graph.add_node(CodeNode {
+                id: id.clone(),
+                node_type: NodeType::Function,
+                name: format!("func_{}", index),
+                content: format!("fn func_{}() {{ func_{}() }}", index, index + 1).into(),
+                start_line: index + 1,
+                end_line: index + 1,
+            });
+            ids.push(id);
+        }
+        // Geniş kardeş kümesi: eski uygulamada parent.len() bütçesini erken
+        // doldurup derin zinciri kaçırırdı. a -> wide_i (30 adet).
+        let mut wide_ids: Vec<String> = Vec::new();
+        for index in 0..30 {
+            let id = format!("./src/chain.rs:function_item:symbol:{:016x}:0", 100 + index);
+            graph.add_node(CodeNode {
+                id: id.clone(),
+                node_type: NodeType::Function,
+                name: format!("wide_{}", index),
+                content: "fn wide() {}".into(),
+                start_line: 200 + index,
+                end_line: 200 + index,
+            });
+            wide_ids.push(id);
+        }
+
+        let a = graph.find_node_index_by_id(&ids[0]).unwrap();
+        let b = graph.find_node_index_by_id(&ids[1]).unwrap();
+        let c = graph.find_node_index_by_id(&ids[2]).unwrap();
+        let d = graph.find_node_index_by_id(&ids[3]).unwrap();
+        let e = graph.find_node_index_by_id(&ids[4]).unwrap();
+        graph.add_edge(a, b, crate::graph::EdgeType::Calls);
+        graph.add_edge(b, c, crate::graph::EdgeType::Calls);
+        graph.add_edge(c, d, crate::graph::EdgeType::Calls);
+        graph.add_edge(d, e, crate::graph::EdgeType::Calls);
+        for wide in wide_ids.iter() {
+            let wide_idx = graph.find_node_index_by_id(wide).unwrap();
+            graph.add_edge(a, wide_idx, crate::graph::EdgeType::Calls);
+        }
+
+        let store = LanceDbStore::new(
+            directory.path().join("db").to_string_lossy().as_ref(),
+            "code_vectors",
+        )
+        .await?;
+        let engine = RetrievalEngine::new(Arc::new(RwLock::new(graph)), store);
+
+        // max_depth=4: a->b->c->d->e tam 4 hop'tur ve bulunmalıdır.
+        let results = engine.trace_call_chain(&ids[0], &ids[4], 4).await;
+        assert_eq!(results.len(), 5, "4 hop'luk zincir 5 node ile bulunmalı");
+        assert!(
+            results
+                .iter()
+                .any(|suggestion| suggestion.title.contains("func_4")),
+            "zincirin son düğümü (func_4) sonuçta olmalı"
+        );
+
+        // max_depth=2: a->b->c'ye ulaşır, e'ye değil.
+        let shallow = engine.trace_call_chain(&ids[0], &ids[4], 2).await;
+        assert!(shallow.is_empty(), "2 hop sınırı e'ye ulaşmamalı");
+
+        std::env::remove_var("CCM_DISABLE_EMBEDDER");
         Ok(())
     }
 }

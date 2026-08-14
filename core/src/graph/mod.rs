@@ -367,7 +367,14 @@ impl CodeGraph {
                 // deterministik olarak seçilir.
                 None => node_row,
             };
-            if dist < best_dist && dist <= 200 {
+            // 200 satırlık tolerans yalnızca legacy id'lerin satır kayması için
+            // geçerlidir; stable id'lerde hedef satır bilinmez ve dosyanın her
+            // satırındaki node aday olabilir (ilk 200 satır kısıtlaması yanlıştı).
+            let within_limit = match target_row {
+                Some(_) => dist <= 200,
+                None => true,
+            };
+            if dist < best_dist && within_limit {
                 best_dist = dist;
                 best = Some(node);
             }
@@ -782,6 +789,28 @@ mod tests {
             .find_node_in_file("./f.rs", 4)
             .expect("node for line 4");
         assert_eq!(found, inner_idx);
+    }
+
+    #[test]
+    fn stable_id_fuzzy_resolves_nodes_beyond_line_200() {
+        let mut graph = CodeGraph::new();
+        // 201. satırdaki bir fonksiyonun stable id'si hash değişse bile fuzzy
+        // çözüm dosyanın ilk 200 satırıyla sınırlı kalmamalı.
+        graph.add_node(CodeNode {
+            id: "./src/tall.rs:function_item:symbol:aaaa000000000001:0".to_string(),
+            node_type: NodeType::Function,
+            name: "deep_function".to_string(),
+            content: "fn deep_function() {}".into(),
+            start_line: 201,
+            end_line: 205,
+        });
+        let found =
+            graph.find_node_fuzzy_by_id("./src/tall.rs:function_item:symbol:bbbb000000000001:0");
+        assert!(
+            found.is_some(),
+            "201. satırdaki node stable-id farkıyla çözülebilmeli"
+        );
+        assert_eq!(found.unwrap().name, "deep_function");
     }
 
     #[test]
