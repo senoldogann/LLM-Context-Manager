@@ -37,9 +37,10 @@ Trigger phrases: "understand the codebase", "find usages of", "what calls X", "w
 - User says "just give me the file" without needing cross-file reasoning
 
 <HARD-GATE>
-Use `index_project` when you need an explicit refresh or index statistics. Other
-tools may lazily create a missing index on first use, but they still require an
-allowed `project_path` and may take longer on that first call.
+Call `index_project` before retrieval when the project has not been indexed in
+the current workspace or when source files changed. Retrieval tools never build
+a missing index implicitly; they return an actionable error while an index is
+missing or being updated.
 </HARD-GATE>
 
 ## Execution Boundaries
@@ -238,7 +239,7 @@ continues in the MCP server. Call `index_project` again to poll: it reports
 }
 ```
 
-**When:** Call for an explicit refresh, after editing files, or when you need index statistics. A missing index can also be created lazily by the first retrieval call.
+**When:** Call before the first retrieval, after editing files, or when you need index statistics. A missing index must be created explicitly with this tool.
 
 ---
 
@@ -522,7 +523,7 @@ Always use node_ids **exactly as returned** by tools. Do not guess or construct 
 
 | Anti-Pattern | Risk | Solution |
 |--------------|------|----------|
-| **Assuming the first query is cheap** | Lazy indexing can make it slow | Call `index_project` first when explicit progress or timing matters |
+| **Querying before indexing** | Retrieval fails because no healthy index exists | Call `index_project` and poll until it returns final statistics |
 | **Mixing absolute + relative paths** | Tool returns "path outside project root" | Use ONLY relative paths (`core/src/lib.rs`, never `/Users/.../core/src/lib.rs`) |
 | **Manually constructing node_ids** | Wrong format breaks downstream tools | Use `find_nodes` output; NEVER guess the node_id format |
 | **Low `max_depth` in trace_call_chain** | Misses the actual path between functions | Default is 8; increase to 10–15 for deeper chains |
@@ -611,7 +612,7 @@ Before considering a task complete:
 ## Source & References
 
 **Repository:** https://github.com/senoldogann/LLM-Context-Manager  
-**npm Package:** `@senoldogann/context-manager` (v0.3.7+)
+**npm Package:** `@senoldogann/context-manager` (v0.3.8+)
 **Built with:** Rust, Tree-sitter, LanceDB, Petgraph  
 **License:** MIT  
 

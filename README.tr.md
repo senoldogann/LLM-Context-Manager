@@ -10,9 +10,10 @@
 
 > CCM, kod tabanınız ile yapay zeka editörünüz arasındaki boşluğu kapatır. Statik kaynak kodu dinamik ve sorgulanabilir bir bilgi grafına dönüştürür; böylece ajanlar projenizi daha doğru gezebilir, anlayabilir ve akıl yürütebilir.
 
-> **Güncel sürüm: v0.3.7.** Codex MCP keşif çağrıları artık resources ve
-> resource templates için geçerli boş listeler döndürüyor. Kurucu ayrıca MCP
-> yapılandırmasıyla birlikte güncel agent skill dosyasını da yüklüyor.
+> **Güncel sürüm: v0.3.8.** İndeks güncellemeleri, yenisi tamamen hazır olana
+> kadar son sağlıklı graf ve vektör neslini korur. MCP protokolü, arka plan
+> indeksleme ve npm binary kurulumu gerçek editör ve büyük repo akışları için
+> sağlamlaştırıldı.
 
 [![Rust](https://img.shields.io/badge/Built%20With-Rust-orange.svg?style=flat-square&logo=rust)](https://www.rust-lang.org/)
 [![MCP Ready](https://img.shields.io/badge/MCP-Compatible-blue.svg?style=flat-square&logo=google-cloud)](https://modelcontextprotocol.io/)
@@ -64,7 +65,7 @@ CCM, ham kod yiginlari vermek yerine **AI-Optimized Context** uretir:
 
 ### Evrensel MCP Uyumlulugu
 - **Tak ve Calistir** - Installer, Codex, Cursor, Claude Desktop ve Antigravity ayarlarini yapar
-- **Lazy Indexing** - Ilk sorguda eksik index'i otomatik olusturur
+- **Acik Indeksleme** - Eksik indeks hizli hata verir ve `index_project` aracina yonlendirir
 - **Dusuk Konfigurasyon** - Proje koku otomatik tespit edilir
 
 ---
@@ -235,11 +236,16 @@ ccm-cli eval --tasks eval/golden_tasks.v3.ccm.json
 
 ### Arttirmali indexleme davranisi
 
-İlk `index` tüm projeyi indeksler. Sonraki `index_project` veya `index --watch` çalışmaları dosya manifestini karşılaştırır; yalnızca yeni ya da değişen dosyaları günceller ve silinen dosyaların node'larını kaldırır. Hiçbir şey değişmediyse vektör veritabanı baştan oluşturulmaz.
+İlk `index` tüm projeyi indeksler. Sonraki `index_project` veya `index --watch` çalışmaları dosya manifestini karşılaştırır; yalnızca yeni ya da değişen dosyaları günceller ve silinen dosyaların node'larını kaldırır. Hiçbir şey değişmediyse vektör veritabanı baştan oluşturulmaz. İndeks eksikse veya güncelleniyorsa retrieval araçları hızlı hata verir; arama çağrısını gizli bir yeniden oluşturma işlemi için bekletmek yerine `index_project` açıkça çağrılır.
 
 Büyük repolarda MCP `index_project`, istemci zaman aşımından önce yanıt verir ve
 indeksleme arka planda sürer. Son indeksleme istatistikleri gelene kadar aynı
 aracı tekrar çağırarak durumu sorgulayabilirsiniz.
+
+Tam yeniden oluşturma önce staging neslinde hazırlanır. Tarama, ayrıştırma,
+embedding veya vektör yazma hatası önceki graf, manifest ve vektör tablosunu
+yerinde bırakır. Dosya parmak izleri içeriği de kapsadığı için boyutu aynı kalan
+ve zaman damgası korunmuş değişiklikler algılanır.
 
 ---
 

@@ -20,6 +20,10 @@ async fn main() -> Result<()> {
         .with_writer(std::io::stderr)
         .init();
 
+    if run_internal_index_worker().await? {
+        return Ok(());
+    }
+
     // MCP uses stdio for communication
     let stdin = tokio::io::stdin();
     let mut stdout = tokio::io::stdout();
@@ -34,8 +38,16 @@ async fn main() -> Result<()> {
         .unwrap_or(false);
 
     loop {
-        let Some(line) = read_jsonrpc_message(&mut reader, MAX_REQUEST_BYTES).await? else {
-            break;
+        let line = match read_jsonrpc_message(&mut reader, MAX_REQUEST_BYTES).await {
+            Ok(Some(line)) => line,
+            Ok(None) => break,
+            Err(error) if is_recoverable_message_error(&error) => {
+                tracing::warn!(error = %error, "Rejected invalid JSON-RPC frame");
+                let response = protocol::create_error_response(None, -32700, "Parse error");
+                write_response(&mut stdout, &response).await?;
+                continue;
+            }
+            Err(error) => return Err(error),
         };
         let trimmed = line.trim();
         if trimmed.is_empty() {
@@ -55,9 +67,7 @@ async fn main() -> Result<()> {
                 if debug {
                     tracing::debug!(payload = %sanitize_payload(&response_str), "Sending JSON-RPC response");
                 }
-                stdout.write_all(response_str.as_bytes()).await?;
-                stdout.write_all(b"\n").await?;
-                stdout.flush().await?;
+                write_response(&mut stdout, &response).await?;
             }
             Ok(None) => {
                 // Notification - no response needed
@@ -67,37 +77,63 @@ async fn main() -> Result<()> {
             }
             Err(e) => {
                 tracing::error!(error = %e, "Error processing request");
-                // JSON-RPC 2.0: hata yanıtı istek id'sini korumalıdır; id parse
-                // edilemiyorsa (örn. batch) null kullanılır. -32602 invalid params,
-                // -32603 internal error ayrımı yapılır.
-                let request_id = serde_json::from_str::<serde_json::Value>(trimmed)
-                    .ok()
-                    .and_then(|value| value.get("id").cloned());
-                let code = if e.to_string().contains("Missing")
-                    || e.to_string().contains("invalid")
-                    || e.to_string().contains("Invalid")
-                {
-                    -32602
+                let parsed = serde_json::from_str::<serde_json::Value>(trimmed);
+                let (request_id, code, message) = if let Ok(value) = parsed {
+                    let request_id = value.get("id").cloned();
+                    (request_id, -32603, e.to_string())
                 } else {
-                    -32603
+                    (None, -32700, "Parse error".to_string())
                 };
-                let error_response = protocol::create_error_response(
-                    request_id,
-                    code,
-                    if code == -32602 {
-                        "Invalid params"
-                    } else {
-                        "Internal error"
-                    },
-                );
-                let response_str = serde_json::to_string(&error_response)?;
-                stdout.write_all(response_str.as_bytes()).await?;
-                stdout.write_all(b"\n").await?;
-                stdout.flush().await?;
+                let error_response = protocol::create_error_response(request_id, code, &message);
+                write_response(&mut stdout, &error_response).await?;
             }
         }
     }
 
+    Ok(())
+}
+
+async fn run_internal_index_worker() -> Result<bool> {
+    const INTERNAL_COMMAND: &str = "--ccm-internal-index-worker";
+    let mut args = std::env::args().skip(1);
+    if args.next().as_deref() != Some(INTERNAL_COMMAND) {
+        return Ok(false);
+    }
+    if std::env::var("CCM_INTERNAL_INDEX_WORKER").as_deref() != Ok("1") {
+        anyhow::bail!("Internal index worker mode requires CCM_INTERNAL_INDEX_WORKER=1");
+    }
+    let project_path = args
+        .next()
+        .context("Internal worker project path is missing")?;
+    let db_path = args.next().context("Internal worker DB path is missing")?;
+    if args.next().is_some() {
+        anyhow::bail!("Internal index worker received unexpected arguments");
+    }
+    if let Ok(delay) = std::env::var("CCM_INTERNAL_INDEX_TEST_DELAY_MS") {
+        let delay_ms = delay
+            .parse::<u64>()
+            .context("CCM_INTERNAL_INDEX_TEST_DELAY_MS must be an integer")?;
+        tokio::time::sleep(std::time::Duration::from_millis(delay_ms)).await;
+    }
+    let stats = ccm_core::update_index(&project_path, Some(&db_path)).await?;
+    println!("{}", serde_json::to_string(&stats)?);
+    Ok(true)
+}
+
+fn is_recoverable_message_error(error: &anyhow::Error) -> bool {
+    let message = error.to_string();
+    message.starts_with("JSON-RPC request exceeds")
+        || message.starts_with("JSON-RPC request is not valid UTF-8")
+}
+
+async fn write_response<W>(writer: &mut W, response: &protocol::JsonRpcResponse) -> Result<()>
+where
+    W: tokio::io::AsyncWrite + Unpin,
+{
+    let response_str = serde_json::to_string(response)?;
+    writer.write_all(response_str.as_bytes()).await?;
+    writer.write_all(b"\n").await?;
+    writer.flush().await?;
     Ok(())
 }
 

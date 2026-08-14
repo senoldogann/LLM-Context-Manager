@@ -26,15 +26,18 @@ pub struct ServerState {
     pub engines: RwLock<EngineCache>,
     index_locks:
         std::sync::Mutex<std::collections::HashMap<String, std::sync::Arc<tokio::sync::Mutex<()>>>>,
-    pub(crate) index_jobs: std::sync::Mutex<
-        std::collections::HashMap<
-            String,
-            tokio::sync::watch::Receiver<Option<crate::protocol::ToolResult>>,
-        >,
-    >,
+    pub(crate) index_jobs: std::sync::Mutex<std::collections::HashMap<String, IndexJob>>,
+    pub(crate) next_index_job_id: std::sync::atomic::AtomicU64,
     default_project_root: Option<PathBuf>,
+    default_db_path: PathBuf,
     allowed_roots: Vec<PathBuf>,
     require_allowed_roots: bool,
+}
+
+#[derive(Clone)]
+pub(crate) struct IndexJob {
+    pub id: u64,
+    pub receiver: tokio::sync::watch::Receiver<Option<crate::protocol::ToolResult>>,
 }
 
 const DEFAULT_ENGINE_CACHE_SIZE: usize = 8;
@@ -98,7 +101,38 @@ impl ServerState {
             .lock()
             .unwrap()
             .get(&cache_key)
-            .is_some_and(|receiver| receiver.borrow().is_none())
+            .is_some_and(|job| job.receiver.borrow().is_none())
+    }
+
+    pub(crate) fn remove_index_job_if_id(&self, job_key: &str, job_id: u64) {
+        let mut jobs = self.index_jobs.lock().unwrap();
+        if jobs.get(job_key).is_some_and(|job| job.id == job_id) {
+            jobs.remove(job_key);
+        }
+    }
+
+    pub(crate) fn release_index_lock(&self, job_key: &str) {
+        self.index_locks.lock().unwrap().remove(job_key);
+    }
+
+    pub(crate) fn project_db_path(&self, project_path: &str) -> PathBuf {
+        let canonical_path = canonicalize_project_path(Path::new(project_path));
+        if self
+            .default_project_root
+            .as_ref()
+            .is_some_and(|root| canonical_path == *root)
+        {
+            return self.default_db_path.clone();
+        }
+        canonical_path.join("data/ccm_db")
+    }
+
+    fn project_artifacts(&self, project_path: &str) -> Result<ccm_core::IndexArtifactPaths> {
+        let requested_db = self.project_db_path(project_path);
+        ccm_core::resolve_index_artifacts(
+            project_path,
+            Some(requested_db.to_string_lossy().as_ref()),
+        )
     }
 
     pub async fn new() -> Result<Self> {
@@ -150,7 +184,38 @@ impl ServerState {
         }
 
         // Initialize Graph (Load from disk if available)
-        let graph_path = format!("{}/../ccm_graph.json", db_path); // db_path is data/ccm_db, so json is data/ccm_graph.json
+        let default_db_path = PathBuf::from(&db_path);
+        let default_artifact_parent = default_db_path
+            .parent()
+            .map(Path::to_path_buf)
+            .unwrap_or_else(|| PathBuf::from("."));
+        let default_artifacts = match &default_project_root {
+            Some(root) => match ccm_core::resolve_index_artifacts(
+                root.to_string_lossy().as_ref(),
+                Some(default_db_path.to_string_lossy().as_ref()),
+            ) {
+                Ok(artifacts) => artifacts,
+                Err(error) => {
+                    tracing::warn!(
+                        error = %error,
+                        "Active index pointer is invalid. Start index_project to repair it."
+                    );
+                    ccm_core::IndexArtifactPaths {
+                        db_path: default_db_path.clone(),
+                        graph_path: default_artifact_parent.join("ccm_graph.json"),
+                        manifest_path: default_artifact_parent.join("ccm_manifest.json"),
+                        generation_id: None,
+                    }
+                }
+            },
+            None => ccm_core::IndexArtifactPaths {
+                db_path: default_db_path.clone(),
+                graph_path: default_artifact_parent.join("ccm_graph.json"),
+                manifest_path: default_artifact_parent.join("ccm_manifest.json"),
+                generation_id: None,
+            },
+        };
+        let graph_path = default_artifacts.graph_path.to_string_lossy().to_string();
         let mut graph = CodeGraph::new();
 
         if std::path::Path::new(&graph_path).exists() {
@@ -163,7 +228,9 @@ impl ServerState {
                         "Graph loaded successfully"
                     );
                 }
-                Err(e) => tracing::warn!(error = %e, "Failed to load graph"),
+                Err(e) => {
+                    tracing::warn!(error = %e, "Failed to load graph");
+                }
             }
         } else {
             tracing::warn!(
@@ -172,7 +239,8 @@ impl ServerState {
             );
         }
 
-        let store = LanceDbStore::new(&db_path, "code_vectors").await?;
+        let active_db_path = default_artifacts.db_path.to_string_lossy().to_string();
+        let store = LanceDbStore::new(&active_db_path, "code_vectors").await?;
         let policy_path = std::path::Path::new(&db_path)
             .parent()
             .map(|parent| parent.join("ccm_learn/policies.json"));
@@ -196,7 +264,9 @@ impl ServerState {
             engines: RwLock::new(EngineCache::new(cache_size)),
             index_locks: std::sync::Mutex::new(std::collections::HashMap::new()),
             index_jobs: std::sync::Mutex::new(std::collections::HashMap::new()),
+            next_index_job_id: std::sync::atomic::AtomicU64::new(1),
             default_project_root,
+            default_db_path,
             allowed_roots,
             require_allowed_roots,
         })
@@ -206,11 +276,21 @@ impl ServerState {
     /// Loads the engine dynamically if it's not in the cache.
     pub async fn get_engine(&self, project_path: Option<&str>) -> Result<Arc<RetrievalEngine>> {
         let path = match project_path {
-            Some(p) => p,
-            None => return Ok(self.default_engine.read().await.clone()),
+            Some(path) => path.to_string(),
+            None => {
+                let Some(root) = &self.default_project_root else {
+                    if self.require_allowed_roots {
+                        return Err(anyhow::anyhow!(
+                            "No default project root is available and strict allowlist mode is enabled. Set CCM_PROJECT_ROOT and CCM_ALLOWED_ROOTS."
+                        ));
+                    }
+                    return Ok(self.default_engine.read().await.clone());
+                };
+                root.to_string_lossy().to_string()
+            }
         };
 
-        if !self.is_path_allowed(path) {
+        if !self.is_path_allowed(&path) {
             return Err(anyhow::anyhow!(
                 "Project path '{}' is not allowed. Set CCM_ALLOWED_ROOTS to permit access.",
                 path
@@ -218,7 +298,7 @@ impl ServerState {
         }
 
         // Cache key normalize edilir; "/repo" ile "/repo/" ayrı entry oluşturmasın.
-        let canonical_path = canonicalize_project_path(Path::new(path));
+        let canonical_path = canonicalize_project_path(Path::new(&path));
         let cache_key = canonical_path.to_string_lossy().to_string();
 
         if self.index_job_in_progress(&cache_key) {
@@ -227,78 +307,52 @@ impl ServerState {
             ));
         }
 
+        let artifacts = self.project_artifacts(&cache_key)?;
+        let engine_cache_key = format!(
+            "{}#{}",
+            cache_key,
+            artifacts.generation_id.as_deref().unwrap_or("legacy")
+        );
+
         // Check cache (write lock needed for LRU order update)
         {
             let mut engines = self.engines.write().await;
-            if let Some(engine) = engines.get(&cache_key) {
+            if let Some(engine) = engines.get(&engine_cache_key) {
                 return Ok(engine);
             }
         }
 
         tracing::info!(path = %cache_key, "Loading context for project");
-        // Assume db at path/data/ccm_db
-        // Use the MCP specific DB path
-        let db_path = canonical_path
-            .join("data/ccm_db")
-            .to_string_lossy()
-            .to_string();
-        let graph_path = canonical_path
-            .join("data/ccm_graph.json")
-            .to_string_lossy()
-            .to_string();
-        let manifest_path = canonical_path
-            .join("data/ccm_manifest.json")
-            .to_string_lossy()
-            .to_string();
+        let db_path = artifacts.db_path.to_string_lossy().to_string();
+        let graph_path = artifacts.graph_path.to_string_lossy().to_string();
+        let manifest_path = artifacts.manifest_path.to_string_lossy().to_string();
 
-        // Sanity check & Lazy Indexing
+        // Uzun full index retrieval çağrısının içinde çalıştırılmaz.
         if !Path::new(&db_path).exists()
             || !Path::new(&graph_path).is_file()
             || !Path::new(&manifest_path).is_file()
         {
-            tracing::warn!(
-                path = %db_path,
-                "Index not found. Triggering lazy indexing."
-            );
-
-            // Aynı proje için eşzamanlı index çağrılarını serileştir (M6).
-            let lock = self.project_index_lock(&cache_key);
-            let _guard = lock.lock().await;
-
-            // Kilidi aldıktan sonra yeniden kontrol: başka bir çağrı index'i kurmuş olabilir.
-            if !Path::new(&db_path).exists()
-                || !Path::new(&graph_path).is_file()
-                || !Path::new(&manifest_path).is_file()
-            {
-                // LAZY INDEXING: Incremental index for this request
-                match ccm_core::update_index(&cache_key, Some(&db_path)).await {
-                    Ok(stats) => {
-                        tracing::info!(nodes = stats.nodes_created, "Lazy indexing complete");
-                    }
-                    Err(e) => {
-                        return Err(anyhow::anyhow!(
-                            "Failed to auto-index project: {}. Please fix the project path or permissions.",
-                            e
-                        ));
-                    }
-                }
-            }
+            return Err(anyhow::anyhow!(
+                "Project index is missing. Call index_project first; large indexes run in the background."
+            ));
         }
 
-        let mut graph = CodeGraph::new();
-        if std::path::Path::new(&graph_path).exists() {
-            if let Ok(g) = CodeGraph::load_from_file(&graph_path) {
-                graph = g;
-                tracing::info!(
-                    path = %cache_key,
-                    nodes = graph.graph.node_count(),
-                    "Loaded graph for project"
-                );
-            }
-        }
+        let graph = CodeGraph::load_from_file(&graph_path).map_err(|error| {
+            anyhow::anyhow!(
+                "Project graph '{}' could not be loaded: {}. Run index_project to rebuild it.",
+                graph_path,
+                error
+            )
+        })?;
+        tracing::info!(
+            path = %cache_key,
+            nodes = graph.graph.node_count(),
+            "Loaded graph for project"
+        );
 
         let store = LanceDbStore::new(&db_path, "code_vectors").await?;
-        let policy_path = std::path::Path::new(&db_path)
+        let requested_db_path = self.project_db_path(&cache_key);
+        let policy_path = requested_db_path
             .parent()
             .map(|parent| parent.join("ccm_learn/policies.json"));
         let engine = Arc::new(RetrievalEngine::new_with_active_policy(
@@ -308,28 +362,22 @@ impl ServerState {
         ));
 
         let mut engines = self.engines.write().await;
-        if let Some(existing) = engines.get(&cache_key) {
+        if let Some(existing) = engines.get(&engine_cache_key) {
             return Ok(existing);
         }
-        Ok(engines.insert(cache_key, engine))
+        Ok(engines.insert(engine_cache_key, engine))
     }
 
     pub async fn refresh_project_engine(&self, project_path: &str) -> Result<()> {
         // get_engine ile aynı normalize key kullanılır ki cache tutarlı kalsın.
         let canonical_path = canonicalize_project_path(Path::new(project_path));
         let cache_key = canonical_path.to_string_lossy().to_string();
-        let db_path = canonical_path
-            .join("data/ccm_db")
-            .to_string_lossy()
-            .to_string();
-        let graph_path = canonical_path.join("data/ccm_graph.json");
-        let graph = if graph_path.exists() {
-            CodeGraph::load_from_file(&graph_path.to_string_lossy())?
-        } else {
-            CodeGraph::new()
-        };
+        let artifacts = self.project_artifacts(&cache_key)?;
+        let db_path = artifacts.db_path.to_string_lossy().to_string();
+        let graph = CodeGraph::load_from_file(&artifacts.graph_path.to_string_lossy())?;
         let store = LanceDbStore::new(&db_path, "code_vectors").await?;
-        let policy_path = std::path::Path::new(&db_path)
+        let requested_db_path = self.project_db_path(&cache_key);
+        let policy_path = requested_db_path
             .parent()
             .map(|parent| parent.join("ccm_learn/policies.json"));
         let engine = Arc::new(RetrievalEngine::new_with_active_policy(
@@ -338,7 +386,15 @@ impl ServerState {
             policy_path.as_deref(),
         ));
 
-        self.engines.write().await.insert(cache_key, engine.clone());
+        let engine_cache_key = format!(
+            "{}#{}",
+            cache_key,
+            artifacts.generation_id.as_deref().unwrap_or("legacy")
+        );
+        self.engines
+            .write()
+            .await
+            .insert(engine_cache_key, engine.clone());
         if self
             .default_project_root
             .as_ref()
@@ -438,21 +494,62 @@ pub async fn handle_request(
     state: &Arc<ServerState>,
     raw_request: &str,
 ) -> Result<Option<JsonRpcResponse>> {
-    let request: JsonRpcRequest = serde_json::from_str(raw_request)?;
+    let raw_value: Value = serde_json::from_str(raw_request)?;
+    let Some(object) = raw_value.as_object() else {
+        return Ok(Some(create_error_response(
+            None,
+            -32600,
+            "Invalid Request: JSON-RPC payload must be an object",
+        )));
+    };
+    let request_id = object.get("id").cloned();
+    let is_notification = !object.contains_key("id");
+    if request_id
+        .as_ref()
+        .is_some_and(|id| !(id.is_null() || id.is_string() || id.is_number()))
+    {
+        return Ok(Some(create_error_response(
+            None,
+            -32600,
+            "Invalid Request: id must be a string, number, or null",
+        )));
+    }
+    if object.get("jsonrpc").and_then(Value::as_str) != Some("2.0")
+        || object.get("method").and_then(Value::as_str).is_none()
+    {
+        return Ok(Some(create_error_response(
+            request_id,
+            -32600,
+            "Invalid Request: jsonrpc must be '2.0' and method must be a string",
+        )));
+    }
+    if object
+        .get("params")
+        .is_some_and(|params| !(params.is_object() || params.is_array()))
+    {
+        if is_notification {
+            return Ok(None);
+        }
+        return Ok(Some(create_error_response(
+            request_id,
+            -32602,
+            "Invalid params: params must be an object or array",
+        )));
+    }
+    let request: JsonRpcRequest = serde_json::from_value(raw_value)?;
 
-    // Check if this is a notification (no id field means notification)
-    let is_notification = request.id.is_none();
+    if request.jsonrpc != "2.0" {
+        return Ok(Some(create_error_response(
+            request.id,
+            -32600,
+            "Invalid Request: jsonrpc must be '2.0'",
+        )));
+    }
 
-    match request.method.as_str() {
+    let response = match request.method.as_str() {
         "initialize" => handle_initialize(request.id, request.params.as_ref()).map(Some),
         "initialized" | "notifications/initialized" => {
-            // Notifications don't get responses per JSON-RPC 2.0 spec
-            if is_notification {
-                Ok(None)
-            } else {
-                // If it has an id (unusual), respond with empty object
-                Ok(Some(create_success_response(request.id, json!({}))))
-            }
+            Ok(Some(create_success_response(request.id, json!({}))))
         }
         "tools/list" => handle_list_tools(request.id).map(Some),
         "resources/list" => Ok(Some(create_success_response(
@@ -466,18 +563,20 @@ pub async fn handle_request(
         "tools/call" => handle_call_tool(state, request.id, request.params)
             .await
             .map(Some),
-        _ => {
-            // For unknown methods, only respond if it's a request (has id)
-            if is_notification {
-                Ok(None)
-            } else {
-                Ok(Some(create_error_response(
-                    request.id,
-                    -32601,
-                    &format!("Method not found: {}", request.method),
-                )))
-            }
+        _ => Ok(Some(create_error_response(
+            request.id,
+            -32601,
+            &format!("Method not found: {}", request.method),
+        ))),
+    };
+
+    if is_notification {
+        if let Err(error) = response {
+            tracing::warn!(method = %request.method, error = %error, "Notification failed");
         }
+        Ok(None)
+    } else {
+        response
     }
 }
 
@@ -523,10 +622,10 @@ fn handle_list_tools(id: Option<Value>) -> Result<JsonRpcResponse> {
                 "type": "object",
                 "properties": {
                     "file": { "type": "string", "description": "The file path" },
-                    "line": { "type": "integer", "description": "The line number" },
+                    "line": { "type": "integer", "minimum": 1, "description": "The line number" },
                     "project_path": { "type": "string", "description": "Optional absolute path to the project root. If provided, uses the index in that project." },
                     "include_body": { "type": "boolean", "description": "Include node body snippets. Defaults to false (metadata only)." },
-                    "max_chars": { "type": "integer", "description": "Maximum total body characters to include. Defaults to 4000." }
+                    "max_chars": { "type": "integer", "minimum": 1, "maximum": 100000, "description": "Maximum total body characters to include. Defaults to 4000." }
                 },
                 "required": ["file", "line"]
             }),
@@ -538,10 +637,10 @@ fn handle_list_tools(id: Option<Value>) -> Result<JsonRpcResponse> {
                 "type": "object",
                 "properties": {
                     "query": { "type": "string", "description": "The search query (e.g. 'how does authentication work?')" },
-                    "limit": { "type": "integer", "description": "Optional maximum number of results to return. Defaults to 5." },
+                    "limit": { "type": "integer", "minimum": 1, "maximum": 50, "description": "Optional maximum number of results to return. Defaults to 5." },
                     "project_path": { "type": "string", "description": "Optional absolute path to the project root. If provided, uses the index in that project." },
                     "include_body": { "type": "boolean", "description": "Include node body snippets. Defaults to false (metadata only)." },
-                    "max_chars": { "type": "integer", "description": "Maximum total body characters to include. Defaults to 4000." }
+                    "max_chars": { "type": "integer", "minimum": 1, "maximum": 100000, "description": "Maximum total body characters to include. Defaults to 4000." }
                 },
                 "required": ["query"]
             }),
@@ -553,10 +652,10 @@ fn handle_list_tools(id: Option<Value>) -> Result<JsonRpcResponse> {
                 "type": "object",
                 "properties": {
                     "query": { "type": "string", "description": "A node name, file path fragment, or node ID fragment to search for." },
-                    "limit": { "type": "integer", "description": "Optional maximum number of matches to return. Defaults to 10." },
+                    "limit": { "type": "integer", "minimum": 1, "maximum": 50, "description": "Optional maximum number of matches to return. Defaults to 10." },
                     "project_path": { "type": "string", "description": "Optional absolute path to the project root. If provided, uses the index in that project." },
                     "include_body": { "type": "boolean", "description": "Include node body snippets. Defaults to false (metadata only)." },
-                    "max_chars": { "type": "integer", "description": "Maximum total body characters to include. Defaults to 4000." }
+                    "max_chars": { "type": "integer", "minimum": 1, "maximum": 100000, "description": "Maximum total body characters to include. Defaults to 4000." }
                 },
                 "required": ["query"]
             }),
@@ -570,7 +669,7 @@ fn handle_list_tools(id: Option<Value>) -> Result<JsonRpcResponse> {
                     "node_id": { "type": "string", "description": "The ID of the node to retrieve." },
                     "project_path": { "type": "string", "description": "Optional absolute path to the project root. If provided, uses the index in that project." },
                     "include_body": { "type": "boolean", "description": "Include node body snippets. Defaults to false (metadata only)." },
-                    "max_chars": { "type": "integer", "description": "Maximum total body characters to include. Defaults to 4000." }
+                    "max_chars": { "type": "integer", "minimum": 1, "maximum": 100000, "description": "Maximum total body characters to include. Defaults to 4000." }
                 },
                 "required": ["node_id"]
             }),
@@ -593,10 +692,10 @@ fn handle_list_tools(id: Option<Value>) -> Result<JsonRpcResponse> {
                 "type": "object",
                 "properties": {
                     "node_id": { "type": "string", "description": "Node ID to find usages for (from read_graph or search_code results)." },
-                    "limit": { "type": "integer", "description": "Max usages to return. Defaults to 20." },
+                    "limit": { "type": "integer", "minimum": 1, "maximum": 50, "description": "Max usages to return. Defaults to 20." },
                     "project_path": { "type": "string", "description": "Optional absolute path to the project root." },
                     "include_body": { "type": "boolean", "description": "Include node body snippets. Defaults to false (metadata only)." },
-                    "max_chars": { "type": "integer", "description": "Maximum total body characters to include. Defaults to 4000." }
+                    "max_chars": { "type": "integer", "minimum": 1, "maximum": 100000, "description": "Maximum total body characters to include. Defaults to 4000." }
                 },
                 "required": ["node_id"]
             }),
@@ -609,10 +708,10 @@ fn handle_list_tools(id: Option<Value>) -> Result<JsonRpcResponse> {
                 "properties": {
                     "from_id": { "type": "string", "description": "Starting node ID." },
                     "to_id": { "type": "string", "description": "Target node ID." },
-                    "max_depth": { "type": "integer", "description": "Max hops to search. Defaults to 8." },
+                    "max_depth": { "type": "integer", "minimum": 1, "maximum": 32, "description": "Max hops to search. Defaults to 8." },
                     "project_path": { "type": "string", "description": "Optional absolute path to the project root." },
                     "include_body": { "type": "boolean", "description": "Include node body snippets. Defaults to false (metadata only)." },
-                    "max_chars": { "type": "integer", "description": "Maximum total body characters to include. Defaults to 4000." }
+                    "max_chars": { "type": "integer", "minimum": 1, "maximum": 100000, "description": "Maximum total body characters to include. Defaults to 4000." }
                 },
                 "required": ["from_id", "to_id"]
             }),
@@ -624,10 +723,10 @@ fn handle_list_tools(id: Option<Value>) -> Result<JsonRpcResponse> {
                 "type": "object",
                 "properties": {
                     "file": { "type": "string", "description": "Relative path of the file to analyze (e.g. 'src/engine.rs')." },
-                    "limit": { "type": "integer", "description": "Max dependents to return. Defaults to 30." },
+                    "limit": { "type": "integer", "minimum": 1, "maximum": 50, "description": "Max dependents to return. Defaults to 30." },
                     "project_path": { "type": "string", "description": "Optional absolute path to the project root." },
                     "include_body": { "type": "boolean", "description": "Include node body snippets. Defaults to false (metadata only)." },
-                    "max_chars": { "type": "integer", "description": "Maximum total body characters to include. Defaults to 4000." }
+                    "max_chars": { "type": "integer", "minimum": 1, "maximum": 100000, "description": "Maximum total body characters to include. Defaults to 4000." }
                 },
                 "required": ["file"]
             }),
@@ -639,10 +738,10 @@ fn handle_list_tools(id: Option<Value>) -> Result<JsonRpcResponse> {
                 "type": "object",
                 "properties": {
                     "project_path": { "type": "string", "description": "Absolute path to the project root (must be a git repo)." },
-                    "days": { "type": "integer", "description": "Days to look back in git history. Defaults to 7." },
-                    "limit": { "type": "integer", "description": "Max nodes to return. Defaults to 30." },
+                    "days": { "type": "integer", "minimum": 1, "maximum": 3650, "description": "Days to look back in git history. Defaults to 7." },
+                    "limit": { "type": "integer", "minimum": 1, "maximum": 50, "description": "Max nodes to return. Defaults to 30." },
                     "include_body": { "type": "boolean", "description": "Include node body snippets. Defaults to false (metadata only)." },
-                    "max_chars": { "type": "integer", "description": "Maximum total body characters to include. Defaults to 4000." }
+                    "max_chars": { "type": "integer", "minimum": 1, "maximum": 100000, "description": "Maximum total body characters to include. Defaults to 4000." }
                 },
                 "required": ["project_path"]
             }),
@@ -657,21 +756,42 @@ async fn handle_call_tool(
     id: Option<Value>,
     params: Option<Value>,
 ) -> Result<JsonRpcResponse> {
-    let params = params.ok_or_else(|| anyhow::anyhow!("Missing params"))?;
+    let request_id = id.as_ref().map(|value| match value {
+        Value::String(text) => text.clone(),
+        _ => value.to_string(),
+    });
     let tool_name = params
-        .get("name")
-        .and_then(|v| v.as_str())
-        .ok_or_else(|| anyhow::anyhow!("Missing tool name"))?;
+        .as_ref()
+        .and_then(|value| value.get("name"))
+        .and_then(Value::as_str)
+        .unwrap_or("unknown")
+        .to_string();
+    let context = ccm_core::trajectory::TrajectoryContext {
+        tool_name,
+        request_id,
+    };
+    ccm_core::trajectory::with_context(context, handle_call_tool_inner(state, id, params)).await
+}
+
+async fn handle_call_tool_inner(
+    state: &Arc<ServerState>,
+    id: Option<Value>,
+    params: Option<Value>,
+) -> Result<JsonRpcResponse> {
+    let Some(params) = params else {
+        return Ok(create_error_response(
+            id,
+            -32602,
+            "Missing tools/call params",
+        ));
+    };
+    let Some(tool_name) = params.get("name").and_then(|v| v.as_str()) else {
+        return Ok(create_error_response(id, -32602, "Missing tool name"));
+    };
     let arguments = params.get("arguments").cloned().unwrap_or(json!({}));
 
-    // Trajectory bağlamı: MCP istekleri ajan bazında ayrışsın. Server stdio
-    // döngüsü sıralı olduğu için env set/restore güvenlidir; session yoksa
-    // engine varsayılanı ("cli") kullanılır.
-    if ccm_core::trajectory::trajectory_enabled() {
-        std::env::set_var("CCM_TRAJECTORY_TOOL", tool_name);
-        if let Some(request_id) = params.get("id").and_then(|v| v.as_str()) {
-            std::env::set_var("CCM_TRAJECTORY_REQUEST_ID", request_id);
-        }
+    if let Err(message) = validate_tool_arguments(tool_name, &arguments) {
+        return Ok(create_error_response(id, -32602, &message));
     }
 
     // Extract project_path if present
@@ -696,10 +816,22 @@ async fn handle_call_tool(
         Ok(e) => e,
         Err(e) => {
             tracing::warn!(error = %e, tool = %tool_name, "Failed to load project context");
+            let message = if e.to_string().contains("Project index is missing") {
+                "Project index is missing. Call index_project first.".to_string()
+            } else if e.to_string().contains("Project indexing is in progress") {
+                "Project indexing is in progress. Poll index_project before retrying this tool."
+                    .to_string()
+            } else if e.to_string().contains("not allowed")
+                || e.to_string().contains("No default project root")
+            {
+                e.to_string()
+            } else {
+                "Failed to load project context. Check project_path, allowlist, and index state."
+                    .to_string()
+            };
             return Ok(create_error_response(
-                id,
-                -32603, // Internal error / Invalid params
-                "Failed to load project context. Check project_path, allowlist, and index state.",
+                id, -32603, // Internal error / Invalid params
+                &message,
             ));
         }
     };
@@ -723,6 +855,42 @@ async fn handle_call_tool(
     };
 
     Ok(create_success_response(id, serde_json::to_value(result)?))
+}
+
+fn validate_tool_arguments(tool_name: &str, arguments: &Value) -> std::result::Result<(), String> {
+    let required_strings: &[&str] = match tool_name {
+        "get_context" => &["file"],
+        "search_code" | "find_nodes" => &["query"],
+        "read_graph" | "find_usages" => &["node_id"],
+        "trace_call_chain" => &["from_id", "to_id"],
+        "impact_of_change" => &["file"],
+        "diff_context" | "index_project" => &["project_path"],
+        _ => return Err(format!("Unknown tool: {}", tool_name)),
+    };
+
+    for name in required_strings {
+        let valid = arguments
+            .get(*name)
+            .and_then(Value::as_str)
+            .is_some_and(|value| !value.trim().is_empty());
+        if !valid {
+            return Err(format!(
+                "Missing or invalid '{}' argument for {}",
+                name, tool_name
+            ));
+        }
+    }
+
+    if tool_name == "get_context"
+        && arguments
+            .get("line")
+            .and_then(Value::as_u64)
+            .is_none_or(|line| line == 0)
+    {
+        return Err("Missing or invalid 'line' argument for get_context".to_string());
+    }
+
+    Ok(())
 }
 
 #[cfg(test)]

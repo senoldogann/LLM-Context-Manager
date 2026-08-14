@@ -4,9 +4,10 @@
 
 **Node.js wrapper for Cognitive Codebase Matrix (CCM)** - Enables AI agents to understand and navigate your codebase with surgical precision.
 
-**v0.3.7** completes Codex MCP discovery compatibility, installs the canonical
-`SKILL.md`, repairs incomplete vector indexes, and makes
-metadata-first MCP body controls match the published tool schema.
+**v0.3.8** preserves the last healthy index while a replacement is built,
+recovers cleanly from malformed MCP frames, and verifies cached release
+binaries before execution. Missing indexes now fail fast with an explicit
+`index_project` action instead of hiding a long rebuild inside retrieval.
 
 [![npm](https://img.shields.io/npm/v/@senoldogann/context-manager?color=orange)](https://www.npmjs.com/package/@senoldogann/context-manager)
 [![MCP](https://img.shields.io/badge/MCP-Compatible-blue)](https://modelcontextprotocol.io/)
@@ -251,6 +252,12 @@ Enable `CCM_EMBED_DATA_FILES=1` to include them in semantic search.
 ---
 
 ## 📝 Changelog
+
+### v0.3.8
+- ✅ Failed scans, parses, embeddings, and full rebuilds preserve the last healthy index
+- ✅ Large MCP indexing is polled in the background while retrieval fails fast during updates
+- ✅ JSON-RPC framing, notifications, discovery calls, allowlists, and corrupt graphs fail safely
+- ✅ Cached npm binaries are checksum-verified and concurrent cold starts use isolated downloads
 
 ### v0.3.7
 - ✅ Codex discovery calls `resources/list` and `resources/templates/list` return valid empty lists

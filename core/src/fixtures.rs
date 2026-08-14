@@ -180,15 +180,16 @@ async fn generate_repo(
         )
     })?;
     std::env::set_var("CCM_DISABLE_EMBEDDER", "1");
-    crate::update_index(&canonical_repo.to_string_lossy(), None)
-        .await
-        .with_context(|| format!("fixture repo indeksi kurulamadı: {}", repo_path.display()))?;
+    let index_result = crate::update_index(&canonical_repo.to_string_lossy(), None).await;
     match prev_disable {
         Some(value) => std::env::set_var("CCM_DISABLE_EMBEDDER", value),
         None => std::env::remove_var("CCM_DISABLE_EMBEDDER"),
     }
+    index_result
+        .with_context(|| format!("fixture repo indeksi kurulamadı: {}", repo_path.display()))?;
 
-    let graph_path = repo_path.join("data").join("ccm_graph.json");
+    let graph_path =
+        crate::resolve_index_artifacts(&canonical_repo.to_string_lossy(), None)?.graph_path;
     let graph = CodeGraph::from_file(&graph_path.to_string_lossy())
         .with_context(|| format!("fixture graph okunamadı: {}", graph_path.display()))?;
 

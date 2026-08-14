@@ -118,8 +118,21 @@ fn load_fixture_cached(path: &Path) -> Result<Arc<EmbeddingFixture>> {
 
 /// DB uri'sinden namespace çıkarır: `<repo>/data/ccm_db` → repo dizin adı.
 fn namespace_for_uri(uri: &str) -> String {
-    Path::new(uri)
-        .parent()
+    let path = Path::new(uri);
+    if let Some(generations_root) = path.ancestors().find(|ancestor| {
+        ancestor
+            .file_name()
+            .is_some_and(|name| name == ".ccm-generations")
+    }) {
+        if let Some(project_name) = generations_root
+            .parent()
+            .and_then(Path::parent)
+            .and_then(Path::file_name)
+        {
+            return project_name.to_string_lossy().to_string();
+        }
+    }
+    path.parent()
         .and_then(Path::parent)
         .and_then(Path::file_name)
         .map(|name| name.to_string_lossy().to_string())
@@ -136,6 +149,14 @@ pub struct LanceDbStore {
 
 impl LanceDbStore {
     pub async fn new(uri: &str, table_name: &str) -> Result<Self> {
+        Self::new_with_fixture_namespace(uri, table_name, None).await
+    }
+
+    pub(crate) async fn new_with_fixture_namespace(
+        uri: &str,
+        table_name: &str,
+        fixture_namespace: Option<&str>,
+    ) -> Result<Self> {
         let conn = connect(uri).execute().await?;
 
         let embedder_disabled = std::env::var("CCM_DISABLE_EMBEDDER")
@@ -172,7 +193,9 @@ impl LanceDbStore {
             }
             _ => None,
         };
-        let fixture_ns = namespace_for_uri(uri);
+        let fixture_ns = fixture_namespace
+            .map(str::to_string)
+            .unwrap_or_else(|| namespace_for_uri(uri));
 
         Ok(Self {
             conn,
@@ -193,16 +216,36 @@ impl LanceDbStore {
             .is_ok();
 
         if table_exists {
-            if let Err(e) = self.conn.drop_table(&self.table_name, &[]).await {
-                tracing::warn!(
-                    table = %self.table_name,
-                    error = %e,
-                    "Failed to drop table"
-                );
-            }
+            self.conn
+                .drop_table(&self.table_name, &[])
+                .await
+                .with_context(|| {
+                    format!(
+                        "vector table '{}' could not be reset; rebuild was aborted",
+                        self.table_name
+                    )
+                })?;
         }
 
         Ok(())
+    }
+
+    pub async fn validate_table(&self) -> Result<usize> {
+        let table = self
+            .conn
+            .open_table(&self.table_name)
+            .execute()
+            .await
+            .with_context(|| {
+                format!(
+                    "vector table '{}' is missing or unreadable",
+                    self.table_name
+                )
+            })?;
+        table
+            .count_rows(None)
+            .await
+            .with_context(|| format!("vector table '{}' could not be scanned", self.table_name))
     }
 
     /// Embeds texts and inserts them into the LanceDB table.
@@ -224,13 +267,11 @@ impl LanceDbStore {
 
         let mut all_chunks = Vec::new();
         let mut all_chunk_ids = Vec::new();
-        let mut original_ids_map = Vec::new(); // Maps chunk index to original ID index
 
         for (i, text) in texts.iter().enumerate() {
             if text.len() <= max_chars {
                 all_chunks.push(text.clone());
                 all_chunk_ids.push(ids[i].clone());
-                original_ids_map.push(i);
             } else {
                 for (chunk_idx, chunk) in semantic_chunks(text, max_chars, overlap)
                     .into_iter()
@@ -238,7 +279,6 @@ impl LanceDbStore {
                 {
                     all_chunks.push(chunk);
                     all_chunk_ids.push(format!("{}#chunk{}", ids[i], chunk_idx));
-                    original_ids_map.push(i);
                 }
             }
         }
@@ -282,6 +322,14 @@ impl LanceDbStore {
         // Use all_chunks and all_chunk_ids for storage
         let texts = all_chunks;
         let ids = all_chunk_ids;
+
+        if embeddings.len() != ids.len() {
+            return Err(anyhow::anyhow!(
+                "Embedding provider returned {} vectors for {} chunks",
+                embeddings.len(),
+                ids.len()
+            ));
+        }
 
         let dim = embeddings.first().map(|v| v.len()).unwrap_or(1536);
 
@@ -577,7 +625,19 @@ pub(crate) fn semantic_chunks(text: &str, max_chars: usize, overlap: usize) -> V
 
 #[cfg(test)]
 mod chunk_tests {
-    use super::semantic_chunks;
+    use super::{namespace_for_uri, semantic_chunks};
+
+    #[test]
+    fn generation_database_keeps_the_project_fixture_namespace() {
+        assert_eq!(
+            namespace_for_uri("/work/repo_a/data/.ccm-generations/123/ccm_db"),
+            "repo_a"
+        );
+        assert_eq!(
+            namespace_for_uri("/work/repo_b/.ccm/.ccm-generations/456/ccm_db"),
+            "repo_b"
+        );
+    }
 
     #[test]
     fn semantic_chunks_prefer_code_boundaries_and_preserve_progress() {

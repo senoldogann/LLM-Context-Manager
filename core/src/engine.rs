@@ -3,12 +3,12 @@ pub mod hybrid;
 use crate::engine::hybrid::HybridScorer;
 use crate::fs_utils::{detect_language, read_text_file_limited, FileReadError};
 use crate::git::GitIntegrator;
-use crate::graph::{CodeGraph, CodeNode, EdgeType, NodeType};
+use crate::graph::{CodeGraph, CodeNode, NodeType};
 use crate::normalize_file_id_with_root;
 use crate::parser::CodeParser;
 use crate::parser::SupportedLanguage;
 use crate::policy::RetrievalPolicy;
-use crate::trajectory::{record_if_enabled, RetrievalEvent, RetrievalResultItem};
+use crate::trajectory::{current_context, record_if_enabled, RetrievalEvent, RetrievalResultItem};
 use crate::vector::extractor::Extractor;
 use crate::vector::store::LanceDbStore;
 use crate::{
@@ -134,12 +134,10 @@ impl RetrievalEngine {
     pub async fn index_graph(&self) -> Result<()> {
         let embed_data_files = embed_data_files_enabled();
 
-        // Embedding metinleri toplanır toplanmaz lock bırakılır; uzak embedding
-        // çağrıları dakikalar sürebilir ve bu süre boyunca writer'lar bloklanmamalı.
-        let (ids, texts) = {
+        // Node clone'ları Arc içerik taşır; pahalı metin/embedding üretimi lock dışında yapılır.
+        let nodes = {
             let graph = self.graph.read().await;
-            let mut ids = Vec::new();
-            let mut texts = Vec::new();
+            let mut nodes = Vec::new();
 
             // O(n) over all nodes is unavoidable: every node must be visited exactly once to
             // build its embedding text. No shortcut exists since this is a full-index operation.
@@ -152,23 +150,14 @@ impl RetrievalEngine {
                     NodeType::Function | NodeType::Method | NodeType::Class | NodeType::Struct
                 ) || (embed_data_files && matches!(node.node_type, NodeType::DataFile))
                 {
-                    // Zenginleştirilmiş embedding metni üret
-                    let text_representation = build_embedding_text(node);
-
-                    ids.push(node.id.clone());
-                    texts.push(text_representation);
+                    nodes.push(node.clone());
                 }
             }
 
-            (ids, texts)
+            nodes
         };
 
-        if !ids.is_empty() {
-            tracing::info!(count = ids.len(), "Indexing nodes into vector store");
-            self.vector_store.add_documents(ids, texts).await?;
-        }
-
-        Ok(())
+        self.index_nodes_in_bounded_batches(&nodes).await
     }
 
     /// Performs incremental indexing using Git status.
@@ -239,26 +228,19 @@ impl RetrievalEngine {
 
             tracing::debug!(path = %relative_path, "Processing file");
 
-            // 1. GARBAGE COLLECTION: Delete old vectors for this file
-            // Now that Extractor uses file-prefixed IDs ("./path/to/file:kind:row..."),
-            // we can safely delete all vectors belonging to this file.
-            if let Err(e) = self.vector_store.delete_by_prefix(&relative_path).await {
-                tracing::warn!(
-                    path = %relative_path,
-                    error = %e,
-                    "Failed to perform vector GC for file"
-                );
-            }
-
-            {
-                // Write Lock Scope: Remove old nodes
-                // This removes them from the Graph structure (RAM/Disk)
-                let mut graph = self.graph.write().await;
-                graph.remove_file_nodes(&relative_path);
-            }
-
-            // Parse File (skip if deleted)
+            // Silinen dosya için yeni içerik hazırlanamayacağı için doğrudan kaldırılır.
             if !abs_path.exists() {
+                self.vector_store
+                    .delete_by_prefix(&relative_path)
+                    .await
+                    .map_err(|error| {
+                        anyhow::anyhow!(
+                            "Failed to delete vectors for removed file '{}': {}",
+                            relative_path,
+                            error
+                        )
+                    })?;
+                self.graph.write().await.remove_file_nodes(&relative_path);
                 continue;
             }
 
@@ -278,9 +260,9 @@ impl RetrievalEngine {
             };
 
             let lang = detect_language(&abs_path);
+            let mut staged_graph = CodeGraph::new();
 
             if matches!(lang, SupportedLanguage::Data) {
-                let mut graph = self.graph.write().await;
                 let end_line = content.lines().count().max(1);
                 let node = CodeNode {
                     id: relative_path.clone(),
@@ -290,91 +272,70 @@ impl RetrievalEngine {
                     start_line: 1,
                     end_line,
                 };
-                let idx = graph.add_node(node);
-                if embed_data_files {
-                    let node = &graph.graph[idx];
-                    if indexed_node_ids.insert(node.id.clone()) {
-                        nodes_to_index.push(node.clone());
+                staged_graph.add_node(node);
+            } else {
+                let tree = match parser.parse_tree(&content, lang) {
+                    Ok(tree) => tree,
+                    Err(e) => {
+                        let issue = IndexIssue {
+                            path: relative_path,
+                            reason: IndexIssueReason::ParseError,
+                            detail: e.to_string(),
+                            suggested_ignore: suggestion_for_issue(
+                                &abs_path.to_string_lossy(),
+                                &IndexIssueReason::ParseError,
+                            ),
+                        };
+                        tracing::warn!(
+                            path = %issue.path,
+                            detail = %issue.detail,
+                            "Skipping file due to parse error"
+                        );
+                        register_issue(&mut stats, issue, false);
+                        continue;
                     }
-                }
-                continue;
-            }
-
-            let tree = match parser.parse_tree(&content, lang) {
-                Ok(tree) => tree,
-                Err(e) => {
+                };
+                let mut extractor = Extractor::new(content.clone(), lang);
+                if let Err(error) = extractor.extract(&tree, &mut staged_graph, &relative_path) {
                     let issue = IndexIssue {
                         path: relative_path,
-                        reason: IndexIssueReason::ParseError,
-                        detail: e.to_string(),
+                        reason: IndexIssueReason::ExtractError,
+                        detail: error.to_string(),
                         suggested_ignore: suggestion_for_issue(
                             &abs_path.to_string_lossy(),
-                            &IndexIssueReason::ParseError,
+                            &IndexIssueReason::ExtractError,
                         ),
                     };
-                    tracing::warn!(
-                        path = %issue.path,
-                        detail = %issue.detail,
-                        "Skipping file due to parse error"
-                    );
                     register_issue(&mut stats, issue, false);
                     continue;
                 }
-            };
-
-            let mut extractor = Extractor::new(content.clone(), lang);
-
-            // Write Lock Scope: Update Graph
-            let mut graph = self.graph.write().await;
-
-            if extractor.extract(&tree, &mut graph, &relative_path).is_ok() {
-                // Collect ALL new nodes for this file
-                if let Some(file_node_idx) = graph.find_file_node(&relative_path) {
-                    let mut stack = vec![file_node_idx];
-                    let mut visited = HashSet::new();
-                    visited.insert(file_node_idx);
-
-                    while let Some(idx) = stack.pop() {
-                        let node = &graph.graph[idx];
-
-                        if (matches!(
-                            node.node_type,
-                            NodeType::Function
-                                | NodeType::Method
-                                | NodeType::Class
-                                | NodeType::Struct
-                        ) || (embed_data_files && matches!(node.node_type, NodeType::DataFile)))
-                            && indexed_node_ids.insert(node.id.clone())
-                        {
-                            nodes_to_index.push(node.clone());
-                        }
-
-                        for edge in graph
-                            .graph
-                            .edges_directed(idx, petgraph::Direction::Outgoing)
-                        {
-                            if matches!(edge.weight(), EdgeType::Contains) {
-                                let neighbor_idx = edge.target();
-                                if visited.insert(neighbor_idx) {
-                                    stack.push(neighbor_idx);
-                                }
-                            }
-                        }
-                    }
-                }
-                stats.files_indexed += 1;
-            } else {
-                let issue = IndexIssue {
-                    path: relative_path,
-                    reason: IndexIssueReason::ExtractError,
-                    detail: "AST extraction failed".to_string(),
-                    suggested_ignore: suggestion_for_issue(
-                        &abs_path.to_string_lossy(),
-                        &IndexIssueReason::ExtractError,
-                    ),
-                };
-                register_issue(&mut stats, issue, false);
             }
+
+            for node in staged_graph.graph.node_weights() {
+                if (matches!(
+                    node.node_type,
+                    NodeType::Function | NodeType::Method | NodeType::Class | NodeType::Struct
+                ) || (embed_data_files && matches!(node.node_type, NodeType::DataFile)))
+                    && indexed_node_ids.insert(node.id.clone())
+                {
+                    nodes_to_index.push(node.clone());
+                }
+            }
+
+            self.vector_store
+                .delete_by_prefix(&relative_path)
+                .await
+                .map_err(|error| {
+                    anyhow::anyhow!(
+                        "Failed to replace vectors for '{}': {}",
+                        relative_path,
+                        error
+                    )
+                })?;
+            let mut graph = self.graph.write().await;
+            graph.remove_file_nodes(&relative_path);
+            graph.append_graph(&staged_graph);
+            stats.files_indexed += 1;
         }
 
         {
@@ -396,12 +357,7 @@ impl RetrievalEngine {
                 count = nodes_to_index.len(),
                 "Incremental: indexing semantic nodes"
             );
-            let ids: Vec<String> = nodes_to_index.iter().map(|n| n.id.clone()).collect();
-            let texts: Vec<String> = nodes_to_index.iter().map(build_embedding_text).collect();
-
-            // Deduplicate?
-
-            self.vector_store.add_documents(ids, texts).await?;
+            self.index_nodes_in_bounded_batches(&nodes_to_index).await?;
         }
 
         tracing::info!("Incremental update complete.");
@@ -412,6 +368,58 @@ impl RetrievalEngine {
         };
 
         Ok(stats)
+    }
+
+    async fn index_nodes_in_bounded_batches(&self, nodes: &[CodeNode]) -> Result<()> {
+        if nodes.is_empty() {
+            return Ok(());
+        }
+        let batch_size = std::env::var("CCM_INDEX_NODE_BATCH_SIZE")
+            .ok()
+            .and_then(|value| value.parse::<usize>().ok())
+            .unwrap_or(128)
+            .clamp(1, 4_096);
+        let batch_bytes = std::env::var("CCM_INDEX_BATCH_BYTES")
+            .ok()
+            .and_then(|value| value.parse::<usize>().ok())
+            .unwrap_or(4 * 1024 * 1024)
+            .clamp(64 * 1024, 64 * 1024 * 1024);
+        tracing::info!(
+            count = nodes.len(),
+            batch_size,
+            batch_bytes,
+            "Indexing nodes into vector store"
+        );
+
+        let mut start = 0usize;
+        let mut batch_index = 0usize;
+        while start < nodes.len() {
+            let mut end = start;
+            let mut bytes = 0usize;
+            while end < nodes.len() && end - start < batch_size {
+                let node_bytes = nodes[end].content.len().saturating_add(nodes[end].id.len());
+                if end > start && bytes.saturating_add(node_bytes) > batch_bytes {
+                    break;
+                }
+                bytes = bytes.saturating_add(node_bytes);
+                end += 1;
+            }
+            let batch = &nodes[start..end];
+            let ids = batch.iter().map(|node| node.id.clone()).collect();
+            let texts = batch.iter().map(build_embedding_text).collect();
+            self.vector_store.add_documents(ids, texts).await?;
+            if batch_index.is_multiple_of(20) || end == nodes.len() {
+                tracing::info!(
+                    batch = batch_index + 1,
+                    indexed = end,
+                    total = nodes.len(),
+                    "Vector indexing batch progress"
+                );
+            }
+            start = end;
+            batch_index += 1;
+        }
+        Ok(())
     }
 
     /// Performs a purely semantic search using vectors.
@@ -479,11 +487,11 @@ impl RetrievalEngine {
         query: &str,
         limit: usize,
     ) -> Result<Vec<ContextSuggestion>> {
+        let started = std::time::Instant::now();
         let seed_multiplier = self.active_policy.seed_multiplier as usize;
         let seed_limit = limit.saturating_mul(seed_multiplier).max(limit);
-        // When the embedder is disabled the vector store returns an error instead of
-        // an empty result set. Treat that as a signal to fall through to the graph
-        // fallback rather than surfacing an unhelpful "Internal error" to the caller.
+        // Embedder kapalıyken vector store boş sonuç yerine hata döndürür.
+        // Bu durumda çağırana anlamsız bir iç hata taşımak yerine graph fallback'i kullanılır.
         let hits = match self.vector_store.search(query, seed_limit).await {
             Ok(h) => h,
             Err(e) => {
@@ -503,7 +511,15 @@ impl RetrievalEngine {
 
         if hits.is_empty() {
             // vector sonuç yoksa graph üzerinden lexical arama ile fallback yap
-            return Ok(self.find_graph_nodes(query, limit).await);
+            let results = self.find_graph_nodes(query, limit).await;
+            record_search_event(
+                query,
+                &results,
+                self.active_policy.version,
+                self.active_policy.task_type,
+                started.elapsed().as_millis() as u64,
+            );
+            return Ok(results);
         }
 
         let scorer = HybridScorer::from_policy(&self.active_policy);
@@ -673,6 +689,7 @@ impl RetrievalEngine {
             &results,
             self.active_policy.version,
             self.active_policy.task_type,
+            started.elapsed().as_millis() as u64,
         );
         Ok(results)
     }
@@ -1469,8 +1486,8 @@ fn record_search_event(
     results: &[ContextSuggestion],
     policy_version: u32,
     task_type: crate::policy::TaskType,
+    latency_ms: u64,
 ) {
-    let started = std::time::Instant::now();
     let items: Vec<RetrievalResultItem> = results
         .iter()
         .enumerate()
@@ -1482,17 +1499,20 @@ fn record_search_event(
         })
         .collect();
     let estimated_tokens: usize = results.iter().map(|result| result.content.len() / 4).sum();
+    let trajectory_context = current_context();
     record_if_enabled(RetrievalEvent {
         session_id: std::env::var("CCM_TRAJECTORY_SESSION").unwrap_or_else(|_| "cli".to_string()),
-        tool_name: std::env::var("CCM_TRAJECTORY_TOOL").ok(),
-        request_id: std::env::var("CCM_TRAJECTORY_REQUEST_ID").ok(),
+        tool_name: trajectory_context
+            .as_ref()
+            .map(|context| context.tool_name.clone()),
+        request_id: trajectory_context.and_then(|context| context.request_id),
         task_type,
         policy_version,
         query: Some(query.to_string()),
         cursor: None,
         results: items,
         estimated_tokens,
-        latency_ms: started.elapsed().as_millis() as u64,
+        latency_ms,
         timestamp_ms: crate::trajectory::now_ms(),
     });
 }
@@ -1515,10 +1535,13 @@ fn record_predict_event(
         })
         .collect();
     let estimated_tokens: usize = results.iter().map(|result| result.content.len() / 4).sum();
+    let trajectory_context = current_context();
     record_if_enabled(RetrievalEvent {
         session_id: std::env::var("CCM_TRAJECTORY_SESSION").unwrap_or_else(|_| "cli".to_string()),
-        tool_name: std::env::var("CCM_TRAJECTORY_TOOL").ok(),
-        request_id: std::env::var("CCM_TRAJECTORY_REQUEST_ID").ok(),
+        tool_name: trajectory_context
+            .as_ref()
+            .map(|context| context.tool_name.clone()),
+        request_id: trajectory_context.and_then(|context| context.request_id),
         task_type,
         policy_version,
         query: None,
@@ -1586,7 +1609,12 @@ fn classify_incremental_read_error(path: &str, error: anyhow::Error) -> IndexIss
 #[cfg(test)]
 mod retrieval_regression_tests {
     use super::{extract_file_path, lexical_graph_score};
-    use crate::graph::NodeType;
+    use crate::engine::RetrievalEngine;
+    use crate::graph::{CodeGraph, CodeNode, NodeType};
+    use crate::trajectory::{with_context, RetrievalEvent, TrajectoryContext};
+    use crate::vector::store::LanceDbStore;
+    use std::sync::Arc;
+    use tokio::sync::RwLock;
 
     #[test]
     fn stable_node_ids_report_the_actual_file_path() {
@@ -1618,5 +1646,50 @@ mod retrieval_regression_tests {
         .unwrap();
 
         assert!(symbol > data_file);
+    }
+
+    #[tokio::test]
+    async fn lexical_fallback_records_scoped_trajectory_event() -> anyhow::Result<()> {
+        let directory = tempfile::tempdir()?;
+        let trajectory_path = directory.path().join("experiences.jsonl");
+        std::env::set_var("CCM_DISABLE_EMBEDDER", "1");
+        std::env::set_var("CCM_TRAJECTORY_LOG", "1");
+        std::env::set_var("CCM_TRAJECTORY_PATH", &trajectory_path);
+
+        let mut graph = CodeGraph::new();
+        graph.add_node(CodeNode {
+            id: "./src/main.rs:function_item:symbol:0000000000000001:0".to_string(),
+            node_type: NodeType::Function,
+            name: "alpha".to_string(),
+            content: "fn alpha() {}".into(),
+            start_line: 1,
+            end_line: 1,
+        });
+        let store = LanceDbStore::new(
+            directory.path().join("db").to_string_lossy().as_ref(),
+            "code_vectors",
+        )
+        .await?;
+        let engine = RetrievalEngine::new(Arc::new(RwLock::new(graph)), store);
+        let results = with_context(
+            TrajectoryContext {
+                tool_name: "search_code".to_string(),
+                request_id: Some("request-7".to_string()),
+            },
+            engine.search_code_hybrid("alpha", 5),
+        )
+        .await?;
+        assert!(!results.is_empty());
+
+        let line = std::fs::read_to_string(&trajectory_path)?;
+        let event: RetrievalEvent = serde_json::from_str(line.trim())?;
+        assert_eq!(event.tool_name.as_deref(), Some("search_code"));
+        assert_eq!(event.request_id.as_deref(), Some("request-7"));
+        assert_eq!(event.query.as_deref(), Some("alpha"));
+        assert!(!event.results.is_empty());
+
+        std::env::remove_var("CCM_TRAJECTORY_LOG");
+        std::env::remove_var("CCM_TRAJECTORY_PATH");
+        Ok(())
     }
 }

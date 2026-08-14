@@ -35,6 +35,9 @@ fn format_suggestion_metadata(suggestion: &ccm_core::engine::ContextSuggestion) 
 
 const DEFAULT_MAX_LIMIT: usize = 50;
 const DEFAULT_MAX_BODY_CHARS: usize = 4_000;
+const MAX_BODY_CHARS: usize = 100_000;
+const MAX_GRAPH_DEPTH: usize = 32;
+const MAX_DIFF_DAYS: u32 = 3_650;
 
 fn format_suggestions_output(
     suggestions: &[ccm_core::engine::ContextSuggestion],
@@ -87,7 +90,11 @@ fn limit_from_args(args: &Value, default: usize) -> usize {
 fn max_chars_from_args(args: &Value) -> usize {
     args.get("max_chars")
         .and_then(|v| v.as_u64())
-        .map(|v| v as usize)
+        .map(|value| {
+            usize::try_from(value)
+                .unwrap_or(MAX_BODY_CHARS)
+                .clamp(1, MAX_BODY_CHARS)
+        })
         .unwrap_or(DEFAULT_MAX_BODY_CHARS)
 }
 
@@ -427,7 +434,8 @@ pub async fn index_project(
     let job_key = canonical_path.to_string_lossy().to_string();
 
     let existing = state.index_jobs.lock().unwrap().get(&job_key).cloned();
-    if let Some(receiver) = existing {
+    if let Some(job) = existing {
+        let receiver = job.receiver;
         if let Some(result) = receiver.borrow().clone() {
             state.index_jobs.lock().unwrap().remove(&job_key);
             return Ok(result);
@@ -435,16 +443,30 @@ pub async fn index_project(
         return Ok(index_in_progress_result(project_path));
     }
 
+    const MAX_INDEX_JOBS: usize = 64;
+    if state.index_jobs.lock().unwrap().len() >= MAX_INDEX_JOBS {
+        return Ok(index_task_failed_result(
+            project_path,
+            "too many index jobs are awaiting completion or result polling; poll existing jobs and retry",
+        ));
+    }
+
     tracing::info!(path = %project_path, "Starting manual index");
     let (sender, mut receiver) = tokio::sync::watch::channel(None);
-    state
-        .index_jobs
-        .lock()
-        .unwrap()
-        .insert(job_key.clone(), receiver.clone());
+    let job_id = state
+        .next_index_job_id
+        .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    state.index_jobs.lock().unwrap().insert(
+        job_key.clone(),
+        crate::server::IndexJob {
+            id: job_id,
+            receiver: receiver.clone(),
+        },
+    );
 
     let job_state = state.clone();
     let job_path = project_path.to_string();
+    let background_job_key = job_key.clone();
     tokio::spawn(async move {
         let worker_state = job_state.clone();
         let worker_path = job_path.clone();
@@ -455,6 +477,9 @@ pub async fn index_project(
             Err(error) => index_task_failed_result(&job_path, &error.to_string()),
         };
         let _ = sender.send(Some(result));
+        job_state.release_index_lock(&background_job_key);
+        tokio::time::sleep(index_result_retention()).await;
+        job_state.remove_index_job_if_id(&background_job_key, job_id);
     });
 
     let timeout_ms = std::env::var("CCM_INDEX_RESPONSE_TIMEOUT_MS").ok();
@@ -476,6 +501,18 @@ pub async fn index_project(
     }
 
     Ok(index_started_result(project_path))
+}
+
+fn index_result_retention() -> std::time::Duration {
+    const DEFAULT_SECS: u64 = 10 * 60;
+    const MAX_SECS: u64 = 60 * 60;
+    let seconds = std::env::var("CCM_INDEX_RESULT_RETENTION_SECS")
+        .ok()
+        .and_then(|value| value.parse::<u64>().ok())
+        .filter(|value| *value > 0)
+        .unwrap_or(DEFAULT_SECS)
+        .min(MAX_SECS);
+    std::time::Duration::from_secs(seconds)
 }
 
 fn index_response_timeout(
@@ -542,13 +579,12 @@ async fn run_index_project(state: &crate::server::ServerState, project_path: &st
     let lock = state.project_index_lock(project_path);
     let _guard = lock.lock().await;
 
-    // Shared db path inside project
-    let db_path = std::path::Path::new(project_path)
-        .join("data/ccm_db") // Use shared db folder
+    let db_path = state
+        .project_db_path(project_path)
         .to_string_lossy()
         .to_string();
 
-    match ccm_core::update_index(project_path, Some(&db_path)).await {
+    match run_index_worker_process(project_path, &db_path).await {
         Ok(stats) => {
             // Refresh both the explicit project cache and the default startup engine.
             if let Err(error) = state.refresh_project_engine(project_path).await {
@@ -640,6 +676,65 @@ async fn run_index_project(state: &crate::server::ServerState, project_path: &st
     }
 }
 
+async fn run_index_worker_process(
+    project_path: &str,
+    db_path: &str,
+) -> Result<ccm_core::IndexStats> {
+    let executable = std::env::current_exe()?;
+    let mut command = tokio::process::Command::new(executable);
+    command
+        .arg("--ccm-internal-index-worker")
+        .arg(project_path)
+        .arg(db_path)
+        .env("CCM_INTERNAL_INDEX_WORKER", "1")
+        .kill_on_drop(true)
+        .stdin(std::process::Stdio::null())
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::piped());
+
+    let child = command.spawn()?;
+    let output = tokio::time::timeout(index_worker_timeout(), child.wait_with_output())
+        .await
+        .map_err(|_| anyhow::anyhow!("index execution exceeded the configured deadline"))??;
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        let detail = stderr.chars().take(4_000).collect::<String>();
+        anyhow::bail!(
+            "index worker exited with status {}: {}",
+            output.status,
+            detail.trim()
+        );
+    }
+    serde_json::from_slice(&output.stdout).map_err(|error| {
+        anyhow::anyhow!(
+            "index worker returned invalid JSON: {} (stdout: {})",
+            error,
+            String::from_utf8_lossy(&output.stdout)
+                .chars()
+                .take(1_000)
+                .collect::<String>()
+        )
+    })
+}
+
+fn index_worker_timeout() -> std::time::Duration {
+    const DEFAULT_MILLIS: u64 = 2 * 60 * 60 * 1_000;
+    const MAX_MILLIS: u64 = 24 * 60 * 60 * 1_000;
+    let milliseconds = std::env::var("CCM_INDEX_EXECUTION_TIMEOUT_MS")
+        .ok()
+        .and_then(|value| value.parse::<u64>().ok())
+        .or_else(|| {
+            std::env::var("CCM_INDEX_EXECUTION_TIMEOUT_SECS")
+                .ok()
+                .and_then(|value| value.parse::<u64>().ok())
+                .map(|seconds| seconds.saturating_mul(1_000))
+        })
+        .filter(|value| *value > 0)
+        .unwrap_or(DEFAULT_MILLIS)
+        .min(MAX_MILLIS);
+    std::time::Duration::from_millis(milliseconds)
+}
+
 /// Tool: find_usages
 /// Verilen node_id'yi çağıran / kullanan tüm node'ları döndürür.
 pub async fn find_usages(engine: &Arc<RetrievalEngine>, args: &Value) -> Result<ToolResult> {
@@ -706,7 +801,15 @@ pub async fn trace_call_chain(engine: &Arc<RetrievalEngine>, args: &Value) -> Re
     let project_path = args.get("project_path").and_then(|v| v.as_str());
     let normalized_from = normalize_graph_node_id(from_id, project_path)?;
     let normalized_to = normalize_graph_node_id(to_id, project_path)?;
-    let max_depth = args.get("max_depth").and_then(|v| v.as_u64()).unwrap_or(8) as usize;
+    let max_depth = args
+        .get("max_depth")
+        .and_then(|v| v.as_u64())
+        .map(|value| {
+            usize::try_from(value)
+                .unwrap_or(MAX_GRAPH_DEPTH)
+                .clamp(1, MAX_GRAPH_DEPTH)
+        })
+        .unwrap_or(8);
 
     let chain = engine
         .trace_call_chain(&normalized_from, &normalized_to, max_depth)
@@ -806,7 +909,11 @@ pub async fn diff_context(engine: &Arc<RetrievalEngine>, args: &Value) -> Result
         .and_then(|v| v.as_str())
         .ok_or_else(|| anyhow::anyhow!("Missing 'project_path' argument"))?;
 
-    let days = args.get("days").and_then(|v| v.as_u64()).unwrap_or(7) as u32;
+    let days = args
+        .get("days")
+        .and_then(|v| v.as_u64())
+        .map(|value| value.clamp(1, u64::from(MAX_DIFF_DAYS)) as u32)
+        .unwrap_or(7);
     let limit = limit_from_args(args, 30);
     let nodes = engine.diff_context(project_path, days, limit).await;
 

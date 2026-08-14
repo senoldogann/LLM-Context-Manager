@@ -7,11 +7,33 @@
 
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
+use std::future::Future;
 use std::io::Write;
 use std::path::PathBuf;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use crate::policy::TaskType;
+
+#[derive(Debug, Clone)]
+pub struct TrajectoryContext {
+    pub tool_name: String,
+    pub request_id: Option<String>,
+}
+
+tokio::task_local! {
+    static TRAJECTORY_CONTEXT: TrajectoryContext;
+}
+
+pub async fn with_context<F>(context: TrajectoryContext, future: F) -> F::Output
+where
+    F: Future,
+{
+    TRAJECTORY_CONTEXT.scope(context, future).await
+}
+
+pub fn current_context() -> Option<TrajectoryContext> {
+    TRAJECTORY_CONTEXT.try_with(Clone::clone).ok()
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RetrievalResultItem {
@@ -122,5 +144,21 @@ mod tests {
         let parsed: RetrievalEvent =
             serde_json::from_str(content.lines().next().unwrap()).expect("parse jsonl");
         assert_eq!(parsed.results[0].rank, 1);
+    }
+
+    #[tokio::test]
+    async fn trajectory_context_is_scoped_to_the_current_task() {
+        assert!(current_context().is_none());
+        let context = TrajectoryContext {
+            tool_name: "search_code".to_string(),
+            request_id: Some("42".to_string()),
+        };
+        with_context(context, async {
+            let active = current_context().expect("scoped context");
+            assert_eq!(active.tool_name, "search_code");
+            assert_eq!(active.request_id.as_deref(), Some("42"));
+        })
+        .await;
+        assert!(current_context().is_none());
     }
 }

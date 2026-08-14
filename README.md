@@ -10,9 +10,10 @@ English | [Turkce](./README.tr.md)
 
 > Bridge the gap between your codebase and your AI editor. CCM transforms static source code into a dynamic, queryable Knowledge Graph, enabling AI agents to navigate, understand, and reason about your project with surgical precision.
 
-> **Current release: v0.3.7.** Rust crates, npm wrapper, GitHub assets and the
-> agent skill now ship as one versioned unit. This release also hardens partial
-> index recovery and aligns metadata-first MCP output with its published schema.
+> **Current release: v0.3.8.** Index updates preserve the last healthy graph and
+> vector generation until a replacement is complete. MCP discovery, protocol
+> recovery, background indexing and npm binary installation are hardened for
+> real editor and large-repository workflows.
 
 [![Rust](https://img.shields.io/badge/Built%20With-Rust-orange.svg?style=flat-square&logo=rust)](https://www.rust-lang.org/)
 [![MCP Ready](https://img.shields.io/badge/MCP-Compatible-blue.svg?style=flat-square&logo=google-cloud)](https://modelcontextprotocol.io/)
@@ -65,7 +66,7 @@ Unlike tools that dump raw code, CCM injects **AI-Optimized Context**:
 
 ### 🔌 Universal Compatibility (MCP)
 - **Plug & Play** - Installer configures Codex, Cursor, Claude Desktop, and Antigravity
-- **Lazy Indexing** - Auto-indexes on first query
+- **Explicit Indexing** - Missing indexes fail fast and point to `index_project`
 - **Zero-Config** - Auto-detects project root
 
 ---
@@ -239,11 +240,16 @@ ccm-cli eval --tasks eval/golden_tasks.v3.ccm.json
 
 ### Incremental indexing behavior
 
-The first `index` builds the complete index. Later `index_project` or `index --watch` runs compare the filesystem manifest and update only changed or newly created files while removing deleted-file nodes. The vector database is not rebuilt when nothing changed. Cross-file reference edges are refreshed from the in-memory semantic graph so callers remain accurate after a symbol changes.
+The first `index` builds the complete index. Later `index_project` or `index --watch` runs compare the filesystem manifest and update only changed or newly created files while removing deleted-file nodes. The vector database is not rebuilt when nothing changed. Cross-file reference edges are refreshed from the in-memory semantic graph so callers remain accurate after a symbol changes. Retrieval tools fail fast when an index is missing or being updated; call `index_project` explicitly instead of making a search request wait for a hidden rebuild.
 
 For large repositories, MCP `index_project` returns before the client's timeout
 and continues in the background. Call the tool again to poll until it returns
 the final indexing statistics.
+
+Full rebuilds are prepared in a staging generation. A scan, parse, embedding or
+vector write failure leaves the previous graph, manifest and vector table in
+place. File fingerprints include content, so same-size edits with preserved
+timestamps are still detected.
 
 ---
 

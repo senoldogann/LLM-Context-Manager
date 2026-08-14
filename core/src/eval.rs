@@ -367,8 +367,6 @@ pub async fn evaluate_with_mode(tasks_file: GoldenTasksFile, mode: EvalMode) -> 
 
     for task in tasks_file.tasks {
         let repo_path = normalize_repo_path(&task.repo.path)?;
-        let db_path = repo_path.join("data").join("ccm_db");
-        let graph_path = repo_path.join("data").join("ccm_graph.json");
 
         let max_rank = task.expected.max_rank.unwrap_or(5).max(1);
         let expected_min_recall = task.expected.min_recall;
@@ -394,20 +392,18 @@ pub async fn evaluate_with_mode(tasks_file: GoldenTasksFile, mode: EvalMode) -> 
         };
 
         let require_vector_table = task.query.kind == "search_code";
-        if let Err(error) = ensure_eval_index(
-            &repo_path,
-            &db_path,
-            &graph_path,
-            require_vector_table,
-            &mut prepared_repos,
-        )
-        .await
-        {
-            result.detail = format!("Failed to prepare index: {}", error);
-            totals.skipped += 1;
-            results.push(result);
-            continue;
-        }
+        let artifacts =
+            match ensure_eval_index(&repo_path, require_vector_table, &mut prepared_repos).await {
+                Ok(artifacts) => artifacts,
+                Err(error) => {
+                    result.detail = format!("Failed to prepare index: {}", error);
+                    totals.skipped += 1;
+                    results.push(result);
+                    continue;
+                }
+            };
+        let db_path = artifacts.db_path;
+        let graph_path = artifacts.graph_path;
 
         match task.query.kind.as_str() {
             "search_code" => {
@@ -671,8 +667,6 @@ pub async fn evaluate_policy(
     for task in tasks_file.tasks {
         let started = std::time::Instant::now();
         let repo_path = normalize_repo_path(&task.repo.path)?;
-        let db_path = repo_path.join("data").join("ccm_db");
-        let graph_path = repo_path.join("data").join("ccm_graph.json");
 
         let max_rank = task.expected.max_rank.unwrap_or(5).max(1);
         let expected_min_recall = task.expected.min_recall;
@@ -697,14 +691,17 @@ pub async fn evaluate_policy(
             policy_version: Some(policy.version),
         };
 
-        if let Err(error) =
-            ensure_eval_index(&repo_path, &db_path, &graph_path, true, &mut prepared_repos).await
-        {
-            result.detail = format!("Failed to prepare index: {}", error);
-            totals.skipped += 1;
-            results.push(result);
-            continue;
-        }
+        let artifacts = match ensure_eval_index(&repo_path, true, &mut prepared_repos).await {
+            Ok(artifacts) => artifacts,
+            Err(error) => {
+                result.detail = format!("Failed to prepare index: {}", error);
+                totals.skipped += 1;
+                results.push(result);
+                continue;
+            }
+        };
+        let db_path = artifacts.db_path;
+        let graph_path = artifacts.graph_path;
 
         let mut ranked: Vec<String> = Vec::new();
         let mut token_hint: usize = 0;
@@ -1016,34 +1013,33 @@ fn cached_graph(
 
 async fn ensure_eval_index(
     repo_path: &Path,
-    db_path: &Path,
-    graph_path: &Path,
     require_vector_table: bool,
     prepared_repos: &mut HashSet<PathBuf>,
-) -> Result<()> {
-    let vector_table_path = db_path.join("code_vectors.lance");
-    if graph_path.exists() && (!require_vector_table || vector_table_path.exists()) {
-        return Ok(());
+) -> Result<crate::IndexArtifactPaths> {
+    let repo_path_text = repo_path.to_string_lossy();
+    let mut artifacts = crate::resolve_index_artifacts(&repo_path_text, None)?;
+    let mut vector_table_path = artifacts.db_path.join("code_vectors.lance");
+    if artifacts.graph_path.exists() && (!require_vector_table || vector_table_path.exists()) {
+        return Ok(artifacts);
     }
 
     let repo_key = repo_path.to_path_buf();
     if prepared_repos.contains(&repo_key) {
-        return Ok(());
+        return Ok(artifacts);
     }
 
-    crate::update_index(
-        &repo_path.to_string_lossy(),
-        Some(&db_path.to_string_lossy()),
-    )
-    .await
-    .with_context(|| {
-        format!(
-            "failed to build evaluation index for {}",
-            repo_path.display()
-        )
-    })?;
+    crate::update_index(&repo_path_text, None)
+        .await
+        .with_context(|| {
+            format!(
+                "failed to build evaluation index for {}",
+                repo_path.display()
+            )
+        })?;
 
     prepared_repos.insert(repo_key);
+    artifacts = crate::resolve_index_artifacts(&repo_path_text, None)?;
+    vector_table_path = artifacts.db_path.join("code_vectors.lance");
 
     if require_vector_table && !vector_table_path.exists() {
         return Err(anyhow::anyhow!(
@@ -1052,11 +1048,14 @@ async fn ensure_eval_index(
         ));
     }
 
-    if !graph_path.exists() {
-        return Err(anyhow::anyhow!("Missing graph at {}", graph_path.display()));
+    if !artifacts.graph_path.exists() {
+        return Err(anyhow::anyhow!(
+            "Missing graph at {}",
+            artifacts.graph_path.display()
+        ));
     }
 
-    Ok(())
+    Ok(artifacts)
 }
 
 /// Cursor konumunda context tahminini engine üzerinden üretir; node id'leri

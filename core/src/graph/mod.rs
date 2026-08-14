@@ -1,7 +1,7 @@
 use petgraph::graph::{DiGraph, NodeIndex};
 use petgraph::visit::EdgeRef;
 use serde::{Deserialize, Serialize};
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -87,6 +87,23 @@ impl CodeGraph {
             return;
         }
         self.graph.add_edge(source, target, weight);
+    }
+
+    pub(crate) fn append_graph(&mut self, other: &CodeGraph) {
+        let mut indices = HashMap::new();
+        for old_index in other.graph.node_indices() {
+            let new_index = self.add_node(other.graph[old_index].clone());
+            indices.insert(old_index, new_index);
+        }
+        for edge in other.graph.edge_references() {
+            let Some(source) = indices.get(&edge.source()).copied() else {
+                continue;
+            };
+            let Some(target) = indices.get(&edge.target()).copied() else {
+                continue;
+            };
+            self.add_edge(source, target, edge.weight().clone());
+        }
     }
 
     /// Rebuilds cross-symbol references from the current semantic node contents.

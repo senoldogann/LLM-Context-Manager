@@ -14,10 +14,6 @@ function resolvePackageVersion() {
         return process.env.CCM_BINARY_VERSION.trim();
     }
 
-    if (process.env.npm_package_version && process.env.npm_package_version.trim() !== '') {
-        return process.env.npm_package_version.trim();
-    }
-
     try {
         const pkgPath = path.join(__dirname, '..', 'package.json');
         const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8'));
@@ -137,7 +133,28 @@ function installAgentSkill(home, sourcePath) {
     const skillDirectory = path.join(home, '.agents', 'skills', MCP_SERVER_NAME);
     const skillPath = path.join(skillDirectory, 'SKILL.md');
     fs.mkdirSync(skillDirectory, { recursive: true });
-    writeTextAtomic(skillPath, fs.readFileSync(sourcePath, 'utf8'));
+    const nextContent = fs.readFileSync(sourcePath, 'utf8');
+    if (fs.existsSync(skillPath)) {
+        const currentContent = fs.readFileSync(skillPath, 'utf8');
+        if (currentContent !== nextContent) {
+            const contentHash = crypto
+                .createHash('sha256')
+                .update(currentContent)
+                .digest('hex')
+                .slice(0, 16);
+            const primaryBackup = `${skillPath}.bak`;
+            const backupPath = fs.existsSync(primaryBackup)
+                ? `${primaryBackup}.${contentHash}`
+                : primaryBackup;
+            try {
+                fs.copyFileSync(skillPath, backupPath, fs.constants.COPYFILE_EXCL);
+                console.warn(`[CCM] Existing agent skill was backed up to ${backupPath}`);
+            } catch (error) {
+                if (error.code !== 'EEXIST') throw error;
+            }
+        }
+    }
+    writeTextAtomic(skillPath, nextContent);
     console.log('[CCM] ✓ Successfully updated: ~/.agents/skills/context-manager/SKILL.md');
 }
 
@@ -162,8 +179,18 @@ function installJsonConfig(configPath, mcpConfig) {
         }
     }
 
-    if (!config.mcpServers || typeof config.mcpServers !== 'object') {
+    if (config === null || Array.isArray(config) || typeof config !== 'object') {
+        throw new Error(
+            `Could not update ${configPath}: the top-level JSON value must be an object. The original file was preserved.`
+        );
+    }
+
+    if (!config.mcpServers) {
         config.mcpServers = {};
+    } else if (Array.isArray(config.mcpServers) || typeof config.mcpServers !== 'object') {
+        throw new Error(
+            `Could not update ${configPath}: mcpServers must be a JSON object. The original file was preserved.`
+        );
     }
 
     config.mcpServers[MCP_SERVER_NAME] = mcpConfig;
@@ -211,9 +238,9 @@ function installCodexTomlConfig(configPath, projectRoot, version) {
     const preserved = [];
     let removing = false;
     for (const line of lines) {
-        const header = line.trim().match(/^\[([^\]]+)\]$/);
+        const header = line.match(/^\s*\[\[?([^\]]+)\]\]?\s*(?:#.*)?$/);
         if (header) {
-            removing = header[1] === sectionPrefix || header[1].startsWith(`${sectionPrefix}.`);
+            removing = isManagedCodexSection(header[1]);
         }
         if (!removing) {
             preserved.push(line);
@@ -235,11 +262,52 @@ function installCodexTomlConfig(configPath, projectRoot, version) {
     ].join('\n');
 
     const next = `${preserved.join('\n').trimEnd()}\n\n${block}\n`.replace(/^\n+/, '');
+    validateManagedCodexSections(next);
     writeTextAtomic(configPath, next);
+    try {
+        const written = fs.readFileSync(configPath, 'utf8');
+        if (written !== next) {
+            throw new Error('Codex configuration verification did not match the rendered content');
+        }
+        validateManagedCodexSections(written);
+    } catch (error) {
+        if (content === '') {
+            fs.unlinkSync(configPath);
+        } else {
+            writeTextAtomic(configPath, content);
+        }
+        throw error;
+    }
+}
+
+function isManagedCodexSection(header) {
+    return /^(?:mcp_servers|"mcp_servers"|'mcp_servers')\s*\.\s*(?:context-manager|"context-manager"|'context-manager')\s*(?:\.|$)/.test(
+        header.trim()
+    );
+}
+
+function validateManagedCodexSections(content) {
+    let rootCount = 0;
+    let envCount = 0;
+    for (const line of content.split(/\r?\n/)) {
+        const header = line.trim().match(/^\[([^\]]+)\]$/);
+        if (!header || !isManagedCodexSection(header[1])) continue;
+        const normalized = header[1]
+            .replace(/"context-manager"|'context-manager'/, 'context-manager')
+            .replace(/\s+/g, '');
+        if (normalized === 'mcp_servers.context-manager') rootCount++;
+        if (normalized === 'mcp_servers.context-manager.env') envCount++;
+    }
+    if (rootCount !== 1 || envCount !== 1) {
+        throw new Error(
+            `Rendered Codex configuration is invalid: expected one context-manager root and env section, found root=${rootCount}, env=${envCount}`
+        );
+    }
 }
 
 function createUniqueTmpPath(binPath) {
-    return `${binPath}.${process.pid}.${Date.now()}.tmp`;
+    const nonce = crypto.randomBytes(8).toString('hex');
+    return `${binPath}.${process.pid}.${Date.now()}.${nonce}.tmp`;
 }
 
 function writeTextAtomic(filePath, content) {
@@ -276,14 +344,13 @@ async function getBinaryFor(commandName) {
     const remoteFilename = `${commandName}-${target}`;
     const compressedFilename = `${remoteFilename}.gz`;
 
-    // If file exists, ensure it is executable
+    // Daha once dogrulanmis cache yalniz sidecar hash'i halen eslesiyorsa kullanilir.
     if (fs.existsSync(binPath)) {
-        try {
+        if (await verifyCachedBinary(binPath)) {
             fs.chmodSync(binPath, '755');
             return binPath;
-        } catch (e) {
-            // If chmod fails, maybe it's a broken file, try to redownload
         }
+        console.warn(`[CCM] Cached binary failed verification and will be replaced: ${binPath}`);
     }
 
     console.log(`[CCM] Downloading ${commandName} v${VERSION} for ${target}...`);
@@ -293,15 +360,16 @@ async function getBinaryFor(commandName) {
     }
 
     const tmpPath = createUniqueTmpPath(binPath);
-    const compressedPath = `${binPath}.gz.download`;
-    const rawPath = `${binPath}.download`;
+    const compressedPath = `${tmpPath}.gz.download`;
+    const rawPath = `${tmpPath}.download`;
 
     try {
+        let downloadVerified = false;
         const compressedUrl =
             `https://github.com/${REPO}/releases/download/v${VERSION}/${compressedFilename}`;
         try {
             await downloadFileWithRetry(compressedUrl, compressedPath);
-            await verifyChecksum(compressedPath, [compressedFilename]);
+            downloadVerified = await verifyChecksum(compressedPath, [compressedFilename]);
             await extractGzip(compressedPath, tmpPath);
             fs.unlinkSync(compressedPath);
         } catch (error) {
@@ -312,25 +380,108 @@ async function getBinaryFor(commandName) {
             const rawUrl =
                 `https://github.com/${REPO}/releases/download/v${VERSION}/${remoteFilename}`;
             await downloadFileWithRetry(rawUrl, rawPath);
-            await verifyChecksum(rawPath, [remoteFilename, binFilename]);
+            downloadVerified = await verifyChecksum(rawPath, [remoteFilename, binFilename]);
             fs.renameSync(rawPath, tmpPath);
         }
         fs.chmodSync(tmpPath, '755');
-        if (fs.existsSync(binPath)) {
-            fs.unlinkSync(tmpPath);
-            return binPath;
-        }
-        fs.renameSync(tmpPath, binPath);
+        await finalizeDownloadedBinary(binPath, tmpPath, downloadVerified);
     } catch (err) {
         if (fs.existsSync(tmpPath)) fs.unlinkSync(tmpPath);
-        if (/checksum|gzip|header|unexpected end/i.test(err.message || '')) {
-            if (fs.existsSync(compressedPath)) fs.unlinkSync(compressedPath);
-            if (fs.existsSync(rawPath)) fs.unlinkSync(rawPath);
-        }
+        // Retry dongusu ayni unique partial dosyayi kullanir. Son hata sonrasinda
+        // baska bir proses bu yolu yeniden kullanamayacagi icin artiklari temizle.
+        if (fs.existsSync(compressedPath)) fs.unlinkSync(compressedPath);
+        if (fs.existsSync(rawPath)) fs.unlinkSync(rawPath);
         throw err;
     }
 
     return binPath;
+}
+
+function processIsAlive(pid) {
+    if (!Number.isInteger(pid) || pid <= 0) return false;
+    try {
+        process.kill(pid, 0);
+        return true;
+    } catch (error) {
+        return error.code === 'EPERM';
+    }
+}
+
+async function acquireFileLock(lockPath, timeoutMs) {
+    const startedAt = Date.now();
+    while (true) {
+        try {
+            const descriptor = fs.openSync(lockPath, 'wx', 0o600);
+            fs.writeFileSync(descriptor, `${process.pid}\n`, 'utf8');
+            return descriptor;
+        } catch (error) {
+            if (error.code !== 'EEXIST') throw error;
+            let ownerAlive = true;
+            try {
+                const owner = Number.parseInt(fs.readFileSync(lockPath, 'utf8').trim(), 10);
+                ownerAlive = processIsAlive(owner);
+            } catch (readError) {
+                if (readError.code !== 'ENOENT') ownerAlive = false;
+            }
+            if (!ownerAlive) {
+                try {
+                    fs.unlinkSync(lockPath);
+                } catch (unlinkError) {
+                    if (unlinkError.code !== 'ENOENT') throw unlinkError;
+                }
+                continue;
+            }
+            if (Date.now() - startedAt >= timeoutMs) {
+                throw new Error(`Timed out waiting for binary cache lock: ${lockPath}`);
+            }
+            await new Promise((resolve) => setTimeout(resolve, 50));
+        }
+    }
+}
+
+async function finalizeDownloadedBinary(binPath, tmpPath, downloadVerified) {
+    const lockPath = `${binPath}.lock`;
+    const descriptor = await acquireFileLock(lockPath, 30_000);
+    try {
+        const downloadedHash = await sha256File(tmpPath);
+        if (fs.existsSync(binPath)) {
+            const existingHash = await sha256File(binPath);
+            if (existingHash === downloadedHash) {
+                fs.unlinkSync(tmpPath);
+                if (downloadVerified) writeBinaryChecksumSidecar(binPath, existingHash);
+                return;
+            }
+            fs.unlinkSync(binPath);
+            const staleSidecar = checksumSidecarPath(binPath);
+            if (fs.existsSync(staleSidecar)) fs.unlinkSync(staleSidecar);
+        }
+        fs.renameSync(tmpPath, binPath);
+        if (downloadVerified) writeBinaryChecksumSidecar(binPath, downloadedHash);
+    } finally {
+        fs.closeSync(descriptor);
+        try {
+            fs.unlinkSync(lockPath);
+        } catch (error) {
+            if (error.code !== 'ENOENT') throw error;
+        }
+    }
+}
+
+function checksumSidecarPath(binPath) {
+    return `${binPath}.sha256`;
+}
+
+function writeBinaryChecksumSidecar(binPath, hash) {
+    writeTextAtomic(checksumSidecarPath(binPath), `${hash}\n`);
+}
+
+async function verifyCachedBinary(binPath) {
+    const sidecarPath = checksumSidecarPath(binPath);
+    if (!fs.existsSync(sidecarPath)) return false;
+    const expected = fs.readFileSync(sidecarPath, 'utf8').trim().toLowerCase();
+    if (!/^[a-f0-9]{64}$/.test(expected)) return false;
+    const actual = await sha256File(binPath);
+    return actual === expected;
 }
 
 async function extractGzip(source, destination) {
@@ -513,7 +664,7 @@ async function verifyChecksum(filePath, candidates) {
     if (!checksums) {
         if (allowUnverifiedBinaries()) {
             console.warn('[CCM] Checksum manifest not found. Proceeding without verification.');
-            return;
+            return false;
         }
         throw new Error('Checksum manifest not found. Set CCM_ALLOW_UNVERIFIED_BINARIES=1 to bypass.');
     }
@@ -526,7 +677,7 @@ async function verifyChecksum(filePath, candidates) {
     if (!expected) {
         if (allowUnverifiedBinaries()) {
             console.warn('[CCM] Checksum not found for binary. Proceeding without verification.');
-            return;
+            return false;
         }
         throw new Error('Checksum not found for binary. Set CCM_ALLOW_UNVERIFIED_BINARIES=1 to bypass.');
     }
@@ -535,6 +686,7 @@ async function verifyChecksum(filePath, candidates) {
     if (actual !== expected) {
         throw new Error(`Checksum mismatch. Expected ${expected}, got ${actual}`);
     }
+    return true;
 }
 
 async function main() {
@@ -550,8 +702,16 @@ async function main() {
             }
         });
 
-        child.on('exit', (code) => {
-            process.exit(code);
+        child.on('error', (error) => {
+            console.error(`[CCM Error] Failed to start binary: ${error.message}`);
+            process.exit(1);
+        });
+        child.on('exit', (code, signal) => {
+            if (signal) {
+                console.error(`[CCM Error] Binary terminated by signal ${signal}`);
+                process.exit(1);
+            }
+            process.exit(typeof code === 'number' ? code : 1);
         });
     } catch (err) {
         console.error(`[CCM Error] ${err.message}`);
@@ -566,12 +726,15 @@ if (require.main === module) {
 module.exports = {
     MCP_ARGS,
     MCP_ENV,
+    createUniqueTmpPath,
     extractGzip,
+    finalizeDownloadedBinary,
     installAgentSkill,
     installCodexTomlConfig,
     installJsonConfig,
     parseChecksums,
     resolveRedirectUrl,
+    verifyCachedBinary,
     verifyChecksum,
     writeJsonAtomic
 };

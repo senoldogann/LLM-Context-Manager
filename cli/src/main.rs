@@ -239,7 +239,14 @@ async fn main() -> anyhow::Result<()> {
                             "Incremental indexing failed: {}. Falling back to full index.",
                             e
                         );
-                        let _ = ccm_core::index_directory(&path_str, db_path_str.as_deref()).await;
+                        ccm_core::index_directory(&path_str, db_path_str.as_deref())
+                            .await
+                            .with_context(|| {
+                                format!(
+                                    "Incremental indexing and full rebuild both failed for '{}'",
+                                    path.display()
+                                )
+                            })?;
                     }
                 }
             }
@@ -447,18 +454,18 @@ async fn main() -> anyhow::Result<()> {
                 }
             }
         },
-        Commands::Doctor { path, json } => run_doctor(&path, json)?,
+        Commands::Doctor { path, json } => run_doctor(&path, json).await?,
     }
 
     Ok(())
 }
 
-fn run_doctor(path: &std::path::Path, json: bool) -> anyhow::Result<()> {
+async fn run_doctor(path: &std::path::Path, json: bool) -> anyhow::Result<()> {
     let root = path.canonicalize()?;
-    let data = root.join("data");
-    let manifest_path = data.join("ccm_manifest.json");
-    let graph_path = data.join("ccm_graph.json");
-    let db_path = data.join("ccm_db");
+    let artifacts = ccm_core::resolve_index_artifacts(&root.to_string_lossy(), None)?;
+    let manifest_path = artifacts.manifest_path;
+    let graph_path = artifacts.graph_path;
+    let db_path = artifacts.db_path;
 
     let manifest_schema = std::fs::read_to_string(&manifest_path)
         .ok()
@@ -485,6 +492,44 @@ fn run_doctor(path: &std::path::Path, json: bool) -> anyhow::Result<()> {
     let model = std::env::var("CCM_EMBEDDING_MODEL")
         .or_else(|_| std::env::var("EMBEDDING_MODEL"))
         .unwrap_or_else(|_| "default".to_string());
+    let graph_result = ccm_core::graph::CodeGraph::load_from_file(&graph_path.to_string_lossy());
+    let graph_error = graph_result.as_ref().err().map(ToString::to_string);
+    let graph_nodes = graph_result
+        .as_ref()
+        .ok()
+        .map(|graph| graph.graph.node_count());
+    let semantic_nodes = graph_result
+        .as_ref()
+        .ok()
+        .map(ccm_core::semantic_node_count)
+        .unwrap_or(0);
+    let embedder_disabled = std::env::var("CCM_DISABLE_EMBEDDER")
+        .or_else(|_| std::env::var("EMBEDDING_DISABLED"))
+        .map(|value| matches!(value.to_lowercase().as_str(), "1" | "true" | "yes"))
+        .unwrap_or(false);
+    let vector_result = if !db_path.is_dir() {
+        Err("vector database directory is missing".to_string())
+    } else if embedder_disabled {
+        Ok(None)
+    } else if semantic_nodes == 0 {
+        Ok(Some(0))
+    } else {
+        match ccm_core::vector::store::LanceDbStore::new(&db_path.to_string_lossy(), "code_vectors")
+            .await
+        {
+            Ok(store) => match store.validate_table().await {
+                Ok(rows) if rows >= semantic_nodes => Ok(Some(rows)),
+                Ok(rows) => Err(format!(
+                    "vector table has {} row(s), fewer than {} semantic graph node(s)",
+                    rows, semantic_nodes
+                )),
+                Err(error) => Err(error.to_string()),
+            },
+            Err(error) => Err(error.to_string()),
+        }
+    };
+    let vector_error = vector_result.as_ref().err().cloned();
+    let vector_rows = vector_result.as_ref().ok().copied().flatten();
 
     let checks = serde_json::json!({
         "project_root": {"ok": root.is_dir(), "value": root},
@@ -499,8 +544,20 @@ fn run_doctor(path: &std::path::Path, json: bool) -> anyhow::Result<()> {
             "schema": manifest_schema,
             "expected_schema": expected_schema
         },
-        "graph": {"ok": graph_path.is_file(), "path": graph_path},
-        "vector_index": {"ok": db_path.is_dir(), "path": db_path},
+        "graph": {
+            "ok": graph_result.is_ok(),
+            "path": graph_path,
+            "nodes": graph_nodes,
+            "semantic_nodes": semantic_nodes,
+            "error": graph_error
+        },
+        "vector_index": {
+            "ok": vector_result.is_ok(),
+            "path": db_path,
+            "rows": vector_rows,
+            "disabled": embedder_disabled,
+            "error": vector_error
+        },
         "embedding": {"ok": !provider.trim().is_empty(), "provider": provider, "model": model},
         "binary": {"ok": true, "version": env!("CARGO_PKG_VERSION")}
     });

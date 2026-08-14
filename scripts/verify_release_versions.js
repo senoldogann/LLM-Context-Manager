@@ -41,6 +41,7 @@ const npmLock = JSON.parse(
 const versions = new Map(packageFiles.map((file) => [file, cargoVersion(file)]));
 versions.set('npm/package.json', npmPackage.version);
 versions.set('npm/package-lock.json', npmLock.version);
+versions.set('npm/package-lock.json:packages[""]', npmLock.packages[''].version);
 versions.set('Cargo.lock:ccm-core', cargoLockVersion('ccm-core'));
 versions.set('Cargo.lock:ccm-cli', cargoLockVersion('ccm-cli'));
 versions.set('Cargo.lock:ccm-mcp', cargoLockVersion('ccm-mcp'));

@@ -1,5 +1,23 @@
 # Release Notes
 
+## v0.3.8 - Runtime and Distribution Hardening
+
+- Tam indeks yeniden oluşturma staging neslinde tamamlanmadan canlı graf,
+  manifest ve vektör tablosu değiştirilmez; başarısız işlem son sağlıklı indeksi
+  korur.
+- Eksik, bozuk veya güncellenmekte olan indeks retrieval çağrısında gizlice
+  oluşturulmaz; `index_project` için açık ve hızlı hata döner.
+- Büyük repo indeksleri istemci çağrısını açık tutmadan arka planda çalışır,
+  ayrı worker process için hard deadline uygular, tekrar çağrıyla sorgulanır ve
+  tamamlanan iş/lock kayıtları süre sonunda temizlenir.
+- JSON-RPC parse ve protokol hataları doğru kodlarla yanıtlanır; bozuk çerçeve,
+  notification ve discovery akışları sunucuyu veya yanıt sırasını bozmaz.
+- npm wrapper cache binary'sini checksum sidecar ile doğrular, eşzamanlı soğuk
+  indirmeleri ayırır, yabancı npm sürüm ortamını yok sayar ve child sinyallerini
+  başarısız çıkış olarak iletir.
+- Doctor bozuk graf ve vektör tablosunu yalnız dosya varlığıyla sağlıklı saymaz;
+  indeks taraması içerik hash'i ve dinamik artifact hariç tutma kullanır.
+
 ## v0.3.7 - Codex MCP Discovery Compatibility
 
 - `resources/list` artık Codex keşif akışı için geçerli boş `resources` listesi

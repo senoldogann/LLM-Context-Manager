@@ -40,6 +40,7 @@ fn mcp_large_index_returns_before_client_timeout_and_supports_polling(
     cmd.env("CCM_DISABLE_EMBEDDER", "1")
         .env("CCM_MCP_DEBUG", "0")
         .env("CCM_INDEX_RESPONSE_TIMEOUT_MS", "1")
+        .env("CCM_PROJECT_ROOT", project_root.to_string_lossy().as_ref())
         .env("CCM_ALLOWED_ROOTS", project_root.to_string_lossy().as_ref())
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
@@ -88,8 +89,7 @@ fn mcp_large_index_returns_before_client_timeout_and_supports_polling(
                 "name":"get_context",
                 "arguments":{
                     "file":"src/module_0.rs",
-                    "line":1,
-                    "project_path":project_root
+                    "line":1
                 }
             }
         }),
@@ -98,7 +98,7 @@ fn mcp_large_index_returns_before_client_timeout_and_supports_polling(
     assert!(retrieval["error"]["message"]
         .as_str()
         .unwrap_or_default()
-        .contains("Failed to load project context"));
+        .contains("indexing is in progress"));
 
     let deadline = Instant::now() + Duration::from_secs(30);
     loop {
@@ -113,6 +113,49 @@ fn mcp_large_index_returns_before_client_timeout_and_supports_polling(
             "background index did not finish before deadline: {text}"
         );
     }
+
+    let _ = child.kill();
+    Ok(())
+}
+
+#[test]
+fn mcp_index_worker_timeout_releases_the_job_for_retry() -> Result<(), Box<dyn std::error::Error>> {
+    let project = tempdir()?;
+    fs::write(project.path().join("main.rs"), "fn delayed() {}\n")?;
+    let mut cmd = Command::new(assert_cmd::cargo::cargo_bin!("ccm-mcp"));
+    cmd.env("CCM_DISABLE_EMBEDDER", "1")
+        .env("CCM_MCP_DEBUG", "0")
+        .env("CCM_PROJECT_ROOT", project.path())
+        .env("CCM_ALLOWED_ROOTS", project.path())
+        .env("CCM_INDEX_EXECUTION_TIMEOUT_MS", "50")
+        .env("CCM_INTERNAL_INDEX_TEST_DELAY_MS", "500")
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null());
+
+    let mut child = cmd.spawn()?;
+    let mut stdin = child.stdin.take().unwrap();
+    let mut reader = BufReader::new(child.stdout.take().unwrap());
+    let initialized = send_request(
+        &mut stdin,
+        &mut reader,
+        json!({"jsonrpc":"2.0","id":0,"method":"initialize","params":{}}),
+    )?;
+    assert!(initialized.get("result").is_some());
+    let request = json!({
+        "jsonrpc":"2.0","id":1,"method":"tools/call",
+        "params":{"name":"index_project","arguments":{"project_path":project.path()}}
+    });
+
+    let started = Instant::now();
+    let timed_out = send_request(&mut stdin, &mut reader, request.clone())?;
+    assert!(started.elapsed() < Duration::from_secs(2));
+    assert_eq!(timed_out["result"]["isError"], true);
+    assert!(tool_text(&timed_out).contains("configured deadline"));
+
+    let retry = send_request(&mut stdin, &mut reader, request)?;
+    assert_eq!(retry["result"]["isError"], true);
+    assert!(!tool_text(&retry).contains("still in progress"));
 
     let _ = child.kill();
     Ok(())
@@ -505,6 +548,524 @@ fn mcp_non_strict_empty_allowlist_stays_within_default_root(
         }),
     )?;
     assert!(tool_text(&denied).contains("not allowed") || denied.get("error").is_some());
+
+    let _ = child.kill();
+    Ok(())
+}
+
+#[test]
+fn mcp_implicit_default_path_obeys_strict_allowlist() -> Result<(), Box<dyn std::error::Error>> {
+    let project = tempdir()?;
+    fs::write(project.path().join("main.rs"), "fn hidden() {}\n")?;
+
+    let mut cmd = Command::new(assert_cmd::cargo::cargo_bin!("ccm-mcp"));
+    cmd.env("CCM_DISABLE_EMBEDDER", "1")
+        .env("CCM_MCP_DEBUG", "0")
+        .env_remove("CCM_ALLOWED_ROOTS")
+        .env_remove("CCM_PROJECT_ROOT")
+        .env_remove("CCM_REQUIRE_ALLOWED_ROOTS")
+        .current_dir(project.path())
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null());
+
+    let mut child = cmd.spawn()?;
+    let mut stdin = child.stdin.take().unwrap();
+    let mut reader = BufReader::new(child.stdout.take().unwrap());
+    let denied = send_request(
+        &mut stdin,
+        &mut reader,
+        json!({
+            "jsonrpc":"2.0","id":1,"method":"tools/call",
+            "params":{"name":"get_context","arguments":{"file":"main.rs","line":1}}
+        }),
+    )?;
+    assert_eq!(denied["error"]["code"], -32603);
+
+    let _ = child.kill();
+    Ok(())
+}
+
+#[test]
+fn mcp_strict_mode_without_default_root_rejects_implicit_retrieval(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let home = tempdir()?;
+    let mut cmd = Command::new(assert_cmd::cargo::cargo_bin!("ccm-mcp"));
+    cmd.env("CCM_DISABLE_EMBEDDER", "1")
+        .env("CCM_MCP_DEBUG", "0")
+        .env("CCM_REQUIRE_ALLOWED_ROOTS", "1")
+        .env("HOME", home.path())
+        .env("USERPROFILE", home.path())
+        .env_remove("CCM_ALLOWED_ROOTS")
+        .env_remove("CCM_PROJECT_ROOT")
+        .current_dir("/")
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null());
+
+    let mut child = cmd.spawn()?;
+    let mut stdin = child.stdin.take().unwrap();
+    let mut reader = BufReader::new(child.stdout.take().unwrap());
+    let denied = send_request(
+        &mut stdin,
+        &mut reader,
+        json!({
+            "jsonrpc":"2.0","id":1,"method":"tools/call",
+            "params":{"name":"get_context","arguments":{"file":"main.rs","line":1}}
+        }),
+    )?;
+    assert_eq!(denied["error"]["code"], -32603);
+    let message = denied["error"]["message"].as_str().unwrap_or_default();
+    assert!(
+        message.contains("No default project root"),
+        "unexpected strict-root error: {message}"
+    );
+
+    let _ = child.kill();
+    Ok(())
+}
+
+#[test]
+fn mcp_suppresses_notification_responses() -> Result<(), Box<dyn std::error::Error>> {
+    let project = tempdir()?;
+    let mut cmd = Command::new(assert_cmd::cargo::cargo_bin!("ccm-mcp"));
+    cmd.env("CCM_DISABLE_EMBEDDER", "1")
+        .env("CCM_MCP_DEBUG", "0")
+        .env("CCM_PROJECT_ROOT", project.path())
+        .env("CCM_ALLOWED_ROOTS", project.path())
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null());
+
+    let mut child = cmd.spawn()?;
+    let mut stdin = child.stdin.take().unwrap();
+    let mut reader = BufReader::new(child.stdout.take().unwrap());
+    writeln!(stdin, "{}", json!({"jsonrpc":"2.0","method":"tools/list"}))?;
+    writeln!(
+        stdin,
+        "{}",
+        json!({"jsonrpc":"2.0","id":9,"method":"resources/list"})
+    )?;
+    stdin.flush()?;
+
+    let mut line = String::new();
+    reader.read_line(&mut line)?;
+    let response: serde_json::Value = serde_json::from_str(&line)?;
+    assert_eq!(response["id"], 9);
+    assert!(response["result"]["resources"].is_array());
+
+    let _ = child.kill();
+    Ok(())
+}
+
+#[test]
+fn mcp_suppresses_invalid_notification_errors() -> Result<(), Box<dyn std::error::Error>> {
+    let project = tempdir()?;
+    let mut cmd = Command::new(assert_cmd::cargo::cargo_bin!("ccm-mcp"));
+    cmd.env("CCM_DISABLE_EMBEDDER", "1")
+        .env("CCM_MCP_DEBUG", "0")
+        .env("CCM_PROJECT_ROOT", project.path())
+        .env("CCM_ALLOWED_ROOTS", project.path())
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null());
+
+    let mut child = cmd.spawn()?;
+    let mut stdin = child.stdin.take().unwrap();
+    let mut reader = BufReader::new(child.stdout.take().unwrap());
+    writeln!(
+        stdin,
+        "{}",
+        json!({"jsonrpc":"2.0","method":"tools/call","params":{}})
+    )?;
+    writeln!(
+        stdin,
+        "{}",
+        json!({"jsonrpc":"2.0","id":9,"method":"resources/list"})
+    )?;
+    stdin.flush()?;
+
+    let mut line = String::new();
+    reader.read_line(&mut line)?;
+    let response: serde_json::Value = serde_json::from_str(&line)?;
+    assert_eq!(response["id"], 9);
+    assert!(response["result"]["resources"].is_array());
+
+    let _ = child.kill();
+    Ok(())
+}
+
+#[test]
+fn mcp_rejects_invalid_tools_before_lazy_indexing() -> Result<(), Box<dyn std::error::Error>> {
+    let server_root = tempdir()?;
+    let project = tempdir()?;
+    fs::write(project.path().join("main.rs"), "fn untouched() {}\n")?;
+
+    let mut cmd = Command::new(assert_cmd::cargo::cargo_bin!("ccm-mcp"));
+    cmd.env("CCM_DISABLE_EMBEDDER", "1")
+        .env("CCM_MCP_DEBUG", "0")
+        .env("CCM_ALLOWED_ROOTS", project.path())
+        .env_remove("CCM_PROJECT_ROOT")
+        .current_dir(server_root.path())
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null());
+
+    let mut child = cmd.spawn()?;
+    let mut stdin = child.stdin.take().unwrap();
+    let mut reader = BufReader::new(child.stdout.take().unwrap());
+    let unknown = send_request(
+        &mut stdin,
+        &mut reader,
+        json!({
+            "jsonrpc":"2.0","id":1,"method":"tools/call",
+            "params":{"name":"typo_tool","arguments":{"project_path":project.path()}}
+        }),
+    )?;
+    assert_eq!(unknown["error"]["code"], -32602);
+
+    let malformed = send_request(
+        &mut stdin,
+        &mut reader,
+        json!({
+            "jsonrpc":"2.0","id":2,"method":"tools/call",
+            "params":{"name":"get_context","arguments":{"project_path":project.path()}}
+        }),
+    )?;
+    assert_eq!(malformed["error"]["code"], -32602);
+    assert!(!project.path().join("data").exists());
+
+    let _ = child.kill();
+    Ok(())
+}
+
+#[test]
+fn mcp_missing_index_fails_fast_without_hidden_rebuild() -> Result<(), Box<dyn std::error::Error>> {
+    let server_root = tempdir()?;
+    let project = tempdir()?;
+    fs::write(project.path().join("main.rs"), "fn pending() {}\n")?;
+
+    let mut cmd = Command::new(assert_cmd::cargo::cargo_bin!("ccm-mcp"));
+    cmd.env("CCM_DISABLE_EMBEDDER", "1")
+        .env("CCM_MCP_DEBUG", "0")
+        .env("CCM_ALLOWED_ROOTS", project.path())
+        .env_remove("CCM_PROJECT_ROOT")
+        .current_dir(server_root.path())
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null());
+
+    let mut child = cmd.spawn()?;
+    let mut stdin = child.stdin.take().unwrap();
+    let mut reader = BufReader::new(child.stdout.take().unwrap());
+    let initialized = send_request(
+        &mut stdin,
+        &mut reader,
+        json!({"jsonrpc":"2.0","id":0,"method":"initialize","params":{}}),
+    )?;
+    assert!(initialized.get("result").is_some());
+    let started = Instant::now();
+    let response = send_request(
+        &mut stdin,
+        &mut reader,
+        json!({
+            "jsonrpc":"2.0","id":1,"method":"tools/call",
+            "params":{"name":"get_context","arguments":{
+                "file":"main.rs","line":1,"project_path":project.path()
+            }}
+        }),
+    )?;
+    assert!(started.elapsed() < Duration::from_secs(2));
+    assert_eq!(response["error"]["code"], -32603);
+    assert!(response["error"]["message"]
+        .as_str()
+        .unwrap_or_default()
+        .contains("Call index_project first"));
+    assert!(!project.path().join("data").exists());
+
+    let _ = child.kill();
+    Ok(())
+}
+
+#[test]
+fn mcp_custom_db_path_is_used_for_index_and_retrieval() -> Result<(), Box<dyn std::error::Error>> {
+    let project = tempdir()?;
+    let custom_db = project.path().join(".ccm/db");
+    fs::write(project.path().join("main.rs"), "fn custom_location() {}\n")?;
+
+    let mut cmd = Command::new(assert_cmd::cargo::cargo_bin!("ccm-mcp"));
+    cmd.env("CCM_DISABLE_EMBEDDER", "1")
+        .env("CCM_MCP_DEBUG", "0")
+        .env("CCM_PROJECT_ROOT", project.path())
+        .env("CCM_ALLOWED_ROOTS", project.path())
+        .env("CCM_DB_PATH", &custom_db)
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null());
+
+    let mut child = cmd.spawn()?;
+    let mut stdin = child.stdin.take().unwrap();
+    let mut reader = BufReader::new(child.stdout.take().unwrap());
+    let indexed = send_request(
+        &mut stdin,
+        &mut reader,
+        json!({
+            "jsonrpc":"2.0","id":1,"method":"tools/call",
+            "params":{"name":"index_project","arguments":{"project_path":project.path()}}
+        }),
+    )?;
+    assert!(tool_text(&indexed).contains("Project index refreshed successfully"));
+    let artifacts = ccm_core::resolve_index_artifacts(
+        project.path().to_string_lossy().as_ref(),
+        Some(custom_db.to_string_lossy().as_ref()),
+    )?;
+    assert!(artifacts.graph_path.is_file());
+    let canonical_custom_parent = project.path().canonicalize()?.join(".ccm");
+    assert!(
+        artifacts.db_path.starts_with(&canonical_custom_parent),
+        "active custom DB '{}' is outside '{}'",
+        artifacts.db_path.display(),
+        canonical_custom_parent.display()
+    );
+    assert!(!project.path().join("data/ccm_graph.json").exists());
+
+    let context = send_request(
+        &mut stdin,
+        &mut reader,
+        json!({
+            "jsonrpc":"2.0","id":2,"method":"tools/call",
+            "params":{"name":"get_context","arguments":{"file":"main.rs","line":1}}
+        }),
+    )?;
+    assert!(tool_text(&context).contains("Current: custom_location"));
+
+    let _ = child.kill();
+    Ok(())
+}
+
+#[test]
+fn mcp_default_corrupt_graph_requires_and_accepts_rebuild() -> Result<(), Box<dyn std::error::Error>>
+{
+    let project = tempdir()?;
+    fs::create_dir_all(project.path().join("data/ccm_db"))?;
+    fs::write(project.path().join("main.rs"), "fn repaired() {}\n")?;
+    fs::write(project.path().join("data/ccm_graph.json"), "{broken")?;
+    fs::write(
+        project.path().join("data/ccm_manifest.json"),
+        format!(
+            "{{\"schema_version\":{},\"files\":{{}}}}",
+            ccm_core::INDEX_SCHEMA_VERSION
+        ),
+    )?;
+
+    let mut cmd = Command::new(assert_cmd::cargo::cargo_bin!("ccm-mcp"));
+    cmd.env("CCM_DISABLE_EMBEDDER", "1")
+        .env("CCM_MCP_DEBUG", "0")
+        .env("CCM_PROJECT_ROOT", project.path())
+        .env("CCM_ALLOWED_ROOTS", project.path())
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null());
+
+    let mut child = cmd.spawn()?;
+    let mut stdin = child.stdin.take().unwrap();
+    let mut reader = BufReader::new(child.stdout.take().unwrap());
+    let rejected = send_request(
+        &mut stdin,
+        &mut reader,
+        json!({
+            "jsonrpc":"2.0","id":1,"method":"tools/call",
+            "params":{"name":"get_context","arguments":{"file":"main.rs","line":1}}
+        }),
+    )?;
+    assert_eq!(rejected["error"]["code"], -32603);
+
+    let rebuilt = send_request(
+        &mut stdin,
+        &mut reader,
+        json!({
+            "jsonrpc":"2.0","id":2,"method":"tools/call",
+            "params":{"name":"index_project","arguments":{"project_path":project.path()}}
+        }),
+    )?;
+    assert!(tool_text(&rebuilt).contains("Project index refreshed successfully"));
+
+    let recovered = send_request(
+        &mut stdin,
+        &mut reader,
+        json!({
+            "jsonrpc":"2.0","id":3,"method":"tools/call",
+            "params":{"name":"get_context","arguments":{"file":"main.rs","line":1}}
+        }),
+    )?;
+    assert!(tool_text(&recovered).contains("Current: repaired"));
+
+    let _ = child.kill();
+    Ok(())
+}
+
+#[test]
+fn mcp_broken_generation_pointer_can_be_repaired_with_index_project(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let project = tempdir()?;
+    fs::create_dir_all(project.path().join("data"))?;
+    fs::write(project.path().join("main.rs"), "fn pointer_repaired() {}\n")?;
+    fs::write(
+        project.path().join("data/ccm_current"),
+        "missing-generation",
+    )?;
+
+    let mut cmd = Command::new(assert_cmd::cargo::cargo_bin!("ccm-mcp"));
+    cmd.env("CCM_DISABLE_EMBEDDER", "1")
+        .env("CCM_MCP_DEBUG", "0")
+        .env("CCM_PROJECT_ROOT", project.path())
+        .env("CCM_ALLOWED_ROOTS", project.path())
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null());
+
+    let mut child = cmd.spawn()?;
+    let mut stdin = child.stdin.take().unwrap();
+    let mut reader = BufReader::new(child.stdout.take().unwrap());
+    let initialized = send_request(
+        &mut stdin,
+        &mut reader,
+        json!({"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}),
+    )?;
+    assert!(initialized.get("result").is_some());
+
+    let rebuilt = send_request(
+        &mut stdin,
+        &mut reader,
+        json!({
+            "jsonrpc":"2.0","id":2,"method":"tools/call",
+            "params":{"name":"index_project","arguments":{"project_path":project.path()}}
+        }),
+    )?;
+    assert!(tool_text(&rebuilt).contains("Project index refreshed successfully"));
+
+    let recovered = send_request(
+        &mut stdin,
+        &mut reader,
+        json!({
+            "jsonrpc":"2.0","id":3,"method":"tools/call",
+            "params":{"name":"get_context","arguments":{"file":"main.rs","line":1}}
+        }),
+    )?;
+    assert!(tool_text(&recovered).contains("Current: pointer_repaired"));
+
+    let _ = child.kill();
+    Ok(())
+}
+
+#[test]
+fn mcp_recovers_after_an_oversized_frame() -> Result<(), Box<dyn std::error::Error>> {
+    let project = tempdir()?;
+    let mut cmd = Command::new(assert_cmd::cargo::cargo_bin!("ccm-mcp"));
+    cmd.env("CCM_DISABLE_EMBEDDER", "1")
+        .env("CCM_MCP_DEBUG", "0")
+        .env("CCM_PROJECT_ROOT", project.path())
+        .env("CCM_ALLOWED_ROOTS", project.path())
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null());
+
+    let mut child = cmd.spawn()?;
+    let mut stdin = child.stdin.take().unwrap();
+    let mut reader = BufReader::new(child.stdout.take().unwrap());
+    let oversized = vec![b'x'; 10 * 1024 * 1024 + 1];
+    stdin.write_all(&oversized)?;
+    stdin.write_all(b"\n")?;
+    writeln!(
+        stdin,
+        "{}",
+        json!({"jsonrpc":"2.0","id":7,"method":"resources/list"})
+    )?;
+    stdin.flush()?;
+
+    let mut line = String::new();
+    reader.read_line(&mut line)?;
+    let rejected: serde_json::Value = serde_json::from_str(&line)?;
+    assert_eq!(rejected["error"]["code"], -32700);
+    assert!(rejected["id"].is_null());
+
+    line.clear();
+    reader.read_line(&mut line)?;
+    let recovered: serde_json::Value = serde_json::from_str(&line)?;
+    assert_eq!(recovered["id"], 7);
+    assert!(recovered["result"]["resources"].is_array());
+
+    let _ = child.kill();
+    Ok(())
+}
+
+#[test]
+fn mcp_classifies_protocol_errors_and_continues() -> Result<(), Box<dyn std::error::Error>> {
+    let project = tempdir()?;
+    let mut cmd = Command::new(assert_cmd::cargo::cargo_bin!("ccm-mcp"));
+    cmd.env("CCM_DISABLE_EMBEDDER", "1")
+        .env("CCM_MCP_DEBUG", "0")
+        .env("CCM_PROJECT_ROOT", project.path())
+        .env("CCM_ALLOWED_ROOTS", project.path())
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null());
+
+    let mut child = cmd.spawn()?;
+    let mut stdin = child.stdin.take().unwrap();
+    let mut reader = BufReader::new(child.stdout.take().unwrap());
+    stdin.write_all(b"{broken\n")?;
+    writeln!(
+        stdin,
+        "{}",
+        json!({"jsonrpc":"1.0","id":2,"method":"resources/list"})
+    )?;
+    writeln!(
+        stdin,
+        "{}",
+        json!({"jsonrpc":"2.0","id":{"bad":true},"method":"resources/list"})
+    )?;
+    writeln!(
+        stdin,
+        "{}",
+        json!({"jsonrpc":"2.0","id":4,"method":"resources/list","params":"bad"})
+    )?;
+    writeln!(
+        stdin,
+        "{}",
+        json!({"jsonrpc":"2.0","id":3,"method":"resources/list"})
+    )?;
+    stdin.flush()?;
+
+    let mut line = String::new();
+    reader.read_line(&mut line)?;
+    let parse_error: serde_json::Value = serde_json::from_str(&line)?;
+    assert_eq!(parse_error["error"]["code"], -32700);
+    assert!(parse_error["id"].is_null());
+
+    line.clear();
+    reader.read_line(&mut line)?;
+    let invalid_request: serde_json::Value = serde_json::from_str(&line)?;
+    assert_eq!(invalid_request["id"], 2);
+    assert_eq!(invalid_request["error"]["code"], -32600);
+
+    line.clear();
+    reader.read_line(&mut line)?;
+    let invalid_id: serde_json::Value = serde_json::from_str(&line)?;
+    assert!(invalid_id["id"].is_null());
+    assert_eq!(invalid_id["error"]["code"], -32600);
+
+    line.clear();
+    reader.read_line(&mut line)?;
+    let invalid_params: serde_json::Value = serde_json::from_str(&line)?;
+    assert_eq!(invalid_params["id"], 4);
+    assert_eq!(invalid_params["error"]["code"], -32602);
+
+    line.clear();
+    reader.read_line(&mut line)?;
+    let recovered: serde_json::Value = serde_json::from_str(&line)?;
+    assert_eq!(recovered["id"], 3);
+    assert!(recovered["result"]["resources"].is_array());
 
     let _ = child.kill();
     Ok(())
