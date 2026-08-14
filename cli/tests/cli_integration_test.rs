@@ -92,7 +92,14 @@ fn doctor_rejects_semantic_graph_without_vectors() -> Result<(), Box<dyn std::er
         .output()?;
 
     assert!(!output.status.success());
-    let stdout: serde_json::Value = serde_json::from_slice(&output.stdout)?;
+    let stdout: serde_json::Value = serde_json::from_slice(&output.stdout).map_err(|error| {
+        format!(
+            "doctor JSON parse failed: {}; stderr: {}; exit: {:?}",
+            error,
+            String::from_utf8_lossy(&output.stderr),
+            output.status.code()
+        )
+    })?;
     assert_eq!(stdout["healthy"], false);
     assert_eq!(stdout["checks"]["vector_index"]["ok"], false);
     assert!(

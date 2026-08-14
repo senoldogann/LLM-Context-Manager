@@ -507,25 +507,34 @@ async fn run_doctor(path: &std::path::Path, json: bool) -> anyhow::Result<()> {
         .or_else(|_| std::env::var("EMBEDDING_DISABLED"))
         .map(|value| matches!(value.to_lowercase().as_str(), "1" | "true" | "yes"))
         .unwrap_or(false);
+    let vector_table_path = db_path.join("code_vectors.lance");
     let vector_result = if !db_path.is_dir() {
         Err("vector database directory is missing".to_string())
     } else if embedder_disabled {
         Ok(None)
     } else if semantic_nodes == 0 {
         Ok(Some(0))
+    } else if !vector_table_path.is_dir() {
+        Err("vector table 'code_vectors' is missing or unreadable".to_string())
     } else {
-        match ccm_core::vector::store::LanceDbStore::new(&db_path.to_string_lossy(), "code_vectors")
-            .await
-        {
-            Ok(store) => match store.validate_table().await {
-                Ok(rows) if rows >= semantic_nodes => Ok(Some(rows)),
-                Ok(rows) => Err(format!(
-                    "vector table has {} row(s), fewer than {} semantic graph node(s)",
-                    rows, semantic_nodes
-                )),
-                Err(error) => Err(error.to_string()),
-            },
-            Err(error) => Err(error.to_string()),
+        let db_path_string = db_path.to_string_lossy().to_string();
+        let check = tokio::spawn(async move {
+            let store =
+                ccm_core::vector::store::LanceDbStore::new(&db_path_string, "code_vectors").await?;
+            store.validate_table().await
+        })
+        .await;
+        match check {
+            Ok(Ok(rows)) if rows >= semantic_nodes => Ok(Some(rows)),
+            Ok(Ok(rows)) => Err(format!(
+                "vector table has {} row(s), fewer than {} semantic graph node(s)",
+                rows, semantic_nodes
+            )),
+            Ok(Err(error)) => Err(error.to_string()),
+            Err(join_error) => Err(format!(
+                "vector table check failed with a runtime error ({}); rebuild the CCM index",
+                join_error
+            )),
         }
     };
     let vector_error = vector_result.as_ref().err().cloned();
