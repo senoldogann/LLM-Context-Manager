@@ -10,10 +10,9 @@ English | [Turkce](./README.tr.md)
 
 > Bridge the gap between your codebase and your AI editor. CCM transforms static source code into a dynamic, queryable Knowledge Graph, enabling AI agents to navigate, understand, and reason about your project with surgical precision.
 
-> **Current release: v0.3.8.** Index updates preserve the last healthy graph and
-> vector generation until a replacement is complete. MCP discovery, protocol
-> recovery, background indexing and npm binary installation are hardened for
-> real editor and large-repository workflows.
+> **Current release: v0.3.9.** Retrieval accuracy fixes for Swift (attribute
+> names, call edges), parallel full-rebuild parsing, concurrent embedding
+> batches, allowlist-hardened artifact paths and private index files on disk.
 
 [![Rust](https://img.shields.io/badge/Built%20With-Rust-orange.svg?style=flat-square&logo=rust)](https://www.rust-lang.org/)
 [![MCP Ready](https://img.shields.io/badge/MCP-Compatible-blue.svg?style=flat-square&logo=google-cloud)](https://modelcontextprotocol.io/)

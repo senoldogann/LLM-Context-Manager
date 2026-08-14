@@ -4,10 +4,10 @@
 
 **Node.js wrapper for Cognitive Codebase Matrix (CCM)** - Enables AI agents to understand and navigate your codebase with surgical precision.
 
-**v0.3.8** preserves the last healthy index while a replacement is built,
-recovers cleanly from malformed MCP frames, and verifies cached release
-binaries before execution. Missing indexes now fail fast with an explicit
-`index_project` action instead of hiding a long rebuild inside retrieval.
+**v0.3.9** fixes Swift symbol names under attributes and real call edges,
+parses full rebuilds in parallel, runs embedding batches concurrently, keeps
+index artifacts inside the allowlist even with symlinked data directories, and
+writes index files with private permissions.
 
 [![npm](https://img.shields.io/npm/v/@senoldogann/context-manager?color=orange)](https://www.npmjs.com/package/@senoldogann/context-manager)
 [![MCP](https://img.shields.io/badge/MCP-Compatible-blue)](https://modelcontextprotocol.io/)

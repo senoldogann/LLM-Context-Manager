@@ -1,5 +1,31 @@
 # Release Notes
 
+## v0.3.9 - Retrieval Accuracy, Parallel Indexing, and Hardening
+
+- Swift sembol isimleri attribute'lar tarafından çalınmaz: `@MainActor` /
+  `@objc` gibi deklarasyon öncesi attribute'lar artık gerçek sınıf/struct/enum
+  ve fonksiyon adını gizlemiyor; `find_nodes`, `get_context` ve
+  `impact_of_change` Swift projelerinde doğru sembolleri döndürür.
+- Gerçek çağrı kenarları kurulur: aynı dosyadaki öz-referans artık farklı
+  dosyadaki hedefi engellemiyor ve belirsiz çağrı kenarları
+  `find_usages`/`trace_call_chain` tarafından da izleniyor.
+- Tam yeniden indeksleme dosya ayrıştırmasını paralel yürütür (rayon); büyük
+  repolarda index süresi çekirdek sayısıyla ölçeklenir.
+- Embedding batch'leri `CCM_EMBED_CONCURRENCY` ile eşzamanlı gönderilir;
+  vektör sırası korunur.
+- OpenAI-uyumlu embedding sağlayıcıları genişletildi: HuggingFace TEI, Voyage,
+  Jina, LM Studio, LocalAI, llama.cpp server ve Azure OpenAI tek kod yolundan
+  çalışır.
+- Allowlist güvenliği: proje içindeki symlink'li `data` dizini index
+  artifact'lerini allowlist dışına yazamaz; çözümlenen tüm yollar canonical
+  proje kökü içinde doğrulanır.
+- Index, manifest, trajectory ve policy dosyaları Unix'te `0600` izniyle
+  yazılır.
+- MCP: `tools/call` notification'ı ana JSON-RPC loop'unu bloklamaz; istemci
+  girdi hataları `-32602` (Invalid params) olarak sınıflandırılır.
+- Dokümantasyon düzeltmeleri: README eval sonucu (53/56), CONTRIBUTING gate
+  komutları CI ile aynı, OPERATIONS hata yönetimi iddiası gerçekle uyumlu.
+
 ## v0.3.8 - Runtime and Distribution Hardening
 
 - Tam indeks yeniden oluşturma staging neslinde tamamlanmadan canlı graf,

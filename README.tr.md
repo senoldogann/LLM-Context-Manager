@@ -10,10 +10,10 @@
 
 > CCM, kod tabanınız ile yapay zeka editörünüz arasındaki boşluğu kapatır. Statik kaynak kodu dinamik ve sorgulanabilir bir bilgi grafına dönüştürür; böylece ajanlar projenizi daha doğru gezebilir, anlayabilir ve akıl yürütebilir.
 
-> **Güncel sürüm: v0.3.8.** İndeks güncellemeleri, yenisi tamamen hazır olana
-> kadar son sağlıklı graf ve vektör neslini korur. MCP protokolü, arka plan
-> indeksleme ve npm binary kurulumu gerçek editör ve büyük repo akışları için
-> sağlamlaştırıldı.
+> **Güncel sürüm: v0.3.9.** Swift retrieval düzeltmeleri (attribute isimleri,
+> çağrı kenarları), paralel tam yeniden indeksleme, eşzamanlı embedding
+> batch'leri, allowlist-güvenli artifact yolları ve diskte özel izinli index
+> dosyaları.
 
 [![Rust](https://img.shields.io/badge/Built%20With-Rust-orange.svg?style=flat-square&logo=rust)](https://www.rust-lang.org/)
 [![MCP Ready](https://img.shields.io/badge/MCP-Compatible-blue.svg?style=flat-square&logo=google-cloud)](https://modelcontextprotocol.io/)

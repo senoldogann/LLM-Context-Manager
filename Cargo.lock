@@ -676,7 +676,7 @@ dependencies = [
 
 [[package]]
 name = "ccm-cli"
-version = "0.3.8"
+version = "0.3.9"
 dependencies = [
  "anyhow",
  "assert_cmd",
@@ -692,7 +692,7 @@ dependencies = [
 
 [[package]]
 name = "ccm-core"
-version = "0.3.8"
+version = "0.3.9"
 dependencies = [
  "anyhow",
  "arrow-array",
@@ -730,7 +730,7 @@ dependencies = [
 
 [[package]]
 name = "ccm-mcp"
-version = "0.3.8"
+version = "0.3.9"
 dependencies = [
  "anyhow",
  "assert_cmd",
