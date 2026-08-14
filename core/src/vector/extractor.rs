@@ -584,27 +584,64 @@ impl Extractor {
 
     fn classify_swift_node(&self, node: &Node, kind: &str) -> Option<(NodeType, String)> {
         match kind {
-            "function_declaration" | "initializer_declaration" => Some((
+            "function_declaration"
+            | "initializer_declaration"
+            | "init_declaration"
+            | "deinit_declaration"
+            | "protocol_function_declaration" => Some((
                 NodeType::Function,
-                self.find_descendant_text(node, &["simple_identifier", "identifier"])
+                self.swift_declaration_name(node)
                     .unwrap_or_else(|| "init".to_string()),
             )),
             "class_declaration" | "actor_declaration" => Some((
                 NodeType::Class,
-                self.find_descendant_text(node, &["type_identifier", "simple_identifier"])
+                self.swift_declaration_name(node)
                     .unwrap_or_else(|| "anonymous".to_string()),
             )),
-            "struct_declaration" | "protocol_declaration" | "enum_declaration" => Some((
+            "struct_declaration"
+            | "protocol_declaration"
+            | "enum_declaration"
+            | "extension_declaration" => Some((
                 NodeType::Struct,
-                self.find_descendant_text(node, &["type_identifier", "simple_identifier"])
+                self.swift_declaration_name(node)
                     .unwrap_or_else(|| "anonymous".to_string()),
             )),
             "import_declaration" => Some((NodeType::Import, self.get_node_text(node))),
-            "property_declaration" => self
-                .find_descendant_text(node, &["simple_identifier", "identifier"])
+            "property_declaration" | "protocol_property_declaration" => self
+                .swift_declaration_name(node)
                 .map(|name| (NodeType::Variable, name)),
             _ => None,
         }
+    }
+
+    /// Swift isim çözümü: grammar `name:` field'ını tanımlar; attribute'lar
+    /// (örn. `@MainActor`) gerçek isimden önce geldiği için ilk eşleşen
+    /// tanımlayıcıyı almak yanlış isim üretir. Önce field, yoksa kaynak
+    /// sırasındaki son tanımlayıcı kullanılır.
+    fn swift_declaration_name(&self, node: &Node) -> Option<String> {
+        if let Some(name_node) = node.child_by_field_name("name") {
+            let text = self.get_node_text(&name_node);
+            if !text.trim().is_empty() {
+                return Some(text);
+            }
+        }
+        let mut found = None;
+        let mut stack = vec![*node];
+        while let Some(current) = stack.pop() {
+            if current.id() != node.id()
+                && matches!(
+                    current.kind(),
+                    "type_identifier" | "simple_identifier" | "identifier"
+                )
+            {
+                found = Some(self.get_node_text(&current));
+            }
+            let mut cursor = current.walk();
+            let mut children: Vec<Node> = current.children(&mut cursor).collect();
+            children.reverse();
+            stack.extend(children);
+        }
+        found
     }
 
     /// Helper: Finds a child node by kind and returns its text.
@@ -763,6 +800,104 @@ impl Point {
         assert!(
             graph.graph.node_weights().any(|node| node.name == "App"),
             "TSX dosyasından App fonksiyonu çıkarılamadı"
+        );
+    }
+
+    #[test]
+    fn swift_attributes_do_not_steal_declaration_names() {
+        let code = r#"
+@MainActor
+final class SettingsStore {
+    @MainActor func startRecording() {}
+}
+
+@objc class AudioPlayerService {
+    @objc func play() {}
+}
+
+struct Config { let name: String }
+enum Mode { case auto }
+actor Cache { func get() {} }
+"#;
+        let mut parser = CodeParser::new();
+        let tree = parser.parse_tree(code, SupportedLanguage::Swift).unwrap();
+        assert!(!tree.root_node().has_error(), "Swift parse failed");
+
+        let mut graph = CodeGraph::new();
+        let mut extractor = Extractor::new(code.to_string(), SupportedLanguage::Swift);
+        extractor
+            .extract(&tree, &mut graph, "settings.swift")
+            .unwrap();
+
+        let names: Vec<String> = graph
+            .graph
+            .node_indices()
+            .map(|idx| graph.graph[idx].name.clone())
+            .collect();
+        assert!(
+            names.iter().any(|name| name == "SettingsStore"),
+            "SettingsStore adı attribute tarafından çalındı: {:?}",
+            names
+        );
+        assert!(
+            names.iter().any(|name| name == "AudioPlayerService"),
+            "AudioPlayerService adı attribute tarafından çalındı: {:?}",
+            names
+        );
+        assert!(
+            names.iter().any(|name| name == "startRecording"),
+            "startRecording metodu attribute tarafından çalındı: {:?}",
+            names
+        );
+        assert!(
+            names.iter().any(|name| name == "play"),
+            "play metodu attribute tarafından çalındı: {:?}",
+            names
+        );
+    }
+
+    #[test]
+    fn swift_call_edges_are_created_from_method_bodies() {
+        let code = r#"
+final class Recorder {
+    func startRecording() {}
+}
+
+final class HomeView {
+    let recorder = Recorder()
+    func startRecording() {
+        recorder.startRecording()
+    }
+}
+"#;
+        let mut parser = CodeParser::new();
+        let tree = parser.parse_tree(code, SupportedLanguage::Swift).unwrap();
+        assert!(!tree.root_node().has_error(), "Swift parse failed");
+
+        let mut graph = CodeGraph::new();
+        let mut extractor = Extractor::new(code.to_string(), SupportedLanguage::Swift);
+        extractor.extract(&tree, &mut graph, "home.swift").unwrap();
+        graph.rebuild_reference_edges();
+
+        let calls: Vec<String> = graph
+            .graph
+            .edge_indices()
+            .filter_map(|edge_idx| {
+                let (a, b) = graph.graph.edge_endpoints(edge_idx)?;
+                if graph.graph[edge_idx] == EdgeType::Calls {
+                    Some(format!(
+                        "{} -> {}",
+                        graph.graph[a].name, graph.graph[b].name
+                    ))
+                } else {
+                    None
+                }
+            })
+            .collect();
+        assert!(
+            calls.iter().any(|edge| edge.ends_with("-> startRecording")),
+            "HomeView.startRecording -> Recorder.startRecording çağrı kenarı yok: {:?}",
+            calls
         );
     }
 

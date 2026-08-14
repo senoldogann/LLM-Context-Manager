@@ -456,6 +456,87 @@ fn mcp_rejects_project_outside_allowlist() -> Result<(), Box<dyn std::error::Err
 }
 
 #[test]
+fn mcp_symlinked_data_dir_never_writes_outside_the_allowlist(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let allowed_dir = tempdir()?;
+    let project_root = allowed_dir.path().join("repo");
+    let outside_dir = tempdir()?;
+
+    fs::create_dir_all(&project_root)?;
+    fs::write(project_root.join("main.rs"), "fn secret_business() {}\n")?;
+    // Proje içindeki `data` dizini allowlist DIŞINI gösteren bir symlink.
+    #[cfg(unix)]
+    std::os::unix::fs::symlink(outside_dir.path(), project_root.join("data"))?;
+
+    let mut cmd = Command::new(assert_cmd::cargo::cargo_bin!("ccm-mcp"));
+    cmd.env("CCM_DISABLE_EMBEDDER", "1")
+        .env("CCM_MCP_DEBUG", "0")
+        .env(
+            "CCM_ALLOWED_ROOTS",
+            allowed_dir.path().to_string_lossy().as_ref(),
+        )
+        .env("CCM_REQUIRE_ALLOWED_ROOTS", "1")
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null());
+
+    let mut child = cmd.spawn()?;
+    let mut stdin = child.stdin.take().unwrap();
+    let stdout = child.stdout.take().unwrap();
+    let mut reader = BufReader::new(stdout);
+
+    let init_req = json!({
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "initialize",
+        "params": {}
+    });
+    writeln!(stdin, "{}", init_req)?;
+    stdin.flush()?;
+    let mut line = String::new();
+    reader.read_line(&mut line)?;
+    assert!(line.contains("\"result\""));
+    line.clear();
+
+    let index_req = json!({
+        "jsonrpc": "2.0",
+        "id": 2,
+        "method": "tools/call",
+        "params": {
+            "name": "index_project",
+            "arguments": { "project_path": project_root }
+        }
+    });
+    writeln!(stdin, "{}", index_req)?;
+    stdin.flush()?;
+    reader.read_line(&mut line)?;
+    let response: serde_json::Value = serde_json::from_str(&line)?;
+    assert!(
+        response["error"].is_object() || tool_text(&response).contains("resolved safely"),
+        "symlink'li data dizini güvenli çözümleme hatası üretmeli: {}",
+        line
+    );
+
+    // Allowlist dışındaki dizine hiçbir index artifact'i yazılmamalı.
+    assert!(
+        !outside_dir.path().join("ccm_current").exists(),
+        "index pointer allowlist dışına yazıldı"
+    );
+    assert!(
+        !outside_dir.path().join("ccm_db").exists(),
+        "vector DB allowlist dışına yazıldı"
+    );
+    assert!(
+        !outside_dir.path().join(".ccm-generations").exists(),
+        "generation artifacts allowlist dışına yazıldı"
+    );
+
+    child.kill()?;
+    let _ = child.wait();
+    Ok(())
+}
+
+#[test]
 fn mcp_defaults_to_strict_allowlist() -> Result<(), Box<dyn std::error::Error>> {
     // CCM_REQUIRE_ALLOWED_ROOTS hiç verilmezse strict mod varsayılan olmalı.
     let allowed_dir = tempdir()?;

@@ -21,6 +21,7 @@ use crate::graph::CodeGraph;
 use crate::parser::{CodeParser, SupportedLanguage};
 use crate::vector::store::LanceDbStore;
 use anyhow::Result;
+use rayon::prelude::*;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -338,6 +339,15 @@ pub async fn index_directory(path: &str, db_path: Option<&str>) -> Result<IndexS
     Ok(stats)
 }
 
+/// Paralel indexleme aşamasının tek dosya için ürettiği sonuç.
+struct FileIndexOutcome {
+    file_path: PathBuf,
+    file_id: String,
+    fingerprint: std::io::Result<FileFingerprint>,
+    graph: Option<CodeGraph>,
+    populate_error: Option<PopulateFileError>,
+}
+
 async fn build_index_generation(
     path: &str,
     db_path_buf: PathBuf,
@@ -368,7 +378,9 @@ async fn build_index_generation(
     // Create a walker that respects gitignore + ccmignore and skips heavy noise paths.
     let walker = build_project_walker(&project_root, excluded_paths);
 
-    // Walk directory recursively
+    // Aşama 1 (sıralı): indekslenecek adayları topla. Yalnız ucuz metadata
+    // kontrolleri yapılır; dosya içeriği paralel aşamada okunur.
+    let mut candidates: Vec<(PathBuf, String)> = Vec::new();
     for result in walker {
         match result {
             Ok(entry) => {
@@ -376,9 +388,8 @@ async fn build_index_generation(
                     continue;
                 }
 
-                let file_path = entry.path();
-                let file_path_str = file_path.to_string_lossy().to_string();
-                let Some(file_id) = normalize_file_id_with_root(&project_root, file_path) else {
+                let file_path = entry.path().to_path_buf();
+                let Some(file_id) = normalize_file_id_with_root(&project_root, &file_path) else {
                     continue;
                 };
                 if is_internal_index_file(&file_id) {
@@ -392,7 +403,7 @@ async fn build_index_generation(
                     continue;
                 }
 
-                if path_is_policy_excluded(file_path) {
+                if path_is_policy_excluded(&file_path) {
                     let issue = IndexIssue {
                         path: file_id,
                         reason: IndexIssueReason::SkippedByPolicy,
@@ -406,36 +417,7 @@ async fn build_index_generation(
                     continue;
                 }
 
-                // Fingerprint policy kontrolünden SONRA yazılır; build_manifest
-                // ile aynı sıralama korunur, yoksa incremental update bu dosyaları
-                // her seferinde "silinmiş" sanır.
-                let fingerprint = fingerprint_for_path(file_path).map_err(|error| {
-                    anyhow::anyhow!(
-                        "Full index snapshot could not fingerprint '{}': {}. Active index was preserved.",
-                        file_path.display(),
-                        error
-                    )
-                })?;
-                manifest.files.insert(file_id.clone(), fingerprint);
-
-                match populate_graph_for_file(&mut graph, file_path, &file_id) {
-                    Ok(_) => {
-                        stats.files_indexed += 1;
-                    }
-                    Err(e) => {
-                        if !matches!(detect_language(file_path), SupportedLanguage::Data) {
-                            fatal_supported_failures += 1;
-                        }
-                        let issue = issue_from_populate_error(&file_id, e);
-                        tracing::debug!(
-                            file = %file_path_str,
-                            reason = %issue.reason.as_str(),
-                            detail = %issue.detail,
-                            "Failed to index file"
-                        );
-                        register_issue(&mut stats, issue, false);
-                    }
-                }
+                candidates.push((file_path, file_id));
             }
             Err(err) => {
                 let issue = IndexIssue {
@@ -446,6 +428,66 @@ async fn build_index_generation(
                 };
                 register_issue(&mut stats, issue, false);
                 warn!(error = %err, "Error during directory traversal");
+            }
+        }
+    }
+
+    // Aşama 2 (paralel): her aday için fingerprint + parse ayrı çalışan
+    // işçide yapılır; sonuçlar sıralı merge için toplanır. Büyük repolarda
+    // CPU-bound Tree-sitter ayrıştırması çekirdek sayısı kadar hızlanır.
+    let outcomes: Vec<FileIndexOutcome> = candidates
+        .par_iter()
+        .map(|(file_path, file_id)| {
+            let fingerprint = fingerprint_for_path(file_path);
+            let mut file_graph = CodeGraph::new();
+            let populate_result = populate_graph_for_file(&mut file_graph, file_path, file_id);
+            FileIndexOutcome {
+                file_path: file_path.clone(),
+                file_id: file_id.clone(),
+                fingerprint,
+                graph: if populate_result.is_ok() {
+                    Some(file_graph)
+                } else {
+                    None
+                },
+                populate_error: populate_result.err(),
+            }
+        })
+        .collect();
+
+    // Aşama 3 (sıralı): sonuçları ana grafa/manifeste/istatistiklere birleştir.
+    for outcome in outcomes {
+        let file_path_str = outcome.file_path.to_string_lossy().to_string();
+        // Fingerprint policy kontrolünden SONRA yazılır; build_manifest ile
+        // aynı sıralama korunur, yoksa incremental update bu dosyaları her
+        // seferinde "silinmiş" sanır.
+        let fingerprint = outcome.fingerprint.map_err(|error| {
+            anyhow::anyhow!(
+                "Full index snapshot could not fingerprint '{}': {}. Active index was preserved.",
+                outcome.file_path.display(),
+                error
+            )
+        })?;
+        manifest.files.insert(outcome.file_id.clone(), fingerprint);
+
+        match outcome.graph {
+            Some(file_graph) => {
+                graph.append_graph(&file_graph);
+                stats.files_indexed += 1;
+            }
+            None => {
+                let error = outcome.populate_error.expect("populate error");
+                if !matches!(detect_language(&outcome.file_path), SupportedLanguage::Data) {
+                    fatal_supported_failures += 1;
+                }
+                let issue = issue_from_populate_error(&outcome.file_id, error);
+                tracing::debug!(
+                    file = %file_path_str,
+                    reason = %issue.reason.as_str(),
+                    detail = %issue.detail,
+                    "Failed to index file"
+                );
+                register_issue(&mut stats, issue, false);
             }
         }
     }
@@ -695,7 +737,74 @@ fn resolve_requested_db_path(project_root: &Path, db_path: Option<&str>) -> Path
         Some(path) => project_root.join(path),
         None => project_root.join("data/ccm_db"),
     };
-    std::fs::canonicalize(&path).unwrap_or_else(|_| normalize_path_lexically(&path))
+    resolve_artifact_path(project_root, &path).unwrap_or_else(|_| normalize_path_lexically(&path))
+}
+
+/// Bir artifact yolunu symlink-güvenli biçimde çözer.
+///
+/// Yolun kendisi henüz var olmayabilir (ilk index), bu yüzden en derin MEVCUT
+/// atası `canonicalize` ile çözülür, kalan bileşenler eklenir ve sonucun
+/// canonical proje kökü içinde kaldığı doğrulanır. Aksi halde proje içindeki
+/// `data` → dış dizin symlink'i tüm index artifact'lerini allowlist dışına
+/// yazabilir.
+pub fn resolve_artifact_path(root: &Path, path: &Path) -> Result<PathBuf> {
+    let canonical_root =
+        std::fs::canonicalize(root).unwrap_or_else(|_| normalize_path_lexically(root));
+    let absolute = if path.is_absolute() {
+        path.to_path_buf()
+    } else {
+        canonical_root.join(path)
+    };
+
+    // En derin mevcut atayı bul; var olmayan bileşenleri kuyruğa al.
+    let mut pending: Vec<std::ffi::OsString> = Vec::new();
+    let mut current = absolute.as_path();
+    let resolved = loop {
+        match std::fs::canonicalize(current) {
+            Ok(base) => break base,
+            Err(_) => {
+                let Some(name) = current.file_name() else {
+                    return Err(anyhow::anyhow!(
+                        "Cannot resolve artifact path '{}' under '{}'",
+                        path.display(),
+                        root.display()
+                    ));
+                };
+                pending.push(name.to_os_string());
+                let Some(parent) = current.parent() else {
+                    return Err(anyhow::anyhow!(
+                        "Cannot resolve artifact path '{}' under '{}'",
+                        path.display(),
+                        root.display()
+                    ));
+                };
+                current = parent;
+            }
+        }
+    };
+
+    // Kalan bileşenleri uygula; `..` gezinmesini lexical olarak temizle.
+    let mut result = resolved;
+    for component in pending.iter().rev() {
+        let component = Path::new(component);
+        match component.components().next() {
+            Some(std::path::Component::ParentDir) => {
+                result.pop();
+            }
+            Some(std::path::Component::CurDir) => {}
+            _ => result.push(component),
+        }
+    }
+
+    if result.starts_with(&canonical_root) {
+        Ok(result)
+    } else {
+        Err(anyhow::anyhow!(
+            "Resolved artifact path '{}' escapes the project root '{}'",
+            result.display(),
+            canonical_root.display()
+        ))
+    }
 }
 
 fn normalize_path_lexically(path: &Path) -> PathBuf {
@@ -728,6 +837,17 @@ fn validate_generation_id(generation_id: &str) -> Result<()> {
 fn write_synced_file(path: &Path, content: &[u8]) -> Result<()> {
     use std::io::Write;
 
+    #[cfg(unix)]
+    let mut file = {
+        use std::os::unix::fs::OpenOptionsExt;
+        std::fs::OpenOptions::new()
+            .write(true)
+            .create(true)
+            .truncate(true)
+            .mode(0o600)
+            .open(path)?
+    };
+    #[cfg(not(unix))]
     let mut file = std::fs::File::create(path)?;
     file.write_all(content)?;
     file.flush()?;
@@ -1338,6 +1458,17 @@ fn save_manifest(path: &Path, manifest: &IndexManifest) -> Result<()> {
         std::fs::create_dir_all(parent)?;
     }
     let temp_path = path.with_extension(format!("json.{}.tmp", std::process::id()));
+    #[cfg(unix)]
+    let file = {
+        use std::os::unix::fs::OpenOptionsExt;
+        std::fs::OpenOptions::new()
+            .write(true)
+            .create(true)
+            .truncate(true)
+            .mode(0o600)
+            .open(&temp_path)?
+    };
+    #[cfg(not(unix))]
     let file = std::fs::File::create(&temp_path)?;
     let mut writer = std::io::BufWriter::new(file);
     serde_json::to_writer_pretty(&mut writer, manifest)?;

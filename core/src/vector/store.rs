@@ -2,7 +2,7 @@ use crate::vector::remote::RemoteEmbedder;
 use anyhow::{Context, Result};
 use arrow_array::{FixedSizeListArray, Float32Array, RecordBatch, StringArray};
 use arrow_schema::{DataType, Field, Schema};
-use futures::TryStreamExt;
+use futures::{StreamExt, TryStreamExt};
 use lancedb::query::{ExecutableQuery, QueryBase};
 use lancedb::{connect, Connection};
 use std::collections::HashMap;
@@ -303,19 +303,45 @@ impl LanceDbStore {
                 None => return Ok(()),
             };
             let total_batches = all_chunks.len().div_ceil(batch_size);
-            for (batch_idx, batch) in all_chunks.chunks(batch_size).enumerate() {
-                if batch_idx % 20 == 0 || (batch_idx + 1) == total_batches {
+            // Sınırlı eşzamanlılık: Ollama `num_parallel` işçisiyle eşzamanlı
+            // istekleri kuyruğa alıp işleyebilir; seri bekleme yerine
+            // CCM_EMBED_CONCURRENCY kadar batch paralel gider. Vektörler
+            // batch indeksine göre toplanıp sırayla birleştirilir, böylece
+            // id ↔ vektör hizası bozulmaz.
+            let concurrency: usize = std::env::var("CCM_EMBED_CONCURRENCY")
+                .ok()
+                .and_then(|value| value.parse().ok())
+                .unwrap_or(2)
+                .clamp(1, 8);
+            let mut collected: Vec<Option<Vec<Vec<f32>>>> = vec![None; total_batches];
+            let batch_futures =
+                all_chunks
+                    .chunks(batch_size)
+                    .enumerate()
+                    .map(|(batch_idx, batch)| {
+                        let batch_texts: Vec<String> = batch.to_vec();
+                        async move {
+                            let result = embedder.embed(batch_texts).await;
+                            (batch_idx, result)
+                        }
+                    });
+            let mut stream = futures::stream::iter(batch_futures).buffer_unordered(concurrency);
+            let mut completed = 0usize;
+            while let Some((batch_idx, result)) = stream.next().await {
+                let batch_embeddings = result?;
+                completed += 1;
+                if batch_idx % 20 == 0 || completed == total_batches {
                     tracing::info!(
                         batch = batch_idx + 1,
                         total = total_batches,
-                        chunks = batch.len(),
+                        chunks = batch_embeddings.len(),
                         "Embedding batch progress"
                     );
                 }
-
-                let batch_texts: Vec<String> = batch.to_vec();
-                let batch_embeddings = embedder.embed(batch_texts).await?;
-                embeddings.extend(batch_embeddings);
+                collected[batch_idx] = Some(batch_embeddings);
+            }
+            for batch in collected {
+                embeddings.extend(batch.expect("embedding batch"));
             }
         }
 

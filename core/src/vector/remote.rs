@@ -344,7 +344,23 @@ impl RemoteEmbedder {
 }
 
 fn resolve_provider(provider_str: &str, base_url: &str) -> Provider {
-    if provider_str.contains("openai") || base_url.contains("api.openai.com") {
+    // OpenAI-uyumlu /embeddings sözleşmesi kullanan sağlayıcılar tek kod
+    // yolundan geçer: OpenAI, Azure OpenAI, HuggingFace TEI, Voyage, Jina,
+    // LM Studio, llama.cpp server, LocalAI vb. Açıkça ollama belirtilmedikçe
+    // bu sağlayıcı adları OpenAI provider'ına çözülür.
+    let normalized = provider_str.to_lowercase();
+    let openai_compatible = normalized.contains("openai")
+        || normalized.contains("tei")
+        || normalized.contains("text-embeddings-inference")
+        || normalized.contains("voyage")
+        || normalized.contains("jina")
+        || normalized.contains("lmstudio")
+        || normalized.contains("localai")
+        || normalized.contains("llama.cpp")
+        || base_url.contains("api.openai.com")
+        || base_url.contains("inference.ai.azure.com")
+        || base_url.contains("/v1/embeddings");
+    if openai_compatible {
         return Provider::OpenAI;
     }
     Provider::Ollama

@@ -78,12 +78,19 @@ async fn main() -> Result<()> {
             Err(e) => {
                 tracing::error!(error = %e, "Error processing request");
                 let parsed = serde_json::from_str::<serde_json::Value>(trimmed);
-                let (request_id, code, message) = if let Ok(value) = parsed {
-                    let request_id = value.get("id").cloned();
-                    (request_id, -32603, e.to_string())
-                } else {
-                    (None, -32700, "Parse error".to_string())
-                };
+                let (request_id, code, message) =
+                    if let Some(input_error) = e.downcast_ref::<crate::tools::ToolInputError>() {
+                        let request_id = parsed
+                            .as_ref()
+                            .ok()
+                            .and_then(|value| value.get("id").cloned());
+                        (request_id, -32602, input_error.0.clone())
+                    } else if let Ok(value) = parsed {
+                        let request_id = value.get("id").cloned();
+                        (request_id, -32603, e.to_string())
+                    } else {
+                        (None, -32700, "Parse error".to_string())
+                    };
                 let error_response = protocol::create_error_response(request_id, code, &message);
                 write_response(&mut stdout, &error_response).await?;
             }

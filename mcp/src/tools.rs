@@ -8,6 +8,23 @@ use std::sync::Arc;
 use crate::protocol::{ToolResult, ToolResultContent};
 use ccm_core::engine::{CursorPosition, RetrievalEngine};
 
+/// İstemci girdisinden kaynaklanan tool argüman hatası. JSON-RPC'de -32602
+/// (Invalid params) olarak raporlanır; iç hatalardan (-> -32603) ayrılır.
+#[derive(Debug)]
+pub struct ToolInputError(pub String);
+
+impl std::fmt::Display for ToolInputError {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter.write_str(&self.0)
+    }
+}
+
+impl std::error::Error for ToolInputError {}
+
+pub(crate) fn input_error(message: impl Into<String>) -> anyhow::Error {
+    anyhow::Error::new(ToolInputError(message.into()))
+}
+
 fn format_suggestion_metadata(suggestion: &ccm_core::engine::ContextSuggestion) -> String {
     let mut metadata = Vec::new();
 
@@ -333,22 +350,22 @@ pub async fn read_graph(engine: &Arc<RetrievalEngine>, args: &Value) -> Result<T
 /// Helper: Normalizes a file path to match graph conventions (relative, starts with ./)
 fn normalize_graph_path(path_str: &str, project_path: Option<&str>) -> Result<String> {
     if path_str.is_empty() {
-        return Err(anyhow::anyhow!("Path argument cannot be empty"));
+        return Err(input_error("Path argument cannot be empty"));
     }
 
     let normalized_input = path_str.replace('\\', "/");
     if normalized_input.contains('\0') {
-        return Err(anyhow::anyhow!("Path argument contains invalid null byte"));
+        return Err(input_error("Path argument contains invalid null byte"));
     }
 
     let path = Path::new(&normalized_input);
     if path.is_absolute() {
         let root = project_path.ok_or_else(|| {
-            anyhow::anyhow!("Absolute paths require a matching 'project_path' argument")
+            input_error("Absolute paths require a matching 'project_path' argument")
         })?;
         let stripped = path
             .strip_prefix(Path::new(root))
-            .map_err(|_| anyhow::anyhow!("Path is outside the provided project root"))?;
+            .map_err(|_| input_error("Path is outside the provided project root"))?;
         return normalize_relative_graph_path(stripped);
     }
 
@@ -399,13 +416,13 @@ fn normalize_relative_graph_path(path: &Path) -> Result<String> {
                 parts.push(text.to_string());
             }
             Component::ParentDir => {
-                return Err(anyhow::anyhow!(
-                    "Parent directory segments are not allowed in MCP path arguments"
+                return Err(input_error(
+                    "Parent directory segments are not allowed in MCP path arguments",
                 ));
             }
             Component::RootDir | Component::Prefix(_) => {
-                return Err(anyhow::anyhow!(
-                    "Absolute paths are not allowed in MCP path arguments"
+                return Err(input_error(
+                    "Absolute paths are not allowed in MCP path arguments",
                 ));
             }
         }
@@ -579,10 +596,18 @@ async fn run_index_project(state: &crate::server::ServerState, project_path: &st
     let lock = state.project_index_lock(project_path);
     let _guard = lock.lock().await;
 
-    let db_path = state
-        .project_db_path(project_path)
-        .to_string_lossy()
-        .to_string();
+    let db_path = match state.project_db_path(project_path) {
+        Ok(path) => path.to_string_lossy().to_string(),
+        Err(error) => {
+            return ToolResult {
+                content: vec![ToolResultContent {
+                    content_type: "text".to_string(),
+                    text: format!("Project path could not be resolved safely: {}", error),
+                }],
+                is_error: Some(true),
+            }
+        }
+    };
 
     match run_index_worker_process(project_path, &db_path).await {
         Ok(stats) => {

@@ -4,7 +4,7 @@
 This project follows strict architectural rules:
 -   **Core Independence:** The `core` crate must not depend on `cli` or `mcp`. It is the pure logic layer.
 -   **Observability:** Uses `tracing` crate. No `println!` allowed in library code.
--   **Error Handling:** Uses `thiserror` for libraries, `anyhow` for binaries.
+-   **Error Handling:** Uses `anyhow` throughout (libraries and binaries).
 
 ## 2. Standard Workflows
 

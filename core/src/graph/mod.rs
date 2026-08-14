@@ -153,17 +153,29 @@ impl CodeGraph {
                 let Some(targets) = symbols.get(name) else {
                     continue;
                 };
+                // Kaynak düğümün kendisini adaylardan çıkar: aynı dosyada tek
+                // "eşleşme" yalnızca kaynağın kendisiyse (örn. kendi adıyla
+                // çağrılan üye), farklı dosyadaki gerçek hedef hiç bağlanmıyordu.
+                let candidates: Vec<_> = targets
+                    .iter()
+                    .copied()
+                    .filter(|target_idx| *target_idx != source_idx)
+                    .collect();
+                if candidates.is_empty() {
+                    continue;
+                }
                 let same_file_targets: Vec<_> = targets
                     .iter()
                     .copied()
+                    .filter(|target_idx| *target_idx != source_idx)
                     .filter(|target_idx| {
                         graph_node_file_path(&self.graph[*target_idx].id) == source_file
                     })
                     .collect();
                 let (resolved_targets, ambiguous): (Vec<_>, bool) = if same_file_targets.is_empty()
                 {
-                    if targets.len() == 1 {
-                        (targets.clone(), false)
+                    if candidates.len() == 1 {
+                        (candidates.clone(), false)
                     } else {
                         continue;
                     }
@@ -403,6 +415,17 @@ impl CodeGraph {
             std::fs::create_dir_all(parent)?;
         }
         let temp_path = path.with_extension(format!("json.{}.tmp", std::process::id()));
+        #[cfg(unix)]
+        let file = {
+            use std::os::unix::fs::OpenOptionsExt;
+            std::fs::OpenOptions::new()
+                .write(true)
+                .create(true)
+                .truncate(true)
+                .mode(0o600)
+                .open(&temp_path)?
+        };
+        #[cfg(not(unix))]
         let file = std::fs::File::create(&temp_path)?;
         let mut writer = std::io::BufWriter::new(file);
         serde_json::to_writer(&mut writer, &self.graph)?;

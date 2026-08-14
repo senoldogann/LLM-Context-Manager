@@ -115,20 +115,21 @@ impl ServerState {
         self.index_locks.lock().unwrap().remove(job_key);
     }
 
-    pub(crate) fn project_db_path(&self, project_path: &str) -> PathBuf {
+    pub(crate) fn project_db_path(&self, project_path: &str) -> Result<PathBuf> {
         let canonical_path = canonicalize_project_path(Path::new(project_path));
         if self
             .default_project_root
             .as_ref()
             .is_some_and(|root| canonical_path == *root)
         {
-            return self.default_db_path.clone();
+            return Ok(self.default_db_path.clone());
         }
-        canonical_path.join("data/ccm_db")
+        let candidate = canonical_path.join("data/ccm_db");
+        ccm_core::resolve_artifact_path(&canonical_path, &candidate)
     }
 
     fn project_artifacts(&self, project_path: &str) -> Result<ccm_core::IndexArtifactPaths> {
-        let requested_db = self.project_db_path(project_path);
+        let requested_db = self.project_db_path(project_path)?;
         ccm_core::resolve_index_artifacts(
             project_path,
             Some(requested_db.to_string_lossy().as_ref()),
@@ -159,7 +160,11 @@ impl ServerState {
         let db_path = if let Ok(path) = std::env::var("CCM_DB_PATH") {
             path
         } else if let Some(root) = &default_project_root {
-            root.join("data/ccm_db").to_string_lossy().to_string()
+            let candidate = root.join("data/ccm_db");
+            ccm_core::resolve_artifact_path(root, &candidate)
+                .unwrap_or(candidate)
+                .to_string_lossy()
+                .to_string()
         } else {
             let home = std::env::var("HOME")
                 .or_else(|_| std::env::var("USERPROFILE"))
@@ -351,7 +356,7 @@ impl ServerState {
         );
 
         let store = LanceDbStore::new(&db_path, "code_vectors").await?;
-        let requested_db_path = self.project_db_path(&cache_key);
+        let requested_db_path = self.project_db_path(&cache_key)?;
         let policy_path = requested_db_path
             .parent()
             .map(|parent| parent.join("ccm_learn/policies.json"));
@@ -376,7 +381,7 @@ impl ServerState {
         let db_path = artifacts.db_path.to_string_lossy().to_string();
         let graph = CodeGraph::load_from_file(&artifacts.graph_path.to_string_lossy())?;
         let store = LanceDbStore::new(&db_path, "code_vectors").await?;
-        let requested_db_path = self.project_db_path(&cache_key);
+        let requested_db_path = self.project_db_path(&cache_key)?;
         let policy_path = requested_db_path
             .parent()
             .map(|parent| parent.join("ccm_learn/policies.json"));
@@ -560,9 +565,21 @@ pub async fn handle_request(
             request.id,
             json!({ "resourceTemplates": [] }),
         ))),
-        "tools/call" => handle_call_tool(state, request.id, request.params)
-            .await
-            .map(Some),
+        "tools/call" => {
+            // `tools/call` notification'ı MCP sözleşmesinin parçası değildir.
+            // Yanıt üretmediği için ağır bir tool'u (örn. index_project) bu
+            // yoldan çalıştırmak ana JSON-RPC loop'unu bloklar ve sonraki
+            // gerçek istekleri geciktirir. Notification olarak gelen
+            // tools/call güvenle yok sayılır.
+            if is_notification {
+                tracing::warn!("tools/call notification ignored; use a request with an id instead");
+                Ok(None)
+            } else {
+                handle_call_tool(state, request.id, request.params)
+                    .await
+                    .map(Some)
+            }
+        }
         _ => Ok(Some(create_error_response(
             request.id,
             -32601,

@@ -126,6 +126,17 @@ pub fn append_history(path: &Path, entry: &PolicyHistoryEntry) -> Result<()> {
     let mut line = serde_json::to_string(entry)?;
     line.push('\n');
     use std::io::Write;
+    #[cfg(unix)]
+    let mut file = {
+        use std::os::unix::fs::OpenOptionsExt;
+        std::fs::OpenOptions::new()
+            .create(true)
+            .append(true)
+            .mode(0o600)
+            .open(path)
+            .with_context(|| format!("history açılamadı: {}", path.display()))?
+    };
+    #[cfg(not(unix))]
     let mut file = std::fs::OpenOptions::new()
         .create(true)
         .append(true)

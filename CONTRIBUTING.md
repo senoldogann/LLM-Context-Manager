@@ -38,16 +38,20 @@ cargo clippy -- -D warnings
 
 1. `cargo fmt --all -- --check` + `cargo clippy --workspace --all-targets -- -D warnings`
 2. `cargo test --workspace` + `npm test --prefix npm` (hermetic MCP e2e dahil)
-3. Structural golden gate: `CCM_DISABLE_EMBEDDER=1 ccm-cli eval --tasks
-   eval/golden_tasks.v3.ccm.json` (search_code hariç 50/50, regresyon 0)
-4. Gerçek anlamsal eval (Ollama varsa): `eval --tasks golden_tasks.v3.ccm.json
-   --report eval/report.semantic.json`; sonucu README'de güncelle
+3. Structural golden gate: `jq '.tasks |= map(select(.query.type !=
+   "search_code"))' eval/golden_tasks.v3.ccm.json > /tmp/golden.structural.json`
+   + `CCM_DISABLE_EMBEDDER=1 ccm-cli eval --tasks /tmp/golden.structural.json
+   --min-pass-rate 100 --max-regression 0` (search_code hariç 50/50)
+4. Gerçek anlamsal eval (Ollama varsa): `eval --tasks
+   eval/golden_tasks.v3.ccm.json --report eval/report.semantic.json`; sonucu
+   README'de güncelle
 5. Self-improve: `CCM_EMBEDDING_FIXTURE=... ccm-cli learn optimize --seed 42`
    (Promote veya Rejected; ikisi de geçerli)
 6. Version bump: `core/cli/mcp Cargo.toml` + `Cargo.lock` + `npm/package.json`
    + `npm/package-lock.json` + README/RELEASE_NOTES
 7. Tag `vX.Y.Z` push → Release workflow (quality-gate → 5 platform build →
-   publish-npm) yeşil; npm `latest` doğrula
+   release assets → npm tarball attach) yeşil; npm publish manuel, `latest`
+   doğrula
 8. GitHub release notlarını `RELEASE_NOTES.md`'den üret
 
 ### 1.0 İçin Açık Maddeler (cutline)

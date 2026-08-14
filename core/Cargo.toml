@@ -17,6 +17,7 @@ git2 = "0.21.0"
 anyhow = "1.0"
 tracing = "0.1"
 tracing-subscriber = "0.3"
+rayon = "1.10"
 
 # LanceDB: vektör deposu. 0.31 serisine pinlenmiş durumda; yükseltmeden önce
 # API uyumluluğu (create_table/delete/vector_search) testlerle doğrulanmalı.

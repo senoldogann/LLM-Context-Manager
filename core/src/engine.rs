@@ -809,7 +809,9 @@ impl RetrievalEngine {
             {
                 if matches!(
                     edge.weight(),
-                    crate::graph::EdgeType::Calls | crate::graph::EdgeType::Defines
+                    crate::graph::EdgeType::Calls
+                        | crate::graph::EdgeType::CallAmbiguous
+                        | crate::graph::EdgeType::Defines
                 ) {
                     let neighbor = edge.target();
                     if visited.insert(neighbor) {
@@ -1086,7 +1088,9 @@ impl RetrievalEngine {
             for edge in graph.graph.edges_directed(idx, Direction::Outgoing) {
                 let target_node = &graph.graph[edge.target()];
                 match edge.weight() {
-                    EdgeType::Calls => calls.push(target_node.name.clone()),
+                    EdgeType::Calls | EdgeType::CallAmbiguous => {
+                        calls.push(target_node.name.clone())
+                    }
                     EdgeType::Contains => contains.push(target_node.name.clone()),
                     _ => {}
                 }
@@ -1095,7 +1099,7 @@ impl RetrievalEngine {
             // Incoming edges
             for edge in graph.graph.edges_directed(idx, Direction::Incoming) {
                 let source_node = &graph.graph[edge.source()];
-                if let EdgeType::Calls = edge.weight() {
+                if matches!(edge.weight(), EdgeType::Calls | EdgeType::CallAmbiguous) {
                     called_by.push(source_node.name.clone());
                 }
             }
@@ -1105,7 +1109,7 @@ impl RetrievalEngine {
             for (target_id, weight) in outgoing {
                 if let Some(node) = graph.find_node_by_id(&target_id) {
                     match weight {
-                        EdgeType::Calls => calls.push(node.name.clone()),
+                        EdgeType::Calls | EdgeType::CallAmbiguous => calls.push(node.name.clone()),
                         EdgeType::Contains => contains.push(node.name.clone()),
                         _ => {}
                     }

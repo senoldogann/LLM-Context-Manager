@@ -704,6 +704,7 @@ dependencies = [
  "lancedb",
  "lru",
  "petgraph 0.6.5",
+ "rayon",
  "reqwest",
  "serde",
  "serde_json",
