@@ -148,11 +148,27 @@ impl CodeGraph {
         for source_idx in source_indices {
             let source = &self.graph[source_idx];
             let source_file = graph_node_file_path(&source.id);
+            let source_name = source.name.clone();
             let tokens = identifier_tokens(&source.content);
-            for (name, call_like) in tokens {
-                let Some(targets) = symbols.get(name) else {
+            // Her sembol adının bu kaynak içeriğinde kaç kez geçtiğini önceden
+            // say; böylece döngü içinde borrow çakışması olmaz.
+            let mut occurrence_counts: std::collections::HashMap<&str, usize> =
+                std::collections::HashMap::new();
+            for (name, _) in &tokens {
+                *occurrence_counts.entry(name).or_insert(0) += 1;
+            }
+            for (name, call_like) in &tokens {
+                let Some(targets) = symbols.get(*name) else {
                     continue;
                 };
+                // Kaynak düğümün kendi bildirim adı yalnızca kendi içeriğinde
+                // geçiyorsa (ör. `func startRecording() {`), bu bir çağrı
+                // değildir ve başka dosyadaki aynı isimli fonksiyonla sahte
+                // ters çağrı kenarı üretmemelidir. Token sayısı 1 ise ve bu tek
+                // token bildirim adıysa atla.
+                if occurrence_counts.get(name) == Some(&1) && source_name == **name {
+                    continue;
+                }
                 // Kaynak düğümün kendisini adaylardan çıkar: aynı dosyada tek
                 // "eşleşme" yalnızca kaynağın kendisiyse (örn. kendi adıyla
                 // çağrılan üye), farklı dosyadaki gerçek hedef hiç bağlanmıyordu.
@@ -194,7 +210,7 @@ impl CodeGraph {
                         continue;
                     }
                     let target = &self.graph[target_idx];
-                    let edge_type = if call_like {
+                    let edge_type = if *call_like {
                         if ambiguous {
                             EdgeType::CallAmbiguous
                         } else {

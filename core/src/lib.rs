@@ -46,7 +46,7 @@ pub fn resolve_index_artifacts(path: &str, db_path: Option<&str>) -> Result<Inde
     let project_root = std::fs::canonicalize(path).map_err(|error| {
         anyhow::anyhow!("Project root '{}' could not be resolved: {}", path, error)
     })?;
-    let requested_db = resolve_requested_db_path(&project_root, db_path);
+    let requested_db = resolve_requested_db_path(&project_root, db_path)?;
     let artifact_parent = requested_db
         .parent()
         .map(Path::to_path_buf)
@@ -277,7 +277,7 @@ pub async fn index_directory(path: &str, db_path: Option<&str>) -> Result<IndexS
     let project_root = std::fs::canonicalize(path).map_err(|error| {
         anyhow::anyhow!("Project root '{}' could not be resolved: {}", path, error)
     })?;
-    let final_db_path = resolve_requested_db_path(&project_root, db_path);
+    let final_db_path = resolve_requested_db_path(&project_root, db_path)?;
     let artifact_parent = final_db_path.parent().ok_or_else(|| {
         anyhow::anyhow!(
             "Invalid DB path '{}': cannot determine parent directory",
@@ -738,13 +738,31 @@ fn cleanup_generations(generations_root: &Path, active_generation: &str) {
     }
 }
 
-fn resolve_requested_db_path(project_root: &Path, db_path: Option<&str>) -> PathBuf {
+fn resolve_requested_db_path(project_root: &Path, db_path: Option<&str>) -> Result<PathBuf> {
     let path = match db_path.map(PathBuf::from) {
         Some(path) if path.is_absolute() => path,
         Some(path) => project_root.join(path),
         None => project_root.join("data/ccm_db"),
     };
-    resolve_artifact_path(project_root, &path).unwrap_or_else(|_| normalize_path_lexically(&path))
+    // v0.3.9 kapsama güvencesi: çözülen yol proje kökü dışına kaçarsa
+    // (ör. `data` → dış dizin symlink'i, relative `../escape` db-path)
+    // hata sessizce yutulmaz; çağıran index'i iptal eder. Lexical fallback
+    // yalnızca kök İÇİNDE kalan var-olmayan yollar için kullanılır.
+    match resolve_artifact_path(project_root, &path) {
+        Ok(resolved) => Ok(resolved),
+        Err(_) => {
+            let lexical = normalize_path_lexically(&path);
+            if lexical.starts_with(project_root) {
+                Ok(lexical)
+            } else {
+                Err(anyhow::anyhow!(
+                    "Database path '{}' resolves outside the project root '{}'",
+                    path.display(),
+                    project_root.display()
+                ))
+            }
+        }
+    }
 }
 
 /// Bir artifact yolunu symlink-güvenli biçimde çözer.
@@ -948,7 +966,7 @@ pub async fn update_index(path: &str, db_path: Option<&str>) -> Result<IndexStat
     let project_root = std::fs::canonicalize(path).map_err(|error| {
         anyhow::anyhow!("Project root '{}' could not be resolved: {}", path, error)
     })?;
-    let requested_db_path = resolve_requested_db_path(&project_root, db_path);
+    let requested_db_path = resolve_requested_db_path(&project_root, db_path)?;
     let artifact_parent = requested_db_path.parent().ok_or_else(|| {
         anyhow::anyhow!(
             "Invalid DB path '{}': cannot determine parent directory",

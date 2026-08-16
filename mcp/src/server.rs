@@ -161,8 +161,10 @@ impl ServerState {
             path
         } else if let Some(root) = &default_project_root {
             let candidate = root.join("data/ccm_db");
-            ccm_core::resolve_artifact_path(root, &candidate)
-                .unwrap_or(candidate)
+            // v0.3.9 kapsama güvencesi: `data` dış dizine symlink ise ya da
+            // yol kök dışına çözülürse sessizce dış dizine bağlanma; server
+            // başlatılamaz (tool çağrıları da aynı hatayı görür).
+            ccm_core::resolve_artifact_path(root, &candidate)?
                 .to_string_lossy()
                 .to_string()
         } else {

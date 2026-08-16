@@ -902,6 +902,63 @@ final class HomeView {
     }
 
     #[test]
+    fn swift_declaration_name_alone_does_not_create_fake_call_edges() {
+        // AudioRecorderService.startRecording içinde "startRecording" yalnızca
+        // kendi bildiriminde geçer (çağrı yok); HomeView.startRecording'i
+        // çağırmaz. Buna rağmen eski çözüm, aynı isimli hedefle sahte ters
+        // çağrı kenarı üretiyordu.
+        let code = r#"
+final class AudioRecorderService {
+    func startRecording() {}
+}
+
+final class HomeView {
+    func startRecording() {
+        recorder.startRecording()
+    }
+    func stopProgressTimer() {
+        stopProgressTimer()
+    }
+}
+"#;
+        let mut parser = CodeParser::new();
+        let tree = parser.parse_tree(code, SupportedLanguage::Swift).unwrap();
+        assert!(!tree.root_node().has_error(), "Swift parse failed");
+
+        let mut graph = CodeGraph::new();
+        let mut extractor = Extractor::new(code.to_string(), SupportedLanguage::Swift);
+        extractor
+            .extract(&tree, &mut graph, "recorder.swift")
+            .unwrap();
+        graph.rebuild_reference_edges();
+
+        let calls: Vec<(String, String)> = graph
+            .graph
+            .edge_indices()
+            .filter_map(|edge_idx| {
+                let (a, b) = graph.graph.edge_endpoints(edge_idx)?;
+                if graph.graph[edge_idx] == EdgeType::Calls {
+                    Some((graph.graph[a].name.clone(), graph.graph[b].name.clone()))
+                } else {
+                    None
+                }
+            })
+            .collect();
+        // Aynı isimli iki startRecording arasında yalnızca tek yönlü kenar
+        // olmalı (HomeView -> AudioRecorderService); kendi bildirim adıyla
+        // üretilen sahte ters kenar (AudioRecorderService -> HomeView) yok.
+        let start_recording_pairs: Vec<_> = calls
+            .iter()
+            .filter(|(from, to)| from == "startRecording" && to == "startRecording")
+            .collect();
+        assert!(
+            start_recording_pairs.len() <= 1,
+            "sahte çift yönlü çağrı kenarı üretildi: {:?}",
+            calls
+        );
+    }
+
+    #[test]
     fn semantic_ids_survive_unrelated_line_insertions() {
         fn function_id(source: &str) -> String {
             let mut parser = CodeParser::new();

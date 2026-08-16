@@ -303,15 +303,16 @@ impl LanceDbStore {
                 None => return Ok(()),
             };
             let total_batches = all_chunks.len().div_ceil(batch_size);
-            // Sınırlı eşzamanlılık: Ollama `num_parallel` işçisiyle eşzamanlı
-            // istekleri kuyruğa alıp işleyebilir; seri bekleme yerine
-            // CCM_EMBED_CONCURRENCY kadar batch paralel gider. Vektörler
-            // batch indeksine göre toplanıp sırayla birleştirilir, böylece
-            // id ↔ vektör hizası bozulmaz.
+            // Sınırlı eşzamanlılık: Ollama varsayılan olarak tek model işçisiyle
+            // (`num_parallel=1`) istekleri sıraya alır; eşzamanlı istekler seri
+            // işlenir, hızlanma sağlamaz ve yavaş makinelerde 30s timeout'u
+            // aşıp tüm full index'i abort edebilir. Bu yüzden varsayılan 1'dir;
+            // `OLLAMA_NUM_PARALLEL>1` ortamlarında CCM_EMBED_CONCURRENCY
+            // yükseltilerek gerçek paralellik alınabilir.
             let concurrency: usize = std::env::var("CCM_EMBED_CONCURRENCY")
                 .ok()
                 .and_then(|value| value.parse().ok())
-                .unwrap_or(2)
+                .unwrap_or(1)
                 .clamp(1, 8);
             let mut collected: Vec<Option<Vec<Vec<f32>>>> = vec![None; total_batches];
             let batch_futures =
