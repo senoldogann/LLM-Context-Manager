@@ -1,5 +1,21 @@
 # Release Notes
 
+## v0.3.11 - Fast Graph-First Indexing and Semantic Repair
+
+- MCP `index_project` accepts `mode:"quick"`; sources are scanned, parsed and
+  graph-referenced immediately while embeddings run in the background, so the
+  first call does not wait on an unavailable or slow embedding provider.
+- New synchronous `index_now` tool returns final index statistics in one call
+  and supports `quick`, `full`, and `upgrade` modes.
+- Hybrid `search_code` ranking now uses semantic score to break graph score
+  ties, fixing cases where a graph neighbor with semantic 0.00 ranked above an
+  exact semantic match.
+- `update_index` detects a graph-only or incomplete vector table and repairs it
+  from the active graph when no source files changed, or performs a full
+  re-index when files also changed.
+- Quick and upgrade modes keep the existing atomic staging generation
+  guarantees; failed upgrades leave the current index untouched.
+
 ## v0.3.10 - Security and Correctness Hardening
 
 - Embedding güvenliği: repo içindeki `.env` artık `EMBEDDING_HOST`/API

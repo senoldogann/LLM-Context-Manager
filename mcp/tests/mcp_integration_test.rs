@@ -1040,6 +1040,72 @@ fn mcp_broken_generation_pointer_can_be_repaired_with_index_project(
 }
 
 #[test]
+fn mcp_quick_index_returns_synchronously_and_search_falls_back_to_graph(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let project = tempdir()?;
+    fs::write(
+        project.path().join("main.rs"),
+        "pub fn quick_compute_tax(base: f64) -> f64 { base * 1.24 }\n",
+    )?;
+
+    let mut cmd = Command::new(assert_cmd::cargo::cargo_bin!("ccm-mcp"));
+    cmd.env("CCM_DISABLE_EMBEDDER", "1")
+        .env("CCM_MCP_DEBUG", "0")
+        .env("CCM_PROJECT_ROOT", project.path())
+        .env("CCM_ALLOWED_ROOTS", project.path())
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null());
+
+    let mut child = cmd.spawn()?;
+    let mut stdin = child.stdin.take().unwrap();
+    let mut reader = BufReader::new(child.stdout.take().unwrap());
+    send_request(
+        &mut stdin,
+        &mut reader,
+        json!({"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}),
+    )?;
+
+    // index_now + mode quick: embedding atlanır, sonuç eşzamanlı döner.
+    let indexed = send_request(
+        &mut stdin,
+        &mut reader,
+        json!({
+            "jsonrpc":"2.0","id":2,"method":"tools/call",
+            "params":{"name":"index_now","arguments":{
+                "project_path":project.path(),"mode":"quick"
+            }}
+        }),
+    )?;
+    assert!(indexed.get("error").is_none(), "index_now quick: {indexed}");
+    let text = tool_text(&indexed);
+    assert!(
+        text.contains("graph-only"),
+        "quick index_now sonucu graph-only vurgusu içermeli: {text}"
+    );
+
+    // Bozuk/oluşturulmamış vektör tablosu 500 değil graph fallback döndürür.
+    let search = send_request(
+        &mut stdin,
+        &mut reader,
+        json!({
+            "jsonrpc":"2.0","id":3,"method":"tools/call",
+            "params":{"name":"search_code","arguments":{
+                "query":"compute_tax","project_path":project.path()
+            }}
+        }),
+    )?;
+    assert!(
+        search.get("error").is_none(),
+        "search_code bozuk vektör tablosunda hata değil graph fallback döndürmeli: {search}"
+    );
+    assert!(tool_text(&search).contains("quick_compute_tax"));
+
+    let _ = child.kill();
+    Ok(())
+}
+
+#[test]
 fn mcp_recovers_after_an_oversized_frame() -> Result<(), Box<dyn std::error::Error>> {
     let project = tempdir()?;
     let mut cmd = Command::new(assert_cmd::cargo::cargo_bin!("ccm-mcp"));

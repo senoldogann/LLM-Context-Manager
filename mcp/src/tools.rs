@@ -445,6 +445,12 @@ pub async fn index_project(
         .get("project_path")
         .and_then(|v| v.as_str())
         .ok_or_else(|| anyhow::anyhow!("Missing 'project_path' argument"))?;
+    let mode = args
+        .get("mode")
+        .and_then(|v| v.as_str())
+        .map(normalize_index_mode)
+        .transpose()?
+        .unwrap_or_default();
 
     let canonical_path = std::fs::canonicalize(project_path)
         .unwrap_or_else(|_| std::path::PathBuf::from(project_path));
@@ -488,7 +494,7 @@ pub async fn index_project(
         let worker_state = job_state.clone();
         let worker_path = job_path.clone();
         let worker =
-            tokio::spawn(async move { run_index_project(&worker_state, &worker_path).await });
+            tokio::spawn(async move { run_index_project(worker_state, &worker_path, mode).await });
         let result = match worker.await {
             Ok(result) => result,
             Err(error) => index_task_failed_result(&job_path, &error.to_string()),
@@ -518,6 +524,138 @@ pub async fn index_project(
     }
 
     Ok(index_started_result(project_path))
+}
+
+/// Tool: index_now
+/// Eşzamanlı indexleme: tamamlanana kadar bekler ve nihai istatistiği döndürür.
+pub async fn index_now(state: Arc<crate::server::ServerState>, args: &Value) -> Result<ToolResult> {
+    let project_path = args
+        .get("project_path")
+        .and_then(|v| v.as_str())
+        .ok_or_else(|| anyhow::anyhow!("Missing 'project_path' argument"))?;
+    let mode = args
+        .get("mode")
+        .and_then(|v| v.as_str())
+        .map(normalize_index_mode)
+        .transpose()?
+        .unwrap_or_default();
+
+    let canonical_path = std::fs::canonicalize(project_path)
+        .unwrap_or_else(|_| std::path::PathBuf::from(project_path));
+    let job_key = canonical_path.to_string_lossy().to_string();
+
+    // Aynı projede devam eden iş varsa sonucu bekleyip döndür; aksi halde
+    // eşzamanlı çalıştırmaya başla.
+    let existing = state.index_jobs.lock().unwrap().get(&job_key).cloned();
+    if let Some(job) = existing {
+        let mut receiver = job.receiver;
+        loop {
+            {
+                let borrowed = receiver.borrow();
+                if let Some(result) = borrowed.as_ref() {
+                    state.index_jobs.lock().unwrap().remove(&job_key);
+                    return Ok(result.clone());
+                }
+            }
+            if receiver.changed().await.is_err() {
+                return Ok(index_task_failed_result(
+                    project_path,
+                    "index job completed without a result",
+                ));
+            }
+        }
+    }
+
+    let lock = state.project_index_lock(project_path);
+    let _guard = lock.lock().await;
+    let db_path = match state.project_db_path(project_path) {
+        Ok(path) => path.to_string_lossy().to_string(),
+        Err(error) => {
+            return Ok(index_task_failed_result(
+                project_path,
+                &format!("project path could not be resolved safely: {}", error),
+            ));
+        }
+    };
+
+    match run_index_worker_process(project_path, &db_path, mode).await {
+        Ok(stats) => {
+            if let Err(error) = state.refresh_project_engine(project_path).await {
+                return Ok(index_task_failed_result(
+                    project_path,
+                    &format!("indexing completed but engine refresh failed: {}", error),
+                ));
+            }
+            if mode == IndexModeArg::Quick {
+                schedule_semantic_upgrade(state, project_path.to_string().into(), db_path.clone());
+            }
+            Ok(ToolResult {
+                content: vec![ToolResultContent {
+                    content_type: "text".to_string(),
+                    text: format_index_stats_result(stats, mode),
+                }],
+                is_error: None,
+            })
+        }
+        Err(error) => Ok(index_task_failed_result(
+            project_path,
+            &format!("indexing failed: {}", error),
+        )),
+    }
+}
+
+/// Arka plan quick index sonrası semantic upgrade'i planlar. Embedding uzun
+/// sürdüğü için yanıt vermez; okuma araçları graph-only sonuçla çalışmaya
+/// devam eder.
+fn schedule_semantic_upgrade(
+    state: Arc<crate::server::ServerState>,
+    project_path: std::sync::Arc<str>,
+    db_path: String,
+) {
+    tokio::spawn(async move {
+        let refresh_state = state.clone();
+        let refresh_path = project_path.clone();
+        let upgrade = tokio::spawn(async move {
+            run_index_worker_process(&project_path, &db_path, IndexModeArg::Upgrade).await
+        });
+        match upgrade.await {
+            Ok(Ok(stats)) => {
+                tracing::info!(
+                    nodes = stats.nodes_created,
+                    "Background semantic upgrade completed"
+                );
+                // Yeni generation graph+vektör içerdiğinden cache'i tazele.
+                let _ = refresh_state.refresh_project_engine(&refresh_path).await;
+            }
+            Ok(Err(error)) => {
+                tracing::warn!(error = %error, "Background semantic upgrade failed");
+            }
+            Err(error) => {
+                tracing::warn!(error = %error, "Background semantic upgrade panicked");
+            }
+        }
+    });
+}
+
+/// `index_project`/`index_now` mod değerini normalize eder.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+enum IndexModeArg {
+    #[default]
+    Full,
+    Quick,
+    Upgrade,
+}
+
+fn normalize_index_mode(value: &str) -> Result<IndexModeArg> {
+    match value.to_ascii_lowercase().as_str() {
+        "full" | "default" => Ok(IndexModeArg::Full),
+        "quick" | "graph" => Ok(IndexModeArg::Quick),
+        "upgrade" | "semantic" => Ok(IndexModeArg::Upgrade),
+        other => Err(input_error(format!(
+            "Unknown index mode '{}'; expected 'full', 'quick', or 'upgrade'",
+            other
+        ))),
+    }
 }
 
 fn index_result_retention() -> std::time::Duration {
@@ -592,7 +730,11 @@ fn index_task_failed_result(project_path: &str, detail: &str) -> ToolResult {
     }
 }
 
-async fn run_index_project(state: &crate::server::ServerState, project_path: &str) -> ToolResult {
+async fn run_index_project(
+    state: Arc<crate::server::ServerState>,
+    project_path: &str,
+    mode: IndexModeArg,
+) -> ToolResult {
     let lock = state.project_index_lock(project_path);
     let _guard = lock.lock().await;
 
@@ -609,7 +751,7 @@ async fn run_index_project(state: &crate::server::ServerState, project_path: &st
         }
     };
 
-    match run_index_worker_process(project_path, &db_path).await {
+    match run_index_worker_process(project_path, &db_path, mode).await {
         Ok(stats) => {
             // Refresh both the explicit project cache and the default startup engine.
             if let Err(error) = state.refresh_project_engine(project_path).await {
@@ -625,64 +767,20 @@ async fn run_index_project(state: &crate::server::ServerState, project_path: &st
                 };
             }
 
-            let message = if stats.files_indexed == 0
-                && stats.files_failed == 0
-                && stats.files_skipped == 0
-                && stats.nodes_created == 0
-            {
-                "No changes detected. Existing index is already up to date.".to_string()
-            } else {
-                let mut lines = vec![
-                    "Project index refreshed successfully.".to_string(),
-                    String::new(),
-                    "Stats:".to_string(),
-                    format!("- Files Indexed: {}", stats.files_indexed),
-                    format!("- Files Failed: {}", stats.files_failed),
-                    format!("- Files Skipped: {}", stats.files_skipped),
-                    format!("- Nodes Created: {}", stats.nodes_created),
-                ];
-
-                if !stats.reason_counts.is_empty() {
-                    lines.push(String::new());
-                    lines.push("Issue Breakdown:".to_string());
-                    let mut reasons: Vec<_> = stats.reason_counts.iter().collect();
-                    reasons.sort_by(|left, right| right.1.cmp(left.1));
-                    for (reason, count) in reasons {
-                        lines.push(format!("- {}: {}", reason, count));
-                    }
-                }
-
-                if !stats.failed_files.is_empty() {
-                    lines.push(String::new());
-                    lines.push("Failed Files (sample):".to_string());
-                    for issue in stats.failed_files.iter().take(10) {
-                        lines.push(format!(
-                            "- {} [{}] {}",
-                            issue.path,
-                            issue.reason.as_str(),
-                            issue.detail
-                        ));
-                    }
-                }
-
-                if !stats.suggested_ignores.is_empty() {
-                    lines.push(String::new());
-                    lines.push("Suggested Ignore Patterns:".to_string());
-                    for pattern in stats.suggested_ignores.iter().take(10) {
-                        lines.push(format!("- {}", pattern));
-                    }
-                }
-
-                lines.push(String::new());
-                lines.push(
-                    "The project is ready for semantic search and graph navigation.".to_string(),
+            // Quick mod ilk yanıtı graph-only döndürür; embedding yüklendiğinde
+            // arka planda aynı projede semantic upgrade başlatılır.
+            if mode == IndexModeArg::Quick {
+                schedule_semantic_upgrade(
+                    state.clone(),
+                    project_path.to_string().into(),
+                    db_path.clone(),
                 );
-                lines.join("\n")
-            };
+            }
+
             ToolResult {
                 content: vec![ToolResultContent {
                     content_type: "text".to_string(),
-                    text: message,
+                    text: format_index_stats_result(stats, mode),
                 }],
                 is_error: None,
             }
@@ -704,13 +802,24 @@ async fn run_index_project(state: &crate::server::ServerState, project_path: &st
 async fn run_index_worker_process(
     project_path: &str,
     db_path: &str,
+    mode: IndexModeArg,
 ) -> Result<ccm_core::IndexStats> {
     let executable = std::env::current_exe()?;
     let mut command = tokio::process::Command::new(executable);
-    command
+    let command = command
         .arg("--ccm-internal-index-worker")
         .arg(project_path)
-        .arg(db_path)
+        .arg(db_path);
+    match mode {
+        IndexModeArg::Quick => {
+            command.arg("quick");
+        }
+        IndexModeArg::Upgrade => {
+            command.arg("upgrade");
+        }
+        IndexModeArg::Full => {}
+    }
+    command
         .env("CCM_INTERNAL_INDEX_WORKER", "1")
         .kill_on_drop(true)
         .stdin(std::process::Stdio::null())
@@ -740,6 +849,72 @@ async fn run_index_worker_process(
                 .collect::<String>()
         )
     })
+}
+
+fn format_index_stats_result(stats: ccm_core::IndexStats, mode: IndexModeArg) -> String {
+    if stats.files_indexed == 0
+        && stats.files_failed == 0
+        && stats.files_skipped == 0
+        && stats.nodes_created == 0
+    {
+        return "No changes detected. Existing index is already up to date.".to_string();
+    }
+
+    let mut lines = vec![
+        "Project index refreshed successfully.".to_string(),
+        String::new(),
+        "Stats:".to_string(),
+        format!("- Files Indexed: {}", stats.files_indexed),
+        format!("- Files Failed: {}", stats.files_failed),
+        format!("- Files Skipped: {}", stats.files_skipped),
+        format!("- Nodes Created: {}", stats.nodes_created),
+    ];
+
+    if !stats.reason_counts.is_empty() {
+        lines.push(String::new());
+        lines.push("Issue Breakdown:".to_string());
+        let mut reasons: Vec<_> = stats.reason_counts.iter().collect();
+        reasons.sort_by(|left, right| right.1.cmp(left.1));
+        for (reason, count) in reasons {
+            lines.push(format!("- {}: {}", reason, count));
+        }
+    }
+
+    if !stats.failed_files.is_empty() {
+        lines.push(String::new());
+        lines.push("Failed Files (sample):".to_string());
+        for issue in stats.failed_files.iter().take(10) {
+            lines.push(format!(
+                "- {} [{}] {}",
+                issue.path,
+                issue.reason.as_str(),
+                issue.detail
+            ));
+        }
+    }
+
+    if !stats.suggested_ignores.is_empty() {
+        lines.push(String::new());
+        lines.push("Suggested Ignore Patterns:".to_string());
+        for pattern in stats.suggested_ignores.iter().take(10) {
+            lines.push(format!("- {}", pattern));
+        }
+    }
+
+    lines.push(String::new());
+    match mode {
+        IndexModeArg::Quick => lines.push(
+            "Quick (graph-only) index is active; semantic vectors are being built in the background."
+                .to_string(),
+        ),
+        IndexModeArg::Upgrade => lines.push(
+            "Semantic vectors are now available; hybrid search is fully enabled.".to_string(),
+        ),
+        IndexModeArg::Full => lines.push(
+            "The project is ready for semantic search and graph navigation.".to_string(),
+        ),
+    }
+    lines.join("\n")
 }
 
 fn index_worker_timeout() -> std::time::Duration {

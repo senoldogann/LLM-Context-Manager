@@ -274,6 +274,23 @@ fn should_traverse_entry(entry: &ignore::DirEntry) -> bool {
 /// Index a directory recursively.
 /// Parses all supported files and stores embeddings in the vector database.
 pub async fn index_directory(path: &str, db_path: Option<&str>) -> Result<IndexStats> {
+    index_directory_with_mode(path, db_path, IndexMode::Full).await
+}
+
+/// İndeksleme kapsamı. `Quick` embedding atlayıp yalnızca graph üretir;
+/// semantic vektörler `upgrade_active_index_semantics` ile arka planda dolar.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum IndexMode {
+    Full,
+    Quick,
+}
+
+/// Belirtilen modda sondan sona tam indeksleme yapar.
+pub async fn index_directory_with_mode(
+    path: &str,
+    db_path: Option<&str>,
+    mode: IndexMode,
+) -> Result<IndexStats> {
     let project_root = std::fs::canonicalize(path).map_err(|error| {
         anyhow::anyhow!("Project root '{}' could not be resolved: {}", path, error)
     })?;
@@ -317,6 +334,7 @@ pub async fn index_directory(path: &str, db_path: Option<&str>) -> Result<IndexS
             artifact_parent.join(CURRENT_GENERATION_FILE),
             artifact_parent.join(ACTIVATION_LOCK_DIRECTORY),
         ],
+        mode,
     )
     .await;
     let stats = match build {
@@ -354,6 +372,7 @@ async fn build_index_generation(
     artifact_parent: &Path,
     fixture_namespace: &str,
     excluded_paths: &[PathBuf],
+    mode: IndexMode,
 ) -> Result<IndexStats> {
     use tracing::{info, warn};
 
@@ -524,20 +543,33 @@ async fn build_index_generation(
     // Count nodes
     stats.nodes_created = graph.graph.node_count();
 
-    // Index into vector store
+    // Index into vector store. Quick mod embedding'i bilinçli olarak atlar;
+    // grafik yine de tam kurulur ve vektörler `upgrade_active_index_semantics`
+    // ile arka planda doldurulur.
     use std::sync::Arc;
     let graph_arc = Arc::new(tokio::sync::RwLock::new(graph));
-    if stats.nodes_created > 0 {
-        let engine = RetrievalEngine::new(graph_arc.clone(), store);
-        engine.index_graph().await?;
+    match mode {
+        IndexMode::Full => {
+            if stats.nodes_created > 0 {
+                let engine = RetrievalEngine::new(graph_arc.clone(), store);
+                engine.index_graph().await?;
 
-        info!(
-            nodes = stats.nodes_created,
-            files = stats.files_indexed,
-            "Indexing completed successfully"
-        );
-    } else {
-        warn!("No supported files found to index");
+                info!(
+                    nodes = stats.nodes_created,
+                    files = stats.files_indexed,
+                    "Indexing completed successfully"
+                );
+            } else {
+                warn!("No supported files found to index");
+            }
+        }
+        IndexMode::Quick => {
+            info!(
+                nodes = stats.nodes_created,
+                files = stats.files_indexed,
+                "Quick (graph-only) indexing completed; semantic upgrade deferred"
+            );
+        }
     }
 
     // Boş sonuç da kalıcılaştırılır; aksi halde önceki dolu graph diskte kalır.
@@ -1018,38 +1050,6 @@ pub async fn update_index(path: &str, db_path: Option<&str>) -> Result<IndexStat
         return index_directory(path, db_path).await;
     }
 
-    let semantic_nodes = semantic_node_count(&graph);
-    let vector_table_required = (fixture_enabled || !embedder_disabled) && semantic_nodes > 0;
-    let vector_table_path = active.db_path.join("code_vectors.lance");
-    if vector_table_required {
-        let fixture_namespace = fixture_namespace_for_db(&requested_db_path);
-        let vector_health = if vector_table_path.exists() {
-            match LanceDbStore::new_with_fixture_namespace(
-                &active.db_path.to_string_lossy(),
-                "code_vectors",
-                Some(&fixture_namespace),
-            )
-            .await
-            {
-                Ok(store) => store
-                    .validate_table()
-                    .await
-                    .map(|rows| rows >= semantic_nodes),
-                Err(error) => Err(error),
-            }
-        } else {
-            Ok(false)
-        };
-        if !matches!(vector_health, Ok(true)) {
-            tracing::warn!(
-                vector_table = %vector_table_path.display(),
-                error = ?vector_health.err(),
-                "Vector index is incomplete or corrupt. Performing full index."
-            );
-            return index_directory(path, db_path).await;
-        }
-    }
-
     let manifest = load_manifest(&active.manifest_path);
     if manifest.schema_version != INDEX_SCHEMA_VERSION {
         info!(
@@ -1073,7 +1073,44 @@ pub async fn update_index(path: &str, db_path: Option<&str>) -> Result<IndexStat
     )?;
     let (changed_rel, deleted_rel) = diff_manifest(&manifest, &new_manifest);
 
+    let semantic_nodes = semantic_node_count(&graph);
+    let vector_table_required = (fixture_enabled || !embedder_disabled) && semantic_nodes > 0;
+    let vector_table_path = active.db_path.join("code_vectors.lance");
+    let vector_health = if vector_table_required {
+        let fixture_namespace = fixture_namespace_for_db(&requested_db_path);
+        if vector_table_path.exists() {
+            match LanceDbStore::new_with_fixture_namespace(
+                &active.db_path.to_string_lossy(),
+                "code_vectors",
+                Some(&fixture_namespace),
+            )
+            .await
+            {
+                Ok(store) => store
+                    .validate_table()
+                    .await
+                    .map(|rows| rows >= semantic_nodes),
+                Err(error) => Err(error),
+            }
+        } else {
+            Ok(false)
+        }
+    } else {
+        Ok(true)
+    };
+
     if changed_rel.is_empty() && deleted_rel.is_empty() {
+        // Değişiklik yokken bile embedding erişilemezliği yüzünden graph-only
+        // kalmış generation'ı onarmak gerekir; aksi halde semantic katman sessizce
+        // eksik kalır ve `index_project` sahte "up to date" döner.
+        if vector_table_required && !matches!(vector_health, Ok(true)) {
+            tracing::warn!(
+                vector_table = %vector_table_path.display(),
+                error = ?vector_health.err(),
+                "Vector index is incomplete or corrupt. Repairing semantics from the active graph."
+            );
+            return upgrade_active_index_semantics(path, db_path).await;
+        }
         info!("No changes detected.");
         return Ok(IndexStats::default());
     }
@@ -1098,6 +1135,17 @@ pub async fn update_index(path: &str, db_path: Option<&str>) -> Result<IndexStat
     if changed_files.is_empty() {
         info!("No actionable changes detected after filtering. Index is up to date.");
         return Ok(IndexStats::default());
+    }
+
+    // Değişen dosyalarla birlikte bozuk vektör tablosu varsa incremental yol yeni
+    // node'ları eklerse de eski node vektörleri eksik kalır. Bu durumda tam yeniden
+    // indeksleme hem parse hem embedding'i tek geçişte doğru biçimde tamamlar.
+    if vector_table_required && !matches!(vector_health, Ok(true)) {
+        tracing::warn!(
+            vector_table = %vector_table_path.display(),
+            "Vector index incomplete with pending source changes; performing full re-index."
+        );
+        return index_directory(path, db_path).await;
     }
 
     let generation_id = new_generation_id();
@@ -1170,6 +1218,90 @@ pub async fn update_index(path: &str, db_path: Option<&str>) -> Result<IndexStat
         return Err(error);
     }
     Ok(stats)
+}
+
+/// Aktif grafiği kullanarak eksik/eksik-semantik vektör tablosunu arka planda
+/// yeniden kurar. Quick modda ya da embedding erişilemezken üretilmiş graph-only
+/// indeksleri tek kaynaktan onarır; diskteki graph'i yeniden parse etmez, yalnızca
+/// eksik vektörleri doldurur. Yeni bir staged jenerasyon üretip atomik aktifleştirir,
+/// böylece devam eden sorgular tutarlı kalır.
+pub async fn upgrade_active_index_semantics(
+    path: &str,
+    db_path: Option<&str>,
+) -> Result<IndexStats> {
+    use std::sync::Arc;
+    use tracing::info;
+
+    let project_root = std::fs::canonicalize(path).map_err(|error| {
+        anyhow::anyhow!("Project root '{}' could not be resolved: {}", path, error)
+    })?;
+    let requested_db_path = resolve_requested_db_path(&project_root, db_path)?;
+    let artifact_parent = requested_db_path.parent().ok_or_else(|| {
+        anyhow::anyhow!(
+            "Invalid DB path '{}': cannot determine parent directory",
+            requested_db_path.display()
+        )
+    })?;
+    let active = resolve_index_artifacts(path, db_path)?;
+
+    if !active.graph_path.is_file() || !active.manifest_path.is_file() {
+        anyhow::bail!(
+            "Active index artifacts are incomplete; run a full index before semantic upgrade"
+        );
+    }
+
+    let graph = CodeGraph::from_file(&active.graph_path.to_string_lossy())?;
+    let semantic_nodes = semantic_node_count(&graph);
+    if semantic_nodes == 0 {
+        info!("No semantic nodes; semantic upgrade has nothing to do");
+        return Ok(IndexStats::default());
+    }
+
+    let activation_generation = read_current_pointer_value(artifact_parent)?;
+    let generation_id = new_generation_id();
+    let generations_root = artifact_parent.join(GENERATIONS_DIRECTORY);
+    std::fs::create_dir_all(&generations_root)?;
+    let staging_root = generations_root.join(format!("{}.staging", generation_id));
+    std::fs::create_dir_all(&staging_root)?;
+    let staged_db_path = staging_root.join("ccm_db");
+
+    // Active generation'dan graph + manifest'i taşı; vektör staging'de sıfırdan kurulur.
+    std::fs::copy(&active.graph_path, staging_root.join("ccm_graph.json"))?;
+    std::fs::copy(
+        &active.manifest_path,
+        staging_root.join("ccm_manifest.json"),
+    )?;
+
+    let fixture_namespace = fixture_namespace_for_db(&requested_db_path);
+    let store = LanceDbStore::new_with_fixture_namespace(
+        &staged_db_path.to_string_lossy(),
+        "code_vectors",
+        Some(&fixture_namespace),
+    )
+    .await?;
+    // Quick/stale generation'da eski vektör tablosu bozuk olabilir; sıfırdan
+    // açık bir tabloyla başlansa da reset idempotent olarak çağrılır.
+    store.reset_table().await?;
+
+    let graph_arc = Arc::new(tokio::sync::RwLock::new(graph));
+    let engine = RetrievalEngine::new(graph_arc.clone(), store);
+    engine.index_graph().await?;
+
+    info!(
+        nodes = semantic_nodes,
+        "Semantic upgrade completed; activating generation"
+    );
+    install_staged_generation(
+        artifact_parent,
+        &staging_root,
+        &generation_id,
+        &activation_generation,
+    )?;
+
+    Ok(IndexStats {
+        nodes_created: semantic_nodes,
+        ..IndexStats::default()
+    })
 }
 
 pub fn semantic_node_count(graph: &CodeGraph) -> usize {

@@ -10,9 +10,10 @@ English | [Turkce](./README.tr.md)
 
 > Bridge the gap between your codebase and your AI editor. CCM transforms static source code into a dynamic, queryable Knowledge Graph, enabling AI agents to navigate, understand, and reason about your project with surgical precision.
 
-> **Current release: v0.3.10.** Security and correctness hardening for
-> embedding configuration, symlink-safe artifact paths, fake call edges and
-> stable node IDs, plus private policy files.
+> **Current release: v0.3.11.** Fast graph-first indexing with `mode:"quick"`,
+> synchronous `index_now`, semantic tie-break repair for hybrid search, and
+> automatic repair of graph-only indexes left behind by an unavailable
+> embedding backend.
 
 [![Rust](https://img.shields.io/badge/Built%20With-Rust-orange.svg?style=flat-square&logo=rust)](https://www.rust-lang.org/)
 [![MCP Ready](https://img.shields.io/badge/MCP-Compatible-blue.svg?style=flat-square&logo=google-cloud)](https://modelcontextprotocol.io/)
@@ -251,7 +252,8 @@ ccm-cli eval --tasks eval/golden_tasks.v3.ccm.json
 | `get_context` | Cursor-based retrieval | Context at file:line |
 | `find_nodes` | Find nodes by name or path | "find_nodes query=UserService" |
 | `read_graph` | Inspect a specific node by ID | Node details + graph connections |
-| `index_project` | Refresh the project index | Incremental re-index |
+| `index_project` | Refresh the project index | Incremental re-index; `mode:"quick"` skips embeddings and upgrades them in the background |
+| `index_now` | Synchronously index and return final stats | `mode:"quick"`, `"full"`, or `"upgrade"` |
 | `find_usages` | Find all callers of a node | "Who calls this function?" |
 | `trace_call_chain` | BFS call chain between two nodes | from_id → to_id path |
 | `impact_of_change` | Blast radius of a file change | Dependents across codebase |
@@ -264,6 +266,15 @@ The first `index` builds the complete index. Later `index_project` or `index --w
 For large repositories, MCP `index_project` returns before the client's timeout
 and continues in the background. Call the tool again to poll until it returns
 the final indexing statistics.
+
+For fast first-response workflows, call `index_project` or `index_now` with
+`mode: "quick"`. This scans and parses sources, builds the navigation graph, and
+returns nearly immediately without waiting on the embedding provider. A
+background task then fills the semantic vectors from the same graph; until that
+completes, `search_code` serves graph-ranked results instead of failing. Use
+`mode: "upgrade"` (or `index_now` with `"upgrade"`) to repair or complete a
+graph-only index that was created while the embedding backend was unavailable,
+without re-parsing source files.
 
 Full rebuilds are prepared in a staging generation. A scan, parse, embedding or
 vector write failure leaves the previous graph, manifest and vector table in

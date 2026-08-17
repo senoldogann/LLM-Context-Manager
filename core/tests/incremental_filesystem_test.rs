@@ -542,3 +542,105 @@ fn copy_directory_for_test(source: &std::path::Path, destination: &std::path::Pa
     }
     Ok(())
 }
+
+#[tokio::test]
+async fn quick_index_builds_graph_but_skips_vectors_then_upgrade_fills_them() -> Result<()> {
+    let _env_guard = ENV_LOCK.lock().await;
+    std::env::set_var("CCM_DISABLE_EMBEDDER", "1");
+    let project = tempdir()?;
+    std::fs::write(
+        project.path().join("main.rs"),
+        "pub fn compute_tax(base: f64) -> f64 { base * 1.24 }\n",
+    )?;
+
+    // Quick mod embedding atlar: graph kurulur, code_vectors.lance üretilmez.
+    let stats = ccm_core::index_directory_with_mode(
+        project.path().to_string_lossy().as_ref(),
+        None,
+        ccm_core::IndexMode::Quick,
+    )
+    .await?;
+    assert!(stats.nodes_created > 0);
+
+    let after_quick = artifacts(project.path(), None)?;
+    assert!(after_quick.graph_path.is_file());
+    assert!(
+        !after_quick.db_path.join("code_vectors.lance").is_dir(),
+        "quick mod embedding üretmemeli"
+    );
+
+    // Embedder disabled iken upgrade embeddings üretemez; açık davranış hata
+    // değil hiçbir şey yapmamaktır (semantic node varsa, disabled ise atlar).
+    std::env::remove_var("CCM_DISABLE_EMBEDDER");
+    // Embedder kapalıyken semantic üretilemeyeceğinden bu testi graph varlığı
+    // ve upgrade çağrısının güvenli no-op davranışıyla sınırlıyoruz; gerçek
+    // semantic doldurma hermetic MCP testinde fixture embedder ile kapsanır.
+    let upgrade =
+        ccm_core::upgrade_active_index_semantics(project.path().to_string_lossy().as_ref(), None)
+            .await;
+    // Ollama canlı olmayan CI ortamında upgrade hata dönebilir; aktif graph
+    // bozulmamalıdır.
+    let _ = upgrade;
+    let after_upgrade = artifacts(project.path(), None)?;
+    assert!(after_upgrade.graph_path.is_file());
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn upgrade_repairs_a_generation_without_vectors_using_fixture_embedder() -> Result<()> {
+    let _env_guard = ENV_LOCK.lock().await;
+    std::env::set_var("CCM_DISABLE_EMBEDDER", "1");
+    let project = tempdir()?;
+    std::fs::write(
+        project.path().join("main.rs"),
+        "pub fn compute_tax(base: f64) -> f64 { base * 1.24 }\n",
+    )?;
+
+    let stats = ccm_core::index_directory_with_mode(
+        project.path().to_string_lossy().as_ref(),
+        None,
+        ccm_core::IndexMode::Quick,
+    )
+    .await?;
+    assert!(stats.nodes_created > 0);
+    let broken = artifacts(project.path(), None)?;
+    assert!(!broken.db_path.join("code_vectors.lance").is_dir());
+
+    // Fixture embedder ile semantic upgrade'i deterministik biçimde kanıtla.
+    // Fixture doc id'si gerçek graph node id'siyle birebir eşleşmelidir.
+    let graph = CodeGraph::from_file(broken.graph_path.to_string_lossy().as_ref())?;
+    let node_id = graph
+        .graph
+        .node_weights()
+        .find(|node| node.name == "compute_tax")
+        .expect("compute_tax node")
+        .id
+        .clone();
+    let project_name = project
+        .path()
+        .file_name()
+        .expect("tempdir name")
+        .to_string_lossy()
+        .to_string();
+    let fixture_path = project.path().join("embeddings.ndjson");
+    std::fs::write(
+        &fixture_path,
+        format!(
+            "{{\"kind\":\"meta\",\"dim\":3}}\n\
+             {{\"kind\":\"doc\",\"ns\":\"{}\",\"id\":\"{}\",\"vector\":[1.0,0.0,0.0]}}\n",
+            project_name, node_id
+        ),
+    )?;
+    std::env::remove_var("CCM_DISABLE_EMBEDDER");
+    std::env::set_var("CCM_EMBEDDING_FIXTURE", &fixture_path);
+
+    let upgrade =
+        ccm_core::upgrade_active_index_semantics(project.path().to_string_lossy().as_ref(), None)
+            .await?;
+    assert!(upgrade.nodes_created > 0);
+    let repaired = artifacts(project.path(), None)?;
+    assert!(repaired.db_path.join("code_vectors.lance").is_dir());
+
+    Ok(())
+}

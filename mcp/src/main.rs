@@ -113,6 +113,7 @@ async fn run_internal_index_worker() -> Result<bool> {
         .next()
         .context("Internal worker project path is missing")?;
     let db_path = args.next().context("Internal worker DB path is missing")?;
+    let mode = args.next();
     if args.next().is_some() {
         anyhow::bail!("Internal index worker received unexpected arguments");
     }
@@ -122,7 +123,20 @@ async fn run_internal_index_worker() -> Result<bool> {
             .context("CCM_INTERNAL_INDEX_TEST_DELAY_MS must be an integer")?;
         tokio::time::sleep(std::time::Duration::from_millis(delay_ms)).await;
     }
-    let stats = ccm_core::update_index(&project_path, Some(&db_path)).await?;
+    let stats = match mode.as_deref() {
+        Some("quick") => {
+            ccm_core::index_directory_with_mode(
+                &project_path,
+                Some(&db_path),
+                ccm_core::IndexMode::Quick,
+            )
+            .await?
+        }
+        Some("upgrade") => {
+            ccm_core::upgrade_active_index_semantics(&project_path, Some(&db_path)).await?
+        }
+        _ => ccm_core::update_index(&project_path, Some(&db_path)).await?,
+    };
     println!("{}", serde_json::to_string(&stats)?);
     Ok(true)
 }

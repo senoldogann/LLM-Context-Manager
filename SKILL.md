@@ -612,7 +612,7 @@ Before considering a task complete:
 ## Source & References
 
 **Repository:** https://github.com/senoldogann/LLM-Context-Manager  
-**npm Package:** `@senoldogann/context-manager` (v0.3.10+)
+**npm Package:** `@senoldogann/context-manager` (v0.3.11+)
 **Built with:** Rust, Tree-sitter, LanceDB, Petgraph  
 **License:** MIT  
 

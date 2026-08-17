@@ -68,6 +68,24 @@ struct HybridCandidate {
     combined_score: f32,
 }
 
+/// Graph-ağırlıklı fallback sıralaması. Graph skoru birincil anahtardır;
+/// eşitlikte semantic skor, son olarak da determinizm için id kullanılır.
+/// Semantic skor tie-break'te yoksayılırsa yalnızca Calls komşusu olan
+/// düşük sinyalli adaylar, anlamlı semantic sonuçların önüne geçer.
+fn sort_by_graph_fallback(candidates: &mut [HybridCandidate]) {
+    candidates.sort_by(|a, b| {
+        b.graph_score
+            .partial_cmp(&a.graph_score)
+            .unwrap_or(std::cmp::Ordering::Equal)
+            .then_with(|| {
+                b.semantic_score
+                    .partial_cmp(&a.semantic_score)
+                    .unwrap_or(std::cmp::Ordering::Equal)
+            })
+            .then_with(|| a.id.cmp(&b.id))
+    });
+}
+
 impl RetrievalEngine {
     pub fn new(graph: Arc<RwLock<CodeGraph>>, vector_store: LanceDbStore) -> Self {
         Self {
@@ -625,12 +643,7 @@ impl RetrievalEngine {
             let top_semantic = candidates.first().map(|c| c.semantic_score).unwrap_or(0.0);
             if top_graph >= 0.6 && top_graph >= top_semantic {
                 // graph sinyali güçlü → graph-ağırlıklı sıralama
-                candidates.sort_by(|a, b| {
-                    b.graph_score
-                        .partial_cmp(&a.graph_score)
-                        .unwrap_or(std::cmp::Ordering::Equal)
-                        .then_with(|| a.id.cmp(&b.id))
-                });
+                sort_by_graph_fallback(&mut candidates);
                 "GraphFallback "
             } else if top_semantic >= 0.6 {
                 // semantic sinyal güçlü → semantic-ağırlıklı sıralama
@@ -1630,13 +1643,19 @@ fn classify_incremental_read_error(path: &str, error: anyhow::Error) -> IndexIss
 
 #[cfg(test)]
 mod retrieval_regression_tests {
-    use super::{extract_file_path, lexical_graph_score};
+    use super::{extract_file_path, lexical_graph_score, sort_by_graph_fallback, HybridCandidate};
+    use crate::engine::hybrid::HybridWeights;
     use crate::engine::RetrievalEngine;
-    use crate::graph::{CodeGraph, CodeNode, NodeType};
+    use crate::graph::{CodeGraph, CodeNode, EdgeType, NodeType};
+    use crate::policy::RetrievalPolicy;
     use crate::trajectory::{with_context, RetrievalEvent, TrajectoryContext};
     use crate::vector::store::LanceDbStore;
     use std::sync::Arc;
     use tokio::sync::RwLock;
+
+    // Process-global env'i değiştiren testler paralel koşunca birbirini
+    // etkiler; bu modülde bu testler tek sıraya alınır.
+    static TEST_ENV_LOCK: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
 
     #[test]
     fn stable_node_ids_report_the_actual_file_path() {
@@ -1670,8 +1689,111 @@ mod retrieval_regression_tests {
         assert!(symbol > data_file);
     }
 
+    #[test]
+    fn graph_fallback_breaks_graph_ties_with_semantic_score() {
+        let mut candidates = vec![
+            HybridCandidate {
+                id: "z-low-semantic".to_string(),
+                graph_score: 1.0,
+                semantic_score: 0.0,
+                path_score: 0.0,
+                combined_score: 0.55,
+            },
+            HybridCandidate {
+                id: "a-high-semantic".to_string(),
+                graph_score: 1.0,
+                semantic_score: 0.65,
+                path_score: 0.0,
+                combined_score: 0.55,
+            },
+            HybridCandidate {
+                id: "m-lower-graph".to_string(),
+                graph_score: 0.5,
+                semantic_score: 0.9,
+                path_score: 0.0,
+                combined_score: 0.55,
+            },
+        ];
+
+        sort_by_graph_fallback(&mut candidates);
+
+        assert_eq!(candidates[0].id, "a-high-semantic");
+        assert_eq!(candidates[1].id, "z-low-semantic");
+        assert_eq!(candidates[2].id, "m-lower-graph");
+    }
+
+    #[tokio::test]
+    async fn graph_fallback_prefers_semantic_hit_on_equal_graph_ties() -> anyhow::Result<()> {
+        let _guard = TEST_ENV_LOCK.lock().await;
+        let directory = tempfile::tempdir()?;
+        let fixture_path = directory.path().join("embeddings.ndjson");
+        std::fs::write(
+            &fixture_path,
+            concat!(
+                "{\"kind\":\"meta\",\"dim\":3}\n",
+                "{\"kind\":\"doc\",\"ns\":\"repo_x\",\"id\":\"./tests/scan_qr.rs:function_item:symbol:0000000000000002:0\",\"vector\":[1.0,0.0,0.0]}\n",
+                "{\"kind\":\"query\",\"ns\":\"repo_x\",\"id\":\"QR code scan validation\",\"vector\":[0.5,0.8660254,0.0]}\n",
+            ),
+        )?;
+        std::env::set_var("CCM_EMBEDDING_FIXTURE", &fixture_path);
+
+        let db_path = directory.path().join("db").to_string_lossy().to_string();
+        let store =
+            LanceDbStore::new_with_fixture_namespace(&db_path, "code_vectors", Some("repo_x"))
+                .await?;
+        store
+            .add_documents(
+                vec!["./tests/scan_qr.rs:function_item:symbol:0000000000000002:0".to_string()],
+                vec!["async scanQr() {}".to_string()],
+            )
+            .await?;
+
+        let scan_id = "./tests/scan_qr.rs:function_item:symbol:0000000000000002:0";
+        let secret_id = "./tests/scan_qr.rs:function_item:symbol:0000000000000001:0";
+        let mut graph = CodeGraph::new();
+        graph.add_node(CodeNode {
+            id: scan_id.to_string(),
+            node_type: NodeType::Function,
+            name: "scanQr".to_string(),
+            content: "async scanQr() {}".into(),
+            start_line: 1,
+            end_line: 1,
+        });
+        graph.add_node(CodeNode {
+            id: secret_id.to_string(),
+            node_type: NodeType::Function,
+            name: "requireQrSigningSecret".to_string(),
+            content: "func secret() {}".into(),
+            start_line: 2,
+            end_line: 2,
+        });
+        let scan_idx = graph.find_node_index_by_id(scan_id).unwrap();
+        let secret_idx = graph.find_node_index_by_id(secret_id).unwrap();
+        graph.add_edge(scan_idx, secret_idx, EdgeType::Calls);
+
+        let mut policy = RetrievalPolicy::baseline();
+        policy.weights = HybridWeights {
+            graph: 0.2,
+            semantic: 0.2,
+            spatial: 0.3,
+            recent: 0.3,
+        };
+        let engine = RetrievalEngine::with_policy(Arc::new(RwLock::new(graph)), store, policy);
+        let results = engine
+            .search_code_hybrid("QR code scan validation", 5)
+            .await?;
+
+        std::env::remove_var("CCM_EMBEDDING_FIXTURE");
+        assert_eq!(
+            results.first().and_then(|result| result.node_id.as_deref()),
+            Some(scan_id)
+        );
+        Ok(())
+    }
+
     #[tokio::test]
     async fn lexical_fallback_records_scoped_trajectory_event() -> anyhow::Result<()> {
+        let _guard = TEST_ENV_LOCK.lock().await;
         let directory = tempfile::tempdir()?;
         let trajectory_path = directory.path().join("experiences.jsonl");
         std::env::set_var("CCM_DISABLE_EMBEDDER", "1");
@@ -1717,6 +1839,7 @@ mod retrieval_regression_tests {
 
     #[tokio::test]
     async fn trace_call_chain_max_depth_counts_hops_not_discovered_nodes() -> anyhow::Result<()> {
+        let _guard = TEST_ENV_LOCK.lock().await;
         let directory = tempfile::tempdir()?;
         std::env::set_var("CCM_DISABLE_EMBEDDER", "1");
 

@@ -218,20 +218,28 @@ impl LanceDbStore {
         if let Some(table) = self.table_cache.lock().unwrap().as_ref() {
             return Ok(Arc::clone(table));
         }
-        let table = Arc::new(
-            self.conn
-                .open_table(&self.table_name)
-                .execute()
-                .await
-                .with_context(|| {
-                    format!(
-                        "Vector table '{}' is missing or unreadable; rebuild the CCM index",
-                        self.table_name
-                    )
-                })?,
-        );
+        let table = Arc::new(self.conn.open_table(&self.table_name).execute().await?);
         self.table_cache.lock().unwrap().replace(Arc::clone(&table));
         Ok(table)
+    }
+
+    /// Vektör tablosunun okunabilir olup olmadığını bildirir. Bozuk bir tablo
+    /// (örneğin embedding erişilemezken üretilmiş graph-only generation) sorgu
+    /// yolunu 500'e düşürmek yerine graph fallback'e geçirmek için çağrılır.
+    pub async fn is_table_readable(&self) -> bool {
+        if self.table_cache.lock().unwrap().as_ref().is_some() {
+            return true;
+        }
+        // Açılan tablo cache'te saklanır; sonraki `table()` çağrısı ikinci bir
+        // metadata açılışı yapmadan aynı handle'i yeniden kullanır.
+        match self.conn.open_table(&self.table_name).execute().await {
+            Ok(table) => {
+                let table = Arc::new(table);
+                self.table_cache.lock().unwrap().replace(Arc::clone(&table));
+                true
+            }
+            Err(_) => false,
+        }
     }
 
     /// Drops the existing table (if any) to prevent duplicate vectors on full re-index.
@@ -450,6 +458,14 @@ impl LanceDbStore {
 
     /// Performs semantic search and returns (id, text, distance).
     pub async fn search(&self, query: &str, limit: usize) -> Result<Vec<(String, String, f32)>> {
+        // Vektör tablosu hiç üretilmemişse (quick/legacy generation) embed
+        // çağrısı yapılmadan boş sonuç döner; engine bu sinyali graph fallback
+        // olarak kullanır.
+        if !self.is_table_readable().await {
+            tracing::warn!("Vector table is missing; semantic search falls back to graph");
+            return Ok(vec![]);
+        }
+
         // 1. Embed Query
         let query_embedding = if let Some(fixture) = self.fixture.as_ref() {
             fixture.query_vector(&self.fixture_ns, query)?

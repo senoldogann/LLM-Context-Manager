@@ -695,11 +695,24 @@ fn handle_list_tools(id: Option<Value>) -> Result<JsonRpcResponse> {
         },
         ToolDefinition {
             name: "index_project".to_string(),
-            description: Some("Refresh the project index. Usually performs an incremental update and reports when the existing index is already up to date.".to_string()),
+            description: Some("Refresh the project index. Usually performs an incremental update and reports when the existing index is already up to date. Use mode:'quick' for a fast graph-only index with deferred background semantic embeddings.".to_string()),
             input_schema: serde_json::json!({
                 "type": "object",
                 "properties": {
-                    "project_path": { "type": "string", "description": "Absolute path to the project root to index." }
+                    "project_path": { "type": "string", "description": "Absolute path to the project root to index." },
+                    "mode": { "type": "string", "enum": ["full", "quick", "upgrade"], "description": "Index mode. 'full' (default) embeds semantics inline, 'quick' builds graph only and upgrades semantics in the background, 'upgrade' fills missing semantics for the active index." }
+                },
+                "required": ["project_path"]
+            }),
+        },
+        ToolDefinition {
+            name: "index_now".to_string(),
+            description: Some("Synchronously index the project and return the final stats when complete. Use mode:'quick' to return after graph-only indexing, or 'full' to wait for semantic embeddings.".to_string()),
+            input_schema: serde_json::json!({
+                "type": "object",
+                "properties": {
+                    "project_path": { "type": "string", "description": "Absolute path to the project root to index." },
+                    "mode": { "type": "string", "enum": ["full", "quick", "upgrade"], "description": "Index mode. 'full' (default), 'quick' graph-only, 'upgrade' semantic-only." }
                 },
                 "required": ["project_path"]
             }),
@@ -816,7 +829,7 @@ async fn handle_call_tool_inner(
     // Extract project_path if present
     let project_path = arguments.get("project_path").and_then(|v| v.as_str());
 
-    if tool_name == "index_project" {
+    if tool_name == "index_project" || tool_name == "index_now" {
         let path = project_path.ok_or_else(|| anyhow::anyhow!("Missing project_path"))?;
         if !state.is_path_allowed(path) {
             return Ok(create_error_response(
@@ -826,7 +839,11 @@ async fn handle_call_tool_inner(
             ));
         }
 
-        let result = tools::index_project(state.clone(), &arguments).await?;
+        let result = if tool_name == "index_now" {
+            tools::index_now(state.clone(), &arguments).await?
+        } else {
+            tools::index_project(state.clone(), &arguments).await?
+        };
         return Ok(create_success_response(id, json!(result)));
     }
 
@@ -883,7 +900,7 @@ fn validate_tool_arguments(tool_name: &str, arguments: &Value) -> std::result::R
         "read_graph" | "find_usages" => &["node_id"],
         "trace_call_chain" => &["from_id", "to_id"],
         "impact_of_change" => &["file"],
-        "diff_context" | "index_project" => &["project_path"],
+        "diff_context" | "index_project" | "index_now" => &["project_path"],
         _ => return Err(format!("Unknown tool: {}", tool_name)),
     };
 
