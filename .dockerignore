@@ -1,0 +1,12 @@
+.git
+.github
+target
+node_modules
+data
+.ccm
+.freebuff
+docs copy
+npm/SKILL.md
+*.log
+.DS_Store
+Thumbs.db

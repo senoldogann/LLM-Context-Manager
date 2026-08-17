@@ -1,5 +1,22 @@
 # Release Notes
 
+## v0.3.10 - Security and Correctness Hardening
+
+- Embedding güvenliği: repo içindeki `.env` artık `EMBEDDING_HOST`/API
+  anahtarını değiştiremez; yalnızca `~/.ccm/.env` yüklenir. Embedding hedefleri
+  varsayılan olarak loopback ile sınırlıdır; güvenilir bir dış sağlayıcı
+  `CCM_ALLOW_REMOTE_EMBEDDING=1` açık onayı ister.
+- Path güvenliği: `data` → dış dizin symlink'i artık CLI'da da kök dışına
+  artifact yazamaz; lexical fallback kaldırıldı, hata doğrudan yükseltilir ve
+  Unix entegrasyon testi senaryoyu kapatır.
+- Sahte çağrı kenarları: doc-comment/string/yorum içindeki fonksiyon adları
+  başka dosyadaki aynı isimli sembolle sahte ters `Calls` kenarı üretmez;
+  gövdedeki gerçek call-like çağrılar korunur.
+- Stabil node ID güvenilirliği: aynı dosya+türde birden çok aday varken
+  çözülemeyen hash'li ID'ler "ilk node" yanlış eşleşmesi yerine reddedilir.
+- Policy dosyaları (`policies.json`) artık `0600` ile yazılır; ikincil corpus
+  eval'i process-global env'i serialize ederek paralel race'i önler.
+
 ## v0.3.9 - Retrieval Accuracy, Parallel Indexing, and Hardening
 
 - Swift sembol isimleri attribute'lar tarafından çalınmaz: `@MainActor` /
@@ -311,9 +328,15 @@ CCM (Cognitive Codebase Matrix) is now available as a fully functional MCP serve
 
 ### 📋 Known Limitations
 
-1. **Manual Indexing Required:** The codebase must be indexed manually via CLI before search works.
-2. **Single Workspace:** Currently supports one workspace per MCP session.
-3. **Embedding Dependency:** Requires Ollama or OpenAI for embeddings.
+1. **Explicit Indexing Required:** A project must be indexed first via CLI
+   (`ccm-cli index --path .`) or MCP (`index_project`) before retrieval works.
+2. **Explicit Multi-Workspace Setup:** Multiple roots are supported via
+   `CCM_ALLOWED_ROOTS` (falling back to `CCM_PROJECT_ROOT`), but every root
+   must be allowlisted; strict mode is on by default.
+3. **Embedding Dependency:** Semantic search requires an embedding provider;
+   local Ollama is the default, and OpenAI-compatible endpoints (OpenAI, Azure
+   OpenAI, HuggingFace TEI, Voyage, Jina, LM Studio, LocalAI, llama.cpp) can
+   be configured.
 
 ---
 
@@ -328,13 +351,16 @@ See [README.md](README.md) for detailed instructions.
 
 ---
 
-### 🔜 Roadmap (v0.2.0)
+### 🔜 Roadmap
 
-- [ ] Auto-indexing on workspace open
-- [ ] Multi-workspace support
-- [ ] Incremental indexing (file watchers)
-- [ ] More language support (Go, Java, C++)
+Multi-root access (`CCM_ALLOWED_ROOTS`) and CLI incremental `index --watch`
+are already shipped. Remaining near-term work:
+
+- [ ] SCIP index import for precise cross-file symbol resolution
 - [ ] LSP integration for real-time updates
+- [ ] MCP-side auto-refresh when watched files change
+- [ ] Multi-arch Docker CI (`linux/amd64`, `linux/arm64`)
+- [ ] Animated demo/GIF for `GETTING_STARTED.md`
 
 ---
 

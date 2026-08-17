@@ -5,6 +5,7 @@
 
 use anyhow::Result;
 use std::path::Path;
+use std::sync::OnceLock;
 
 use crate::engine::hybrid::HybridWeights;
 use crate::eval::{self, EvalReport, GoldenTasksFile};
@@ -19,6 +20,10 @@ pub const OPTIMIZER_SEED: u64 = 42;
 pub const MAX_CANDIDATES_DEFAULT: usize = 60;
 const HILL_CLIMB_ITERATIONS: usize = 5;
 const HILL_CLIMB_STARTS: usize = 3;
+
+/// İkincil corpus adımı process-global env'i geçici değiştirdiği için paralel
+/// çalışan başka bir eval çağrısının yanlış ortamda koşmasını engeller.
+static EVAL_ENV_LOCK: OnceLock<tokio::sync::Mutex<()>> = OnceLock::new();
 
 #[derive(Debug, Clone)]
 pub struct OptimizationOutcome {
@@ -228,7 +233,12 @@ async fn evaluate_secondary_corpus(
     let task_count = structural.tasks.len();
 
     // Gerçek repo structural index'i embedder gerektirmez; fixture/embedder
-    // ortamı bu adım için kapatılıp geri yüklenir (process-global env).
+    // ortamı bu adım için kapatılıp geri yüklenir. Process-global env race'i
+    // önlemek için tüm adım tek bir mutex altında koşar.
+    let env_guard = EVAL_ENV_LOCK
+        .get_or_init(|| tokio::sync::Mutex::new(()))
+        .lock()
+        .await;
     let prev_fixture = std::env::var("CCM_EMBEDDING_FIXTURE").ok();
     let prev_disable = std::env::var("CCM_DISABLE_EMBEDDER").ok();
     std::env::remove_var("CCM_EMBEDDING_FIXTURE");
@@ -243,6 +253,7 @@ async fn evaluate_secondary_corpus(
 
     restore_env("CCM_EMBEDDING_FIXTURE", prev_fixture);
     restore_env("CCM_DISABLE_EMBEDDER", prev_disable);
+    drop(env_guard);
     let (baseline_report, winner_report) = result?;
 
     Ok(Some(SecondaryComparison {
@@ -638,8 +649,39 @@ fn changed_field_count(policy: &RetrievalPolicy, baseline: &RetrievalPolicy) -> 
 
 #[cfg(test)]
 mod tests {
-    use super::candidate_policies;
+    use super::*;
+    use crate::engine::hybrid::HybridWeights;
+    use crate::eval::{EvalReport, TaskResult, Totals};
     use crate::policy::RetrievalPolicy;
+
+    fn task_result(
+        id: &str,
+        status: &str,
+        recall: Option<f64>,
+        precision: Option<f64>,
+        tokens: Option<usize>,
+        latency: Option<f64>,
+    ) -> TaskResult {
+        TaskResult {
+            id: id.to_string(),
+            query_type: "read_graph".to_string(),
+            status: status.to_string(),
+            recall_at_k: recall,
+            precision_at_k: precision,
+            tokens_estimated: tokens,
+            latency_ms: latency,
+            ..Default::default()
+        }
+    }
+
+    fn report(totals: Totals, results: Vec<TaskResult>) -> EvalReport {
+        EvalReport {
+            schema_version: 1,
+            generated_at: 0,
+            totals,
+            results,
+        }
+    }
 
     #[test]
     fn candidates_are_deterministic_and_versioned() {
@@ -653,5 +695,209 @@ mod tests {
         for pair in versions.windows(2) {
             assert!(pair[1] > pair[0]);
         }
+    }
+
+    #[test]
+    fn candidates_respect_normalization_and_variant_bounds() {
+        let baseline = RetrievalPolicy::baseline();
+        let candidates = candidate_policies(&baseline);
+        let mut versions: std::collections::HashSet<u32> = std::collections::HashSet::new();
+        for policy in &candidates {
+            assert!(policy.semantic_hits <= 2);
+            let sum = policy.weights.graph
+                + policy.weights.semantic
+                + policy.weights.spatial
+                + policy.weights.recent;
+            assert!(
+                (sum - 1.0).abs() < 1e-4,
+                "ağırlıklar normalize olmalı: {}",
+                sum
+            );
+            assert!(changed_field_count(policy, &baseline) >= 1);
+            assert!(
+                versions.insert(policy.version),
+                "version tekrarı: {}",
+                policy.version
+            );
+        }
+    }
+
+    #[test]
+    fn metrics_summary_averages_scored_results() {
+        let report = report(
+            Totals {
+                tasks: 2,
+                scored: 2,
+                passed: 1,
+                failed: 1,
+                skipped: 0,
+            },
+            vec![
+                task_result("a", "pass", Some(1.0), Some(1.0), Some(100), Some(10.0)),
+                task_result("b", "fail", Some(0.5), Some(0.25), Some(300), Some(20.0)),
+            ],
+        );
+        let summary = MetricsSummary::from_report(&report);
+        assert_eq!(summary.tasks_scored, 2);
+        assert!((summary.pass_rate - 50.0).abs() < 1e-9);
+        assert!((summary.mean_recall_at_k - 0.75).abs() < 1e-9);
+        assert!((summary.mean_precision_at_k - 0.625).abs() < 1e-9);
+        assert!((summary.mean_tokens - 200.0).abs() < 1e-9);
+        assert!((summary.mean_latency_ms - 15.0).abs() < 1e-9);
+    }
+
+    #[test]
+    fn metrics_summary_is_zero_when_no_results() {
+        let report = report(Totals::default(), Vec::new());
+        let summary = MetricsSummary::from_report(&report);
+        assert_eq!(summary.tasks_scored, 0);
+        assert!((summary.pass_rate - 0.0).abs() < 1e-9);
+        assert!((summary.mean_recall_at_k - 0.0).abs() < 1e-9);
+        assert!((summary.mean_precision_at_k - 0.0).abs() < 1e-9);
+        assert!((summary.mean_tokens - 0.0).abs() < 1e-9);
+        assert!((summary.mean_latency_ms - 0.0).abs() < 1e-9);
+    }
+
+    #[test]
+    fn hill_climb_variants_halve_windows_and_assign_versions() {
+        let mut policy = RetrievalPolicy::baseline();
+        policy.semantic_hits = 1;
+        policy.primary_window_chars = 800;
+        policy.related_window_chars = 600;
+        policy.primary_window_lines = 30;
+        policy.related_window_lines = 20;
+        let variants = hill_climb_variants(&policy, 200);
+        assert_eq!(variants.len(), 3);
+        assert_eq!(variants[0].version, 200);
+        assert_eq!(variants[1].version, 201);
+        assert_eq!(variants[2].version, 202);
+        assert_eq!(variants[2].primary_window_chars, 400);
+        assert_eq!(variants[2].related_window_chars, 300);
+        assert_eq!(variants[2].primary_window_lines, 20);
+        assert_eq!(variants[2].related_window_lines, 20);
+    }
+
+    #[test]
+    fn normalize_weights_scales_to_unit_sum_and_keeps_zero_sum() {
+        let weights = normalize_weights(HybridWeights {
+            graph: 2.0,
+            semantic: 2.0,
+            spatial: 0.0,
+            recent: 0.0,
+        });
+        assert!((weights.graph - 0.5).abs() < 1e-6);
+        assert!((weights.semantic - 0.5).abs() < 1e-6);
+        assert!((weights.spatial - 0.0).abs() < 1e-6);
+
+        let zero = normalize_weights(HybridWeights {
+            graph: 0.0,
+            semantic: 0.0,
+            spatial: 0.0,
+            recent: 0.0,
+        });
+        assert_eq!(
+            zero,
+            HybridWeights {
+                graph: 0.0,
+                semantic: 0.0,
+                spatial: 0.0,
+                recent: 0.0,
+            }
+        );
+    }
+
+    #[test]
+    fn changed_field_count_counts_only_different_fields() {
+        let baseline = RetrievalPolicy::baseline();
+        assert_eq!(changed_field_count(&baseline, &baseline), 0);
+
+        let mut one = baseline.clone();
+        one.semantic_hits = 1;
+        assert_eq!(changed_field_count(&one, &baseline), 1);
+
+        let mut two = baseline.clone();
+        two.semantic_hits = 1;
+        two.top_k = 8;
+        assert_eq!(changed_field_count(&two, &baseline), 2);
+
+        let mut three = baseline.clone();
+        three.weights = HybridWeights {
+            graph: 0.5,
+            semantic: 0.5,
+            spatial: 0.0,
+            recent: 0.0,
+        };
+        three.fallback_enabled = false;
+        three.primary_window_lines = 90;
+        assert_eq!(changed_field_count(&three, &baseline), 3);
+    }
+
+    #[test]
+    fn better_than_orders_by_quality_changed_tokens_and_version() {
+        let policy_a = RetrievalPolicy::baseline();
+        let entry = |quality: f64, changed: usize, tokens: f64, version: u32| GridEntry {
+            policy: RetrievalPolicy {
+                version,
+                ..policy_a.clone()
+            },
+            report: report(Totals::default(), Vec::new()),
+            quality,
+            tokens,
+            changed,
+        };
+        let high_quality = entry(90.0, 2, 100.0, 1);
+        let low_quality = entry(80.0, 2, 50.0, 2);
+        assert!(better_than(&high_quality, &low_quality));
+        assert!(!better_than(&low_quality, &high_quality));
+
+        let fewer_changes = entry(80.0, 1, 100.0, 3);
+        assert!(better_than(&fewer_changes, &low_quality));
+
+        let fewer_tokens = entry(80.0, 1, 20.0, 4);
+        assert!(better_than(&fewer_tokens, &fewer_changes));
+
+        let same_metrics_older = entry(80.0, 1, 20.0, 2);
+        assert!(better_than(&same_metrics_older, &fewer_tokens));
+    }
+
+    #[test]
+    fn metrics_from_maps_report_metrics() {
+        let report = report(
+            Totals {
+                tasks: 1,
+                scored: 1,
+                passed: 1,
+                failed: 0,
+                skipped: 0,
+            },
+            vec![task_result(
+                "a",
+                "pass",
+                Some(1.0),
+                Some(1.0),
+                Some(50),
+                None,
+            )],
+        );
+        let metrics = metrics_from(&report);
+        assert_eq!(metrics.tasks_scored, 1);
+        assert!((metrics.pass_rate - 100.0).abs() < 1e-9);
+        assert!((metrics.mean_recall_at_k - 1.0).abs() < 1e-9);
+        assert!((metrics.mean_tokens - 50.0).abs() < 1e-9);
+    }
+
+    #[test]
+    fn restore_env_restores_previous_value_and_removes_unset() {
+        let name = "CCM_TEST_RESTORE_ENV_OPTIMIZE";
+        std::env::set_var(name, "current");
+        restore_env(name, Some("previous".to_string()));
+        assert_eq!(
+            std::env::var(name).expect("env değeri"),
+            "previous".to_string()
+        );
+
+        std::env::set_var(name, "current");
+        restore_env(name, None);
+        assert!(std::env::var(name).is_err());
     }
 }

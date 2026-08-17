@@ -440,7 +440,9 @@ fn write_embeddings(out_dir: &Path, lines: &[String]) -> Result<()> {
 
 #[cfg(test)]
 mod tests {
-    use super::{chunk_ids_for, short_repo, FIXTURE_CHUNK_MAX_CHARS};
+    use super::*;
+    use crate::vector::hash_embed::HASH_EMBED_DIM;
+    use tempfile::tempdir;
 
     #[test]
     fn short_chunk_id_keeps_plain_node_id() {
@@ -460,5 +462,112 @@ mod tests {
     fn repo_short_name_is_stable() {
         assert_eq!(short_repo("repo_a"), "a");
         assert_eq!(short_repo("repo_b"), "b");
+    }
+
+    #[test]
+    fn fixture_split_as_str_is_stable() {
+        assert_eq!(FixtureSplit::Train.as_str(), "train");
+        assert_eq!(FixtureSplit::Holdout.as_str(), "holdout");
+    }
+
+    #[test]
+    fn copy_source_repos_copies_nested_dirs_and_skips_root_files() -> Result<()> {
+        let source = tempdir()?;
+        std::fs::create_dir_all(source.path().join("repo_a/src/nested"))?;
+        std::fs::write(source.path().join("repo_a/src/main.rs"), "fn main() {}\n")?;
+        std::fs::write(
+            source.path().join("repo_a/src/nested/helper.rs"),
+            "fn helper() {}\n",
+        )?;
+        std::fs::write(source.path().join("README.md"), "root file\n")?;
+
+        let target = tempdir()?;
+        copy_source_repos(source.path(), target.path())?;
+        assert!(target.path().join("repo_a/src/main.rs").is_file());
+        assert!(target.path().join("repo_a/src/nested/helper.rs").is_file());
+        assert!(!target.path().join("README.md").exists());
+        Ok(())
+    }
+
+    #[test]
+    fn copy_dir_recursive_preserves_file_contents() -> Result<()> {
+        let source = tempdir()?;
+        std::fs::create_dir_all(source.path().join("nested"))?;
+        std::fs::write(source.path().join("nested/data.txt"), "payload\n")?;
+        let target = tempdir()?;
+        copy_dir_recursive(source.path(), target.path())?;
+        let copied = std::fs::read_to_string(target.path().join("nested/data.txt"))?;
+        assert_eq!(copied, "payload\n");
+        Ok(())
+    }
+
+    #[test]
+    fn task_json_serializes_full_spec() {
+        let repo_ref = Path::new("/tmp/repos/repo_a");
+        let task = task_json(TaskSpec {
+            id: "syn-a-search-001",
+            repo_name: "repo_a",
+            repo_ref_path: repo_ref,
+            split: FixtureSplit::Train,
+            task_type: "bug_fix",
+            query: json!({
+                "type": "search_code",
+                "text": "find main",
+            }),
+            node_id: "./src/main.rs:function_item:1:0",
+            file_path: "./src/main.rs",
+            tags: &["synthetic", "search_code", "direct", "train"],
+        });
+        assert_eq!(task["id"], "syn-a-search-001");
+        assert_eq!(task["repo"]["name"], "repo_a");
+        assert_eq!(task["repo"]["path"], "/tmp/repos/repo_a");
+        assert_eq!(task["query"]["type"], "search_code");
+        assert_eq!(task["expected"]["min_recall"], 1);
+        assert_eq!(task["expected"]["max_rank"], 5);
+        assert_eq!(task["split"], "train");
+        assert_eq!(task["task_type"], "bug_fix");
+        assert_eq!(task["priority"], 1);
+    }
+
+    #[test]
+    fn meta_line_matches_fixture_contract() {
+        let meta: Value = serde_json::from_str(&meta_line()).expect("meta satırı JSON olmalı");
+        assert_eq!(meta["kind"], "meta");
+        assert_eq!(meta["method"], "token_hash_v1");
+        assert_eq!(meta["dim"], HASH_EMBED_DIM);
+        assert_eq!(meta["seed"], FIXTURE_SEED);
+        assert_eq!(meta["chunk_max_chars"], FIXTURE_CHUNK_MAX_CHARS);
+        assert_eq!(meta["chunk_overlap"], FIXTURE_CHUNK_OVERLAP);
+    }
+
+    #[test]
+    fn write_golden_tasks_persists_schema_and_tasks() -> Result<()> {
+        let out_dir = tempdir()?;
+        let tasks = vec![
+            json!({"id": "syn-a-search-001"}),
+            json!({"id": "syn-a-context-001"}),
+        ];
+        write_golden_tasks(out_dir.path(), &tasks)?;
+        let document: Value = serde_json::from_str(&std::fs::read_to_string(
+            out_dir.path().join("golden_tasks.synthetic.json"),
+        )?)?;
+        assert_eq!(document["schema_version"], 1);
+        assert_eq!(document["tasks"].as_array().expect("tasks dizisi").len(), 2);
+        Ok(())
+    }
+
+    #[test]
+    fn write_embeddings_persists_lines_with_trailing_newline() -> Result<()> {
+        let out_dir = tempdir()?;
+        let lines = vec![
+            "{\"kind\":\"meta\"}".to_string(),
+            "{\"kind\":\"doc\"}".to_string(),
+        ];
+        write_embeddings(out_dir.path(), &lines)?;
+        let content = std::fs::read_to_string(out_dir.path().join("embeddings.ndjson"))?;
+        assert!(content.ends_with('\n'));
+        assert!(content.contains("{\"kind\":\"meta\"}"));
+        assert!(content.contains("{\"kind\":\"doc\"}"));
+        Ok(())
     }
 }

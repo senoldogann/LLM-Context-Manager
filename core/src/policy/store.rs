@@ -60,6 +60,18 @@ impl PolicyStore {
                 format!("policy store dizini oluşturulamadı: {}", parent.display())
             })?;
         }
+        #[cfg(unix)]
+        let file = {
+            use std::os::unix::fs::OpenOptionsExt;
+            std::fs::OpenOptions::new()
+                .write(true)
+                .create(true)
+                .truncate(true)
+                .mode(0o600)
+                .open(path)
+        }
+        .with_context(|| format!("policy store yazılamadı: {}", path.display()))?;
+        #[cfg(not(unix))]
         let file = std::fs::File::create(path)
             .with_context(|| format!("policy store yazılamadı: {}", path.display()))?;
         serde_json::to_writer_pretty(std::io::BufWriter::new(file), self)?;

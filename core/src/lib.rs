@@ -746,23 +746,12 @@ fn resolve_requested_db_path(project_root: &Path, db_path: Option<&str>) -> Resu
     };
     // v0.3.9 kapsama güvencesi: çözülen yol proje kökü dışına kaçarsa
     // (ör. `data` → dış dizin symlink'i, relative `../escape` db-path)
-    // hata sessizce yutulmaz; çağıran index'i iptal eder. Lexical fallback
-    // yalnızca kök İÇİNDE kalan var-olmayan yollar için kullanılır.
-    match resolve_artifact_path(project_root, &path) {
-        Ok(resolved) => Ok(resolved),
-        Err(_) => {
-            let lexical = normalize_path_lexically(&path);
-            if lexical.starts_with(project_root) {
-                Ok(lexical)
-            } else {
-                Err(anyhow::anyhow!(
-                    "Database path '{}' resolves outside the project root '{}'",
-                    path.display(),
-                    project_root.display()
-                ))
-            }
-        }
-    }
+    // hata sessizce yutulmaz; çağıran index'i iptal eder. Fallback yoktur:
+    // lexical `starts_with` kontrolü `data` symlink'i kök dışına çözüldüğünde
+    // yanlış pozitif üretir ve yazımlar symlink'i izleyerek kök dışına gider.
+    // `resolve_artifact_path` var-olmayan iç yolları da doğru çözer, bu yüzden
+    // hata doğrudan yükseltilir.
+    resolve_artifact_path(project_root, &path)
 }
 
 /// Bir artifact yolunu symlink-güvenli biçimde çözer.

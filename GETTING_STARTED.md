@@ -34,6 +34,26 @@ cargo build --release
 ./target/release/ccm-cli --help
 ```
 
+**Option C: Docker (no Rust toolchain)**
+
+```bash
+docker build -t ccm:local .
+
+# Index the current directory (mounted at /workspace)
+docker run --rm -v "$PWD":/workspace -w /workspace \
+  -e EMBEDDING_HOST=http://host.docker.internal:11434 \
+  -e EMBEDDING_MODEL=mxbai-embed-large \
+  ccm:local index --path /workspace
+
+# Query it
+docker run --rm -v "$PWD":/workspace -w /workspace \
+  -e EMBEDDING_HOST=http://host.docker.internal:11434 \
+  ccm:local query --text "authentication flow"
+```
+
+Or use `docker compose run --rm ccm index --path /workspace`. On Linux, replace
+`host.docker.internal` with your host IP if the Docker bridge cannot resolve it.
+
 ### Step 2: Configure
 
 Create `~/.ccm/.env` with the basics below, or start from the repository's `.env.example` for the full advanced list.
@@ -52,7 +72,7 @@ Optional production settings (recommended for server use):
 CCM_ALLOWED_ROOTS=/Users/you/projects:/Users/you/sandbox
 CCM_REQUIRE_ALLOWED_ROOTS=1
 
-# Include data files in semantic search
+# Embed data files in semantic search (0 = off, 1 = on)
 CCM_EMBED_DATA_FILES=0
 ```
 

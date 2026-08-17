@@ -157,3 +157,42 @@ async fn test_delete_by_prefix_keeps_sibling_files_sharing_name_prefix() -> Resu
 
     Ok(())
 }
+
+#[tokio::test]
+async fn validate_table_uses_cached_handle_and_reset_invalidates_it() -> Result<()> {
+    setup_test_env();
+
+    let dir = tempdir()?;
+    let db_path = dir.path().to_string_lossy().to_string();
+
+    let conn = connect(&db_path).execute().await?;
+    let batch = build_test_batch(
+        vec!["./src/a.rs:func:1:0".to_string()],
+        vec!["a1".to_string()],
+    )?;
+    conn.create_table("code_vectors", vec![batch])
+        .execute()
+        .await?;
+
+    let store = LanceDbStore::new(&db_path, "code_vectors").await?;
+    assert_eq!(store.validate_table().await?, 1);
+    // İkinci çağrı önbellekteki açık tablo handle'ını kullanır.
+    assert_eq!(store.validate_table().await?, 1);
+
+    store.reset_table().await?;
+    assert!(store.validate_table().await.is_err());
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn delete_by_prefix_without_table_returns_ok() -> Result<()> {
+    setup_test_env();
+
+    let dir = tempdir()?;
+    let db_path = dir.path().to_string_lossy().to_string();
+    let store = LanceDbStore::new(&db_path, "code_vectors").await?;
+    assert!(store.delete_by_prefix("./missing.rs").await.is_ok());
+
+    Ok(())
+}

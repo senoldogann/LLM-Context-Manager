@@ -1155,21 +1155,33 @@ async fn search_code_hybrid_with_policy(
     let seed_ids: Vec<String> = semantic_scores.keys().cloned().collect();
     let graph_scores = scorer.collect_graph_scores(&graph, &seed_ids);
 
-    let mut candidates: Vec<(String, f32)> = Vec::new();
-    let mut seen: HashSet<String> = HashSet::new();
-    for id in semantic_scores.keys().chain(graph_scores.keys()) {
-        if seen.insert(id.clone()) {
-            let graph_score = graph_scores.get(id).copied().unwrap_or(0.0);
-            let semantic_score = semantic_scores.get(id).copied().unwrap_or(0.0);
-            let spatial_score = graph
-                .find_node_by_id(id)
-                .map(|node| {
-                    crate::engine::repo_priority_score(&crate::engine::extract_file_path(&node.id))
-                })
-                .unwrap_or(0.0);
-            let combined = scorer.combine(graph_score, semantic_score, spatial_score, 0.0);
-            candidates.push((id.clone(), combined));
+    let mut candidates: Vec<(String, f32)> =
+        Vec::with_capacity(semantic_scores.len() + graph_scores.len());
+    for id in semantic_scores.keys() {
+        let graph_score = graph_scores.get(id).copied().unwrap_or(0.0);
+        let semantic_score = semantic_scores.get(id).copied().unwrap_or(0.0);
+        let spatial_score = graph
+            .find_node_by_id(id)
+            .map(|node| {
+                crate::engine::repo_priority_score(&crate::engine::extract_file_path(&node.id))
+            })
+            .unwrap_or(0.0);
+        let combined = scorer.combine(graph_score, semantic_score, spatial_score, 0.0);
+        candidates.push((id.clone(), combined));
+    }
+    for id in graph_scores.keys() {
+        if semantic_scores.contains_key(id) {
+            continue;
         }
+        let graph_score = graph_scores.get(id).copied().unwrap_or(0.0);
+        let spatial_score = graph
+            .find_node_by_id(id)
+            .map(|node| {
+                crate::engine::repo_priority_score(&crate::engine::extract_file_path(&node.id))
+            })
+            .unwrap_or(0.0);
+        let combined = scorer.combine(graph_score, 0.0, spatial_score, 0.0);
+        candidates.push((id.clone(), combined));
     }
 
     // Production ile aynı filtre: düşük sinyalli adaylar elenir (graph sinyali korunur).
@@ -1364,6 +1376,34 @@ fn node_id_to_file_path(id: &str) -> String {
 mod tests {
     use super::*;
     use crate::graph::{CodeNode, EdgeType, NodeType};
+    use serde_json::{json, Value};
+    use tempfile::tempdir;
+
+    fn sample_result(
+        id: &str,
+        query_type: &str,
+        status: &str,
+        recall: Option<f64>,
+        tokens: Option<usize>,
+    ) -> TaskResult {
+        TaskResult {
+            id: id.to_string(),
+            query_type: query_type.to_string(),
+            status: status.to_string(),
+            recall_at_k: recall,
+            tokens_estimated: tokens,
+            ..Default::default()
+        }
+    }
+
+    fn sample_report(totals: Totals, results: Vec<TaskResult>) -> EvalReport {
+        EvalReport {
+            schema_version: 1,
+            generated_at: 0,
+            totals,
+            results,
+        }
+    }
 
     #[test]
     fn score_hits_matches_file_paths() {
@@ -1572,5 +1612,412 @@ mod tests {
             .get("read_graph")
             .expect("missing type");
         assert!(by_type.improvement > 0.0);
+    }
+
+    #[test]
+    fn report_pass_rate_returns_percentage_and_zero_when_no_scored() {
+        let report = sample_report(
+            Totals {
+                tasks: 2,
+                scored: 2,
+                passed: 1,
+                failed: 1,
+                skipped: 0,
+            },
+            Vec::new(),
+        );
+        assert!((report_pass_rate(&report) - 50.0).abs() < 1e-9);
+
+        let empty = sample_report(Totals::default(), Vec::new());
+        assert!((report_pass_rate(&empty) - 0.0).abs() < 1e-9);
+    }
+
+    #[test]
+    fn enforce_quality_gate_rejects_unsatisfied_reports_and_accepts_ok() {
+        let empty = sample_report(Totals::default(), Vec::new());
+        assert!(enforce_quality_gate(&empty, 80.0, None, 0.0).is_err());
+
+        let skipped = sample_report(
+            Totals {
+                tasks: 2,
+                scored: 1,
+                passed: 1,
+                failed: 0,
+                skipped: 1,
+            },
+            Vec::new(),
+        );
+        assert!(enforce_quality_gate(&skipped, 80.0, None, 0.0).is_err());
+
+        let weak = sample_report(
+            Totals {
+                tasks: 2,
+                scored: 2,
+                passed: 1,
+                failed: 1,
+                skipped: 0,
+            },
+            Vec::new(),
+        );
+        assert!(enforce_quality_gate(&weak, 80.0, None, 0.0).is_err());
+
+        let strong = sample_report(
+            Totals {
+                tasks: 2,
+                scored: 2,
+                passed: 2,
+                failed: 0,
+                skipped: 0,
+            },
+            Vec::new(),
+        );
+        assert!(enforce_quality_gate(&strong, 80.0, None, 0.0).is_ok());
+
+        let baseline = sample_report(
+            Totals {
+                tasks: 2,
+                scored: 2,
+                passed: 2,
+                failed: 0,
+                skipped: 0,
+            },
+            Vec::new(),
+        );
+        let regressed = sample_report(
+            Totals {
+                tasks: 2,
+                scored: 2,
+                passed: 1,
+                failed: 1,
+                skipped: 0,
+            },
+            Vec::new(),
+        );
+        assert!(
+            enforce_quality_gate(&regressed, 0.0, Some(&baseline), 5.0).is_err(),
+            "%50 regresyon %5 sınırını aşmalı"
+        );
+        assert!(enforce_quality_gate(&regressed, 0.0, Some(&baseline), 50.0).is_ok());
+    }
+
+    #[test]
+    fn write_report_roundtrips_through_load_report() -> Result<()> {
+        let report = sample_report(
+            Totals {
+                tasks: 1,
+                scored: 1,
+                passed: 1,
+                failed: 0,
+                skipped: 0,
+            },
+            vec![sample_result(
+                "a",
+                "read_graph",
+                "pass",
+                Some(1.0),
+                Some(42),
+            )],
+        );
+        let mut bytes = Vec::new();
+        write_report(&mut bytes, &report)?;
+        assert!(bytes.starts_with(b"{"));
+
+        let out_dir = tempdir()?;
+        let report_path = out_dir.path().join("report.json");
+        std::fs::write(&report_path, bytes)?;
+        let loaded = load_report(&report_path)?;
+        assert_eq!(loaded.totals.passed, 1);
+        assert_eq!(loaded.results[0].id, "a");
+        assert!(load_report(&out_dir.path().join("missing.json")).is_err());
+        Ok(())
+    }
+
+    #[test]
+    fn write_comparison_report_serializes_summary() -> Result<()> {
+        let structural = sample_report(
+            Totals {
+                tasks: 1,
+                scored: 1,
+                passed: 1,
+                failed: 0,
+                skipped: 0,
+            },
+            vec![sample_result("a", "read_graph", "pass", Some(1.0), None)],
+        );
+        let hybrid = sample_report(
+            Totals {
+                tasks: 1,
+                scored: 1,
+                passed: 0,
+                failed: 1,
+                skipped: 0,
+            },
+            vec![sample_result("a", "read_graph", "fail", Some(0.0), None)],
+        );
+        let comparison = ComparisonReport {
+            schema_version: 1,
+            generated_at: 7,
+            structural,
+            hybrid,
+            comparison: build_comparison_summary(
+                &sample_report(Totals::default(), Vec::new()),
+                &sample_report(Totals::default(), Vec::new()),
+            ),
+        };
+        let mut bytes = Vec::new();
+        write_comparison_report(&mut bytes, &comparison)?;
+        let parsed: Value = serde_json::from_slice(&bytes)?;
+        assert_eq!(parsed["schema_version"], 1);
+        assert!(parsed["comparison"].is_object());
+        Ok(())
+    }
+
+    #[test]
+    fn summarize_report_lists_types_failures_path_and_overflow_line() {
+        let mut results = vec![sample_result(
+            "pass-one",
+            "search_code",
+            "pass",
+            Some(1.0),
+            None,
+        )];
+        for index in 0..12 {
+            results.push(sample_result(
+                &format!("fail-{index}"),
+                "read_graph",
+                "fail",
+                Some(0.0),
+                None,
+            ));
+        }
+        let report = sample_report(
+            Totals {
+                tasks: 13,
+                scored: 13,
+                passed: 1,
+                failed: 12,
+                skipped: 0,
+            },
+            results,
+        );
+        let summary = summarize_report(&report, Some("/tmp/report.json"));
+        assert!(summary.contains("Tasks: 13"));
+        assert!(summary.contains("Query Types:"));
+        assert!(summary.contains("read_graph: 0/12 passed (12 failed)"));
+        assert!(summary.contains("... and 2 more"));
+        assert!(summary.contains("Full report: /tmp/report.json"));
+    }
+
+    #[test]
+    fn summarize_report_without_failures_omits_path_and_failure_block() {
+        let report = sample_report(
+            Totals {
+                tasks: 1,
+                scored: 1,
+                passed: 1,
+                failed: 0,
+                skipped: 0,
+            },
+            vec![sample_result("a", "get_context", "pass", Some(1.0), None)],
+        );
+        let summary = summarize_report(&report, None);
+        assert!(summary.contains("Failed Tasks: none"));
+        assert!(!summary.contains("Full report:"));
+    }
+
+    #[test]
+    fn summarize_comparison_report_renders_rates_types_and_path() {
+        let structural = sample_report(
+            Totals {
+                tasks: 2,
+                scored: 2,
+                passed: 1,
+                failed: 1,
+                skipped: 0,
+            },
+            vec![
+                sample_result("a", "read_graph", "pass", Some(1.0), None),
+                sample_result("b", "read_graph", "fail", Some(0.0), None),
+            ],
+        );
+        let hybrid = sample_report(
+            Totals {
+                tasks: 2,
+                scored: 2,
+                passed: 2,
+                failed: 0,
+                skipped: 0,
+            },
+            vec![
+                sample_result("a", "read_graph", "pass", Some(1.0), None),
+                sample_result("b", "read_graph", "pass", Some(1.0), None),
+            ],
+        );
+        let comparison = ComparisonReport {
+            schema_version: 1,
+            generated_at: 0,
+            structural,
+            hybrid,
+            comparison: build_comparison_summary(
+                &sample_report(Totals::default(), Vec::new()),
+                &sample_report(Totals::default(), Vec::new()),
+            ),
+        };
+        let summary = summarize_comparison_report(&comparison, Some("/tmp/cmp.json"));
+        assert!(summary.contains("Structural Pass Rate:"));
+        assert!(summary.contains("Hybrid Pass Rate:"));
+        assert!(summary.contains("Improvement:"));
+        assert!(summary.contains("Full report: /tmp/cmp.json"));
+    }
+
+    #[test]
+    fn load_tasks_roundtrips_and_rejects_bad_input() -> Result<()> {
+        let out_dir = tempdir()?;
+        let tasks_path = out_dir.path().join("tasks.json");
+        let document = json!({
+            "schema_version": 1,
+            "tasks": [{
+                "id": "t1",
+                "repo": {"name": "repo", "path": "/repo"},
+                "query": {"type": "read_graph", "node_id": "./src/main.rs:func:1:0"},
+                "expected": {"node_ids": ["./src/main.rs:func:1:0"], "min_recall": 1},
+                "task_type": "refactor"
+            }]
+        });
+        std::fs::write(&tasks_path, serde_json::to_string_pretty(&document)?)?;
+        let loaded = load_tasks(&tasks_path)?;
+        assert_eq!(loaded.schema_version, 1);
+        assert_eq!(loaded.tasks.len(), 1);
+        assert_eq!(loaded.tasks[0].id, "t1");
+        assert_eq!(loaded.tasks[0].task_type, Some(TaskType::Refactor));
+
+        assert!(load_tasks(&out_dir.path().join("missing.json")).is_err());
+        std::fs::write(&tasks_path, "{not json")?;
+        assert!(load_tasks(&tasks_path).is_err());
+        Ok(())
+    }
+
+    #[test]
+    fn comparison_summary_uses_zero_for_missing_query_types() {
+        let structural = sample_report(
+            Totals {
+                tasks: 1,
+                scored: 1,
+                passed: 1,
+                failed: 0,
+                skipped: 0,
+            },
+            vec![sample_result("a", "read_graph", "pass", Some(1.0), None)],
+        );
+        let hybrid = sample_report(
+            Totals {
+                tasks: 1,
+                scored: 1,
+                passed: 1,
+                failed: 0,
+                skipped: 0,
+            },
+            vec![sample_result("a", "search_code", "pass", Some(1.0), None)],
+        );
+        let summary = build_comparison_summary(&structural, &hybrid);
+        let read_graph = summary.by_query_type.get("read_graph").expect("read_graph");
+        assert!((read_graph.hybrid_pass_rate - 0.0).abs() < 1e-9);
+        let search_code = summary
+            .by_query_type
+            .get("search_code")
+            .expect("search_code");
+        assert!((search_code.structural_pass_rate - 0.0).abs() < 1e-9);
+        assert!((summary.improvement - 0.0).abs() < 1e-9);
+    }
+
+    #[test]
+    fn pass_rate_and_query_type_pass_rate_are_per_type() {
+        let report = sample_report(
+            Totals {
+                tasks: 4,
+                scored: 4,
+                passed: 2,
+                failed: 2,
+                skipped: 0,
+            },
+            vec![
+                sample_result("a", "read_graph", "pass", Some(1.0), None),
+                sample_result("b", "read_graph", "fail", Some(0.0), None),
+                sample_result("c", "search_code", "pass", Some(1.0), None),
+                sample_result("d", "search_code", "fail", Some(0.0), None),
+            ],
+        );
+        assert!((pass_rate(&report) - 50.0).abs() < 1e-9);
+        let by_type = query_type_pass_rate(&report);
+        assert!((by_type["read_graph"] - 50.0).abs() < 1e-9);
+        assert!((by_type["search_code"] - 50.0).abs() < 1e-9);
+    }
+
+    #[test]
+    fn normalize_repo_path_keeps_absolute_and_joins_relative() -> Result<()> {
+        let absolute = Path::new("/tmp/workspace");
+        assert_eq!(normalize_repo_path("/tmp/workspace")?, absolute);
+        let relative = normalize_repo_path("relative/project")?;
+        assert!(relative.is_absolute());
+        assert!(relative.ends_with("relative/project"));
+        Ok(())
+    }
+
+    #[test]
+    fn normalize_task_node_id_normalizes_legacy_four_part_ids() {
+        let repo = Path::new("/repo");
+        assert_eq!(
+            normalize_task_node_id(repo, "/repo/src/main.rs:func:1:0"),
+            "./src/main.rs:func:1:0"
+        );
+        assert_eq!(
+            normalize_task_node_id(repo, "/repo/src\\main.rs:func:1:0"),
+            "./src/main.rs:func:1:0"
+        );
+    }
+
+    #[test]
+    fn normalize_task_node_id_falls_back_for_short_ids() {
+        let repo = Path::new("/repo");
+        assert_eq!(
+            normalize_task_node_id(repo, "src/main.rs:func"),
+            "./src/main.rs:func"
+        );
+    }
+
+    #[test]
+    fn normalize_path_maps_relative_and_repo_absolute_paths() {
+        let repo = Path::new("/repo");
+        assert_eq!(normalize_path(repo, "src/main.rs"), "./src/main.rs");
+        assert_eq!(normalize_path(repo, "src\\main.rs"), "./src/main.rs");
+        assert_eq!(normalize_path(repo, "/repo/src/main.rs"), "./src/main.rs");
+        assert_eq!(
+            normalize_path(repo, "/outside/src/main.rs"),
+            "/outside/src/main.rs"
+        );
+    }
+
+    #[test]
+    fn score_hits_dedups_duplicate_hits() {
+        let expected = Expected {
+            node_ids: None,
+            file_paths: Some(vec!["./src/main.rs".to_string()]),
+            min_recall: 1,
+            max_rank: None,
+            reason_contains: None,
+        };
+        let hits = vec![
+            "./src/main.rs:func:1:0".to_string(),
+            "./src/main.rs:func:1:0".to_string(),
+            "./src/main.rs:func:2:0".to_string(),
+        ];
+        let (matches, items) = score_hits(&expected, &hits);
+        assert_eq!(matches, 1);
+        assert_eq!(items, vec!["./src/main.rs".to_string()]);
+    }
+
+    #[test]
+    fn node_id_to_file_path_handles_plain_ids() {
+        assert_eq!(node_id_to_file_path("plain-id"), "plain-id");
     }
 }

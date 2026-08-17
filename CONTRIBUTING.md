@@ -34,6 +34,22 @@ cargo clippy -- -D warnings
 3.  Push to your fork and submit a Pull Request to `main`.
 4.  Fill out the PR Template clearly.
 
+## 🎯 Good First Issues
+
+New contributors: start here. Each item is small, self-contained, and has a
+clear acceptance signal (a passing test or a visible artifact).
+
+| Area | What to do | Signal |
+|------|-----------|--------|
+| `mcp/src/protocol.rs` | Expand JSON-RPC frame/notification handling tests (currently the least-covered MCP module) | `cargo test -p ccm-mcp` green + coverage rises |
+| `core/src/vector/remote.rs` | Cover embedding timeout and retry branches (host validation already has tests) | `cargo test -p ccm-core vector::remote` green |
+| `core/src/parser` | Prototype SCIP index import for precise cross-file symbol resolution | Sample SCIP corpus produces correct cross-file edges |
+| `cli` / `mcp` | Prototype LSP integration for real-time index updates | Editor save triggers a `--watch`-style incremental update |
+| Docker | Add multi-arch builds (`linux/amd64`, `linux/arm64`) to the release workflow | `docker buildx build --platform linux/amd64,linux/arm64` succeeds |
+| Docs | Add a short animated demo/GIF to `GETTING_STARTED.md` (terminal + one query) | Preview renders in README |
+
+When in doubt, open a draft PR early and tag the maintainers for direction.
+
 ## 📦 Release Checklist (vX.Y.Z)
 
 1. `cargo fmt --all -- --check` + `cargo clippy --workspace --all-targets -- -D warnings`

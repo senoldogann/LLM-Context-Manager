@@ -23,6 +23,8 @@ data/
 !eval/fixtures/repos/repo_b/src/
 .ccm/
 *.log
+lcov.info
+coverage/
 
 # System
 .DS_Store

@@ -3,6 +3,7 @@ use reqwest::Client;
 use serde_json::json;
 use std::env;
 use std::panic::{catch_unwind, AssertUnwindSafe};
+use std::path::PathBuf;
 use std::time::Duration;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -54,10 +55,11 @@ impl RemoteEmbedder {
     }
 
     pub fn from_env() -> Result<Self> {
-        use std::path::PathBuf;
-        let _ = dotenvy::dotenv();
-
-        // Load global config from ~/.ccm/.env if it exists
+        // Güvenlik: repo cwd'den `.env` yüklenmez. Güvenilmeyen bir repodaki
+        // `.env`, `EMBEDDING_HOST`'u saldırgana çevirip kaynak kodu embedding
+        // chunk'ları olarak dışarı gönderebilir ve ortamda dolu olan API
+        // anahtarını sızdırabilir. Yalnızca operatörün kendi `~/.ccm/.env`
+        // dosyası yüklenir.
         if let Ok(home) = env::var("HOME") {
             let global_config = PathBuf::from(&home).join(".ccm").join(".env");
             if global_config.exists() {
@@ -83,6 +85,7 @@ impl RemoteEmbedder {
             .unwrap_or_default()
             .to_lowercase();
         let provider = resolve_provider(&provider_str, &base_url);
+        validate_embedding_host(&base_url)?;
         let api_key = resolve_api_key(&provider)?;
         tracing::info!(
             provider = provider_label(&provider),
@@ -350,6 +353,57 @@ impl RemoteEmbedder {
     }
 }
 
+/// Embedding isteği gönderilecek hedefi doğrular. Geliştirici makinelerinde
+/// varsayılan Ollama localhost'tur; kod veya embedding içeriği dışarı gönderen
+/// hedefler açık bir `CCM_ALLOW_REMOTE_EMBEDDING=1` onayı ister.
+fn validate_embedding_host(base_url: &str) -> Result<()> {
+    let url = reqwest::Url::parse(base_url)
+        .with_context(|| format!("EMBEDDING_HOST geçerli bir URL değil: {}", base_url))?;
+    let scheme_ok = matches!(url.scheme(), "http" | "https");
+    if !scheme_ok {
+        return Err(anyhow::anyhow!(
+            "EMBEDDING_HOST yalnızca http/https kabul eder: {}",
+            base_url
+        ));
+    }
+    let host = url
+        .host_str()
+        .with_context(|| format!("EMBEDDING_HOST host içermiyor: {}", base_url))?;
+    let is_loopback = matches!(
+        host,
+        "localhost" | "127.0.0.1" | "::1" | "0.0.0.0" | "[::1]"
+    ) || host
+        .split('.')
+        .take(4)
+        .all(|part| part.chars().all(|ch| ch.is_ascii_digit()))
+        && host
+            .split('.')
+            .collect::<Vec<_>>()
+            .iter()
+            .take(4)
+            .zip([127, 0, 0, 1])
+            .all(|(part, expected)| part.parse::<u8>().ok() == Some(expected));
+
+    // `localhost.` gibi son noktalı yerel adlar da loopback kabul edilir.
+    let normalized = host.trim_end_matches('.').to_ascii_lowercase();
+    let local_name = normalized == "localhost" || normalized == "localhost.localdomain";
+    if is_loopback || local_name {
+        return Ok(());
+    }
+
+    let allowed = env::var("CCM_ALLOW_REMOTE_EMBEDDING")
+        .map(|value| value == "1")
+        .unwrap_or(false);
+    if allowed {
+        return Ok(());
+    }
+    Err(anyhow::anyhow!(
+        "EMBEDDING_HOST '{}' loopback dışı bir hedefe işaret ediyor; \
+         güvenilir bir dış embedding servisi kullanıyorsanız CCM_ALLOW_REMOTE_EMBEDDING=1 ayarlayın",
+        base_url
+    ))
+}
+
 fn resolve_provider(provider_str: &str, base_url: &str) -> Provider {
     // OpenAI-uyumlu /embeddings sözleşmesi kullanan sağlayıcılar tek kod
     // yolundan geçer: OpenAI, Azure OpenAI, HuggingFace TEI, Voyage, Jina,
@@ -442,7 +496,14 @@ fn build_http_client(timeout: Duration) -> Result<Client> {
 
 #[cfg(test)]
 mod tests {
-    use super::{resolve_provider, Provider};
+    use super::{
+        build_http_client, panic_message, provider_label, resolve_api_key, resolve_provider,
+        validate_embedding_host, Provider,
+    };
+    use std::sync::Mutex;
+    use std::time::Duration;
+
+    static ENV_LOCK: Mutex<()> = Mutex::new(());
 
     #[test]
     fn resolve_provider_defaults_to_ollama_for_localhost() {
@@ -460,5 +521,71 @@ mod tests {
     fn resolve_provider_uses_openai_when_host_is_openai() {
         let provider = resolve_provider("", "https://api.openai.com/v1");
         assert_eq!(provider, Provider::OpenAI);
+    }
+
+    #[test]
+    fn embedding_host_rejects_non_loopback_without_explicit_consent() {
+        assert!(validate_embedding_host("http://127.0.0.1:11434").is_ok());
+        assert!(validate_embedding_host("http://localhost:8080").is_ok());
+        assert!(validate_embedding_host("http://localhost.localdomain:8080").is_ok());
+        assert!(validate_embedding_host("http://0.0.0.0:8080").is_ok());
+        assert!(validate_embedding_host("http://[::1]:11434").is_ok());
+        assert!(validate_embedding_host("ftp://127.0.0.1").is_err());
+        assert!(validate_embedding_host("not-a-url").is_err());
+        // Varsayılan olarak dış hedef reddedilir.
+        assert!(validate_embedding_host("https://api.openai.com/v1").is_err());
+        assert!(validate_embedding_host("https://10.0.0.1").is_err());
+        // Açık onay ile dış hedef kabul edilir.
+        std::env::set_var("CCM_ALLOW_REMOTE_EMBEDDING", "1");
+        assert!(validate_embedding_host("https://api.openai.com/v1").is_ok());
+        std::env::remove_var("CCM_ALLOW_REMOTE_EMBEDDING");
+    }
+
+    #[test]
+    fn provider_label_matches_enum() {
+        assert_eq!(provider_label(&Provider::OpenAI), "openai");
+        assert_eq!(provider_label(&Provider::Ollama), "ollama");
+    }
+
+    #[test]
+    fn api_key_resolution_uses_env_or_ollama_default() {
+        let _guard = ENV_LOCK.lock().unwrap();
+        let previous_embedding = std::env::var("EMBEDDING_API_KEY").ok();
+        let previous_openai = std::env::var("OPENAI_API_KEY").ok();
+
+        std::env::remove_var("EMBEDDING_API_KEY");
+        std::env::remove_var("OPENAI_API_KEY");
+        assert_eq!(resolve_api_key(&Provider::Ollama).unwrap(), "ollama");
+        assert!(resolve_api_key(&Provider::OpenAI).is_err());
+
+        std::env::set_var("EMBEDDING_API_KEY", "test-key");
+        assert_eq!(resolve_api_key(&Provider::OpenAI).unwrap(), "test-key");
+        assert_eq!(resolve_api_key(&Provider::Ollama).unwrap(), "test-key");
+
+        match previous_embedding {
+            Some(value) => std::env::set_var("EMBEDDING_API_KEY", value),
+            None => std::env::remove_var("EMBEDDING_API_KEY"),
+        }
+        match previous_openai {
+            Some(value) => std::env::set_var("OPENAI_API_KEY", value),
+            None => std::env::remove_var("OPENAI_API_KEY"),
+        }
+    }
+
+    #[test]
+    fn panic_message_decodes_common_payloads() {
+        let str_payload: Box<dyn std::any::Any + Send> = Box::new("boom");
+        assert_eq!(panic_message(&str_payload), "boom");
+
+        let string_payload: Box<dyn std::any::Any + Send> = Box::new("custom".to_string());
+        assert_eq!(panic_message(&string_payload), "custom");
+
+        let other_payload: Box<dyn std::any::Any + Send> = Box::new(42u32);
+        assert_eq!(panic_message(&other_payload), "Unknown panic payload");
+    }
+
+    #[test]
+    fn http_client_builder_succeeds_with_timeout() {
+        assert!(build_http_client(Duration::from_secs(5)).is_ok());
     }
 }

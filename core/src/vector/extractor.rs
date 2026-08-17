@@ -959,6 +959,50 @@ final class HomeView {
     }
 
     #[test]
+    fn doc_comment_mention_does_not_create_fake_call_edges() {
+        // Doc-comment'te başka dosyadaki fonksiyon adı geçse bile bu bir çağrı
+        // değildir; sahte ters Calls kenarı üretilmemelidir.
+        let code = r#"
+final class Recorder {
+    func startRecording() {}
+}
+
+final class HomeView {
+    /// Uses startRecording internally.
+    func prepare() {}
+}
+"#;
+        let mut parser = CodeParser::new();
+        let tree = parser.parse_tree(code, SupportedLanguage::Swift).unwrap();
+        assert!(!tree.root_node().has_error(), "Swift parse failed");
+
+        let mut graph = CodeGraph::new();
+        let mut extractor = Extractor::new(code.to_string(), SupportedLanguage::Swift);
+        extractor
+            .extract(&tree, &mut graph, "recorder.swift")
+            .unwrap();
+        graph.rebuild_reference_edges();
+
+        let calls: Vec<(String, String)> = graph
+            .graph
+            .edge_indices()
+            .filter_map(|edge_idx| {
+                let (a, b) = graph.graph.edge_endpoints(edge_idx)?;
+                if graph.graph[edge_idx] == EdgeType::Calls {
+                    Some((graph.graph[a].name.clone(), graph.graph[b].name.clone()))
+                } else {
+                    None
+                }
+            })
+            .collect();
+        assert!(
+            calls.is_empty(),
+            "doc-comment mention'i sahte çağrı kenarı üretti: {:?}",
+            calls
+        );
+    }
+
+    #[test]
     fn semantic_ids_survive_unrelated_line_insertions() {
         fn function_id(source: &str) -> String {
             let mut parser = CodeParser::new();

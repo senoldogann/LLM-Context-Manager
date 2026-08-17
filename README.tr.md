@@ -10,10 +10,9 @@
 
 > CCM, kod tabanınız ile yapay zeka editörünüz arasındaki boşluğu kapatır. Statik kaynak kodu dinamik ve sorgulanabilir bir bilgi grafına dönüştürür; böylece ajanlar projenizi daha doğru gezebilir, anlayabilir ve akıl yürütebilir.
 
-> **Güncel sürüm: v0.3.9.** Swift retrieval düzeltmeleri (attribute isimleri,
-> çağrı kenarları), paralel tam yeniden indeksleme, eşzamanlı embedding
-> batch'leri, allowlist-güvenli artifact yolları ve diskte özel izinli index
-> dosyaları.
+> **Güncel sürüm: v0.3.10.** Embedding yapılandırması ve symlink'li artifact
+> yolları için güvenlik, sahte çağrı kenarları ve stabil node ID'ler için
+> doğruluk düzeltmeleri, ayrıca özel izinli policy dosyaları.
 
 [![Rust](https://img.shields.io/badge/Built%20With-Rust-orange.svg?style=flat-square&logo=rust)](https://www.rust-lang.org/)
 [![MCP Ready](https://img.shields.io/badge/MCP-Compatible-blue.svg?style=flat-square&logo=google-cloud)](https://modelcontextprotocol.io/)
@@ -43,6 +42,24 @@ CCM, ham kod yiginlari vermek yerine **AI-Optimized Context** uretir:
 - **Iliskisel Kenarlar** - Dosyalarin ve sembollerin nasil baglandigini gosterir
 - **Guven Skorlari** - Sonuclarin ne kadar guvenli oldugunu belirtir
 
+### CCM ve Alternatifler
+
+Cogu AI-baglam araci *semantik aramada* durur: dosyalari gomup yalnizca benzer
+gorunen parcalari dondurur. CCM bunun ustune gercek bir bagimlilik grafi koyar.
+
+| Yetenek | CCM | Yalnizca semantik RAG (Cline, Continue.dev, Aider tarzi) |
+|---------|-----|----------------------------------------------------------|
+| Semantik arama | Var | Var |
+| Cagri grafi: "bunu kim cagiriyor?" | Var (`find_usages`) | Yalnizca sembol grep |
+| Etki analizi: degisikligin patlama yaricapi | Var (`impact_of_change`) | Yok |
+| Iki dugum arasi BFS cagri zinciri | Var (`trace_call_chain`) | Yok |
+| AST'den dosyalar arasi bagimlilik kenarlari | Var (tree-sitter, 13 dil) | Yok |
+| Imlec seviyesinde baglam (`dosya:satir`) | Var (`get_context`) | Degisken |
+
+**Tek cumlelik pitch:** *"Kod tabanini sadece arama, haritalandir."* CCM ajana
+benzer gorunen metin degil, bagimlilik grafini verir. "Bunu degistirirsem ne
+kirilir?" gibi sorulari tahminden sorgulanabilir gercege donusturur.
+
 ---
 
 ## Temel Ozellikler
@@ -56,7 +73,7 @@ CCM, ham kod yiginlari vermek yerine **AI-Optimized Context** uretir:
 - **Rust Tabanlı** - Hızlı indeksleme ve sorgulama
 - **Toplu Embedding** - Büyük kod bloklarını kısa sürede işler
 - **LanceDB** - Düşük gecikmeli vektör depolama
-- **Tree-sitter** - Rust, Python, TypeScript, Go, Java, Kotlin, C#, C, C++, Ruby, PHP ve Swift için sağlam AST analizi
+- **Tree-sitter** - Rust, Python, TypeScript, JavaScript, Go, Java, Kotlin, C#, C, C++, Ruby, PHP ve Swift için sağlam AST analizi
 
 ### Production Sertlestirme
 - **Binary Checksums** - Release artifact'lari `checksums.txt` ile dogrulanir
@@ -129,6 +146,8 @@ git clone https://github.com/senoldogann/LLM-Context-Manager.git
 cd LLM-Context-Manager
 cargo build --release
 ```
+
+**Rust kurmadan mi?** [GETTING_STARTED.md](GETTING_STARTED.md) icindeki Docker secenegini kullanin.
 
 ### Manuel npm yayini (maintainer)
 

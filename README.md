@@ -10,9 +10,9 @@ English | [Turkce](./README.tr.md)
 
 > Bridge the gap between your codebase and your AI editor. CCM transforms static source code into a dynamic, queryable Knowledge Graph, enabling AI agents to navigate, understand, and reason about your project with surgical precision.
 
-> **Current release: v0.3.9.** Retrieval accuracy fixes for Swift (attribute
-> names, call edges), parallel full-rebuild parsing, concurrent embedding
-> batches, allowlist-hardened artifact paths and private index files on disk.
+> **Current release: v0.3.10.** Security and correctness hardening for
+> embedding configuration, symlink-safe artifact paths, fake call edges and
+> stable node IDs, plus private policy files.
 
 [![Rust](https://img.shields.io/badge/Built%20With-Rust-orange.svg?style=flat-square&logo=rust)](https://www.rust-lang.org/)
 [![MCP Ready](https://img.shields.io/badge/MCP-Compatible-blue.svg?style=flat-square&logo=google-cloud)](https://modelcontextprotocol.io/)
@@ -43,6 +43,24 @@ Unlike tools that dump raw code, CCM injects **AI-Optimized Context**:
 - **Relational Edges** - Maps how files talk to each other
 - **Confidence Scores** - Shows certainty in results
 
+### CCM vs. Alternatives
+
+Many AI-context tools stop at *semantic search*: they embed files and return
+chunks that merely look similar. CCM layers a real dependency graph on top.
+
+| Capability | CCM | Semantic-only RAG (Cline, Continue.dev, Aider-style) |
+|------------|-----|-------------------------------------------------------|
+| Semantic search | Yes | Yes |
+| Call graph: "who calls X?" | Yes (`find_usages`) | Best-effort symbol grep only |
+| Impact analysis: blast radius of a change | Yes (`impact_of_change`) | No |
+| BFS call-chain traversal between two nodes | Yes (`trace_call_chain`) | No |
+| Cross-file dependency edges from AST | Yes (tree-sitter, 13 languages) | No |
+| Cursor-level context (`file:line`) | Yes (`get_context`) | Varies |
+
+**The one-line pitch:** *"Don't just search your codebase - map it."* CCM gives
+your agent the dependency graph, not just similar-looking text. That turns
+questions like "what breaks if I change this?" from guesses into queryable facts.
+
 ---
 
 ## Key Features
@@ -56,7 +74,7 @@ Unlike tools that dump raw code, CCM injects **AI-Optimized Context**:
 - **Rust-Powered** - Blazing fast indexing and queries
 - **Batch Embedding** - Thousands of lines in seconds
 - **LanceDB** - Millisecond-latency vector storage
-- **Tree-sitter** - Robust AST for Rust, Python, TypeScript, Go, Java, Kotlin, C#, C, C++, Ruby, PHP, and Swift
+- **Tree-sitter** - Robust AST for Rust, Python, TypeScript, JavaScript, Go, Java, Kotlin, C#, C, C++, Ruby, PHP, and Swift
 
 ### 🔒 Production Hardening
 - **Binary Checksums** - Release artifacts include `checksums.txt` for integrity
@@ -132,6 +150,8 @@ cargo build --release
 
 # Binary location: target/release/ccm-cli
 ```
+
+**No Rust toolchain?** Use the Docker option in [GETTING_STARTED.md](GETTING_STARTED.md).
 
 ### Manual npm publication (maintainers)
 

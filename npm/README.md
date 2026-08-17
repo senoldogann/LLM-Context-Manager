@@ -4,10 +4,11 @@
 
 **Node.js wrapper for Cognitive Codebase Matrix (CCM)** - Enables AI agents to understand and navigate your codebase with surgical precision.
 
-**v0.3.9** fixes Swift symbol names under attributes and real call edges,
-parses full rebuilds in parallel, runs embedding batches concurrently, keeps
-index artifacts inside the allowlist even with symlinked data directories, and
-writes index files with private permissions.
+**v0.3.10** hardens embedding configuration so repo `.env` files cannot redirect
+code to an attacker-controlled host, rejects symlink-based artifact writes
+outside the project, prevents comment/string names from creating fake call
+edges, refuses ambiguous stable node IDs, and writes policy files with private
+permissions.
 
 [![npm](https://img.shields.io/npm/v/@senoldogann/context-manager?color=orange)](https://www.npmjs.com/package/@senoldogann/context-manager)
 [![MCP](https://img.shields.io/badge/MCP-Compatible-blue)](https://modelcontextprotocol.io/)

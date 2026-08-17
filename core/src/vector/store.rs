@@ -4,7 +4,7 @@ use arrow_array::{FixedSizeListArray, Float32Array, RecordBatch, StringArray};
 use arrow_schema::{DataType, Field, Schema};
 use futures::{StreamExt, TryStreamExt};
 use lancedb::query::{ExecutableQuery, QueryBase};
-use lancedb::{connect, Connection};
+use lancedb::{connect, Connection, Table};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -142,9 +142,11 @@ fn namespace_for_uri(uri: &str) -> String {
 pub struct LanceDbStore {
     conn: Connection,
     table_name: String,
-    embedder: Option<RemoteEmbedder>,
+    embedder: Mutex<Option<Arc<RemoteEmbedder>>>,
+    embedder_disabled: bool,
     fixture: Option<Arc<EmbeddingFixture>>,
     fixture_ns: String,
+    table_cache: Mutex<Option<Arc<Table>>>,
 }
 
 impl LanceDbStore {
@@ -164,24 +166,6 @@ impl LanceDbStore {
             .map(|v| matches!(v.to_lowercase().as_str(), "1" | "true" | "yes"))
             .unwrap_or(false);
 
-        // Try to initialize Remote embedder from environment.
-        // If it fails (no API key), we operate in "no-vector" mode or warn.
-        let embedder = if embedder_disabled {
-            tracing::warn!("Embedder disabled via environment. Semantic search will be disabled.");
-            None
-        } else {
-            match RemoteEmbedder::from_env() {
-                Ok(e) => Some(e),
-                Err(e) => {
-                    tracing::warn!(
-                        error = %e,
-                        "Remote Embedder init failed. Semantic search will be disabled."
-                    );
-                    None
-                }
-            }
-        };
-
         let fixture = match std::env::var("CCM_EMBEDDING_FIXTURE").ok() {
             Some(path) if !path.trim().is_empty() => {
                 let fixture_path = PathBuf::from(path);
@@ -200,14 +184,59 @@ impl LanceDbStore {
         Ok(Self {
             conn,
             table_name: table_name.to_string(),
-            embedder,
+            embedder: Mutex::new(None),
+            embedder_disabled,
             fixture,
             fixture_ns,
+            table_cache: Mutex::new(None),
         })
+    }
+
+    /// Embedder'ı ilk kullanımda başlatır. Fixture modunda veya disabled
+    /// ortamda gereksiz `.env` yüklemesi/API anahtarı araması yapılmaz.
+    fn embedder(&self) -> Result<Arc<RemoteEmbedder>> {
+        if self.embedder_disabled {
+            anyhow::bail!(
+                "Embedder not initialized (disabled via environment). Semantic search is disabled."
+            );
+        }
+        let mut guard = self.embedder.lock().unwrap();
+        if let Some(embedder) = guard.as_ref() {
+            return Ok(Arc::clone(embedder));
+        }
+        let embedder = Arc::new(RemoteEmbedder::from_env().context(
+            "Embedder not initialized. Configure EMBEDDING_PROVIDER/EMBEDDING_HOST/EMBEDDING_MODEL and EMBEDDING_API_KEY (or OPENAI_API_KEY), or disable semantic search with CCM_DISABLE_EMBEDDER=1.",
+        )?);
+        guard.replace(Arc::clone(&embedder));
+        Ok(embedder)
+    }
+
+    /// Açık LanceDB tablosunu önbellekten döndürür; yoksa açar ve önbelleğe alır.
+    /// Tekrar eden `open_table` metadata taramasını her sorguda tekrarlamaktansa
+    /// engine ömrü boyunca tek açılışla sınırlar.
+    async fn table(&self) -> Result<Arc<Table>> {
+        if let Some(table) = self.table_cache.lock().unwrap().as_ref() {
+            return Ok(Arc::clone(table));
+        }
+        let table = Arc::new(
+            self.conn
+                .open_table(&self.table_name)
+                .execute()
+                .await
+                .with_context(|| {
+                    format!(
+                        "Vector table '{}' is missing or unreadable; rebuild the CCM index",
+                        self.table_name
+                    )
+                })?,
+        );
+        self.table_cache.lock().unwrap().replace(Arc::clone(&table));
+        Ok(table)
     }
 
     /// Drops the existing table (if any) to prevent duplicate vectors on full re-index.
     pub async fn reset_table(&self) -> Result<()> {
+        self.table_cache.lock().unwrap().take();
         let table_exists = self
             .conn
             .open_table(&self.table_name)
@@ -231,17 +260,7 @@ impl LanceDbStore {
     }
 
     pub async fn validate_table(&self) -> Result<usize> {
-        let table = self
-            .conn
-            .open_table(&self.table_name)
-            .execute()
-            .await
-            .with_context(|| {
-                format!(
-                    "vector table '{}' is missing or unreadable",
-                    self.table_name
-                )
-            })?;
+        let table = self.table().await?;
         table
             .count_rows(None)
             .await
@@ -298,10 +317,10 @@ impl LanceDbStore {
                 embeddings.push(fixture.doc_vector(&self.fixture_ns, chunk_id)?);
             }
         } else {
-            let embedder = match self.embedder.as_ref() {
-                Some(e) => e,
-                None => return Ok(()),
-            };
+            if self.embedder_disabled {
+                return Ok(());
+            }
+            let embedder = self.embedder()?;
             let total_batches = all_chunks.len().div_ceil(batch_size);
             // Sınırlı eşzamanlılık: Ollama varsayılan olarak tek model işçisiyle
             // (`num_parallel=1`) istekleri sıraya alır; eşzamanlı istekler seri
@@ -321,6 +340,7 @@ impl LanceDbStore {
                     .enumerate()
                     .map(|(batch_idx, batch)| {
                         let batch_texts: Vec<String> = batch.to_vec();
+                        let embedder = Arc::clone(&embedder);
                         async move {
                             let result = embedder.embed(batch_texts).await;
                             (batch_idx, result)
@@ -411,18 +431,19 @@ impl LanceDbStore {
 
         let batches = vec![batch];
 
-        let table = self.conn.open_table(&self.table_name).execute().await;
-        match table {
-            Ok(t) => {
-                t.add(batches).execute().await?;
+        let table = match self.table().await {
+            Ok(table) => {
+                table.add(batches).execute().await?;
+                table
             }
-            Err(_) => {
+            Err(_) => Arc::new(
                 self.conn
                     .create_table(&self.table_name, batches)
                     .execute()
-                    .await?;
-            }
+                    .await?,
+            ),
         };
+        self.table_cache.lock().unwrap().replace(table);
 
         Ok(())
     }
@@ -433,9 +454,7 @@ impl LanceDbStore {
         let query_embedding = if let Some(fixture) = self.fixture.as_ref() {
             fixture.query_vector(&self.fixture_ns, query)?
         } else {
-            let embedder = self.embedder.as_ref().ok_or_else(|| {
-                anyhow::anyhow!("Embedder not initialized. Configure EMBEDDING_PROVIDER/EMBEDDING_HOST/EMBEDDING_MODEL and EMBEDDING_API_KEY (or OPENAI_API_KEY), or disable semantic search with CCM_DISABLE_EMBEDDER=1.")
-            })?;
+            let embedder = self.embedder()?;
             let query_vecs = embedder.embed(vec![query.to_string()]).await?;
             match query_vecs.into_iter().next() {
                 Some(vec) if !vec.is_empty() => vec,
@@ -450,18 +469,8 @@ impl LanceDbStore {
             }
         };
 
-        // 2. Open Table
-        let table = self
-            .conn
-            .open_table(&self.table_name)
-            .execute()
-            .await
-            .with_context(|| {
-                format!(
-                    "Vector table '{}' is missing or unreadable; rebuild the CCM index",
-                    self.table_name
-                )
-            })?;
+        // 2. Open Table (cache'li)
+        let table = self.table().await?;
 
         // 3. Vector Search
         let results = table
@@ -525,7 +534,7 @@ impl LanceDbStore {
     /// kullanılmaz; çünkü `a.rs` için `a.rs.bak` gibi aynı öneki paylaşan
     /// kardeş dosyaların vektörlerini de siler (veri kaybı).
     pub async fn delete_by_prefix(&self, prefix: &str) -> Result<()> {
-        let table = match self.conn.open_table(&self.table_name).execute().await {
+        let table = match self.table().await {
             Ok(t) => t,
             Err(_) => return Ok(()), // Tablo yoksa silinecek bir şey de yok
         };

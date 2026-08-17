@@ -1,0 +1,20 @@
+services:
+  ccm:
+    build: .
+    image: ccm:local
+    working_dir: /workspace
+    volumes:
+      - .:/workspace
+    environment:
+      # Yerel Ollama'ya konteynerden erişim. Linux'ta gerekirse
+      # `host.docker.internal` yerine host IP adresini kullan.
+      EMBEDDING_PROVIDER: ollama
+      EMBEDDING_HOST: http://host.docker.internal:11434
+      EMBEDDING_MODEL: mxbai-embed-large
+      CCM_MAX_FILE_BYTES: "2097152"
+    # Kullanım:
+    #   docker compose run --rm ccm index --path /workspace
+    #   docker compose run --rm ccm query --text "authentication flow"
+    # MCP stdio sunucusu editöre lokal süreç olarak bağlanır; bu yüzden
+    # prebuilt ikili (npx) yolu MCP için daha pratiktir.
+    entrypoint: ["ccm-cli"]

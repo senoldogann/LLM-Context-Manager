@@ -157,10 +157,29 @@ impl CodeGraph {
             for (name, _) in &tokens {
                 *occurrence_counts.entry(name).or_insert(0) += 1;
             }
+            // Kaynak düğümün kendi bildirim adı, doc-comment/string/yorum
+            // içeriğinde geçse bile gerçek bir çağrı değildir. Ad, gövdedeki
+            // gerçek çağrılardan ayrıştırılırken kendi adına eşit olan token'lar
+            // hedef seçimi için sayılmaz; sahte ters Calls kenarları böylece
+            // yalnızca bildirimde değil yorum/string varyantlarında da engellenir.
+            let source_declaration_token = if tokens
+                .iter()
+                .any(|(name, call_like)| *name == source_name && !call_like)
+            {
+                Some(source_name.as_str())
+            } else {
+                None
+            };
             for (name, call_like) in &tokens {
                 let Some(targets) = symbols.get(*name) else {
                     continue;
                 };
+                // Kendi bildirim adına eşit non-call token'lar (bildirim satırı,
+                // doc-comment, string, yorum) çağrı sayılmaz; call-like gerçek
+                // gövde çağrıları (ör. `recorder.startRecording()`) korunur.
+                if source_declaration_token == Some(*name) && !call_like {
+                    continue;
+                }
                 // Kaynak düğümün kendi bildirim adı yalnızca kendi içeriğinde
                 // geçiyorsa (ör. `func startRecording() {`), bu bir çağrı
                 // değildir ve başka dosyadaki aynı isimli fonksiyonla sahte
@@ -349,8 +368,10 @@ impl CodeGraph {
         }
 
         // Hedef id stable (symbol) formatındaysa row hash'tir; satır hedefi
-        // bilinemez, bu yüzden aynı dosya+türdeki EN YAKIN node'u döndürürüz.
-        // Legacy formatında satır hedefi doğrudan kullanılır.
+        // bilinemez. Aynı dosya+türde birden çok aday varsa hangisinin
+        // kastedildiği belirsizdir: deterministik ama yanlış "ilk node"
+        // eşleşmesi üretmek yerine çözüm reddedilir. Legacy formatında satır
+        // hedefi doğrudan kullanılır.
         let (path_part, kind_part, target_row): (&str, &str, Option<usize>) =
             if let Some((path, kind)) = parse_stable_node_id(id) {
                 (path, kind, None)
@@ -361,6 +382,7 @@ impl CodeGraph {
 
         let mut best: Option<&CodeNode> = None;
         let mut best_dist = usize::MAX;
+        let mut stable_candidates = 0usize;
 
         for node in self.graph.node_weights() {
             let (node_path, node_kind, node_row) =
@@ -376,6 +398,11 @@ impl CodeGraph {
                 };
             if node_path != path_part || node_kind != kind_part {
                 continue;
+            }
+            if target_row.is_none() {
+                // Stable id'de occurrence hash'i çözülemez; birden çok aday
+                // belirsizlik oluşturur. Tek aday güvenli kabul edilir.
+                stable_candidates += 1;
             }
             let dist = match target_row {
                 Some(target) => node_row.abs_diff(target),
@@ -394,6 +421,15 @@ impl CodeGraph {
                 best_dist = dist;
                 best = Some(node);
             }
+        }
+
+        if target_row.is_none() && stable_candidates > 1 {
+            tracing::debug!(
+                requested = %id,
+                candidates = stable_candidates,
+                "Ambiguous stable node ID; refusing fuzzy match"
+            );
+            return None;
         }
 
         if let Some(node) = best {
@@ -827,6 +863,33 @@ mod tests {
             "201. satırdaki node stable-id farkıyla çözülebilmeli"
         );
         assert_eq!(found.unwrap().name, "deep_function");
+    }
+
+    #[test]
+    fn stable_id_fuzzy_refuses_ambiguous_multi_node_files() {
+        let mut graph = CodeGraph::new();
+        // Aynı dosya+türde birden çok aday varsa stable-id hash'i çözülemez;
+        // "ilk node" eşleşmesi yanlış olacağından çözüm reddedilir.
+        graph.add_node(CodeNode {
+            id: "./src/multi.rs:function_item:symbol:aaaa000000000001:0".to_string(),
+            node_type: NodeType::Function,
+            name: "first".to_string(),
+            content: "fn first() {}".into(),
+            start_line: 1,
+            end_line: 1,
+        });
+        graph.add_node(CodeNode {
+            id: "./src/multi.rs:function_item:symbol:aaaa000000000002:0".to_string(),
+            node_type: NodeType::Function,
+            name: "second".to_string(),
+            content: "fn second() {}".into(),
+            start_line: 201,
+            end_line: 201,
+        });
+
+        let found =
+            graph.find_node_fuzzy_by_id("./src/multi.rs:function_item:symbol:bbbb000000000001:0");
+        assert!(found.is_none(), "belirsiz stable-id çözümü reddedilmeli");
     }
 
     #[test]

@@ -340,6 +340,34 @@ async fn relative_custom_database_is_project_relative_and_excluded() -> Result<(
     Ok(())
 }
 
+#[cfg(unix)]
+#[tokio::test]
+async fn symlinked_data_dir_never_writes_outside_the_project() -> Result<()> {
+    let _env_guard = ENV_LOCK.lock().await;
+    std::env::set_var("CCM_DISABLE_EMBEDDER", "1");
+    let outside = tempdir()?;
+    let project = tempdir()?;
+    std::fs::write(project.path().join("main.rs"), "fn business() {}\n")?;
+    std::fs::remove_dir_all(project.path().join("data")).ok();
+    std::os::unix::fs::symlink(outside.path(), project.path().join("data"))?;
+
+    let failed = ccm_core::index_directory(project.path().to_string_lossy().as_ref(), None).await;
+    assert!(
+        failed.is_err(),
+        "data symlink'i kök dışına yazan index kabul edilmemeli"
+    );
+    let leaked: Vec<_> = std::fs::read_dir(outside.path())?
+        .filter_map(Result::ok)
+        .map(|entry| entry.file_name())
+        .collect();
+    assert!(
+        leaked.is_empty(),
+        "kök dışına artifact yazıldı: {:?}",
+        leaked
+    );
+    Ok(())
+}
+
 #[tokio::test]
 async fn orphan_artifact_directories_are_never_indexed() -> Result<()> {
     let _env_guard = ENV_LOCK.lock().await;

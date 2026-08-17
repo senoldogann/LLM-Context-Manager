@@ -550,23 +550,37 @@ impl RetrievalEngine {
         let graph = self.graph.read().await;
         let graph_scores = scorer.collect_graph_scores(&graph, &seed_ids);
 
-        let mut candidate_ids: HashSet<String> = HashSet::new();
-        candidate_ids.extend(semantic_scores.keys().cloned());
-        candidate_ids.extend(graph_scores.keys().cloned());
-
-        let mut candidates = Vec::with_capacity(candidate_ids.len());
-        for id in candidate_ids {
-            let graph_score = graph_scores.get(&id).copied().unwrap_or(0.0);
-            let semantic_score = semantic_scores.get(&id).copied().unwrap_or(0.0);
+        let mut candidates = Vec::with_capacity(semantic_scores.len() + graph_scores.len());
+        for id in semantic_scores.keys() {
+            let graph_score = graph_scores.get(id).copied().unwrap_or(0.0);
+            let semantic_score = semantic_scores.get(id).copied().unwrap_or(0.0);
             let spatial_score = graph
-                .find_node_by_id(&id)
+                .find_node_by_id(id)
                 .map(|node| repo_priority_score(&extract_file_path(&node.id)))
                 .unwrap_or(0.0);
             let combined_score = scorer.combine(graph_score, semantic_score, spatial_score, 0.0);
             candidates.push(HybridCandidate {
-                id,
+                id: id.clone(),
                 graph_score,
                 semantic_score,
+                path_score: spatial_score,
+                combined_score,
+            });
+        }
+        for id in graph_scores.keys() {
+            if semantic_scores.contains_key(id) {
+                continue;
+            }
+            let graph_score = graph_scores.get(id).copied().unwrap_or(0.0);
+            let spatial_score = graph
+                .find_node_by_id(id)
+                .map(|node| repo_priority_score(&extract_file_path(&node.id)))
+                .unwrap_or(0.0);
+            let combined_score = scorer.combine(graph_score, 0.0, spatial_score, 0.0);
+            candidates.push(HybridCandidate {
+                id: id.clone(),
+                graph_score,
+                semantic_score: 0.0,
                 path_score: spatial_score,
                 combined_score,
             });
