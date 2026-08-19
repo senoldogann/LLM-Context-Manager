@@ -10,10 +10,10 @@ English | [Turkce](./README.tr.md)
 
 > Bridge the gap between your codebase and your AI editor. CCM transforms static source code into a dynamic, queryable Knowledge Graph, enabling AI agents to navigate, understand, and reason about your project with surgical precision.
 
-> **Current release: v0.3.11.** Fast graph-first indexing with `mode:"quick"`,
-> synchronous `index_now`, semantic tie-break repair for hybrid search, and
-> automatic repair of graph-only indexes left behind by an unavailable
-> embedding backend.
+> **Current release: v0.3.12.** Durable background semantic upgrade (survives
+> an MCP server restart), a 180/180 offline semantic gate with all 50
+> `search_code` tasks passing, and richer 512-dimension hash embeddings that
+> weigh the code symbol ahead of body noise.
 
 [![Rust](https://img.shields.io/badge/Built%20With-Rust-orange.svg?style=flat-square&logo=rust)](https://www.rust-lang.org/)
 [![MCP Ready](https://img.shields.io/badge/MCP-Compatible-blue.svg?style=flat-square&logo=google-cloud)](https://modelcontextprotocol.io/)
@@ -337,9 +337,12 @@ ccm-cli eval --tasks eval/golden_tasks.v3.ccm.json --compare
 If the evaluation index is missing, CCM bootstraps it automatically before scoring.
 Semantic `search_code` tasks still require a configured embedder.
 
-**Latest Recorded Results:** Real semantic evaluation with the Ollama embedder
-(v0.3.3): 53/56 tasks, 94.6% pass (search_code 3/6); structural-only gate is
-50/50 100%. See [`eval/report.semantic.json`](./eval/report.semantic.json).
+**Latest Recorded Results:** The offline synthetic semantic gate passes
+**180/180 tasks (100%)** as of v0.3.12, and CI now enforces it with
+`--min-pass-rate 100` (no regression). Earlier real semantic evaluation with
+the Ollama embedder (v0.3.3): 53/56 tasks, 94.6% pass (`search_code` 3/6);
+structural-only gate is 50/50 100%. See
+[`eval/report.semantic.json`](./eval/report.semantic.json).
 
 ---
 

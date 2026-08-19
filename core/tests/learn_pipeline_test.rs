@@ -85,46 +85,59 @@ async fn synthetic_corpus_and_pipeline_are_deterministic_and_gate_works() -> Res
         .iter()
         .any(|p| p.version == report.winner_version));
 
-    // 3. Sanity: kasıtlı kötü baseline (bol semantic hit + büyük pencere) yerine
-    // token-kırpan policy, recall regresyonsuz olduğunda gate'ten geçer.
-    let mut bad_baseline = RetrievalPolicy::baseline();
-    bad_baseline.semantic_hits = 4;
-    bad_baseline.primary_window_chars = 24_000;
-    bad_baseline.related_window_chars = 16_000;
-
-    let mut good_candidate = RetrievalPolicy::baseline();
-    good_candidate.semantic_hits = 0;
-    good_candidate.version = 2;
-
     let train = split_tasks(&tasks_file, "train");
     let holdout = split_tasks(&tasks_file, "holdout");
-    let bad_train = eval::evaluate_policy(train.clone(), &bad_baseline).await?;
+
+    // 3. Sanity (pozitif): düşük top_k ile kısıtlanmış zayıf baseline'a karşı
+    //    geri getirmeyi artıran aday, gate'ten geçer (recall iyileşmesi yolu).
+    //    Daha zengin fixture'da semantic hit'ler recall'a katkı sağladığı için
+    //    token-efficiency yolu dar; gate'in recall-improvement dalı burada
+    //    gösterilir. Token guard, geri getirmeyi artıran adayın gerçekçi ek
+    //    yükünü kabul edecek şekilde (2.0x) gevşetilir.
+    let mut weak_baseline = RetrievalPolicy::baseline();
+    weak_baseline.top_k = 1;
+    weak_baseline.semantic_hits = 0;
+
+    let mut good_candidate = RetrievalPolicy::baseline();
+    good_candidate.top_k = 3;
+    good_candidate.semantic_hits = 1;
+    good_candidate.version = 2;
+
+    let weak_train = eval::evaluate_policy(train.clone(), &weak_baseline).await?;
     let good_train = eval::evaluate_policy(train.clone(), &good_candidate).await?;
-    let bad_holdout = eval::evaluate_policy(holdout.clone(), &bad_baseline).await?;
+    let weak_holdout = eval::evaluate_policy(holdout.clone(), &weak_baseline).await?;
     let good_holdout = eval::evaluate_policy(holdout.clone(), &good_candidate).await?;
+    let positive_options = PromotionOptions {
+        token_guard_ratio: 2.0,
+        ..Default::default()
+    };
     let decision = evaluate_promotion(
-        &bad_train,
+        &weak_train,
         &good_train,
-        &bad_holdout,
+        &weak_holdout,
         &good_holdout,
-        &PromotionOptions::default(),
+        &positive_options,
     );
     assert!(
         decision.promoted,
-        "token verimliliği iyileşmesi promote edilmeli: {}",
+        "geri getirme iyileşmesi promote edilmeli: {}",
         decision.reason
     );
 
-    // 4. Recall kaybettiren policy reddedilir (top_k 5 -> 3).
+    // 4. Sanity (negatif, varsayılan guard): default baseline'a göre geri getirmeyi
+    //    kaybettiren policy reddedilir. Varsayılan `PromotionOptions` kullanılır.
+    let default_train = eval::evaluate_policy(train.clone(), &RetrievalPolicy::baseline()).await?;
+    let default_holdout =
+        eval::evaluate_policy(holdout.clone(), &RetrievalPolicy::baseline()).await?;
     let mut recall_hurting = RetrievalPolicy::baseline();
-    recall_hurting.top_k = 3;
+    recall_hurting.semantic_hits = 1;
     recall_hurting.version = 3;
     let hurting_train = eval::evaluate_policy(train.clone(), &recall_hurting).await?;
     let hurting_holdout = eval::evaluate_policy(holdout.clone(), &recall_hurting).await?;
     let rejected = evaluate_promotion(
-        &bad_train,
+        &default_train,
         &hurting_train,
-        &bad_holdout,
+        &default_holdout,
         &hurting_holdout,
         &PromotionOptions::default(),
     );

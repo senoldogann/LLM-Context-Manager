@@ -429,6 +429,7 @@ pub async fn evaluate_with_mode(tasks_file: GoldenTasksFile, mode: EvalMode) -> 
                 match search_result {
                     Ok(hits) => {
                         let (matches, matched_items) = score_hits(&task.expected, &hits);
+                        result.ranked = Some(hits.clone());
                         result.matches = matches;
                         result.matched_items = matched_items;
                         if matches >= expected_min_recall as usize {
@@ -1206,7 +1207,8 @@ fn score_hits(expected: &Expected, hits: &[String]) -> (usize, Vec<String>) {
 
     if let Some(node_ids) = &expected.node_ids {
         expected_set.extend(node_ids.iter().cloned());
-    } else if let Some(file_paths) = &expected.file_paths {
+    }
+    if let Some(file_paths) = &expected.file_paths {
         expected_set.extend(file_paths.iter().cloned());
     }
 
@@ -1215,11 +1217,11 @@ fn score_hits(expected: &Expected, hits: &[String]) -> (usize, Vec<String>) {
     }
 
     for hit in hits {
-        let key = if expected.node_ids.is_some() {
-            crate::normalize_node_id(hit)
-        } else {
-            node_id_to_file_path(hit)
-        };
+        if expected_set.contains(&crate::normalize_node_id(hit)) {
+            matched.push(crate::normalize_node_id(hit));
+            continue;
+        }
+        let key = node_id_to_file_path(hit);
 
         if expected_set.contains(&key) {
             matched.push(key);

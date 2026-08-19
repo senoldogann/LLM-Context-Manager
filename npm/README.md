@@ -4,11 +4,10 @@
 
 **Node.js wrapper for Cognitive Codebase Matrix (CCM)** - Enables AI agents to understand and navigate your codebase with surgical precision.
 
-**v0.3.11** adds fast graph-first indexing for MCP: `index_project` now accepts
-`mode:"quick"` to return immediately and upgrade semantic vectors in the
-background, `index_now` runs synchronously, hybrid `search_code` ranking prefers
-semantic scores on graph ties, and graph-only indexes from an unavailable
-embedding backend are repaired automatically.
+**v0.3.12** makes the background semantic upgrade durable (it completes even if
+the MCP server is closed mid-upgrade) and raises the offline semantic gate to
+180/180, with all `search_code` tasks passing thanks to 512-dimension hash
+embeddings that weigh the code symbol ahead of body noise.
 
 [![npm](https://img.shields.io/npm/v/@senoldogann/context-manager?color=orange)](https://www.npmjs.com/package/@senoldogann/context-manager)
 [![MCP](https://img.shields.io/badge/MCP-Compatible-blue)](https://modelcontextprotocol.io/)

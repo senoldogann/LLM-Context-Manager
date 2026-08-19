@@ -1409,9 +1409,11 @@ pub(crate) fn build_embedding_text(node: &CodeNode) -> String {
         NodeType::File => "file",
     };
     let file_path = extract_file_path(&node.id);
+    // İsim/dosya başlığı içeriğin önünde tekrarlanır; sembol adı hash-embedding'de
+    // içerik gürültüsüne karşı daha güçlü sinyal taşır (name-first weighting).
     format!(
-        "{} {}\nfile: {}\n{}",
-        type_label, node.name, file_path, node.content
+        "{} {}\nfile: {}\n{} {}\nfile: {}\n{}",
+        type_label, node.name, file_path, type_label, node.name, file_path, node.content
     )
 }
 

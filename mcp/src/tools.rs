@@ -607,19 +607,25 @@ pub async fn index_now(state: Arc<crate::server::ServerState>, args: &Value) -> 
 /// Arka plan quick index sonrası semantic upgrade'i planlar. Embedding uzun
 /// sürdüğü için yanıt vermez; okuma araçları graph-only sonuçla çalışmaya
 /// devam eder.
+///
+/// Durable tasarım: upgrade, MCP sürecinin ömründen bağımsız ayrı bir OS
+/// sürecinde (detached process group) çalıştırılır. MCP process'i (örneğin
+/// editor yeniden başlatıldığında) upgrade ortasında kapansa bile iş tamamlanır
+/// ve aktif generation atomik şekilde vektörlü hale gelir. Upgrade yarıda kalırsa
+/// bile `update_index`'in self-repair yolu (`vector_table_required && unhealthy`)
+/// sonraki `index_project` çağrısında eksik vektörleri onarır.
 fn schedule_semantic_upgrade(
     state: Arc<crate::server::ServerState>,
     project_path: std::sync::Arc<str>,
     db_path: String,
 ) {
+    // Detached worker: MCP çıkışında ölmeyen, kendi process grubunda koşan süreç.
+    // Yalnızca iş tamamlandığında (süreç hâlâ yaşıyorsa) engine cache tazelenir.
     tokio::spawn(async move {
         let refresh_state = state.clone();
         let refresh_path = project_path.clone();
-        let upgrade = tokio::spawn(async move {
-            run_index_worker_process(&project_path, &db_path, IndexModeArg::Upgrade).await
-        });
-        match upgrade.await {
-            Ok(Ok(stats)) => {
+        match spawn_detached_upgrade_worker(&project_path, &db_path).await {
+            Ok(stats) => {
                 tracing::info!(
                     nodes = stats.nodes_created,
                     "Background semantic upgrade completed"
@@ -627,14 +633,89 @@ fn schedule_semantic_upgrade(
                 // Yeni generation graph+vektör içerdiğinden cache'i tazele.
                 let _ = refresh_state.refresh_project_engine(&refresh_path).await;
             }
-            Ok(Err(error)) => {
-                tracing::warn!(error = %error, "Background semantic upgrade failed");
-            }
             Err(error) => {
-                tracing::warn!(error = %error, "Background semantic upgrade panicked");
+                tracing::warn!(error = %error, "Background semantic upgrade failed");
             }
         }
     });
+}
+
+/// MCP sürecinden bağımsız, detached bir upgrade worker süreci başlatır ve
+/// tamamlanmasını bekler. Süreç kendi process grubunda koştuğu ve `kill_on_drop`
+/// edilmediği için MCP çıkışında işi bırakmaz. Sonucu (IndexStats) stdout'tan
+/// JSON olarak okur; stderr projeye özel bir log dosyasına yönlendirilir.
+async fn spawn_detached_upgrade_worker(
+    project_path: &str,
+    db_path: &str,
+) -> Result<ccm_core::IndexStats> {
+    let executable = std::env::current_exe()?;
+    let project = project_path.to_string();
+    let db = db_path.to_string();
+    tokio::task::spawn_blocking(move || -> anyhow::Result<ccm_core::IndexStats> {
+        let mut command = std::process::Command::new(&executable);
+        command
+            .arg("--ccm-internal-index-worker")
+            .arg(&project)
+            .arg(&db)
+            .arg("upgrade")
+            .env("CCM_INTERNAL_INDEX_WORKER", "1")
+            .stdin(std::process::Stdio::null())
+            .stdout(std::process::Stdio::piped())
+            .stderr(semantic_upgrade_log(&project));
+
+        // Detached: süreci kendi process grubuna al; terminal/ebeveyn HUP'ından
+        // etkilenmesin ve MCP çıkışında devam edebilsin.
+        #[cfg(unix)]
+        {
+            use std::os::unix::process::CommandExt;
+            command.process_group(0);
+        }
+
+        let mut child = command.spawn()?;
+        let stdout = child
+            .stdout
+            .take()
+            .ok_or_else(|| anyhow::anyhow!("upgrade worker stdout is unavailable"))?;
+        let mut output = String::new();
+        use std::io::Read;
+        let mut reader = std::io::BufReader::new(stdout);
+        reader
+            .read_to_string(&mut output)
+            .map_err(|error| anyhow::anyhow!("failed reading upgrade worker stdout: {}", error))?;
+        let status = child.wait()?;
+        if !status.success() {
+            anyhow::bail!(
+                "upgrade worker exited with status {}; see {}/.ccm/semantic-upgrade.log",
+                status,
+                project
+            );
+        }
+        serde_json::from_str(&output).map_err(|error| {
+            anyhow::anyhow!(
+                "upgrade worker returned invalid JSON: {} (stdout: {})",
+                error,
+                output.chars().take(1_000).collect::<String>()
+            )
+        })
+    })
+    .await?
+}
+
+/// Worker stderr'ini projeye özel bir log dosyasına yönlendirir. Dosya açılamazsa
+/// null'a düşer; upgrade akışı bozulmaz.
+fn semantic_upgrade_log(project_path: &str) -> std::process::Stdio {
+    let base = std::path::PathBuf::from(project_path);
+    let log_dir = base.join(".ccm");
+    let _ = std::fs::create_dir_all(&log_dir);
+    let log_path = log_dir.join("semantic-upgrade.log");
+    match std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(&log_path)
+    {
+        Ok(file) => std::process::Stdio::from(file),
+        Err(_) => std::process::Stdio::null(),
+    }
 }
 
 /// `index_project`/`index_now` mod değerini normalize eder.

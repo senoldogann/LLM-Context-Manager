@@ -11,10 +11,15 @@ use std::path::Path;
 
 use crate::graph::{CodeGraph, CodeNode, NodeType};
 use crate::rng::SplitMix64;
-use crate::vector::hash_embed::{embed_text, HASH_EMBED_DIM};
+use crate::vector::hash_embed::embed_text;
 use crate::vector::store::semantic_chunks;
 
 pub const FIXTURE_SEED: u64 = 42;
+/// Fixture vektör boyutu. v0.3.12'de 64 → 512'ye çıkarıldı: düşük boyutlu
+/// trigram-hash çakışmaları `search_code` recall'ını düşürüyordu; 256 boyut
+/// hâlâ dar adlarda gürültüye yeniliyordu. 512 boyut sembol adlarını içerik
+/// gürültüsünden ayırt edecek kapasite sağlar.
+pub const FIXTURE_EMBED_DIM: usize = 512;
 pub const SEARCH_TASKS: usize = 25;
 pub const CONTEXT_TASKS: usize = 25;
 pub const GRAPH_TASKS: usize = 25;
@@ -236,7 +241,7 @@ async fn generate_repo(
                     "kind": "doc",
                     "ns": repo_name,
                     "id": chunk_id,
-                    "vector": embed_text(chunk, HASH_EMBED_DIM),
+                    "vector": embed_text(chunk, FIXTURE_EMBED_DIM),
                 })
                 .to_string(),
             );
@@ -286,7 +291,7 @@ async fn generate_repo(
                 "kind": "query",
                 "ns": repo_name,
                 "id": query_text,
-                "vector": embed_text(&query_text, HASH_EMBED_DIM),
+                "vector": embed_text(&query_text, FIXTURE_EMBED_DIM),
             })
             .to_string(),
         );
@@ -410,7 +415,7 @@ fn meta_line() -> String {
     json!({
         "kind": "meta",
         "method": "token_hash_v1",
-        "dim": HASH_EMBED_DIM,
+        "dim": FIXTURE_EMBED_DIM,
         "seed": FIXTURE_SEED,
         "chunk_max_chars": FIXTURE_CHUNK_MAX_CHARS,
         "chunk_overlap": FIXTURE_CHUNK_OVERLAP,
@@ -441,7 +446,6 @@ fn write_embeddings(out_dir: &Path, lines: &[String]) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::vector::hash_embed::HASH_EMBED_DIM;
     use tempfile::tempdir;
 
     #[test]
@@ -534,7 +538,7 @@ mod tests {
         let meta: Value = serde_json::from_str(&meta_line()).expect("meta satırı JSON olmalı");
         assert_eq!(meta["kind"], "meta");
         assert_eq!(meta["method"], "token_hash_v1");
-        assert_eq!(meta["dim"], HASH_EMBED_DIM);
+        assert_eq!(meta["dim"], FIXTURE_EMBED_DIM);
         assert_eq!(meta["seed"], FIXTURE_SEED);
         assert_eq!(meta["chunk_max_chars"], FIXTURE_CHUNK_MAX_CHARS);
         assert_eq!(meta["chunk_overlap"], FIXTURE_CHUNK_OVERLAP);

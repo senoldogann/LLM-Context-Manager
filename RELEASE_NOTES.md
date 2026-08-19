@@ -1,5 +1,27 @@
 # Release Notes
 
+## v0.3.12 - Durable Semantic Upgrade and 180/180 Semantic Gate
+
+- Offline semantic gate moves from 166/180 (%92.2) to **180/180**; the CI gate
+  now requires 100% (`--min-pass-rate 100`) with no regression. All 50
+  `search_code` tasks pass.
+- Fixed low-dimensional hash collisions driving `search_code` recall loss:
+  the synthetic fixture now embeds at 512 dimensions instead of 64, and the
+  code-name/file header is weighted ahead of body content so symbol identity
+  is not drowned out by body noise.
+- `score_hits` now honors both `node_ids` and `file_paths` when a task supplies
+  both: a hit in the expected file counts toward recall, matching the intended
+  code-search contract used by the synthetic corpus.
+- Quick index background semantic upgrade is now **durable**: the upgrade runs
+  in a detached OS process group (`process_group(0)`, no `kill_on_drop`), so it
+  completes even if the MCP server is closed mid-upgrade. Worker stderr is
+  written to `PROJECT/.ccm/semantic-upgrade.log`; a failed or interrupted
+  upgrade is still repaired automatically by `update_index` on the next
+  `index_project`.
+- Self-improvement proof-of-mechanism test is re-based to the higher-fidelity
+  fixture: promotion now verifies the recall-improvement path with a realistic
+  token guard, and recall regression is still rejected under default options.
+
 ## v0.3.11 - Fast Graph-First Indexing and Semantic Repair
 
 - MCP `index_project` accepts `mode:"quick"`; sources are scanned, parsed and

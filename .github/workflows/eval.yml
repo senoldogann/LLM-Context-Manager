@@ -52,8 +52,8 @@ jobs:
           ./target/release/ccm-cli eval
           --tasks eval/fixtures/golden_tasks.synthetic.json
           --report eval/report.semantic-gate.json
-          --min-pass-rate 85
-          --max-regression 5
+          --min-pass-rate 100
+          --max-regression 0
 
       - name: Upload eval report
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
