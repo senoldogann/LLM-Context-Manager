@@ -23,7 +23,7 @@ jobs:
         with:
           components: rustfmt, clippy
       - name: Install protoc
-        run: sudo apt-get update && sudo apt-get install -y protobuf-compiler
+        uses: arduino/setup-protoc@c65c819552d16ad3c9b72d9dfd5ba5237b9c906b # v3.0.0
       - name: Verify release versions
         shell: bash
         run: |
@@ -89,9 +89,7 @@ jobs:
 
       - name: Install protoc (Linux)
         if: runner.os == 'Linux'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y protobuf-compiler
+        uses: arduino/setup-protoc@c65c819552d16ad3c9b72d9dfd5ba5237b9c906b # v3.0.0
 
       - name: Install protoc (macOS)
         if: runner.os == 'macOS'
