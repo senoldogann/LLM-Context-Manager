@@ -253,6 +253,46 @@ Enable `CCM_EMBED_DATA_FILES=1` to include them in semantic search.
 
 ## 📝 Changelog
 
+### v0.3.12
+- ✅ Offline semantic gate raised to **180/180** (100%); the CI gate now requires
+  100% with no regression, and all 50 `search_code` tasks pass
+- ✅ Synthetic fixture embeds at 512 dimensions (was 64), weighting the code
+  symbol ahead of body noise to fix low-dimensional `search_code` recall loss
+- ✅ `score_hits` honors both `node_ids` and `file_paths` when a task supplies both
+- ✅ Background semantic upgrade is **durable**: it runs in a detached OS process
+  group, so it completes even if the MCP server is closed mid-upgrade; failed or
+  interrupted upgrades self-repair on the next `index_project`
+
+### v0.3.11
+- ✅ MCP `index_project` accepts `mode:"quick"`; sources are scanned, parsed and
+  graph-referenced immediately while embeddings run in the background
+- ✅ New synchronous `index_now` tool returns final index statistics in one call
+  (`quick`, `full`, `upgrade` modes)
+- ✅ Hybrid `search_code` ranking uses semantic score to break graph-score ties
+- ✅ `update_index` detects a graph-only or incomplete vector table and repairs it
+  from the active graph when no source files changed
+
+### v0.3.10
+- ✅ Embedding security: repo `.env` can no longer override `EMBEDDING_HOST`/API
+  keys; remote embedding hosts require explicit `CCM_ALLOW_REMOTE_EMBEDDING=1`
+- ✅ Path safety: symlinked `data` dirs cannot write artifacts outside the project
+  root; resolved paths are verified inside the canonical project root
+- ✅ Fake call edges from doc comments/strings eliminated; ambiguous stable node
+  IDs rejected instead of mismatched
+- ✅ Policy files written `0600`; parallel corpus eval race fixed
+
+### v0.3.9
+- ✅ Swift symbol names are no longer stolen by attributes (`@MainActor`/`@objc`);
+  `find_nodes`, `get_context` and `impact_of_change` return correct symbols
+- ✅ Real call edges established: self-references no longer block cross-file
+  targets; ambiguous edges traced by `find_usages`/`trace_call_chain`
+- ✅ Full re-index parses files in parallel (rayon); embeddings batched with
+  `CCM_EMBED_CONCURRENCY`
+- ✅ OpenAI-compatible providers extended: HuggingFace TEI, Voyage, Jina, LM
+  Studio, LocalAI, llama.cpp server and Azure OpenAI
+- ✅ Index/manifest/trajectory/policy files written `0600` on Unix; MCP input
+  errors classified as `-32602`
+
 ### v0.3.8
 - ✅ Failed scans, parses, embeddings, and full rebuilds preserve the last healthy index
 - ✅ Large MCP indexing is polled in the background while retrieval fails fast during updates
