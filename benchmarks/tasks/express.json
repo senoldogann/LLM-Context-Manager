@@ -1,0 +1,346 @@
+{
+  "schema_version": 1,
+  "tasks": [
+    {
+      "id": "express-search-001",
+      "repo": {
+        "name": "express",
+        "path": "benchmarks/corpus/express",
+        "languages": [
+          "javascript"
+        ],
+        "commit": "04bc62787be974874bc1467b23606c36bc9779ba"
+      },
+      "query": {
+        "type": "search_code",
+        "text": "How does Express match an incoming request against the route layers?"
+      },
+      "expected": {
+        "file_paths": [
+          "./lib/router/index.js"
+        ],
+        "min_recall": 1,
+        "max_rank": 5
+      },
+      "tags": [
+        "search_code",
+        "semantic"
+      ],
+      "priority": 1,
+      "notes": "proto.handle / next dispatcher in lib/router/index.js (line 136)"
+    },
+    {
+      "id": "express-search-002",
+      "repo": {
+        "name": "express",
+        "path": "benchmarks/corpus/express",
+        "languages": [
+          "javascript"
+        ],
+        "commit": "04bc62787be974874bc1467b23606c36bc9779ba"
+      },
+      "query": {
+        "type": "search_code",
+        "text": "How does Express process route parameters captured from the URL path?"
+      },
+      "expected": {
+        "file_paths": [
+          "./lib/router/index.js"
+        ],
+        "min_recall": 1,
+        "max_rank": 5
+      },
+      "tags": [
+        "search_code",
+        "semantic"
+      ],
+      "priority": 1,
+      "notes": "proto.process_params in lib/router/index.js (line 338)"
+    },
+    {
+      "id": "express-search-003",
+      "repo": {
+        "name": "express",
+        "path": "benchmarks/corpus/express",
+        "languages": [
+          "javascript"
+        ],
+        "commit": "04bc62787be974874bc1467b23606c36bc9779ba"
+      },
+      "query": {
+        "type": "search_code",
+        "text": "How does Express serialize a response body as JSON?"
+      },
+      "expected": {
+        "file_paths": [
+          "./lib/response.js"
+        ],
+        "min_recall": 1,
+        "max_rank": 5
+      },
+      "tags": [
+        "search_code",
+        "semantic"
+      ],
+      "priority": 1,
+      "notes": "res.json in lib/response.js (line 251)"
+    },
+    {
+      "id": "express-search-004",
+      "repo": {
+        "name": "express",
+        "path": "benchmarks/corpus/express",
+        "languages": [
+          "javascript"
+        ],
+        "commit": "04bc62787be974874bc1467b23606c36bc9779ba"
+      },
+      "query": {
+        "type": "search_code",
+        "text": "How does Express lazily create the application router on first use?"
+      },
+      "expected": {
+        "file_paths": [
+          "./lib/application.js"
+        ],
+        "min_recall": 1,
+        "max_rank": 5
+      },
+      "tags": [
+        "search_code",
+        "semantic"
+      ],
+      "priority": 1,
+      "notes": "app.lazyrouter in lib/application.js (line 144)"
+    },
+    {
+      "id": "express-search-005",
+      "repo": {
+        "name": "express",
+        "path": "benchmarks/corpus/express",
+        "languages": [
+          "javascript"
+        ],
+        "commit": "04bc62787be974874bc1467b23606c36bc9779ba"
+      },
+      "query": {
+        "type": "search_code",
+        "text": "How does Express populate req.query from the URL query string?"
+      },
+      "expected": {
+        "file_paths": [
+          "./lib/middleware/query.js"
+        ],
+        "min_recall": 1,
+        "max_rank": 5
+      },
+      "tags": [
+        "search_code",
+        "semantic"
+      ],
+      "priority": 1,
+      "notes": "query middleware in lib/middleware/query.js"
+    },
+    {
+      "id": "express-graph-001",
+      "repo": {
+        "name": "express",
+        "path": "benchmarks/corpus/express",
+        "languages": [
+          "javascript"
+        ],
+        "commit": "04bc62787be974874bc1467b23606c36bc9779ba"
+      },
+      "query": {
+        "type": "read_graph",
+        "node_id": "./lib/router/index.js:function_declaration:symbol:b9865015ef6c4d25:0"
+      },
+      "expected": {
+        "file_paths": [
+          "./lib/router/index.js",
+          "./lib/router/layer.js"
+        ],
+        "min_recall": 1,
+        "max_rank": 5
+      },
+      "tags": [
+        "read_graph",
+        "graph"
+      ],
+      "priority": 1,
+      "notes": "next dispatcher in lib/router/index.js (line 177) calls matchLayer/trim_prefix/process_params and layer.handle_request (lib/router/layer.js)"
+    },
+    {
+      "id": "express-graph-002",
+      "repo": {
+        "name": "express",
+        "path": "benchmarks/corpus/express",
+        "languages": [
+          "javascript"
+        ],
+        "commit": "04bc62787be974874bc1467b23606c36bc9779ba"
+      },
+      "query": {
+        "type": "read_graph",
+        "node_id": "./lib/router/index.js:function_declaration:symbol:b7a27d9fbfee69a9:0"
+      },
+      "expected": {
+        "file_paths": [
+          "./lib/router/index.js"
+        ],
+        "min_recall": 1,
+        "max_rank": 5
+      },
+      "tags": [
+        "read_graph",
+        "graph"
+      ],
+      "priority": 1,
+      "notes": "trim_prefix (line 293) calls next() and manipulates req.url in the same file"
+    },
+    {
+      "id": "express-graph-003",
+      "repo": {
+        "name": "express",
+        "path": "benchmarks/corpus/express",
+        "languages": [
+          "javascript"
+        ],
+        "commit": "04bc62787be974874bc1467b23606c36bc9779ba"
+      },
+      "query": {
+        "type": "read_graph",
+        "node_id": "./lib/router/index.js:function_declaration:symbol:4306a4875c2f6297:0"
+      },
+      "expected": {
+        "file_paths": [
+          "./lib/router/index.js"
+        ],
+        "min_recall": 1,
+        "max_rank": 5
+      },
+      "tags": [
+        "read_graph",
+        "graph"
+      ],
+      "priority": 1,
+      "notes": "router function (Router constructor) wires up handle and delegates req/res/next to router.handle in the same file"
+    },
+    {
+      "id": "express-ctx-001",
+      "repo": {
+        "name": "express",
+        "path": "benchmarks/corpus/express",
+        "languages": [
+          "javascript"
+        ],
+        "commit": "04bc62787be974874bc1467b23606c36bc9779ba"
+      },
+      "query": {
+        "type": "get_context",
+        "file_path": "lib/router/index.js",
+        "line": 140
+      },
+      "expected": {
+        "file_paths": [
+          "./lib/router/index.js"
+        ],
+        "min_recall": 1,
+        "max_rank": 5
+      },
+      "tags": [
+        "get_context",
+        "graph"
+      ],
+      "priority": 1,
+      "notes": "Cursor inside proto.handle (136-292)"
+    },
+    {
+      "id": "express-ctx-002",
+      "repo": {
+        "name": "express",
+        "path": "benchmarks/corpus/express",
+        "languages": [
+          "javascript"
+        ],
+        "commit": "04bc62787be974874bc1467b23606c36bc9779ba"
+      },
+      "query": {
+        "type": "get_context",
+        "file_path": "lib/response.js",
+        "line": 255
+      },
+      "expected": {
+        "file_paths": [
+          "./lib/response.js"
+        ],
+        "min_recall": 1,
+        "max_rank": 5
+      },
+      "tags": [
+        "get_context",
+        "graph"
+      ],
+      "priority": 1,
+      "notes": "Cursor inside res.json (251-293)"
+    },
+    {
+      "id": "express-ctx-003",
+      "repo": {
+        "name": "express",
+        "path": "benchmarks/corpus/express",
+        "languages": [
+          "javascript"
+        ],
+        "commit": "04bc62787be974874bc1467b23606c36bc9779ba"
+      },
+      "query": {
+        "type": "get_context",
+        "file_path": "lib/application.js",
+        "line": 170
+      },
+      "expected": {
+        "file_paths": [
+          "./lib/application.js"
+        ],
+        "min_recall": 1,
+        "max_rank": 5
+      },
+      "tags": [
+        "get_context",
+        "graph"
+      ],
+      "priority": 1,
+      "notes": "Cursor inside app.handle (165-183)"
+    },
+    {
+      "id": "express-ctx-004",
+      "repo": {
+        "name": "express",
+        "path": "benchmarks/corpus/express",
+        "languages": [
+          "javascript"
+        ],
+        "commit": "04bc62787be974874bc1467b23606c36bc9779ba"
+      },
+      "query": {
+        "type": "get_context",
+        "file_path": "lib/router/layer.js",
+        "line": 90
+      },
+      "expected": {
+        "file_paths": [
+          "./lib/router/layer.js"
+        ],
+        "min_recall": 1,
+        "max_rank": 5
+      },
+      "tags": [
+        "get_context",
+        "graph"
+      ],
+      "priority": 1,
+      "notes": "Cursor inside Layer.prototype.handle_request (86-99)"
+    }
+  ]
+}

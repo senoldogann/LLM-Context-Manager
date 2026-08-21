@@ -10,10 +10,11 @@ English | [Turkce](./README.tr.md)
 
 > Bridge the gap between your codebase and your AI editor. CCM transforms static source code into a dynamic, queryable Knowledge Graph, enabling AI agents to navigate, understand, and reason about your project with surgical precision.
 
-> **Current release: v0.3.12.** Durable background semantic upgrade (survives
-> an MCP server restart), a 180/180 offline semantic gate with all 50
-> `search_code` tasks passing, and richer 512-dimension hash embeddings that
-> weigh the code symbol ahead of body noise.
+> **Current release: v0.3.13.** An external benchmark on real repositories
+> (serde, flask, express) with 35 hand-verified golden tasks, honest
+> Recall@K/MRR/latency metrics, and hybrid scoring at 82.9% vs 80.0%
+> semantic-only — plus the v0.3.12 durable background semantic upgrade and
+> the 180/180 offline semantic gate.
 
 [![Rust](https://img.shields.io/badge/Built%20With-Rust-orange.svg?style=flat-square&logo=rust)](https://www.rust-lang.org/)
 [![MCP Ready](https://img.shields.io/badge/MCP-Compatible-blue.svg?style=flat-square&logo=google-cloud)](https://modelcontextprotocol.io/)
@@ -339,10 +340,14 @@ Semantic `search_code` tasks still require a configured embedder.
 
 **Latest Recorded Results:** The offline synthetic semantic gate passes
 **180/180 tasks (100%)** as of v0.3.12, and CI now enforces it with
-`--min-pass-rate 100` (no regression). Earlier real semantic evaluation with
-the Ollama embedder (v0.3.3): 53/56 tasks, 94.6% pass (`search_code` 3/6);
-structural-only gate is 50/50 100%. See
+`--min-pass-rate 100` (no regression); structural-only gate is 50/50 100%. See
 [`eval/report.semantic.json`](./eval/report.semantic.json).
+
+**External benchmark (v0.3.13):** 35 hand-verified golden tasks on real repos
+(serde, flask, express) with real Ollama embeddings. Hybrid scoring passes
+82.9% (29/35) vs 80.0% (28/35) semantic-only; `get_context`/`read_graph` are
+11/11. Full numbers, failure ledger and reproduction steps:
+[`benchmarks/README.md`](./benchmarks/README.md).
 
 ---
 

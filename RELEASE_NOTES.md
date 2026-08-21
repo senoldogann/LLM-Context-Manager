@@ -1,5 +1,22 @@
 # Release Notes
 
+## v0.3.13 - External Benchmark on Real Repositories
+
+- New `benchmarks/` suite: 35 hand-verified golden tasks across 3 real
+  open-source repositories (serde, flask, express), each pinned to an exact
+  commit and indexed with real Ollama embeddings (`mxbai-embed-large`).
+  `scripts/fetch_corpus.sh`, `scripts/run_benchmark.sh` and
+  `scripts/aggregate.py` make the run reproducible end to end.
+- `evaluate_with_mode` now emits `ranked` hit lists and per-task `latency_ms`
+  for **all** query types (`search_code`, `read_graph`, `get_context`), so
+  Recall@K and MRR@K can be computed from the comparison reports.
+- Honest first results: hybrid scoring passes 82.9% (29/35) vs 80.0% (28/35)
+  for semantic-only; graph query types (`get_context`/`read_graph`) are 11/11
+  across all three repos. The hybrid graph-expansion mechanism is demonstrated
+  on real code (flask `test_client()` → `FlaskClient` recovered via a usage
+  edge). Known gaps are logged in `benchmarks/README.md` (serde trait-heavy
+  search, express prototype-assignment functions).
+
 ## v0.3.12 - Durable Semantic Upgrade and 180/180 Semantic Gate
 
 - Offline semantic gate moves from 166/180 (%92.2) to **180/180**; the CI gate

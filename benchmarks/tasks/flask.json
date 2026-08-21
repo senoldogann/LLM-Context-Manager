@@ -1,0 +1,374 @@
+{
+  "schema_version": 1,
+  "tasks": [
+    {
+      "id": "flask-search-001",
+      "repo": {
+        "name": "flask",
+        "path": "benchmarks/corpus/flask",
+        "languages": [
+          "python"
+        ],
+        "commit": "c12a5d874c5a014495eb2db8a73f40037bc813ac"
+      },
+      "query": {
+        "type": "search_code",
+        "text": "How does Flask dispatch an incoming request to the matching view function?"
+      },
+      "expected": {
+        "file_paths": [
+          "./src/flask/app.py"
+        ],
+        "min_recall": 1,
+        "max_rank": 5
+      },
+      "tags": [
+        "search_code",
+        "semantic"
+      ],
+      "priority": 1,
+      "notes": "dispatch_request in app.py (line 842)"
+    },
+    {
+      "id": "flask-search-002",
+      "repo": {
+        "name": "flask",
+        "path": "benchmarks/corpus/flask",
+        "languages": [
+          "python"
+        ],
+        "commit": "c12a5d874c5a014495eb2db8a73f40037bc813ac"
+      },
+      "query": {
+        "type": "search_code",
+        "text": "How does Flask run before_request hooks and other request preprocessing?"
+      },
+      "expected": {
+        "file_paths": [
+          "./src/flask/app.py"
+        ],
+        "min_recall": 1,
+        "max_rank": 5
+      },
+      "tags": [
+        "search_code",
+        "semantic"
+      ],
+      "priority": 1,
+      "notes": "preprocess_request in app.py (line 1233)"
+    },
+    {
+      "id": "flask-search-003",
+      "repo": {
+        "name": "flask",
+        "path": "benchmarks/corpus/flask",
+        "languages": [
+          "python"
+        ],
+        "commit": "c12a5d874c5a014495eb2db8a73f40037bc813ac"
+      },
+      "query": {
+        "type": "search_code",
+        "text": "How does Flask create a test client to simulate requests against the app?"
+      },
+      "expected": {
+        "file_paths": [
+          "./src/flask/testing.py"
+        ],
+        "min_recall": 1,
+        "max_rank": 5
+      },
+      "tags": [
+        "search_code",
+        "semantic"
+      ],
+      "priority": 1,
+      "notes": "FlaskClient in testing.py (line 109)"
+    },
+    {
+      "id": "flask-search-004",
+      "repo": {
+        "name": "flask",
+        "path": "benchmarks/corpus/flask",
+        "languages": [
+          "python"
+        ],
+        "commit": "c12a5d874c5a014495eb2db8a73f40037bc813ac"
+      },
+      "query": {
+        "type": "search_code",
+        "text": "How does Flask convert a view's return value into a response object?"
+      },
+      "expected": {
+        "file_paths": [
+          "./src/flask/helpers.py"
+        ],
+        "min_recall": 1,
+        "max_rank": 5
+      },
+      "tags": [
+        "search_code",
+        "semantic"
+      ],
+      "priority": 1,
+      "notes": "make_response in helpers.py (line 127)"
+    },
+    {
+      "id": "flask-search-005",
+      "repo": {
+        "name": "flask",
+        "path": "benchmarks/corpus/flask",
+        "languages": [
+          "python"
+        ],
+        "commit": "c12a5d874c5a014495eb2db8a73f40037bc813ac"
+      },
+      "query": {
+        "type": "search_code",
+        "text": "How does Flask generate URLs from endpoint names and arguments?"
+      },
+      "expected": {
+        "file_paths": [
+          "./src/flask/helpers.py"
+        ],
+        "min_recall": 1,
+        "max_rank": 5
+      },
+      "tags": [
+        "search_code",
+        "semantic"
+      ],
+      "priority": 1,
+      "notes": "url_for in helpers.py (line 176)"
+    },
+    {
+      "id": "flask-graph-001",
+      "repo": {
+        "name": "flask",
+        "path": "benchmarks/corpus/flask",
+        "languages": [
+          "python"
+        ],
+        "commit": "c12a5d874c5a014495eb2db8a73f40037bc813ac"
+      },
+      "query": {
+        "type": "read_graph",
+        "node_id": "./src/flask/app.py:function_definition:symbol:a76fbc5461b3f5c8:0"
+      },
+      "expected": {
+        "file_paths": [
+          "./src/flask/app.py"
+        ],
+        "min_recall": 1,
+        "max_rank": 5
+      },
+      "tags": [
+        "read_graph",
+        "graph"
+      ],
+      "priority": 1,
+      "notes": "full_dispatch_request calls preprocess_request/dispatch_request/handle_user_exception/finalize_request (all in app.py)"
+    },
+    {
+      "id": "flask-graph-002",
+      "repo": {
+        "name": "flask",
+        "path": "benchmarks/corpus/flask",
+        "languages": [
+          "python"
+        ],
+        "commit": "c12a5d874c5a014495eb2db8a73f40037bc813ac"
+      },
+      "query": {
+        "type": "read_graph",
+        "node_id": "./src/flask/app.py:function_definition:symbol:6498ce0ce328b31a:0"
+      },
+      "expected": {
+        "file_paths": [
+          "./src/flask/app.py"
+        ],
+        "min_recall": 1,
+        "max_rank": 5
+      },
+      "tags": [
+        "read_graph",
+        "graph"
+      ],
+      "priority": 1,
+      "notes": "dispatch_request calls raise_routing_exception/make_default_options_response/ensure_sync (all in app.py)"
+    },
+    {
+      "id": "flask-graph-003",
+      "repo": {
+        "name": "flask",
+        "path": "benchmarks/corpus/flask",
+        "languages": [
+          "python"
+        ],
+        "commit": "c12a5d874c5a014495eb2db8a73f40037bc813ac"
+      },
+      "query": {
+        "type": "read_graph",
+        "node_id": "./src/flask/app.py:function_definition:symbol:90c1b1f0d6b48f30:0"
+      },
+      "expected": {
+        "file_paths": [
+          "./src/flask/app.py",
+          "./src/flask/ctx.py"
+        ],
+        "min_recall": 1,
+        "max_rank": 5
+      },
+      "tags": [
+        "read_graph",
+        "graph"
+      ],
+      "priority": 1,
+      "notes": "wsgi_app calls ctx.push() (RequestContext from ctx.py) and full_dispatch_request (app.py)"
+    },
+    {
+      "id": "flask-graph-004",
+      "repo": {
+        "name": "flask",
+        "path": "benchmarks/corpus/flask",
+        "languages": [
+          "python"
+        ],
+        "commit": "c12a5d874c5a014495eb2db8a73f40037bc813ac"
+      },
+      "query": {
+        "type": "read_graph",
+        "node_id": "./src/flask/app.py:function_definition:symbol:3ebf2c7da78d260e:0"
+      },
+      "expected": {
+        "file_paths": [
+          "./src/flask/app.py"
+        ],
+        "min_recall": 1,
+        "max_rank": 5
+      },
+      "tags": [
+        "read_graph",
+        "graph"
+      ],
+      "priority": 1,
+      "notes": "handle_exception calls log_exception/handle_user_exception/finalize_request (all in app.py)"
+    },
+    {
+      "id": "flask-ctx-001",
+      "repo": {
+        "name": "flask",
+        "path": "benchmarks/corpus/flask",
+        "languages": [
+          "python"
+        ],
+        "commit": "c12a5d874c5a014495eb2db8a73f40037bc813ac"
+      },
+      "query": {
+        "type": "get_context",
+        "file_path": "src/flask/app.py",
+        "line": 870
+      },
+      "expected": {
+        "file_paths": [
+          "./src/flask/app.py"
+        ],
+        "min_recall": 1,
+        "max_rank": 5
+      },
+      "tags": [
+        "get_context",
+        "graph"
+      ],
+      "priority": 1,
+      "notes": "Cursor inside full_dispatch_request (867-901)"
+    },
+    {
+      "id": "flask-ctx-002",
+      "repo": {
+        "name": "flask",
+        "path": "benchmarks/corpus/flask",
+        "languages": [
+          "python"
+        ],
+        "commit": "c12a5d874c5a014495eb2db8a73f40037bc813ac"
+      },
+      "query": {
+        "type": "get_context",
+        "file_path": "src/flask/app.py",
+        "line": 850
+      },
+      "expected": {
+        "file_paths": [
+          "./src/flask/app.py"
+        ],
+        "min_recall": 1,
+        "max_rank": 5
+      },
+      "tags": [
+        "get_context",
+        "graph"
+      ],
+      "priority": 1,
+      "notes": "Cursor inside dispatch_request (842-866)"
+    },
+    {
+      "id": "flask-ctx-003",
+      "repo": {
+        "name": "flask",
+        "path": "benchmarks/corpus/flask",
+        "languages": [
+          "python"
+        ],
+        "commit": "c12a5d874c5a014495eb2db8a73f40037bc813ac"
+      },
+      "query": {
+        "type": "get_context",
+        "file_path": "src/flask/helpers.py",
+        "line": 180
+      },
+      "expected": {
+        "file_paths": [
+          "./src/flask/helpers.py"
+        ],
+        "min_recall": 1,
+        "max_rank": 5
+      },
+      "tags": [
+        "get_context",
+        "graph"
+      ],
+      "priority": 1,
+      "notes": "Cursor inside url_for (176-229)"
+    },
+    {
+      "id": "flask-ctx-004",
+      "repo": {
+        "name": "flask",
+        "path": "benchmarks/corpus/flask",
+        "languages": [
+          "python"
+        ],
+        "commit": "c12a5d874c5a014495eb2db8a73f40037bc813ac"
+      },
+      "query": {
+        "type": "get_context",
+        "file_path": "src/flask/testing.py",
+        "line": 127
+      },
+      "expected": {
+        "file_paths": [
+          "./src/flask/testing.py"
+        ],
+        "min_recall": 1,
+        "max_rank": 5
+      },
+      "tags": [
+        "get_context",
+        "graph"
+      ],
+      "priority": 1,
+      "notes": "Cursor inside FlaskClient.__init__ (125+)"
+    }
+  ]
+}

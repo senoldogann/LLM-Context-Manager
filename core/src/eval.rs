@@ -366,10 +366,13 @@ pub async fn evaluate_with_mode(tasks_file: GoldenTasksFile, mode: EvalMode) -> 
     totals.tasks = tasks_file.tasks.len();
 
     for task in tasks_file.tasks {
+        let started = std::time::Instant::now();
         let repo_path = normalize_repo_path(&task.repo.path)?;
 
         let max_rank = task.expected.max_rank.unwrap_or(5).max(1);
         let expected_min_recall = task.expected.min_recall;
+        let mut ranked: Vec<String> = Vec::new();
+        let mut token_hint: usize = 0;
 
         let mut result = TaskResult {
             id: task.id.clone(),
@@ -428,8 +431,13 @@ pub async fn evaluate_with_mode(tasks_file: GoldenTasksFile, mode: EvalMode) -> 
 
                 match search_result {
                     Ok(hits) => {
+                        ranked = hits.clone();
+                        if graph_path.exists() {
+                            if let Ok(graph) = CodeGraph::from_file(&graph_path.to_string_lossy()) {
+                                token_hint = tokens_for_ids(&graph, &hits);
+                            }
+                        }
                         let (matches, matched_items) = score_hits(&task.expected, &hits);
-                        result.ranked = Some(hits.clone());
                         result.matches = matches;
                         result.matched_items = matched_items;
                         if matches >= expected_min_recall as usize {
@@ -479,6 +487,8 @@ pub async fn evaluate_with_mode(tasks_file: GoldenTasksFile, mode: EvalMode) -> 
 
                 match hits {
                     Some(hits) => {
+                        ranked = hits.clone();
+                        token_hint = tokens_for_ids(&graph, &hits);
                         // Beklenen node_id'leri fuzzy lookup ile mevcut satır numaralarına çöz
                         let resolved_ids: Option<Vec<String>> =
                             task.expected.node_ids.as_ref().map(|ids| {
@@ -550,6 +560,8 @@ pub async fn evaluate_with_mode(tasks_file: GoldenTasksFile, mode: EvalMode) -> 
 
                 match hits {
                     Some(hits) => {
+                        ranked = hits.clone();
+                        token_hint = tokens_for_ids(&graph, &hits);
                         let (matches, matched_items) = score_hits(&task.expected, &hits);
                         result.matches = matches;
                         result.matched_items = matched_items;
@@ -607,10 +619,15 @@ pub async fn evaluate_with_mode(tasks_file: GoldenTasksFile, mode: EvalMode) -> 
                 .await
                 {
                     Ok(suggestions) => {
+                        token_hint = suggestions
+                            .iter()
+                            .map(|suggestion| suggestion.content.len() / 4)
+                            .sum();
                         let hits: Vec<String> = suggestions
                             .into_iter()
                             .filter_map(|suggestion| suggestion.node_id)
                             .collect();
+                        ranked = hits.clone();
                         let (matches, matched_items) = score_hits(&task.expected, &hits);
                         result.matches = matches;
                         result.matched_items = matched_items;
@@ -638,6 +655,7 @@ pub async fn evaluate_with_mode(tasks_file: GoldenTasksFile, mode: EvalMode) -> 
             }
         }
 
+        fill_policy_metrics(&mut result, &task, &ranked, token_hint, started.elapsed());
         results.push(result);
     }
 

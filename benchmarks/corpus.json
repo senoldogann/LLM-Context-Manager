@@ -1,0 +1,33 @@
+{
+  "schema_version": 1,
+  "description": "External benchmark corpus: real open-source repositories at pinned refs. Tasks reference the local clone under benchmarks/corpus/<name>.",
+  "repos": [
+    {
+      "name": "serde",
+      "url": "https://github.com/serde-rs/serde.git",
+      "ref": "v1.0.219",
+      "commit": "49d098debdf8b5c38bfb6868f455c6ce542c422c",
+      "languages": ["rust"],
+      "size_hint": "medium",
+      "notes": "Serde serialization framework; strong AST structure, trait-heavy."
+    },
+    {
+      "name": "flask",
+      "url": "https://github.com/pallets/flask.git",
+      "ref": "3.0.3",
+      "commit": "c12a5d874c5a014495eb2db8a73f40037bc813ac",
+      "languages": ["python"],
+      "size_hint": "small",
+      "notes": "Flask micro-framework; request routing and app lifecycle."
+    },
+    {
+      "name": "express",
+      "url": "https://github.com/expressjs/express.git",
+      "ref": "4.19.2",
+      "commit": "04bc62787be974874bc1467b23606c36bc9779ba",
+      "languages": ["javascript"],
+      "size_hint": "medium",
+      "notes": "Express web framework; middleware chain and router."
+    }
+  ]
+}

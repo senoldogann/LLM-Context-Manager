@@ -10,10 +10,11 @@
 
 > CCM, kod tabanınız ile yapay zeka editörünüz arasındaki boşluğu kapatır. Statik kaynak kodu dinamik ve sorgulanabilir bir bilgi grafına dönüştürür; böylece ajanlar projenizi daha doğru gezebilir, anlayabilir ve akıl yürütebilir.
 
-> **Güncel sürüm: v0.3.12.** MCP sunucu yeniden başlatılsa bile tamamlanan
-> dayanıklı arka plan semantic upgrade, tüm `search_code` görevlerinin geçtiği
-> 180/180 offline semantic gate ve sembol adını gövde gürültüsünün önüne alan
-> 512 boyutlu daha zengin hash embedding'leri.
+> **Güncel sürüm: v0.3.13.** Gerçek repolar üzerinde dış benchmark (serde,
+> flask, express) — 35 elle doğrulanmış golden task, dürüst
+> Recall@K/MRR/latency metrikleri ve semantic-only %80.0'a karşı %82.9 hybrid
+> skoru; ayrıca v0.3.12'nin dayanıklı arka plan semantic upgrade'i ve 180/180
+> offline semantic gate'i.
 
 [![Rust](https://img.shields.io/badge/Built%20With-Rust-orange.svg?style=flat-square&logo=rust)](https://www.rust-lang.org/)
 [![MCP Ready](https://img.shields.io/badge/MCP-Compatible-blue.svg?style=flat-square&logo=google-cloud)](https://modelcontextprotocol.io/)

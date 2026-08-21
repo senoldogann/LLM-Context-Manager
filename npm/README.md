@@ -4,10 +4,11 @@
 
 **Node.js wrapper for Cognitive Codebase Matrix (CCM)** - Enables AI agents to understand and navigate your codebase with surgical precision.
 
-**v0.3.12** makes the background semantic upgrade durable (it completes even if
-the MCP server is closed mid-upgrade) and raises the offline semantic gate to
-180/180, with all `search_code` tasks passing thanks to 512-dimension hash
-embeddings that weigh the code symbol ahead of body noise.
+**v0.3.13** adds an external benchmark on real repositories (serde, flask,
+express) with 35 hand-verified golden tasks and honest Recall@K/MRR/latency
+metrics — hybrid scoring at 82.9% vs 80.0% semantic-only. **v0.3.12** made the
+background semantic upgrade durable (it completes even if the MCP server is
+closed mid-upgrade) and raised the offline semantic gate to 180/180.
 
 [![npm](https://img.shields.io/npm/v/@senoldogann/context-manager?color=orange)](https://www.npmjs.com/package/@senoldogann/context-manager)
 [![MCP](https://img.shields.io/badge/MCP-Compatible-blue)](https://modelcontextprotocol.io/)
@@ -252,6 +253,15 @@ Enable `CCM_EMBED_DATA_FILES=1` to include them in semantic search.
 ---
 
 ## 📝 Changelog
+
+### v0.3.13
+- ✅ New `benchmarks/` suite: 35 hand-verified golden tasks across 3 real
+  open-source repos (serde, flask, express) pinned to exact commits, indexed
+  with real Ollama embeddings
+- ✅ `evaluate_with_mode` emits `ranked` hit lists and per-task `latency_ms` for
+  all query types, enabling Recall@K / MRR@K computation
+- ✅ Honest first results: hybrid 82.9% (29/35) vs semantic-only 80.0% (28/35);
+  `get_context`/`read_graph` 11/11 across all three repos
 
 ### v0.3.12
 - ✅ Offline semantic gate raised to **180/180** (100%); the CI gate now requires

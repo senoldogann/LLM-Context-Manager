@@ -1,0 +1,288 @@
+{
+  "schema_version": 1,
+  "tasks": [
+    {
+      "id": "serde-search-001",
+      "repo": {
+        "name": "serde",
+        "path": "benchmarks/corpus/serde",
+        "languages": [
+          "rust"
+        ],
+        "commit": "49d098debdf8b5c38bfb6868f455c6ce542c422c"
+      },
+      "query": {
+        "type": "search_code",
+        "text": "How does serde define the Deserializer trait contract?"
+      },
+      "expected": {
+        "file_paths": [
+          "./serde/src/de/mod.rs"
+        ],
+        "min_recall": 1,
+        "max_rank": 5
+      },
+      "tags": [
+        "search_code",
+        "semantic"
+      ],
+      "priority": 1,
+      "notes": "trait Deserializer in serde/src/de/mod.rs (line 914)"
+    },
+    {
+      "id": "serde-search-002",
+      "repo": {
+        "name": "serde",
+        "path": "benchmarks/corpus/serde",
+        "languages": [
+          "rust"
+        ],
+        "commit": "49d098debdf8b5c38bfb6868f455c6ce542c422c"
+      },
+      "query": {
+        "type": "search_code",
+        "text": "How does serde buffer untagged enum content for later deserialization?"
+      },
+      "expected": {
+        "file_paths": [
+          "./serde/src/private/de.rs"
+        ],
+        "min_recall": 1,
+        "max_rank": 5
+      },
+      "tags": [
+        "search_code",
+        "semantic"
+      ],
+      "priority": 1,
+      "notes": "Content enum and ContentDeserializer in serde/src/private/de.rs (line 223)"
+    },
+    {
+      "id": "serde-search-003",
+      "repo": {
+        "name": "serde",
+        "path": "benchmarks/corpus/serde",
+        "languages": [
+          "rust"
+        ],
+        "commit": "49d098debdf8b5c38bfb6868f455c6ce542c422c"
+      },
+      "query": {
+        "type": "search_code",
+        "text": "How does serde implement Serialize for primitive types like str and numbers?"
+      },
+      "expected": {
+        "file_paths": [
+          "./serde/src/ser/impls.rs"
+        ],
+        "min_recall": 1,
+        "max_rank": 5
+      },
+      "tags": [
+        "search_code",
+        "semantic"
+      ],
+      "priority": 1,
+      "notes": "impl Serialize for str in serde/src/ser/impls.rs (line 40)"
+    },
+    {
+      "id": "serde-search-004",
+      "repo": {
+        "name": "serde",
+        "path": "benchmarks/corpus/serde",
+        "languages": [
+          "rust"
+        ],
+        "commit": "49d098debdf8b5c38bfb6868f455c6ce542c422c"
+      },
+      "query": {
+        "type": "search_code",
+        "text": "How does serde serialize a struct with named fields?"
+      },
+      "expected": {
+        "file_paths": [
+          "./serde/src/ser/mod.rs"
+        ],
+        "min_recall": 1,
+        "max_rank": 5
+      },
+      "tags": [
+        "search_code",
+        "semantic"
+      ],
+      "priority": 1,
+      "notes": "Serializer::serialize_struct in serde/src/ser/mod.rs (line 1205)"
+    },
+    {
+      "id": "serde-search-005",
+      "repo": {
+        "name": "serde",
+        "path": "benchmarks/corpus/serde",
+        "languages": [
+          "rust"
+        ],
+        "commit": "49d098debdf8b5c38bfb6868f455c6ce542c422c"
+      },
+      "query": {
+        "type": "search_code",
+        "text": "How does serde implement deserialization for numeric primitives like u8 and i32?"
+      },
+      "expected": {
+        "file_paths": [
+          "./serde/src/de/impls.rs"
+        ],
+        "min_recall": 1,
+        "max_rank": 5
+      },
+      "tags": [
+        "search_code",
+        "semantic"
+      ],
+      "priority": 1,
+      "notes": "impl_deserialize_num macros in serde/src/de/impls.rs (line 82)"
+    },
+    {
+      "id": "serde-graph-001",
+      "repo": {
+        "name": "serde",
+        "path": "benchmarks/corpus/serde",
+        "languages": [
+          "rust"
+        ],
+        "commit": "49d098debdf8b5c38bfb6868f455c6ce542c422c"
+      },
+      "query": {
+        "type": "read_graph",
+        "node_id": "./serde/src/de/mod.rs:function_item:symbol:095d0fd192f85e69:0"
+      },
+      "expected": {
+        "file_paths": [
+          "./serde/src/de/mod.rs"
+        ],
+        "min_recall": 1,
+        "max_rank": 5
+      },
+      "tags": [
+        "read_graph",
+        "graph"
+      ],
+      "priority": 1,
+      "notes": "__deserialize_content (line 1229) delegates to self.deserialize_any in the same file"
+    },
+    {
+      "id": "serde-graph-002",
+      "repo": {
+        "name": "serde",
+        "path": "benchmarks/corpus/serde",
+        "languages": [
+          "rust"
+        ],
+        "commit": "49d098debdf8b5c38bfb6868f455c6ce542c422c"
+      },
+      "query": {
+        "type": "read_graph",
+        "node_id": "./serde/src/private/de.rs:function_item:symbol:0669fa998ae12bfe:0"
+      },
+      "expected": {
+        "file_paths": [
+          "./serde/src/private/de.rs"
+        ],
+        "min_recall": 1,
+        "max_rank": 5
+      },
+      "tags": [
+        "read_graph",
+        "graph"
+      ],
+      "priority": 1,
+      "notes": "deserialize_any content helper in serde/src/private/de.rs dispatches to visitor methods in the same file"
+    },
+    {
+      "id": "serde-ctx-001",
+      "repo": {
+        "name": "serde",
+        "path": "benchmarks/corpus/serde",
+        "languages": [
+          "rust"
+        ],
+        "commit": "49d098debdf8b5c38bfb6868f455c6ce542c422c"
+      },
+      "query": {
+        "type": "get_context",
+        "file_path": "serde/src/de/mod.rs",
+        "line": 1238
+      },
+      "expected": {
+        "file_paths": [
+          "./serde/src/de/mod.rs"
+        ],
+        "min_recall": 1,
+        "max_rank": 5
+      },
+      "tags": [
+        "get_context",
+        "graph"
+      ],
+      "priority": 1,
+      "notes": "Cursor inside __deserialize_content body (1229-1240)"
+    },
+    {
+      "id": "serde-ctx-002",
+      "repo": {
+        "name": "serde",
+        "path": "benchmarks/corpus/serde",
+        "languages": [
+          "rust"
+        ],
+        "commit": "49d098debdf8b5c38bfb6868f455c6ce542c422c"
+      },
+      "query": {
+        "type": "get_context",
+        "file_path": "serde/src/ser/impls.rs",
+        "line": 42
+      },
+      "expected": {
+        "file_paths": [
+          "./serde/src/ser/impls.rs"
+        ],
+        "min_recall": 1,
+        "max_rank": 5
+      },
+      "tags": [
+        "get_context",
+        "graph"
+      ],
+      "priority": 1,
+      "notes": "Cursor inside impl Serialize for str (line 40+)"
+    },
+    {
+      "id": "serde-ctx-003",
+      "repo": {
+        "name": "serde",
+        "path": "benchmarks/corpus/serde",
+        "languages": [
+          "rust"
+        ],
+        "commit": "49d098debdf8b5c38bfb6868f455c6ce542c422c"
+      },
+      "query": {
+        "type": "get_context",
+        "file_path": "serde/src/private/de.rs",
+        "line": 230
+      },
+      "expected": {
+        "file_paths": [
+          "./serde/src/private/de.rs"
+        ],
+        "min_recall": 1,
+        "max_rank": 5
+      },
+      "tags": [
+        "get_context",
+        "graph"
+      ],
+      "priority": 1,
+      "notes": "Cursor inside Content enum (line 223+)"
+    }
+  ]
+}
