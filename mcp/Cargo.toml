@@ -21,7 +21,9 @@ async-trait = "0.1"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 lru = "0.18.2"
+url = "2.5"
 
 [dev-dependencies]
 assert_cmd = "2.0"
 tempfile = "3.8"
+url = "2.5"

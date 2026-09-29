@@ -55,23 +55,7 @@ impl RemoteEmbedder {
     }
 
     pub fn from_env() -> Result<Self> {
-        // Güvenlik: repo cwd'den `.env` yüklenmez. Güvenilmeyen bir repodaki
-        // `.env`, `EMBEDDING_HOST`'u saldırgana çevirip kaynak kodu embedding
-        // chunk'ları olarak dışarı gönderebilir ve ortamda dolu olan API
-        // anahtarını sızdırabilir. Yalnızca operatörün kendi `~/.ccm/.env`
-        // dosyası yüklenir.
-        if let Ok(home) = env::var("HOME") {
-            let global_config = PathBuf::from(&home).join(".ccm").join(".env");
-            if global_config.exists() {
-                // eprintln!("Loading global config from: {:?}", global_config);
-                let _ = dotenvy::from_path(&global_config);
-            }
-        } else if let Ok(user_profile) = env::var("USERPROFILE") {
-            let global_config = PathBuf::from(&user_profile).join(".ccm").join(".env");
-            if global_config.exists() {
-                let _ = dotenvy::from_path(&global_config);
-            }
-        }
+        load_user_env_file()?;
 
         let base_url =
             env::var("EMBEDDING_HOST").unwrap_or_else(|_| "http://127.0.0.1:11434".to_string());
@@ -351,6 +335,22 @@ impl RemoteEmbedder {
 
         Err(anyhow::anyhow!("Failed after retries"))
     }
+}
+
+/// Operatörün `~/.ccm/.env` dosyasını süreç ortamına yükler; zaten tanımlı
+/// değişkenler (host config'inin `env`'i) ezilmez. Güvenlik: repo cwd'sindeki
+/// `.env` asla yüklenmez; güvenilmeyen bir repo `EMBEDDING_HOST`'u saldırgana
+/// çevirip kaynak kodu dışarı gönderebilir.
+pub fn load_user_env_file() -> Result<()> {
+    let Some(home) = env::var("HOME").or_else(|_| env::var("USERPROFILE")).ok() else {
+        return Ok(());
+    };
+    let global_config = PathBuf::from(home).join(".ccm").join(".env");
+    if !global_config.exists() {
+        return Ok(());
+    }
+    dotenvy::from_path(&global_config)
+        .with_context(|| format!("Failed to load {}", global_config.display()))
 }
 
 /// Embedding isteği gönderilecek hedefi doğrular. Geliştirici makinelerinde

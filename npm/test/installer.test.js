@@ -14,6 +14,7 @@ const {
     extractGzip,
     finalizeDownloadedBinary,
     installAgentSkill,
+    installClaudeCodeConfig,
     installCodexTomlConfig,
     installJsonConfig,
     verifyCachedBinary,
@@ -103,9 +104,64 @@ test('atomic writer leaves valid JSON and no temporary file', () => {
 test('generated MCP command pins package version and configures strict allowlist', () => {
     assert.match(MCP_ARGS[1], /^@senoldogann\/context-manager@\d+\.\d+\.\d+$/);
     assert.equal(MCP_ENV.RUST_LOG, 'info');
-    assert.ok(MCP_ENV.CCM_PROJECT_ROOT, 'CCM_PROJECT_ROOT must be set');
-    assert.equal(MCP_ENV.CCM_ALLOWED_ROOTS, MCP_ENV.CCM_PROJECT_ROOT);
+    // Açık kök istemcinin MCP roots bildirimini ezeceği için yazılmaz.
+    assert.equal(MCP_ENV.CCM_PROJECT_ROOT, undefined);
+    assert.ok(MCP_ENV.CCM_ALLOWED_ROOTS, 'CCM_ALLOWED_ROOTS must be set');
     assert.equal(MCP_ENV.CCM_REQUIRE_ALLOWED_ROOTS, '1');
+});
+
+test('installer keeps user env keys, drops stale managed keys and never overwrites the first backup', () => {
+    const { configPath } = tempConfig();
+    const original = JSON.stringify({
+        mcpServers: {
+            'context-manager': {
+                command: 'old',
+                env: { CCM_PROJECT_ROOT: '/stale', EMBEDDING_MODEL: 'custom-model' }
+            }
+        }
+    });
+    fs.writeFileSync(configPath, original);
+
+    installJsonConfig(configPath, { command: 'npx', args: MCP_ARGS, env: MCP_ENV });
+    installJsonConfig(configPath, { command: 'npx', args: MCP_ARGS, env: MCP_ENV });
+
+    const env = JSON.parse(fs.readFileSync(configPath, 'utf8')).mcpServers['context-manager'].env;
+    assert.equal(env.EMBEDDING_MODEL, 'custom-model');
+    assert.equal(env.CCM_PROJECT_ROOT, undefined);
+    assert.equal(env.CCM_ALLOWED_ROOTS, MCP_ENV.CCM_ALLOWED_ROOTS);
+    assert.equal(fs.readFileSync(`${configPath}.bak`, 'utf8'), original);
+});
+
+test('Claude Code installer re-registers through the claude CLI and preserves user env', () => {
+    const { directory } = tempConfig();
+    const claudeConfigPath = path.join(directory, '.claude.json');
+    fs.writeFileSync(
+        claudeConfigPath,
+        JSON.stringify({ mcpServers: { 'context-manager': { env: { EMBEDDING_HOST: 'http://localhost:11434' } } } })
+    );
+    const calls = [];
+    const fakeClaude = (args) => {
+        calls.push(args);
+        if (args[1] === 'remove') {
+            return { status: 1, stdout: '', stderr: 'No MCP server found with name: context-manager' };
+        }
+        return { status: 0, stdout: '', stderr: '' };
+    };
+
+    assert.equal(installClaudeCodeConfig(fakeClaude, claudeConfigPath), true);
+
+    const addCall = calls.find((args) => args[1] === 'add-json');
+    assert.deepEqual(addCall.slice(-2), ['--scope', 'user']);
+    const server = JSON.parse(addCall[3]);
+    assert.deepEqual(server.args, MCP_ARGS);
+    assert.equal(server.env.EMBEDDING_HOST, 'http://localhost:11434');
+    assert.equal(server.env.CCM_REQUIRE_ALLOWED_ROOTS, '0');
+    assert.equal(server.env.CCM_PROJECT_ROOT, undefined);
+});
+
+test('Claude Code installer is skipped when the claude CLI is absent', () => {
+    const { directory } = tempConfig();
+    assert.equal(installClaudeCodeConfig(() => null, path.join(directory, '.claude.json')), false);
 });
 
 test('foreign npm package version cannot change the CCM release version', () => {
@@ -146,7 +202,7 @@ test('Codex installer replaces stale or disabled entry without invoking Codex bi
     assert.match(content, /\[mcp_servers\.keep-me\]/);
     assert.match(content, /@senoldogann\/context-manager@0\.2\.1/);
     assert.match(content, /enabled = true/);
-    assert.match(content, /CCM_PROJECT_ROOT = "\/projects\/current"/);
+    assert.doesNotMatch(content, /CCM_PROJECT_ROOT/);
     assert.match(content, /CCM_ALLOWED_ROOTS = "\/projects\/current"/);
     assert.match(content, /CCM_REQUIRE_ALLOWED_ROOTS = "1"/);
     assert.doesNotMatch(content, /command = "old"/);
@@ -169,6 +225,7 @@ test('Codex installer migrates quoted context-manager sections without duplicate
             '',
             '["mcp_servers"."context-manager".env]',
             'OLD = "1"',
+            'CCM_PROJECT_ROOT = "/stale"',
             '',
             '[mcp_servers.keep-me]',
             'command = "safe"',
@@ -180,6 +237,9 @@ test('Codex installer migrates quoted context-manager sections without duplicate
 
     const content = fs.readFileSync(configPath, 'utf8');
     assert.doesNotMatch(content, /"mcp_servers"\."context-manager"/);
+    // Kullanıcı env anahtarı korunur, yönetilen eski kök düşer.
+    assert.match(content, /\[mcp_servers\.context-manager\.env\][^[]*OLD = "1"/);
+    assert.doesNotMatch(content, /\/stale/);
     assert.equal(content.match(/\[mcp_servers\.context-manager\]/g).length, 1);
     assert.equal(content.match(/\[mcp_servers\.context-manager\.env\]/g).length, 1);
     assert.match(content, /\[mcp_servers\.keep-me\]/);
@@ -253,7 +313,7 @@ test('installer writes the packaged agent skill atomically', () => {
     const expected = '# CCM skill\n\nCurrent contract.\n';
     fs.writeFileSync(sourcePath, expected);
 
-    installAgentSkill(directory, sourcePath);
+    installAgentSkill(path.join(directory, '.agents', 'skills'), sourcePath);
 
     const installedPath = path.join(
         directory,
@@ -275,7 +335,7 @@ test('installer backs up a customized agent skill before replacing it', () => {
     fs.writeFileSync(sourcePath, '# Canonical\n');
     fs.writeFileSync(skillPath, '# User customization\n');
 
-    installAgentSkill(directory, sourcePath);
+    installAgentSkill(path.join(directory, '.agents', 'skills'), sourcePath);
 
     assert.equal(fs.readFileSync(skillPath, 'utf8'), '# Canonical\n');
     assert.equal(fs.readFileSync(`${skillPath}.bak`, 'utf8'), '# User customization\n');
@@ -289,11 +349,11 @@ test('installer preserves every distinct agent skill customization', () => {
     fs.mkdirSync(skillDirectory, { recursive: true });
     fs.writeFileSync(sourcePath, '# Canonical v1\n');
     fs.writeFileSync(skillPath, '# User customization v1\n');
-    installAgentSkill(directory, sourcePath);
+    installAgentSkill(path.join(directory, '.agents', 'skills'), sourcePath);
 
     fs.writeFileSync(sourcePath, '# Canonical v2\n');
     fs.writeFileSync(skillPath, '# User customization v2\n');
-    installAgentSkill(directory, sourcePath);
+    installAgentSkill(path.join(directory, '.agents', 'skills'), sourcePath);
 
     const backups = fs
         .readdirSync(skillDirectory)

@@ -162,12 +162,12 @@ CCM_DOWNLOAD_ATTEMPTS=3
 ```
 
 Advanced overrides:
-- `CCM_PROJECT_ROOT` pins the default project root used by the wrapper and MCP fallback engine.
+- `CCM_PROJECT_ROOT` pins the default project root and overrides the workspace reported by the host. Without it the MCP server resolves its default project in this order: the workspace the host reports via MCP `roots` → the launch directory when it lies inside `CCM_ALLOWED_ROOTS` (never `/` or your home directory) → the single `CCM_ALLOWED_ROOTS` entry.
 - `CCM_DB_PATH` overrides the default MCP vector DB location.
 - `.env.example` in the repository contains chunking, batch-size, hybrid-weight, and compatibility-alias settings such as `OPENAI_API_KEY`, `CCM_SKIP_CHECKSUM`, `CCM_MCP_REQUIRE_ALLOWED_ROOTS`, `CCM_EMBED_DATA`, and `EMBEDDING_DISABLED`.
 - Hybrid scoring defaults and tuning notes live in [`docs/hybrid-ranking.md`](https://github.com/senoldogann/LLM-Context-Manager/blob/main/docs/hybrid-ranking.md).
 
-**Security:** The installer writes a strict allowlist into every MCP config (`CCM_PROJECT_ROOT`, `CCM_ALLOWED_ROOTS`, `CCM_REQUIRE_ALLOWED_ROOTS=1`), and the MCP server itself defaults to strict mode. Widen `CCM_ALLOWED_ROOTS` only when you need access to more project roots.
+**Security:** The installer writes a strict allowlist into every MCP config (`CCM_ALLOWED_ROOTS` set to the install directory, `CCM_REQUIRE_ALLOWED_ROOTS=1`); Claude Code is registered in relaxed mode because it launches the server inside the project, which confines access to that launch directory. User-added `env` keys are preserved on reinstall. The MCP server itself defaults to strict mode and additionally allows workspaces the host reports via MCP `roots`. Widen `CCM_ALLOWED_ROOTS` only when you need access to more project roots.
 
 ---
 

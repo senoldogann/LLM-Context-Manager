@@ -38,15 +38,29 @@ let checksumCache = null;
 const MCP_SERVER_NAME = 'context-manager';
 const MCP_COMMAND = 'npx';
 const MCP_ARGS = ['-y', `@senoldogann/context-manager@${VERSION}`, 'mcp'];
-// Allowlist kuruluma eklenir: MCP sunucusu yalnızca kurulum dizinindeki
-// projeye erişebilir. Geniş erişim gerekiyorsa CCM_ALLOWED_ROOTS genişletilir.
+// Kurulum dizini allowlist'e eklenir ve host proje bildirmezse varsayılan kök
+// olur. CCM_PROJECT_ROOT yazılmaz: açık kök, istemcinin MCP roots ile bildirdiği
+// çalışma alanını her zaman ezer ve başka projelerde yanlış indeksi döndürür.
 const INSTALL_PROJECT_ROOT = process.cwd();
 const MCP_ENV = {
     RUST_LOG: 'info',
-    CCM_PROJECT_ROOT: INSTALL_PROJECT_ROOT,
     CCM_ALLOWED_ROOTS: INSTALL_PROJECT_ROOT,
     CCM_REQUIRE_ALLOWED_ROOTS: '1'
 };
+// Claude Code sunucuyu proje dizininde başlatır; non-strict mod yalnızca bu
+// başlatma dizinini (ve MCP roots'u) izinli kılar, sabit bir kök gerekmez.
+const CLAUDE_CODE_ENV = {
+    RUST_LOG: 'info',
+    CCM_REQUIRE_ALLOWED_ROOTS: '0'
+};
+// Kurucunun sahip olduğu env anahtarları; kullanıcının eklediği diğer anahtarlar
+// (ör. EMBEDDING_* ayarları) yeniden kurulumda korunur.
+const MANAGED_ENV_KEYS = new Set([
+    'RUST_LOG',
+    'CCM_PROJECT_ROOT',
+    'CCM_ALLOWED_ROOTS',
+    'CCM_REQUIRE_ALLOWED_ROOTS'
+]);
 const ALLOWED_REDIRECT_HOSTS = new Set([
     'github.com',
     'objects.githubusercontent.com',
@@ -93,19 +107,42 @@ async function installMcp() {
     await getBinaryFor('ccm-cli');
     await getBinaryFor('ccm-mcp');
 
+    // Her hedef bağımsızdır: bozuk bir config diğer hostların kurulumunu durdurmaz;
+    // hatalar sonda toplanıp komut başarısız olarak sonlanır.
+    const installers = [
+        ...jsonTargets.map((configPath) => ({
+            name: configPath,
+            run: () => installJsonConfig(configPath, mcpConfig)
+        })),
+        { name: '~/.codex/config.toml', run: () => installCodexConfig() },
+        {
+            name: 'Claude Code (user scope)',
+            run: () => installClaudeCodeConfig(runClaudeCli, path.join(home, '.claude.json'))
+        }
+    ];
     let installedCount = 0;
-
-    for (const configPath of jsonTargets) {
-        if (installJsonConfig(configPath, mcpConfig)) {
-            installedCount++;
+    const failures = [];
+    for (const installer of installers) {
+        try {
+            if (installer.run()) {
+                installedCount++;
+            }
+        } catch (error) {
+            failures.push({ name: installer.name, message: error.message });
         }
     }
 
-    if (installCodexConfig()) {
-        installedCount++;
+    installAgentSkill(path.join(home, '.agents', 'skills'), path.join(__dirname, '..', 'SKILL.md'));
+    if (fs.existsSync(path.join(home, '.claude'))) {
+        installAgentSkill(path.join(home, '.claude', 'skills'), path.join(__dirname, '..', 'SKILL.md'));
     }
 
-    installAgentSkill(home, path.join(__dirname, '..', 'SKILL.md'));
+    if (failures.length > 0) {
+        for (const failure of failures) {
+            console.error(`[CCM] ✗ ${failure.name}: ${failure.message}`);
+        }
+        throw new Error(`${failures.length} MCP configuration target(s) failed; see messages above.`);
+    }
 
     if (installedCount === 0) {
         console.log("[CCM] No supported MCP config directories found.");
@@ -115,47 +152,65 @@ async function installMcp() {
         console.log(
             `codex mcp add ${MCP_SERVER_NAME}` +
                 ` --env RUST_LOG=info` +
-                ` --env CCM_PROJECT_ROOT=${INSTALL_PROJECT_ROOT}` +
                 ` --env CCM_ALLOWED_ROOTS=${INSTALL_PROJECT_ROOT}` +
                 ` --env CCM_REQUIRE_ALLOWED_ROOTS=1` +
                 ` -- ${MCP_COMMAND} ${MCP_ARGS.join(' ')}`
         );
     } else {
         console.log("[CCM] Installation complete! Restart your AI editor to see the changes.");
+        console.log(
+            `[CCM] Hosts that do not report their workspace default to ${INSTALL_PROJECT_ROOT}. ` +
+                'Extend CCM_ALLOWED_ROOTS in the host config to allow more projects.'
+        );
     }
 }
 
-function installAgentSkill(home, sourcePath) {
+function installAgentSkill(skillsRoot, sourcePath) {
     if (!fs.existsSync(sourcePath)) {
         throw new Error(`Packaged SKILL.md is missing: ${sourcePath}`);
     }
 
-    const skillDirectory = path.join(home, '.agents', 'skills', MCP_SERVER_NAME);
+    const skillDirectory = path.join(skillsRoot, MCP_SERVER_NAME);
     const skillPath = path.join(skillDirectory, 'SKILL.md');
     fs.mkdirSync(skillDirectory, { recursive: true });
     const nextContent = fs.readFileSync(sourcePath, 'utf8');
-    if (fs.existsSync(skillPath)) {
-        const currentContent = fs.readFileSync(skillPath, 'utf8');
-        if (currentContent !== nextContent) {
-            const contentHash = crypto
-                .createHash('sha256')
-                .update(currentContent)
-                .digest('hex')
-                .slice(0, 16);
-            const primaryBackup = `${skillPath}.bak`;
-            const backupPath = fs.existsSync(primaryBackup)
-                ? `${primaryBackup}.${contentHash}`
-                : primaryBackup;
-            try {
-                fs.copyFileSync(skillPath, backupPath, fs.constants.COPYFILE_EXCL);
-                console.warn(`[CCM] Existing agent skill was backed up to ${backupPath}`);
-            } catch (error) {
-                if (error.code !== 'EEXIST') throw error;
-            }
-        }
+    if (fs.existsSync(skillPath) && fs.readFileSync(skillPath, 'utf8') !== nextContent) {
+        const backupPath = backupFileOnce(skillPath);
+        console.warn(`[CCM] Existing agent skill was backed up to ${backupPath}`);
     }
     writeTextAtomic(skillPath, nextContent);
-    console.log('[CCM] ✓ Successfully updated: ~/.agents/skills/context-manager/SKILL.md');
+    console.log(`[CCM] ✓ Successfully updated: ${skillPath}`);
+}
+
+/**
+ * Dosyanın mevcut içeriğini yedekler ve yedek yolunu döndürür. İlk yedek `.bak`
+ * olur; sonraki farklı içerikler `.bak.<hash>` ile saklanır, hiçbir yedeğin
+ * üzerine yazılmaz (ilk orijinal config her zaman geri alınabilir kalır).
+ */
+function backupFileOnce(filePath) {
+    const content = fs.readFileSync(filePath);
+    const primaryBackup = `${filePath}.bak`;
+    if (!fs.existsSync(primaryBackup)) {
+        fs.copyFileSync(filePath, primaryBackup, fs.constants.COPYFILE_EXCL);
+        return primaryBackup;
+    }
+    if (fs.readFileSync(primaryBackup).equals(content)) {
+        return primaryBackup;
+    }
+    const contentHash = crypto.createHash('sha256').update(content).digest('hex').slice(0, 16);
+    const hashedBackup = `${primaryBackup}.${contentHash}`;
+    if (!fs.existsSync(hashedBackup)) {
+        fs.copyFileSync(filePath, hashedBackup, fs.constants.COPYFILE_EXCL);
+    }
+    return hashedBackup;
+}
+
+/** Kurucunun yönettiği anahtarları atıp kullanıcının env anahtarlarını korur. */
+function mergeManagedEnv(existingEnv, managedEnv) {
+    const preserved = Object.fromEntries(
+        Object.entries(existingEnv).filter(([key]) => !MANAGED_ENV_KEYS.has(key))
+    );
+    return { ...preserved, ...managedEnv };
 }
 
 function installJsonConfig(configPath, mcpConfig) {
@@ -167,8 +222,7 @@ function installJsonConfig(configPath, mcpConfig) {
 
     let config = { mcpServers: {} };
     if (fs.existsSync(configPath)) {
-        const backupPath = `${configPath}.bak`;
-        fs.copyFileSync(configPath, backupPath);
+        const backupPath = backupFileOnce(configPath);
         try {
             const content = fs.readFileSync(configPath, 'utf8');
             config = JSON.parse(content);
@@ -193,7 +247,11 @@ function installJsonConfig(configPath, mcpConfig) {
         );
     }
 
-    config.mcpServers[MCP_SERVER_NAME] = mcpConfig;
+    const existingEnv = config.mcpServers[MCP_SERVER_NAME]?.env ?? {};
+    config.mcpServers[MCP_SERVER_NAME] = {
+        ...mcpConfig,
+        env: mergeManagedEnv(existingEnv, mcpConfig.env)
+    };
     writeJsonAtomic(configPath, config);
     console.log(`[CCM] ✓ Successfully updated: ${configPath}`);
     return true;
@@ -226,21 +284,84 @@ function installCodexConfig() {
     return true;
 }
 
+/** `claude` CLI'ını çalıştırır; CLI yoksa `null` döner. */
+function runClaudeCli(args) {
+    const result = require('child_process').spawnSync('claude', args, {
+        encoding: 'utf8',
+        shell: os.platform() === 'win32'
+    });
+    if (result.error && result.error.code === 'ENOENT') {
+        return null;
+    }
+    if (result.error) {
+        throw result.error;
+    }
+    return { status: result.status, stdout: result.stdout, stderr: result.stderr };
+}
+
+/**
+ * Claude Code'a kullanıcı kapsamında kaydeder. `~/.claude.json` doğrudan
+ * yazılmaz (çalışan Claude Code ile yarışır); resmi `claude mcp` CLI'ı kullanılır.
+ * Mevcut kayıttaki kullanıcı env anahtarları okunup korunur.
+ */
+function installClaudeCodeConfig(runClaude, claudeConfigPath) {
+    if (runClaude(['--version']) === null) {
+        return false;
+    }
+    let existingEnv = {};
+    if (fs.existsSync(claudeConfigPath)) {
+        try {
+            const claudeConfig = JSON.parse(fs.readFileSync(claudeConfigPath, 'utf8'));
+            existingEnv = claudeConfig?.mcpServers?.[MCP_SERVER_NAME]?.env ?? {};
+        } catch (error) {
+            throw new Error(`Could not parse ${claudeConfigPath} to preserve existing env: ${error.message}`);
+        }
+    }
+
+    const removal = runClaude(['mcp', 'remove', MCP_SERVER_NAME, '--scope', 'user']);
+    const removalOutput = `${removal.stdout}${removal.stderr}`;
+    if (removal.status !== 0 && !/no .*mcp server|not found/i.test(removalOutput)) {
+        throw new Error(`claude mcp remove failed (exit ${removal.status}): ${removalOutput.trim()}`);
+    }
+
+    const serverJson = JSON.stringify({
+        type: 'stdio',
+        command: MCP_COMMAND,
+        args: MCP_ARGS,
+        env: mergeManagedEnv(existingEnv, CLAUDE_CODE_ENV)
+    });
+    const added = runClaude(['mcp', 'add-json', MCP_SERVER_NAME, serverJson, '--scope', 'user']);
+    if (added.status !== 0) {
+        throw new Error(`claude mcp add-json failed (exit ${added.status}): ${`${added.stdout}${added.stderr}`.trim()}`);
+    }
+    console.log('[CCM] ✓ Successfully updated: Claude Code (user scope)');
+    return true;
+}
+
 function installCodexTomlConfig(configPath, projectRoot, version) {
     let content = '';
     if (fs.existsSync(configPath)) {
         content = fs.readFileSync(configPath, 'utf8');
-        fs.copyFileSync(configPath, `${configPath}.bak`);
+        backupFileOnce(configPath);
     }
 
     const sectionPrefix = `mcp_servers.${MCP_SERVER_NAME}`;
     const lines = content.split(/\r?\n/);
     const preserved = [];
+    // Kullanıcının env tablosuna eklediği satırlar (yönetilen anahtarlar hariç) korunur.
+    const preservedEnvLines = [];
     let removing = false;
+    let inEnvSection = false;
     for (const line of lines) {
         const header = line.match(/^\s*\[\[?([^\]]+)\]\]?\s*(?:#.*)?$/);
         if (header) {
             removing = isManagedCodexSection(header[1]);
+            inEnvSection = removing && /\.\s*env\s*$/.test(header[1].trim());
+        } else if (inEnvSection) {
+            const key = line.match(/^\s*("?)([A-Za-z0-9_]+)\1\s*=/);
+            if (key && !MANAGED_ENV_KEYS.has(key[2])) {
+                preservedEnvLines.push(line.trim());
+            }
         }
         if (!removing) {
             preserved.push(line);
@@ -256,9 +377,9 @@ function installCodexTomlConfig(configPath, projectRoot, version) {
         '',
         `[${sectionPrefix}.env]`,
         `RUST_LOG = ${quote('info')}`,
-        `CCM_PROJECT_ROOT = ${quote(projectRoot)}`,
         `CCM_ALLOWED_ROOTS = ${quote(projectRoot)}`,
-        `CCM_REQUIRE_ALLOWED_ROOTS = ${quote('1')}`
+        `CCM_REQUIRE_ALLOWED_ROOTS = ${quote('1')}`,
+        ...preservedEnvLines
     ].join('\n');
 
     const next = `${preserved.join('\n').trimEnd()}\n\n${block}\n`.replace(/^\n+/, '');
@@ -695,13 +816,12 @@ async function main() {
         const binPath = await getBinary();
         const args = process.argv.slice(2);
 
-        const child = spawn(binPath, args, {
-            stdio: 'inherit',
-            env: {
-                ...process.env,
-                CCM_PROJECT_ROOT: process.env.CCM_PROJECT_ROOT || process.cwd()
-            }
-        });
+        // `mcp` için kök enjekte edilmez: açık CCM_PROJECT_ROOT istemcinin MCP
+        // roots ile bildirdiği çalışma alanını ezer. CLI komutları cwd'yi kullanır.
+        const env = args[0] === 'mcp'
+            ? process.env
+            : { ...process.env, CCM_PROJECT_ROOT: process.env.CCM_PROJECT_ROOT || process.cwd() };
+        const child = spawn(binPath, args, { stdio: 'inherit', env });
 
         child.on('error', (error) => {
             console.error(`[CCM Error] Failed to start binary: ${error.message}`);
@@ -727,10 +847,12 @@ if (require.main === module) {
 module.exports = {
     MCP_ARGS,
     MCP_ENV,
+    backupFileOnce,
     createUniqueTmpPath,
     extractGzip,
     finalizeDownloadedBinary,
     installAgentSkill,
+    installClaudeCodeConfig,
     installCodexTomlConfig,
     installJsonConfig,
     parseChecksums,

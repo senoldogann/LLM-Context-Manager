@@ -29,6 +29,10 @@ async fn main() -> Result<()> {
     let mut stdout = tokio::io::stdout();
     let mut reader = BufReader::new(stdin);
 
+    // Allowlist/kök gibi başlangıç ayarları `~/.ccm/.env`'de de tanımlanabilir;
+    // ServerState bunları okumadan önce yüklenir (host env'i önceliklidir).
+    ccm_core::vector::remote::load_user_env_file()?;
+
     // Initialize the server state
     let server_state = Arc::new(server::ServerState::new().await?);
 
@@ -60,7 +64,12 @@ async fn main() -> Result<()> {
         }
 
         // Process the JSON-RPC request
-        match server::handle_request(&server_state, trimmed).await {
+        let handled = server::handle_request(&server_state, trimmed).await;
+        // Sunucudan istemciye istekler (ör. roots/list) yanıttan önce gönderilir.
+        for outgoing in server_state.take_outgoing_requests() {
+            write_response(&mut stdout, &outgoing).await?;
+        }
+        match handled {
             Ok(Some(response)) => {
                 // Only send response for requests (not notifications)
                 let response_str = serde_json::to_string(&response)?;
@@ -147,9 +156,10 @@ fn is_recoverable_message_error(error: &anyhow::Error) -> bool {
         || message.starts_with("JSON-RPC request is not valid UTF-8")
 }
 
-async fn write_response<W>(writer: &mut W, response: &protocol::JsonRpcResponse) -> Result<()>
+async fn write_response<W, M>(writer: &mut W, response: &M) -> Result<()>
 where
     W: tokio::io::AsyncWrite + Unpin,
+    M: serde::Serialize,
 {
     let response_str = serde_json::to_string(response)?;
     writer.write_all(response_str.as_bytes()).await?;

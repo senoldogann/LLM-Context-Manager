@@ -83,7 +83,7 @@ kirilir?" gibi sorulari tahminden sorgulanabilir gercege donusturur.
 - **Guvenli Varsayilanlar** - Timeout ve dosya boyutu limitleri ayarlanabilir
 
 ### Evrensel MCP Uyumlulugu
-- **Tak ve Calistir** - Installer, Codex, Cursor, Claude Desktop ve Antigravity ayarlarini yapar
+- **Tak ve Calistir** - Installer, Claude Code, Codex, Cursor, Claude Desktop ve Antigravity ayarlarini yapar
 - **Acik Indeksleme** - Eksik indeks hizli hata verir ve `index_project` aracina yonlendirir
 - **Dusuk Konfigurasyon** - Proje koku otomatik tespit edilir
 
@@ -122,6 +122,7 @@ Beklenen sonuc:
 
 | Host | Durum | Kurulum Yolu |
 |------|-------|--------------|
+| Claude Code | Destekleniyor | `claude mcp add-json --scope user` (`claude` CLI gerekir) |
 | Codex | Destekleniyor | `~/.codex/config.toml` atomik olarak güncellenir |
 | Cursor | Destekleniyor | `~/.cursor/mcp.json` |
 | Claude Desktop | Destekleniyor | Yerel desktop config |
@@ -206,14 +207,14 @@ CCM_DOWNLOAD_ATTEMPTS=3
 ```
 
 Gelismis ayarlar:
-- `CCM_PROJECT_ROOT`, npm wrapper ve MCP fallback engine icin varsayilan proje kokunu sabitler.
+- `CCM_PROJECT_ROOT` varsayılan proje kökünü sabitler ve host'un bildirdiği çalışma alanını ezer. Verilmezse MCP sunucusu varsayılan projeyi şu sırayla çözer: host'un MCP `roots` ile bildirdiği çalışma alanı → `CCM_ALLOWED_ROOTS` içindeyse başlatma dizini (asla `/` veya ev dizini değil) → tek `CCM_ALLOWED_ROOTS` girdisi.
 - `CCM_DB_PATH`, varsayılan MCP vektör veritabanı konumunu değiştirir.
 - Chunking, batch size, hibrit agirliklar ve `OPENAI_API_KEY`, `CCM_SKIP_CHECKSUM`, `CCM_MCP_REQUIRE_ALLOWED_ROOTS`, `CCM_EMBED_DATA`, `EMBEDDING_DISABLED` gibi uyumluluk alias'lari icin `.env.example` dosyasina bakin.
 - Hibrit skor agirliklari icin [`docs/hybrid-ranking.md`](./docs/hybrid-ranking.md) dosyasini kullanin.
 
 **Not:** Lokal embedding icin Ollama'nin calisiyor olmasi gerekir (`ollama serve`) ve modelin indirilmis olmasi gerekir (`ollama pull mxbai-embed-large`).
 
-**Guvenlik:** MCP varsayilan olarak strict allowlist uygular; yalnizca `CCM_ALLOWED_ROOTS` (yoksa `CCM_PROJECT_ROOT`) altindaki dizinler indekslenebilir/okunabilir. Genis erisim gerekiyorsa `CCM_REQUIRE_ALLOWED_ROOTS=0` verilebilir; bu modda bile erisim baslangic proje kokuyle sinirli kalir.
+**Guvenlik:** MCP varsayilan olarak strict allowlist uygular; yalnizca `CCM_ALLOWED_ROOTS` (yoksa `CCM_PROJECT_ROOT`) altindaki dizinler ve host'un MCP `roots` ile bildirdigi calisma alanlari indekslenebilir/okunabilir. Genis erisim gerekiyorsa `CCM_REQUIRE_ALLOWED_ROOTS=0` verilebilir; bu modda bile erisim baslangic proje kokuyle sinirli kalir.
 
 ---
 
