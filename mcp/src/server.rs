@@ -22,16 +22,26 @@ const SUPPORTED_PROTOCOL_VERSIONS: [&str; 3] =
 
 /// Holds the server's shared state.
 pub struct ServerState {
-    pub default_engine: RwLock<Arc<RetrievalEngine>>,
+    /// Yalnızca proje kökü olmadan başlatıldığında dolu (ev dizinindeki depo).
+    pub default_engine: RwLock<Option<Arc<RetrievalEngine>>>,
     pub engines: RwLock<EngineCache>,
     index_locks:
         std::sync::Mutex<std::collections::HashMap<String, std::sync::Arc<tokio::sync::Mutex<()>>>>,
     pub(crate) index_jobs: std::sync::Mutex<std::collections::HashMap<String, IndexJob>>,
     pub(crate) next_index_job_id: std::sync::atomic::AtomicU64,
     default_project_root: Option<PathBuf>,
+    /// `CCM_PROJECT_ROOT` açıkça verildiyse istemci roots'u varsayılan kökü değiştirmez.
+    project_root_is_explicit: bool,
     default_db_path: PathBuf,
     allowed_roots: Vec<PathBuf>,
     require_allowed_roots: bool,
+    /// İstemcinin MCP `roots/list` ile bildirdiği çalışma alanı kökleri. Host
+    /// uygulaması (model değil) bildirdiği için izin listesine dahildir.
+    client_roots: std::sync::RwLock<Vec<PathBuf>>,
+    client_supports_roots: std::sync::atomic::AtomicBool,
+    pending_roots_request_id: std::sync::Mutex<Option<String>>,
+    next_client_request_id: std::sync::atomic::AtomicU64,
+    outgoing_requests: std::sync::Mutex<Vec<Value>>,
 }
 
 #[derive(Clone)]
@@ -139,21 +149,27 @@ impl ServerState {
     pub async fn new() -> Result<Self> {
         tracing::info!("Initializing CCM Core Engine for MCP...");
 
-        // Use CCM_PROJECT_ROOT env var if available, otherwise default to CWD
-        let project_root = std::env::var("CCM_PROJECT_ROOT").ok().or_else(|| {
-            // If we are in / (root), don't default to it as it's often read-only
-            if let Ok(cwd) = std::env::current_dir() {
-                if cwd.to_string_lossy() == "/" {
-                    return None;
-                }
-                return Some(cwd.to_string_lossy().to_string());
-            }
-            None
-        });
-        let default_project_root = project_root
-            .as_deref()
-            .map(Path::new)
-            .map(canonicalize_project_path);
+        let explicit_project_root = std::env::var("CCM_PROJECT_ROOT")
+            .ok()
+            .filter(|value| !value.trim().is_empty());
+        let require_allowed_roots = require_allowed_roots();
+        let allowed_roots = load_allowed_roots();
+        let home_dir = std::env::var("HOME")
+            .or_else(|_| std::env::var("USERPROFILE"))
+            .ok()
+            .map(|home| canonicalize_project_path(Path::new(&home)));
+        let launch_dir = std::env::current_dir()
+            .ok()
+            .map(|cwd| canonicalize_project_path(&cwd));
+        let default_project_root = resolve_startup_project_root(
+            explicit_project_root.as_deref().map(Path::new),
+            &allowed_roots,
+            launch_dir.as_deref(),
+            home_dir.as_deref(),
+        );
+        let project_root = default_project_root
+            .as_ref()
+            .map(|root| root.to_string_lossy().to_string());
 
         // Prefer the selected project's shared index. A home-directory fallback is
         // only used when no project root is available.
@@ -190,75 +206,15 @@ impl ServerState {
             );
         }
 
-        // Initialize Graph (Load from disk if available)
         let default_db_path = PathBuf::from(&db_path);
-        let default_artifact_parent = default_db_path
-            .parent()
-            .map(Path::to_path_buf)
-            .unwrap_or_else(|| PathBuf::from("."));
-        let default_artifacts = match &default_project_root {
-            Some(root) => match ccm_core::resolve_index_artifacts(
-                root.to_string_lossy().as_ref(),
-                Some(default_db_path.to_string_lossy().as_ref()),
-            ) {
-                Ok(artifacts) => artifacts,
-                Err(error) => {
-                    tracing::warn!(
-                        error = %error,
-                        "Active index pointer is invalid. Start index_project to repair it."
-                    );
-                    ccm_core::IndexArtifactPaths {
-                        db_path: default_db_path.clone(),
-                        graph_path: default_artifact_parent.join("ccm_graph.json"),
-                        manifest_path: default_artifact_parent.join("ccm_manifest.json"),
-                        generation_id: None,
-                    }
-                }
-            },
-            None => ccm_core::IndexArtifactPaths {
-                db_path: default_db_path.clone(),
-                graph_path: default_artifact_parent.join("ccm_graph.json"),
-                manifest_path: default_artifact_parent.join("ccm_manifest.json"),
-                generation_id: None,
-            },
+        // Proje kökü varken motorlar proje bazında (get_engine) yüklenir. Başlangıçta
+        // proje deposunu açmak projeye yan etkiyle `data/` yazar; varsayılan motor
+        // yalnızca hiç kök yokken ev dizinindeki depo için kurulur.
+        let default_engine = match &default_project_root {
+            Some(_) => None,
+            None => Some(load_rootless_engine(&default_db_path).await?),
         };
-        let graph_path = default_artifacts.graph_path.to_string_lossy().to_string();
-        let mut graph = CodeGraph::new();
-
-        if std::path::Path::new(&graph_path).exists() {
-            tracing::info!(path = %graph_path, "Loading CodeGraph");
-            match CodeGraph::load_from_file(&graph_path) {
-                Ok(g) => {
-                    graph = g;
-                    tracing::info!(
-                        nodes = graph.graph.node_count(),
-                        "Graph loaded successfully"
-                    );
-                }
-                Err(e) => {
-                    tracing::warn!(error = %e, "Failed to load graph");
-                }
-            }
-        } else {
-            tracing::warn!(
-                path = %graph_path,
-                "No persisted graph found. Starting empty."
-            );
-        }
-
-        let active_db_path = default_artifacts.db_path.to_string_lossy().to_string();
-        let store = LanceDbStore::new(&active_db_path, "code_vectors").await?;
-        let policy_path = std::path::Path::new(&db_path)
-            .parent()
-            .map(|parent| parent.join("ccm_learn/policies.json"));
-        let default_engine = Arc::new(RetrievalEngine::new_with_active_policy(
-            Arc::new(RwLock::new(graph)),
-            store,
-            policy_path.as_deref(),
-        ));
         let cache_size = engine_cache_size();
-        let require_allowed_roots = require_allowed_roots();
-        let allowed_roots = load_allowed_roots();
 
         if require_allowed_roots && allowed_roots.is_empty() {
             tracing::warn!(
@@ -273,10 +229,74 @@ impl ServerState {
             index_jobs: std::sync::Mutex::new(std::collections::HashMap::new()),
             next_index_job_id: std::sync::atomic::AtomicU64::new(1),
             default_project_root,
+            project_root_is_explicit: explicit_project_root.is_some(),
             default_db_path,
             allowed_roots,
             require_allowed_roots,
+            client_roots: std::sync::RwLock::new(Vec::new()),
+            client_supports_roots: std::sync::atomic::AtomicBool::new(false),
+            pending_roots_request_id: std::sync::Mutex::new(None),
+            next_client_request_id: std::sync::atomic::AtomicU64::new(1),
+            outgoing_requests: std::sync::Mutex::new(Vec::new()),
         })
+    }
+
+    /// Varsayılan proje kökü: açık `CCM_PROJECT_ROOT` > istemcinin ilk root'u >
+    /// başlangıçta çözülen kök (izinli cwd veya tek allowlist girdisi).
+    fn effective_project_root(&self) -> Option<PathBuf> {
+        if self.project_root_is_explicit {
+            return self.default_project_root.clone();
+        }
+        self.client_roots
+            .read()
+            .unwrap()
+            .first()
+            .cloned()
+            .or_else(|| self.default_project_root.clone())
+    }
+
+    /// İstemciye gönderilmeyi bekleyen JSON-RPC isteklerini (ör. `roots/list`) boşaltır.
+    pub fn take_outgoing_requests(&self) -> Vec<Value> {
+        std::mem::take(&mut *self.outgoing_requests.lock().unwrap())
+    }
+
+    fn queue_roots_request(&self) {
+        if !self
+            .client_supports_roots
+            .load(std::sync::atomic::Ordering::SeqCst)
+        {
+            return;
+        }
+        let sequence = self
+            .next_client_request_id
+            .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        let request_id = format!("ccm-roots-{sequence}");
+        *self.pending_roots_request_id.lock().unwrap() = Some(request_id.clone());
+        self.outgoing_requests.lock().unwrap().push(json!({
+            "jsonrpc": "2.0",
+            "id": request_id,
+            "method": "roots/list"
+        }));
+    }
+
+    /// İstemcinin sunucu isteğine verdiği yanıtı işler (şu an yalnızca `roots/list`).
+    fn handle_client_response(&self, response: &serde_json::Map<String, Value>) {
+        let response_id = response.get("id").and_then(Value::as_str);
+        let mut pending = self.pending_roots_request_id.lock().unwrap();
+        if response_id.is_none() || pending.as_deref() != response_id {
+            tracing::warn!(id = ?response.get("id"), "Ignoring response to an unknown server request");
+            return;
+        }
+        *pending = None;
+        drop(pending);
+
+        if let Some(error) = response.get("error") {
+            tracing::warn!(error = %error, "Client rejected roots/list; using the startup project root");
+            return;
+        }
+        let roots = parse_client_roots(response.get("result"));
+        tracing::info!(roots = ?roots, "Client workspace roots updated");
+        *self.client_roots.write().unwrap() = roots;
     }
 
     /// Retrieves the engine for a specific project path, or defaults to the startup engine.
@@ -285,13 +305,17 @@ impl ServerState {
         let path = match project_path {
             Some(path) => path.to_string(),
             None => {
-                let Some(root) = &self.default_project_root else {
+                let Some(root) = self.effective_project_root() else {
                     if self.require_allowed_roots {
                         return Err(anyhow::anyhow!(
                             "No default project root is available and strict allowlist mode is enabled. Set CCM_PROJECT_ROOT and CCM_ALLOWED_ROOTS."
                         ));
                     }
-                    return Ok(self.default_engine.read().await.clone());
+                    return self.default_engine.read().await.clone().ok_or_else(|| {
+                        anyhow::anyhow!(
+                            "No project root is available. Pass 'project_path' or set CCM_PROJECT_ROOT."
+                        )
+                    });
                 };
                 root.to_string_lossy().to_string()
             }
@@ -398,22 +422,21 @@ impl ServerState {
             cache_key,
             artifacts.generation_id.as_deref().unwrap_or("legacy")
         );
-        self.engines
-            .write()
-            .await
-            .insert(engine_cache_key, engine.clone());
-        if self
-            .default_project_root
-            .as_ref()
-            .is_some_and(|root| canonical_path == *root)
-        {
-            *self.default_engine.write().await = engine;
-        }
+        self.engines.write().await.insert(engine_cache_key, engine);
         Ok(())
     }
 
     fn is_path_allowed(&self, path: &str) -> bool {
         let candidate = canonicalize_project_path(Path::new(path));
+        if self
+            .client_roots
+            .read()
+            .unwrap()
+            .iter()
+            .any(|root| candidate.starts_with(root))
+        {
+            return true;
+        }
         if self.allowed_roots.is_empty() {
             if self.require_allowed_roots {
                 return false;
@@ -457,6 +480,84 @@ fn load_allowed_roots() -> Vec<PathBuf> {
     }
 
     roots
+}
+
+/// Proje kökü olmadan başlatılan sunucunun ev dizinindeki depoya bağlı motorunu kurar.
+async fn load_rootless_engine(db_path: &Path) -> Result<Arc<RetrievalEngine>> {
+    let artifact_parent = db_path
+        .parent()
+        .map(Path::to_path_buf)
+        .unwrap_or_else(|| PathBuf::from("."));
+    let graph_path = artifact_parent.join("ccm_graph.json");
+    let graph = if graph_path.exists() {
+        CodeGraph::load_from_file(&graph_path.to_string_lossy()).map_err(|error| {
+            anyhow::anyhow!(
+                "Graph '{}' could not be loaded: {}. Remove it or run index_project.",
+                graph_path.display(),
+                error
+            )
+        })?
+    } else {
+        CodeGraph::new()
+    };
+    let store = LanceDbStore::new(&db_path.to_string_lossy(), "code_vectors").await?;
+    let policy_path = artifact_parent.join("ccm_learn/policies.json");
+    Ok(Arc::new(RetrievalEngine::new_with_active_policy(
+        Arc::new(RwLock::new(graph)),
+        store,
+        Some(policy_path.as_path()),
+    )))
+}
+
+/// Başlangıç varsayılan kökü: açık kök > izinli başlatma dizini (cwd) > tek
+/// allowlist girdisi. `/` ve ev dizini örtük kök olamaz; host uygulamaları
+/// (ör. Claude Desktop) sunucuyu çoğu zaman bu dizinlerde başlatır.
+fn resolve_startup_project_root(
+    explicit_root: Option<&Path>,
+    allowed_roots: &[PathBuf],
+    launch_dir: Option<&Path>,
+    home_dir: Option<&Path>,
+) -> Option<PathBuf> {
+    if let Some(root) = explicit_root {
+        return Some(canonicalize_project_path(root));
+    }
+    let usable_launch_dir = launch_dir.filter(|dir| {
+        dir.parent().is_some()
+            && home_dir != Some(*dir)
+            && (allowed_roots.is_empty() || allowed_roots.iter().any(|root| dir.starts_with(root)))
+    });
+    if let Some(dir) = usable_launch_dir {
+        return Some(dir.to_path_buf());
+    }
+    match allowed_roots {
+        [single_root] => Some(single_root.clone()),
+        _ => None,
+    }
+}
+
+/// `roots/list` sonucundaki `file://` URI'lerini kanonik yollara çevirir.
+fn parse_client_roots(result: Option<&Value>) -> Vec<PathBuf> {
+    let Some(entries) = result
+        .and_then(|value| value.get("roots"))
+        .and_then(Value::as_array)
+    else {
+        tracing::warn!("roots/list result has no 'roots' array");
+        return Vec::new();
+    };
+    entries
+        .iter()
+        .filter_map(|entry| {
+            let uri = entry.get("uri").and_then(Value::as_str)?;
+            let path = url::Url::parse(uri)
+                .ok()
+                .filter(|url| url.scheme() == "file")
+                .and_then(|url| url.to_file_path().ok());
+            if path.is_none() {
+                tracing::warn!(uri = %uri, "Ignoring non-file workspace root");
+            }
+            path.map(|path| canonicalize_project_path(&path))
+        })
+        .collect()
 }
 
 fn require_allowed_roots() -> bool {
@@ -521,6 +622,13 @@ pub async fn handle_request(
             "Invalid Request: id must be a string, number, or null",
         )));
     }
+    // Sunucunun istemciye gönderdiği isteklerin (ör. roots/list) yanıtları.
+    if !object.contains_key("method")
+        && (object.contains_key("result") || object.contains_key("error"))
+    {
+        state.handle_client_response(object);
+        return Ok(None);
+    }
     if object.get("jsonrpc").and_then(Value::as_str) != Some("2.0")
         || object.get("method").and_then(Value::as_str).is_none()
     {
@@ -554,9 +662,24 @@ pub async fn handle_request(
     }
 
     let response = match request.method.as_str() {
-        "initialize" => handle_initialize(request.id, request.params.as_ref()).map(Some),
+        "initialize" => {
+            let supports_roots = request
+                .params
+                .as_ref()
+                .and_then(|params| params.pointer("/capabilities/roots"))
+                .is_some_and(Value::is_object);
+            state
+                .client_supports_roots
+                .store(supports_roots, std::sync::atomic::Ordering::SeqCst);
+            handle_initialize(request.id, request.params.as_ref()).map(Some)
+        }
         "initialized" | "notifications/initialized" => {
+            state.queue_roots_request();
             Ok(Some(create_success_response(request.id, json!({}))))
+        }
+        "notifications/roots/list_changed" => {
+            state.queue_roots_request();
+            Ok(None)
         }
         "ping" => Ok(Some(create_success_response(request.id, json!({})))),
         "tools/list" => handle_list_tools(request.id).map(Some),
@@ -932,7 +1055,42 @@ fn validate_tool_arguments(tool_name: &str, arguments: &Value) -> std::result::R
 
 #[cfg(test)]
 mod tests {
-    use super::negotiate_protocol_version;
+    use super::{negotiate_protocol_version, resolve_startup_project_root};
+    use std::path::{Path, PathBuf};
+
+    #[test]
+    fn startup_root_skips_filesystem_root_and_home_as_implicit_roots() {
+        let home = Path::new("/home/dev");
+        let pinned = vec![PathBuf::from("/work/app")];
+        let resolve = |allowed: &[PathBuf], launch: &str| {
+            resolve_startup_project_root(None, allowed, Some(Path::new(launch)), Some(home))
+        };
+
+        // `/` ve ev dizini örtük kök olamaz; tek allowlist girdisi kullanılır.
+        assert_eq!(resolve(&pinned, "/"), Some(PathBuf::from("/work/app")));
+        assert_eq!(
+            resolve(&pinned, "/home/dev"),
+            Some(PathBuf::from("/work/app"))
+        );
+        assert_eq!(resolve(&[], "/"), None);
+        // Allowlist içindeki başlatma dizini (alt proje) tercih edilir.
+        assert_eq!(
+            resolve(&[PathBuf::from("/work")], "/work/app"),
+            Some(PathBuf::from("/work/app"))
+        );
+        // Allowlist dışındaki başlatma dizini varsayılan kök olmaz.
+        assert_eq!(
+            resolve(&pinned, "/tmp/other"),
+            Some(PathBuf::from("/work/app"))
+        );
+        assert_eq!(
+            resolve(&[], "/tmp/other"),
+            Some(PathBuf::from("/tmp/other"))
+        );
+        // Birden çok allowlist girdisinde belirsiz varsayılan seçilmez.
+        let many = vec![PathBuf::from("/a"), PathBuf::from("/b")];
+        assert_eq!(resolve(&many, "/"), None);
+    }
     use serde_json::json;
 
     #[test]

@@ -1402,3 +1402,78 @@ fn mcp_answers_ping_with_empty_result() -> Result<(), Box<dyn std::error::Error>
     let _ = child.kill();
     Ok(())
 }
+
+#[test]
+fn mcp_client_roots_select_and_allow_the_workspace() -> Result<(), Box<dyn std::error::Error>> {
+    // Kurulumda başka bir dizine sabitlenmiş allowlist olsa bile istemcinin
+    // MCP roots ile bildirdiği çalışma alanı varsayılan kök olarak kullanılır.
+    let pinned = tempdir()?;
+    let workspace = tempdir()?;
+    fs::write(workspace.path().join("main.rs"), "fn workspace_only() {}\n")?;
+
+    let mut cmd = Command::new(assert_cmd::cargo::cargo_bin!("ccm-mcp"));
+    cmd.env("CCM_DISABLE_EMBEDDER", "1")
+        .env("CCM_MCP_DEBUG", "0")
+        .env("CCM_REQUIRE_ALLOWED_ROOTS", "1")
+        .env("CCM_ALLOWED_ROOTS", pinned.path())
+        .env_remove("CCM_PROJECT_ROOT")
+        .current_dir("/")
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null());
+
+    let mut child = cmd.spawn()?;
+    let mut stdin = child.stdin.take().unwrap();
+    let mut reader = BufReader::new(child.stdout.take().unwrap());
+
+    let initialized = send_request(
+        &mut stdin,
+        &mut reader,
+        json!({"jsonrpc":"2.0","id":1,"method":"initialize",
+               "params":{"protocolVersion":"2025-11-25","capabilities":{"roots":{"listChanged":true}}}}),
+    )?;
+    assert!(initialized.get("result").is_some());
+
+    // initialized bildirimi sonrası sunucu roots/list isteği göndermelidir.
+    let roots_request = send_request(
+        &mut stdin,
+        &mut reader,
+        json!({"jsonrpc":"2.0","method":"notifications/initialized"}),
+    )?;
+    assert_eq!(roots_request["method"], "roots/list");
+    let workspace_uri = url::Url::from_directory_path(workspace.path())
+        .expect("absolute workspace path")
+        .to_string();
+    writeln!(
+        stdin,
+        "{}",
+        json!({"jsonrpc":"2.0","id":roots_request["id"],
+               "result":{"roots":[{"uri":workspace_uri,"name":"workspace"}]}})
+    )?;
+
+    let indexed = send_request(
+        &mut stdin,
+        &mut reader,
+        json!({"jsonrpc":"2.0","id":2,"method":"tools/call",
+               "params":{"name":"index_now","arguments":{
+                   "project_path":workspace.path().to_string_lossy()}}}),
+    )?;
+    assert!(
+        indexed.get("error").is_none(),
+        "index_now failed: {indexed}"
+    );
+
+    let context = send_request(
+        &mut stdin,
+        &mut reader,
+        json!({"jsonrpc":"2.0","id":3,"method":"tools/call",
+               "params":{"name":"get_context","arguments":{"file":"main.rs","line":1}}}),
+    )?;
+    assert!(
+        tool_text(&context).contains("workspace_only"),
+        "default root did not follow client roots: {context}"
+    );
+
+    let _ = child.kill();
+    Ok(())
+}

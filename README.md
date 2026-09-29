@@ -84,7 +84,7 @@ questions like "what breaks if I change this?" from guesses into queryable facts
 - **Safe Defaults** - UTF-8-safe chunking, configurable timeouts, retries, and file-size limits
 
 ### 🔌 Universal Compatibility (MCP)
-- **Plug & Play** - Installer configures Codex, Cursor, Claude Desktop, and Antigravity
+- **Plug & Play** - Installer configures Claude Code, Codex, Cursor, Claude Desktop, and Antigravity
 - **Explicit Indexing** - Missing indexes fail fast and point to `index_project`
 - **Zero-Config** - Auto-detects project root
 
@@ -123,6 +123,7 @@ Expected outcomes:
 
 | Host | Status | Installation Path |
 |------|--------|-------------------|
+| Claude Code | Supported | `claude mcp add-json --scope user` (requires the `claude` CLI) |
 | Codex | Supported | Atomic update of `~/.codex/config.toml` |
 | Cursor | Supported | `~/.cursor/mcp.json` |
 | Claude Desktop | Supported | Native desktop config |
@@ -132,7 +133,7 @@ If your editor is not auto-detected, use the manual MCP config printed by the in
 
 ### 🤖 Agent Skill
 
-CCM ships a [`SKILL.md`](SKILL.md) in both the source repository and npm tarball. AI agents can load it to understand all 9 MCP tools, stable node IDs, recommended flow, and common pitfalls.
+CCM ships a [`SKILL.md`](SKILL.md) in both the source repository and npm tarball. AI agents can load it to understand all 10 MCP tools, stable node IDs, recommended flow, and common pitfalls.
 
 Copy it into your agent's skill directory and it becomes a first-class tool reference:
 ```bash
@@ -211,13 +212,13 @@ CCM_DOWNLOAD_ATTEMPTS=3
 ```
 
 Advanced overrides:
-- `CCM_PROJECT_ROOT` pins the default project root used by the npm wrapper and MCP fallback engine.
+- `CCM_PROJECT_ROOT` pins the default project root and overrides the workspace reported by the host. Without it the MCP server resolves its default project in this order: the workspace the host reports via MCP `roots` → the launch directory when it lies inside `CCM_ALLOWED_ROOTS` (never `/` or your home directory) → the single `CCM_ALLOWED_ROOTS` entry.
 - `CCM_DB_PATH` overrides the default MCP vector DB location.
 - `.env.example` contains the full advanced tuning surface for chunking, batch size, hybrid ranking weights, and compatibility aliases such as `OPENAI_API_KEY`, `CCM_SKIP_CHECKSUM`, `CCM_MCP_REQUIRE_ALLOWED_ROOTS`, `CCM_EMBED_DATA`, and `EMBEDDING_DISABLED`.
 - Hybrid weight tuning details live in [`docs/hybrid-ranking.md`](./docs/hybrid-ranking.md).
 
 **Note:** Requires Ollama running (`ollama serve`) with model pulled (`ollama pull mxbai-embed-large`).
-**Security:** MCP enforces a strict allowlist by default — only directories under `CCM_ALLOWED_ROOTS` (falling back to `CCM_PROJECT_ROOT`) can be indexed or read. Set `CCM_REQUIRE_ALLOWED_ROOTS=0` only if you explicitly want the relaxed mode; even then, access stays confined to the startup project root.
+**Security:** MCP enforces a strict allowlist by default — only directories under `CCM_ALLOWED_ROOTS` (falling back to `CCM_PROJECT_ROOT`) and workspaces the host reports via MCP `roots` can be indexed or read. Set `CCM_REQUIRE_ALLOWED_ROOTS=0` only if you explicitly want the relaxed mode; even then, access stays confined to the startup project root.
 
 ---
 

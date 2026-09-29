@@ -1,6 +1,6 @@
 ---
 name: context-manager
-description: "Cognitive Codebase Matrix (CCM) MCP skill for deep codebase intelligence. Gives AI agents a queryable knowledge graph over any project: semantic hybrid search, call chain tracing, blast-radius analysis, and cursor-aware context retrieval — all via 9 MCP tools. WHEN: understand a large codebase, find callers/callees, map blast radius, retrieve cursor context, trace a call chain, inspect a graph node, get recently changed code, or index a project before starting work."
+description: "Cognitive Codebase Matrix (CCM) MCP skill for deep codebase intelligence. Gives AI agents a queryable knowledge graph over any project: semantic hybrid search, call chain tracing, blast-radius analysis, and cursor-aware context retrieval — all via 10 MCP tools. WHEN: understand a large codebase, find callers/callees, map blast radius, retrieve cursor context, trace a call chain, inspect a graph node, get recently changed code, or index a project before starting work."
 origin: https://github.com/senoldogann/LLM-Context-Manager
 terminal_state: invoke_tool_chain("index_project", then search/context/graph/impact tools based on task)
 version: 1.1
@@ -11,7 +11,7 @@ license: MIT
 
 > Transform any codebase into a queryable knowledge graph for AI agents.
 > CCM combines Tree-sitter AST parsing, LanceDB vector search, and Petgraph graph traversal
-> into 9 MCP tools that give agents surgical codebase intelligence.
+> into 10 MCP tools that give agents surgical codebase intelligence.
 
 ## When to Activate
 
@@ -53,7 +53,7 @@ missing or being updated.
 
 ## MCP Setup
 
-### One-line install (configures Codex, Cursor, Claude Desktop, Antigravity automatically)
+### One-line install (configures Claude Code, Codex, Cursor, Claude Desktop, Antigravity automatically)
 ```bash
 npx @senoldogann/context-manager install
 ```
@@ -66,7 +66,6 @@ npx @senoldogann/context-manager install
     "args": ["-y", "@senoldogann/context-manager", "mcp"],
     "env": {
       "RUST_LOG": "info",
-      "CCM_PROJECT_ROOT": "/path/to/your/project",
       "CCM_ALLOWED_ROOTS": "/path/to/your/project",
       "CCM_REQUIRE_ALLOWED_ROOTS": "true"
     }
@@ -74,9 +73,12 @@ npx @senoldogann/context-manager install
 }
 ```
 
-> `CCM_REQUIRE_ALLOWED_ROOTS` varsayılan olarak açıktır. `CCM_ALLOWED_ROOTS`
-> boşsa `CCM_PROJECT_ROOT` izin verilen tek kök olur; ikisi de boşsa erişim
-> reddedilir. Birden çok kökü platform path ayracıyla ekleyebilirsiniz.
+> `CCM_REQUIRE_ALLOWED_ROOTS` is on by default. Host-reported MCP `roots` are
+> always allowed and become the default project; otherwise the launch directory
+> inside `CCM_ALLOWED_ROOTS`, then the single allowlist entry, is used.
+> `CCM_PROJECT_ROOT` pins the default and overrides host roots. Separate
+> multiple roots with the platform path separator. These are startup settings:
+> set them in the host's MCP `env`, not in `~/.ccm/.env`.
 
 ### Minimal environment (~/.ccm/.env)
 ```ini
@@ -91,8 +93,6 @@ EMBEDDING_API_KEY=ollama
 # EMBEDDING_API_KEY=sk-your-key
 # EMBEDDING_MODEL=text-embedding-3-small
 
-# Security: restrict which projects the MCP server may access
-CCM_ALLOWED_ROOTS=/Users/you/projects:/Users/you/sandbox
 ```
 
 Ollama prerequisites:
