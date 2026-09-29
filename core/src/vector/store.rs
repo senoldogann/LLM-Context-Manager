@@ -601,12 +601,22 @@ impl LanceDbStore {
 
     /// Dosyanın mevcut parçalarını metinden vektöre eşler. Artımlı güncelleme
     /// dosyanın satırlarını silmeden önce bunu okur; metni değişmeyen parçalar
-    /// yeniden embed edilmez. Tablo hiç oluşmamışsa (graf-only) boş döner.
+    /// yeniden embed edilmez. Tablo hiç oluşmamışsa (graf-only) boş döner; tablo
+    /// açılamıyorsa (bozuk, I/O, izin) hata döner.
     pub async fn vectors_for_file(&self, file_id: &str) -> Result<HashMap<String, Vec<f32>>> {
         let table = match self.table().await {
             Ok(table) => table,
-            // `delete_by_prefix` ile aynı sözleşme: tablo yoksa okunacak vektör de yoktur.
-            Err(_) => return Ok(HashMap::new()),
+            // Yalnızca tablonun hiç oluşmamış olması "okunacak vektör yok" demektir.
+            // Bozuk tablo, I/O veya izin hatası da boş sayılırsa her parça sessizce
+            // yeniden embed edilirdi; bu yüzden diğer tüm hatalar yukarı taşınır.
+            Err(error) if is_table_not_found(&error) => return Ok(HashMap::new()),
+            Err(error) => {
+                return Err(anyhow::anyhow!(
+                    "Vector table could not be opened to read existing vectors for '{}': {}",
+                    file_id,
+                    error
+                ));
+            }
         };
         let batches: Vec<RecordBatch> = table
             .query()
@@ -682,6 +692,16 @@ impl LanceDbStore {
             }
         }
     }
+}
+
+/// `table()` hatasının lancedb'nin "tablo bulunamadı" durumu olup olmadığını
+/// söyler. `table()` `lancedb::Error`'ı doğrudan `anyhow`'a çevirdiği için kök
+/// hata downcast ile okunur.
+fn is_table_not_found(error: &anyhow::Error) -> bool {
+    matches!(
+        error.downcast_ref::<lancedb::Error>(),
+        Some(lancedb::Error::TableNotFound { .. })
+    )
 }
 
 /// Yalnızca verilen dosyanın vektörlerini eşleyen silme predicate'i üretir:
