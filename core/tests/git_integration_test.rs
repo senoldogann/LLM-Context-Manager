@@ -204,3 +204,34 @@ fn integrator_rejects_missing_path_and_bare_repository() -> Result<()> {
     assert!(integrator.get_changed_files().is_err());
     Ok(())
 }
+
+#[tokio::test]
+async fn indexing_keeps_artifacts_out_of_git_status() -> Result<()> {
+    std::env::set_var("CCM_DISABLE_EMBEDDER", "1");
+    let (dir, repo) = init_repo()?;
+    // Proje deponun alt dizininde olabilir; desenler depo köküne göre yazılır.
+    write_file(dir.path(), "app/main.rs", "fn main() {}\n")?;
+    let project = std::fs::canonicalize(dir.path().join("app"))?;
+
+    ccm_core::update_index(project.to_string_lossy().as_ref(), None).await?;
+    ccm_core::update_index(project.to_string_lossy().as_ref(), None).await?;
+
+    let exclude = std::fs::read_to_string(dir.path().join(".git/info/exclude"))?;
+    for pattern in ["/app/data/ccm_*", "/app/data/.ccm-*", "/app/.ccm/"] {
+        assert_eq!(
+            exclude.lines().filter(|line| *line == pattern).count(),
+            1,
+            "pattern {pattern} must appear exactly once:\n{exclude}"
+        );
+    }
+
+    let mut options = git2::StatusOptions::new();
+    options.include_untracked(true).recurse_untracked_dirs(true);
+    let untracked: HashSet<String> = repo
+        .statuses(Some(&mut options))?
+        .iter()
+        .map(|entry| entry.path().map(str::to_string))
+        .collect::<Result<_, _>>()?;
+    assert_eq!(untracked, HashSet::from(["app/main.rs".to_string()]));
+    Ok(())
+}

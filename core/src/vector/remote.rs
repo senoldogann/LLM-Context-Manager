@@ -6,6 +6,32 @@ use std::panic::{catch_unwind, AssertUnwindSafe};
 use std::path::PathBuf;
 use std::time::Duration;
 
+/// Embedding servisine ağ düzeyinde ulaşılamadı (bağlantı reddi, DNS, zaman aşımı).
+/// İndeksleyici bu durumda grafı yine de aktive eder ve semantik katmanı beklemeye
+/// alır; model/kimlik doğrulama gibi yapılandırma hataları bu türe girmez.
+#[derive(Debug)]
+pub struct EmbedderUnavailable {
+    pub endpoint: String,
+    pub detail: String,
+}
+
+impl std::fmt::Display for EmbedderUnavailable {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            formatter,
+            "embedding service at {} is unreachable ({}). Start it (for Ollama: `ollama serve`) and re-index",
+            self.endpoint, self.detail
+        )
+    }
+}
+
+impl std::error::Error for EmbedderUnavailable {}
+
+/// Hata zincirinde `EmbedderUnavailable` olup olmadığını bildirir.
+pub fn is_embedder_unavailable(error: &anyhow::Error) -> bool {
+    error.chain().any(|cause| cause.is::<EmbedderUnavailable>())
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Provider {
     OpenAI,
@@ -81,6 +107,16 @@ impl RemoteEmbedder {
         Self::new(api_key, model, base_url, provider)
     }
 
+    /// Tanılama çıktısı için sağlayıcı, model ve uç nokta özeti.
+    pub fn endpoint_summary(&self) -> String {
+        format!(
+            "{} model '{}' at {}",
+            provider_label(&self.provider),
+            self.model,
+            self.base_url
+        )
+    }
+
     pub async fn embed(&self, texts: Vec<String>) -> Result<Vec<Vec<f32>>> {
         match self.provider {
             Provider::OpenAI => self.embed_openai(texts).await,
@@ -93,11 +129,20 @@ impl RemoteEmbedder {
         request: reqwest::RequestBuilder,
     ) -> Result<reqwest::Response> {
         match tokio::time::timeout(self.timeout, request.send()).await {
-            Ok(res) => res.context("Failed to send embedding request"),
-            Err(_) => Err(anyhow::anyhow!(
-                "Embedding request timed out after {}s",
-                self.timeout.as_secs()
-            )),
+            Ok(Ok(response)) => Ok(response),
+            Ok(Err(error)) if error.is_connect() || error.is_timeout() => {
+                // Kaynak zinciri (ör. "Connection refused") detayda korunur.
+                let detail = format!("{:#}", anyhow::Error::new(error));
+                Err(anyhow::Error::new(EmbedderUnavailable {
+                    endpoint: self.base_url.clone(),
+                    detail,
+                }))
+            }
+            Ok(Err(error)) => Err(error).context("Failed to send embedding request"),
+            Err(_) => Err(anyhow::Error::new(EmbedderUnavailable {
+                endpoint: self.base_url.clone(),
+                detail: format!("request timed out after {}s", self.timeout.as_secs()),
+            })),
         }
     }
 
@@ -222,22 +267,9 @@ impl RemoteEmbedder {
                 )
                 .await;
 
-            // Handle network errors first to give friendly advice
-            let response = match response_res {
-                Ok(resp) => resp,
-                Err(e) => {
-                    let msg = e.to_string();
-                    if msg.contains("connect") || msg.contains("refused") {
-                        return Err(anyhow::anyhow!(
-                            "\nCould not connect to Ollama at {}.\n\
-                            Is Ollama running? Run `ollama serve` in a terminal.\n\
-                            Not installed? Download it from https://ollama.com\n",
-                            self.base_url
-                        ));
-                    }
-                    return Err(anyhow::anyhow!("Failed to connect to Ollama: {}", e));
-                }
-            };
+            // Ağ hataları `EmbedderUnavailable` olarak yukarı taşınır (çağıran
+            // graf-öncelikli indekse geçebilsin); mesaj `ollama serve` önerir.
+            let response = response_res?;
 
             if !response.status().is_success() {
                 let error_text = self.read_text_with_timeout(response).await?;

@@ -684,3 +684,46 @@ async fn project_under_excluded_directory_name_is_still_indexed() -> Result<()> 
 
     Ok(())
 }
+
+#[tokio::test]
+async fn unreachable_embedder_still_activates_a_graph_only_index() -> Result<()> {
+    let _env_guard = ENV_LOCK.lock().await;
+    // Graf-öncelikli: embedding servisi kapalıyken graf araçları kullanılabilir
+    // kalmalı, neden açıkça raporlanmalı ve sonraki güncellemeler graf'ı tazelemeli.
+    std::env::remove_var("CCM_DISABLE_EMBEDDER");
+    std::env::set_var("EMBEDDING_HOST", "http://127.0.0.1:9");
+    std::env::set_var("EMBEDDING_TIMEOUT_SECS", "2");
+    let project = tempdir()?;
+    std::fs::write(
+        project.path().join("main.rs"),
+        "fn alpha() { beta(); }\nfn beta() {}\n",
+    )?;
+
+    let first = ccm_core::update_index(project.path().to_string_lossy().as_ref(), None).await;
+    std::fs::write(project.path().join("extra.rs"), "fn gamma() { alpha(); }\n")?;
+    let second = ccm_core::update_index(project.path().to_string_lossy().as_ref(), None).await;
+    std::env::remove_var("EMBEDDING_HOST");
+    std::env::remove_var("EMBEDDING_TIMEOUT_SECS");
+    std::env::set_var("CCM_DISABLE_EMBEDDER", "1");
+
+    let first = first?;
+    let reason = first
+        .semantic_unavailable
+        .expect("semantic_unavailable reason");
+    assert!(
+        reason.contains("unreachable"),
+        "unexpected reason: {reason}"
+    );
+    let second = second?;
+    assert!(second.semantic_unavailable.is_some());
+
+    let paths = artifacts(project.path(), None)?;
+    let graph = CodeGraph::from_file(paths.graph_path.to_string_lossy().as_ref())?;
+    for name in ["alpha", "beta", "gamma"] {
+        assert!(
+            graph.graph.node_weights().any(|node| node.name == name),
+            "{name} missing from graph-only index"
+        );
+    }
+    Ok(())
+}

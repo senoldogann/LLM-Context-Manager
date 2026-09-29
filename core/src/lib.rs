@@ -23,7 +23,7 @@ use crate::vector::store::LanceDbStore;
 use anyhow::Result;
 use rayon::prelude::*;
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::time::UNIX_EPOCH;
 
@@ -295,6 +295,7 @@ pub async fn index_directory_with_mode(
         anyhow::anyhow!("Project root '{}' could not be resolved: {}", path, error)
     })?;
     let final_db_path = resolve_requested_db_path(&project_root, db_path)?;
+    record_git_excludes(&project_root);
     let artifact_parent = final_db_path.parent().ok_or_else(|| {
         anyhow::anyhow!(
             "Invalid DB path '{}': cannot determine parent directory",
@@ -552,13 +553,24 @@ async fn build_index_generation(
         IndexMode::Full => {
             if stats.nodes_created > 0 {
                 let engine = RetrievalEngine::new(graph_arc.clone(), store);
-                engine.index_graph().await?;
-
-                info!(
-                    nodes = stats.nodes_created,
-                    files = stats.files_indexed,
-                    "Indexing completed successfully"
-                );
+                match engine.index_graph().await {
+                    Ok(()) => info!(
+                        nodes = stats.nodes_created,
+                        files = stats.files_indexed,
+                        "Indexing completed successfully"
+                    ),
+                    // Graf-öncelikli: embedding servisi yokken graf araçları yine
+                    // kullanılabilir olmalı. Eksik vektörler sonraki update_index'te
+                    // (vector health kontrolü) onarılır.
+                    Err(error) if crate::vector::remote::is_embedder_unavailable(&error) => {
+                        warn!(
+                            error = %error,
+                            "Embedding service unreachable; activating a graph-only index"
+                        );
+                        stats.semantic_unavailable = Some(error.to_string());
+                    }
+                    Err(error) => return Err(error),
+                }
             } else {
                 warn!("No supported files found to index");
             }
@@ -988,6 +1000,7 @@ pub async fn update_index(path: &str, db_path: Option<&str>) -> Result<IndexStat
         anyhow::anyhow!("Project root '{}' could not be resolved: {}", path, error)
     })?;
     let requested_db_path = resolve_requested_db_path(&project_root, db_path)?;
+    record_git_excludes(&project_root);
     let artifact_parent = requested_db_path.parent().ok_or_else(|| {
         anyhow::anyhow!(
             "Invalid DB path '{}': cannot determine parent directory",
@@ -1109,7 +1122,16 @@ pub async fn update_index(path: &str, db_path: Option<&str>) -> Result<IndexStat
                 error = ?vector_health.err(),
                 "Vector index is incomplete or corrupt. Repairing semantics from the active graph."
             );
-            return upgrade_active_index_semantics(path, db_path).await;
+            return match upgrade_active_index_semantics(path, db_path).await {
+                // Graf zaten güncel; yalnızca semantik katman hâlâ beklemede.
+                Err(error) if crate::vector::remote::is_embedder_unavailable(&error) => {
+                    Ok(IndexStats {
+                        semantic_unavailable: Some(error.to_string()),
+                        ..IndexStats::default()
+                    })
+                }
+                result => result,
+            };
         }
         info!("No changes detected.");
         return Ok(IndexStats::default());
@@ -1205,6 +1227,12 @@ pub async fn update_index(path: &str, db_path: Option<&str>) -> Result<IndexStat
         Ok(stats) => stats,
         Err(error) => {
             let _ = std::fs::remove_dir_all(&staging_root);
+            if crate::vector::remote::is_embedder_unavailable(&error) {
+                // Artımlı embedding yapılamadı; graf değişikliklerini kaybetmemek için
+                // tam yeniden indeksleme graf-yalnız generation'ı aktive eder.
+                tracing::warn!(error = %error, "Embedding service unreachable during incremental update; rebuilding graph-only");
+                return index_directory(path, db_path).await;
+            }
             return Err(error);
         }
     };
@@ -1385,6 +1413,10 @@ pub struct IndexStats {
     pub skipped_files: Vec<IndexIssue>,
     pub reason_counts: HashMap<String, usize>,
     pub suggested_ignores: Vec<String>,
+    /// Embedding servisine ulaşılamadığı için graf-yalnız aktive edildiyse nedeni.
+    /// Graf araçları çalışır; semantik arama servis gelince yeniden indekslemeyle döner.
+    #[serde(default)]
+    pub semantic_unavailable: Option<String>,
     #[serde(skip)]
     pub(crate) retry_files: Vec<String>,
 }
@@ -1753,6 +1785,79 @@ pub(crate) fn path_is_policy_excluded(file_path: &Path) -> bool {
     }
 
     false
+}
+
+/// İndeks artefaktlarını projeyi içeren git deposunun `info/exclude` dosyasına
+/// ekler; kullanıcının `git status`'u ve `.gitignore`'u kirlenmez. Yalnızca
+/// eksik desenler eklenir (idempotent). Depo yoksa hiçbir şey yapılmaz.
+fn ensure_git_excludes(project_root: &Path) -> Result<()> {
+    let Ok(repo) = git2::Repository::discover(project_root) else {
+        return Ok(());
+    };
+    let Some(workdir) = repo.workdir() else {
+        return Ok(());
+    };
+    let workdir = std::fs::canonicalize(workdir)?;
+    let Ok(relative_root) = project_root.strip_prefix(&workdir) else {
+        return Ok(());
+    };
+    let prefix = relative_root.to_string_lossy().replace('\\', "/");
+    let anchor = if prefix.is_empty() {
+        "/".to_string()
+    } else {
+        format!("/{prefix}/")
+    };
+    let patterns: Vec<String> = ["data/ccm_*", "data/.ccm-*", ".ccm/"]
+        .iter()
+        .map(|pattern| format!("{anchor}{pattern}"))
+        .collect();
+
+    let exclude_path = repo.commondir().join("info").join("exclude");
+    let existing = match std::fs::read_to_string(&exclude_path) {
+        Ok(content) => content,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => String::new(),
+        Err(error) => return Err(error.into()),
+    };
+    let missing = missing_exclude_patterns(&existing, &patterns);
+    if missing.is_empty() {
+        return Ok(());
+    }
+    if let Some(parent) = exclude_path.parent() {
+        std::fs::create_dir_all(parent)?;
+    }
+    let mut addition = String::new();
+    if !existing.is_empty() && !existing.ends_with('\n') {
+        addition.push('\n');
+    }
+    addition.push_str("# CCM index artifacts\n");
+    for pattern in missing {
+        addition.push_str(&pattern);
+        addition.push('\n');
+    }
+    use std::io::Write;
+    std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(&exclude_path)?
+        .write_all(addition.as_bytes())?;
+    Ok(())
+}
+
+fn missing_exclude_patterns(existing: &str, patterns: &[String]) -> Vec<String> {
+    let present: HashSet<&str> = existing.lines().map(str::trim).collect();
+    patterns
+        .iter()
+        .filter(|pattern| !present.contains(pattern.as_str()))
+        .cloned()
+        .collect()
+}
+
+/// Exclude yazımı indekslemenin ana işi değildir; başarısızlık görünür biçimde
+/// loglanır ama indeksi durdurmaz.
+fn record_git_excludes(project_root: &Path) {
+    if let Err(error) = ensure_git_excludes(project_root) {
+        tracing::warn!(project = %project_root.display(), error = %error, "Could not add CCM artifacts to .git/info/exclude");
+    }
 }
 
 fn current_head_oid(project_root: &Path) -> Option<String> {
