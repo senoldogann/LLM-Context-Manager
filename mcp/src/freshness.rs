@@ -12,6 +12,10 @@ use crate::server::ServerState;
 
 /// Değişiklik olaylarının birleştirildiği sessizlik süresi.
 const DEBOUNCE: Duration = Duration::from_millis(300);
+/// Debounce'un üst sınırı: bekleyen ilk sinyalden bu kadar sonra, olaylar sürse de
+/// yenileme turu başlatılır. Aksi halde 300 ms'den sık yazılan bir dosya turu
+/// sonsuza dek erteler ve her okuma tam bekleme süresini öder.
+const MAX_DEBOUNCE: Duration = Duration::from_secs(2);
 /// Başarısız yenileme için toplam deneme sayısı.
 const MAX_REFRESH_ATTEMPTS: usize = 3;
 /// Denemeler arası bekleme: ilk hatadan sonra 1 sn, ikinciden sonra 2 sn.
@@ -351,8 +355,13 @@ async fn run_refresh_loop(
                 .state
                 .send_modify(|freshness| freshness.pending_paths = count);
         }
+        let batch_started = tokio::time::Instant::now();
         loop {
-            match tokio::time::timeout(DEBOUNCE, signals.recv()).await {
+            let window = DEBOUNCE.min(MAX_DEBOUNCE.saturating_sub(batch_started.elapsed()));
+            if window.is_zero() {
+                break;
+            }
+            match tokio::time::timeout(window, signals.recv()).await {
                 Ok(Some(signal)) => {
                     log_signal(&project_key, &signal);
                     pending.insert(pending_path(&signal, &root));
@@ -423,6 +432,21 @@ fn publish_waiting_for_upgrade(handle: &FreshnessHandle, pending_paths: usize) {
     });
 }
 
+/// Etkin indeks diskten silinmiş: otomatik yenileme indekslenmemiş bir projeyi
+/// kendiliğinden tam indekslemez. Kalıcı bir durum olduğu için yeniden denenmez.
+#[derive(Debug)]
+struct IndexRemovedError;
+
+impl std::fmt::Display for IndexRemovedError {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter.write_str(
+            "Project index was removed; auto-refresh does not rebuild it. Call index_project to re-index.",
+        )
+    }
+}
+
+impl std::error::Error for IndexRemovedError {}
+
 /// Tek bir yenileme turunun sonucu.
 enum RefreshOutcome {
     /// Worker çalıştı; istatistikleri tazelik durumuna yansıtılır.
@@ -444,6 +468,14 @@ async fn refresh_with_retries(
     loop {
         match refresh_once(server, project_key, &db_path).await {
             Ok(outcome) => return Ok(outcome),
+            Err(error) if error.is::<IndexRemovedError>() => {
+                tracing::warn!(
+                    project = %project_key,
+                    error = %error,
+                    "Auto-refresh skipped: the project index was removed"
+                );
+                return Err(error);
+            }
             Err(error) if attempt < MAX_REFRESH_ATTEMPTS => {
                 let delay = RETRY_DELAYS[attempt - 1];
                 tracing::warn!(
@@ -479,6 +511,11 @@ async fn refresh_once(
 ) -> anyhow::Result<RefreshOutcome> {
     let lock = server.project_index_lock(project_key);
     let _guard = lock.lock().await;
+    // Etkin indeks silinmişse `update_index` tüm projeyi (embedding dahil) yeniden
+    // kurardı; otomatik yenileme yalnızca var olan indeksi günceller.
+    if !server.project_index_exists(project_key)? {
+        return Err(anyhow::Error::new(IndexRemovedError));
+    }
     // Döngünün yükseltme denetimi kilit beklenirken eskimiş olabilir: `index_now`
     // hızlı indeksi kilit altında bitirip yükseltmeyi kaydeder. Kilit bizdeyken
     // yeni yükseltme başlayamayacağı için bu denetim yarışı kapatır; aksi halde

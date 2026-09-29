@@ -965,5 +965,30 @@ async fn watch_filter_skips_ignored_outputs_and_index_artifacts() -> Result<()> 
         "non-git project ignores .gitignore, so generated/out.rs should be relevant"
     );
 
+    // Git olmayan projede `.git/info/exclude` yoktur (git deposunda indeks oraya
+    // `/data/ccm_*` desenlerini yazar); indeksin kendi çıktısını yalnızca filtrenin
+    // kendi kuralları eler. `src/ccm_current.notes.tmp` işaretçi geçici dosyasına
+    // yalnızca ad olarak benzer; artefakt dizininin dışında olduğu için normal
+    // proje dosyasıdır.
+    assert!(
+        ccm_core::is_watch_relevant_path(&filter2, &root2.join("src/ccm_current.notes.tmp")),
+        "a project file outside the artifact directory must stay relevant"
+    );
+    for own_output in [
+        // Atomik yazımın geçici dosyaları artefakt dizininde durur.
+        "data/ccm_current.4242.1790000000000000000.tmp",
+        "data/ccm_manifest.json.4242.tmp",
+        "data/ccm_graph.json.4242.tmp",
+        // Trajectory günlüğü ve politika deposu araç durumudur.
+        "data/ccm_learn",
+        "data/ccm_learn/experiences.jsonl",
+        "data/ccm_learn/policies.json",
+    ] {
+        assert!(
+            !ccm_core::is_watch_relevant_path(&filter2, &root2.join(own_output)),
+            "{own_output} is written by the tool itself and must not trigger a refresh"
+        );
+    }
+
     Ok(())
 }

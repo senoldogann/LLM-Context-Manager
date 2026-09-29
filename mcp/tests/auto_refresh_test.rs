@@ -4,6 +4,8 @@ use std::fs;
 use std::io::{BufRead, BufReader, Write};
 use std::path::Path;
 use std::process::{Child, ChildStdin, ChildStdout, Command, Stdio};
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tempfile::tempdir;
 
@@ -98,6 +100,28 @@ fn poll_find_nodes(
             );
         }
         std::thread::sleep(Duration::from_millis(200));
+    }
+}
+
+/// Etkin generation işaretçisi `previous` değerinden farklı olana kadar bekler ve
+/// değişikliğin görüldüğü anı (yenilemenin yeni generation'ı aktive ettiği an)
+/// döndürür.
+fn wait_for_pointer_change(
+    pointer: &Path,
+    previous: &str,
+    deadline: Duration,
+) -> Result<Instant, Box<dyn Error>> {
+    let started = Instant::now();
+    loop {
+        if fs::read_to_string(pointer)? != previous {
+            return Ok(Instant::now());
+        }
+        if started.elapsed() > deadline {
+            return Err(
+                format!("active generation pointer did not change within {deadline:?}").into(),
+            );
+        }
+        std::thread::sleep(Duration::from_millis(20));
     }
 }
 
@@ -205,7 +229,9 @@ fn disabled_auto_refresh_keeps_manual_semantics() -> Result<(), Box<dyn Error>> 
 fn ignored_and_artifact_writes_do_not_mark_index_stale() -> Result<(), Box<dyn Error>> {
     let project = tempdir()?;
     // `.gitignore` yalnızca git deposunda uygulanır (tarama ve izleme filtresi aynı
-    // kuralı izler); boş bir `.git` dizini ikisi için de depo işaretidir.
+    // kuralı izler); boş bir `.git` dizini ikisi için de depo işaretidir. Geçerli bir
+    // depo olmadığı için indeks `.git/info/exclude` yazmaz; indeksin kendi
+    // dosyalarına karşı korumayı yalnızca izleme filtresinin kendi kuralları sağlar.
     fs::create_dir(project.path().join(".git"))?;
     fs::write(project.path().join(".gitignore"), "generated/\n")?;
     fs::write(project.path().join("main.rs"), "fn existing_symbol() {}\n")?;
@@ -221,18 +247,29 @@ fn ignored_and_artifact_writes_do_not_mark_index_stale() -> Result<(), Box<dyn E
         |text| text.starts_with("_Index: fresh"),
     )?;
 
-    // Gerçek değişiklik yeni generation yazar; indeksin kendi dosyaları ikinci
-    // bir (3 sn'lik) yenilemeyi tetiklerse hemen sonraki okuma bayat görünür.
+    // Gerçek değişiklik yeni bir generation yazar ve etkin işaretçiyi değiştirir.
+    // Yenileme aktivasyondan sonra saniyenin küçük bir kesrinde biter; indeksin kendi
+    // dosyaları (işaretçinin geçici dosyası) ikinci bir tur tetiklerse bu tur (testte
+    // 3 sn'lik worker gecikmesi kadar) `fresh` satırını aktivasyondan çok sonraya iter.
+    let pointer = project.path().join("data/ccm_current");
+    let generation_before = fs::read_to_string(&pointer)?;
     fs::write(
         project.path().join("added.rs"),
         "fn real_change_symbol() {}\n",
     )?;
+    let activated_at =
+        wait_for_pointer_change(&pointer, &generation_before, Duration::from_secs(15))?;
     poll_find_nodes(
         &mut session,
         "real_change_symbol",
         Duration::from_secs(15),
         |text| found_node(text, "real_change_symbol") && text.starts_with("_Index: fresh"),
     )?;
+    assert!(
+        activated_at.elapsed() < Duration::from_secs(2),
+        "a second refresh round ran after the generation was activated: fresh only after {:?}",
+        activated_at.elapsed()
+    );
     std::thread::sleep(Duration::from_millis(800));
     let started = Instant::now();
     let after_refresh = session.call_tool("find_nodes", json!({ "query": "existing_symbol" }))?;
@@ -401,5 +438,82 @@ fn manual_index_during_auto_refresh_succeeds() -> Result<(), Box<dyn Error>> {
         Duration::from_secs(10),
         |text| found_node(text, "raced_symbol") && text.starts_with("_Index: fresh"),
     )?;
+    Ok(())
+}
+
+#[test]
+fn continuous_events_do_not_postpone_the_refresh_forever() -> Result<(), Box<dyn Error>> {
+    let project = tempdir()?;
+    fs::write(project.path().join("main.rs"), "fn existing_symbol() {}\n")?;
+    let mut session = McpSession::start(project.path(), &[])?;
+    session.call_tool("index_now", json!({ "project_path": project.path() }))?;
+    poll_find_nodes(
+        &mut session,
+        "existing_symbol",
+        Duration::from_secs(15),
+        |text| text.starts_with("_Index: fresh"),
+    )?;
+
+    // Bir yazıcı 100 ms aralıkla aynı dosyaya yazar; 300 ms'lik sessizlik penceresi
+    // hiç dolmaz. Debounce'un üst sınırı olmazsa yenileme yazıcı durana kadar başlamaz.
+    let noisy = project.path().join("noisy.rs");
+    let stop = Arc::new(AtomicBool::new(false));
+    let writer = std::thread::spawn({
+        let stop = stop.clone();
+        move || -> std::io::Result<()> {
+            let mut tick = 0_u32;
+            while !stop.load(Ordering::SeqCst) {
+                tick += 1;
+                fs::write(&noisy, format!("fn noisy_symbol() {{}}\n// tick {tick}\n"))?;
+                std::thread::sleep(Duration::from_millis(100));
+            }
+            Ok(())
+        }
+    });
+    let found = poll_find_nodes(
+        &mut session,
+        "noisy_symbol",
+        Duration::from_secs(8),
+        |text| found_node(text, "noisy_symbol"),
+    );
+    stop.store(true, Ordering::SeqCst);
+    writer.join().map_err(|_| "writer thread panicked")??;
+    found?;
+    Ok(())
+}
+
+#[test]
+fn removed_index_is_not_rebuilt_by_auto_refresh() -> Result<(), Box<dyn Error>> {
+    let project = tempdir()?;
+    fs::write(project.path().join("main.rs"), "fn existing_symbol() {}\n")?;
+    let mut session = McpSession::start(project.path(), &[])?;
+    session.call_tool("index_now", json!({ "project_path": project.path() }))?;
+    poll_find_nodes(
+        &mut session,
+        "existing_symbol",
+        Duration::from_secs(15),
+        |text| text.starts_with("_Index: fresh"),
+    )?;
+
+    // Kullanıcı indeksi siler ve izlenen bir dosyayı değiştirir. Otomatik yenileme
+    // indekslenmemiş bir projeyi kendiliğinden yeniden indekslememelidir.
+    fs::remove_dir_all(project.path().join("data"))?;
+    fs::write(
+        project.path().join("added.rs"),
+        "fn after_removal_symbol() {}\n",
+    )?;
+    std::thread::sleep(Duration::from_millis(3_000));
+
+    assert!(
+        !project.path().join("data/ccm_current").exists(),
+        "auto-refresh must not rebuild a removed index"
+    );
+    let error = session
+        .call_tool("find_nodes", json!({ "query": "after_removal_symbol" }))
+        .expect_err("reads must report the missing index");
+    assert!(
+        error.to_string().contains("Project index is missing"),
+        "unexpected read error: {error}"
+    );
     Ok(())
 }

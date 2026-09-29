@@ -32,6 +32,10 @@ pub const INDEX_SCHEMA_VERSION: u32 = 4;
 const GENERATIONS_DIRECTORY: &str = ".ccm-generations";
 const CURRENT_GENERATION_FILE: &str = "ccm_current";
 const ACTIVATION_LOCK_DIRECTORY: &str = ".ccm-activation.lock";
+/// Öğrenme verisinin dizin adı: trajectory günlüğü (`data/ccm_learn/experiences.jsonl`)
+/// ve politika deposu (`<db dizini>/ccm_learn/policies.json`) burada tutulur. Araç
+/// durumudur; indeksin girdisi değildir.
+const LEARN_DIRECTORY: &str = "ccm_learn";
 
 /// Ham ve kanonik yol varyasyonlarını çıkarır: eğer kanonik form raw'dan
 /// farklıysa her ikisini de verir, yoksa raw'ı verir. Symlink'leri yakalar.
@@ -56,6 +60,29 @@ fn is_index_staging_dir_name(name: &str) -> bool {
         || name == ACTIVATION_LOCK_DIRECTORY
         || name.starts_with(".ccm-rebuild-")
         || name.starts_with(".ccm-backup-")
+}
+
+/// İndeks artefaktlarının atomik yazımda kullandığı geçici dosya adlarını tanır.
+/// Adlar yazan koddaki `format!`/`with_extension` çağrılarıyla birebir aynı desenleri
+/// izler: `ccm_current.<generation>.tmp` (etkin işaretçi, generation aktivasyonu),
+/// `ccm_manifest.json.<pid>.tmp` (`save_manifest`) ve `ccm_graph.json.<pid>.tmp`
+/// (`CodeGraph::save_to_file`). Manifest ve graf geçici dosyaları güncel akışta
+/// staging dizininde oluşur; düz yerleşimde artefakt dizininde de görülebileceği
+/// için aynı desenler tanınır.
+fn is_index_artifact_temp_name(name: &str) -> bool {
+    let Some(stem) = name.strip_suffix(".tmp") else {
+        return false;
+    };
+    [
+        CURRENT_GENERATION_FILE,
+        "ccm_manifest.json",
+        "ccm_graph.json",
+    ]
+    .iter()
+    .any(|artifact| {
+        stem.strip_prefix(artifact)
+            .is_some_and(|rest| rest.starts_with('.'))
+    })
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

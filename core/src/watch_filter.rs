@@ -1,8 +1,10 @@
 //! MCP otomatik yenilemesinin dosya olaylarını süzen filtre. Manifest
-//! taramasıyla aynı politikayı uygular; indeksin kendi yazdığı dosyalar ve
-//! ignore kurallarına takılan build çıktıları yenileme tetiklemez. Git
-//! olmayan projelerde `.gitignore` ve `.git/info/exclude` uygulanmaz, tarama
-//! davranışıyla tutarlılık sağlanır.
+//! taramasıyla aynı politikayı uygular; indeksin kendi yazdığı dosyalar (artefaktlar,
+//! atomik yazımın geçici dosyaları, `ccm_learn` verisi) ve ignore kurallarına takılan
+//! build çıktıları yenileme tetiklemez. Git olmayan projelerde `.gitignore` ve
+//! `.git/info/exclude` uygulanmaz, tarama davranışıyla tutarlılık sağlanır; bu
+//! yüzden indeksin kendi çıktısına karşı koruma `.git/info/exclude`'a değil bu
+//! filtrenin kendi kurallarına dayanır.
 
 use anyhow::Result;
 use ignore::gitignore::{Gitignore, GitignoreBuilder};
@@ -12,6 +14,10 @@ use std::path::{Path, PathBuf};
 pub struct WatchFilter {
     root: PathBuf,
     excluded: Vec<PathBuf>,
+    /// İndeks artefaktlarının durduğu dizin (ham ve kanonik biçimleriyle);
+    /// atomik yazımın geçici dosyaları yalnızca bu dizinin doğrudan altında
+    /// artefakt sayılır.
+    artifact_parents: Vec<PathBuf>,
     ignore: Gitignore,
 }
 
@@ -50,6 +56,7 @@ pub fn build_watch_filter(project_root: &Path, db_path: &Path) -> Result<WatchFi
     })?;
     let excluded =
         crate::with_canonical_variants(crate::index_artifact_paths(artifact_parent, db_path));
+    let artifact_parents = crate::with_canonical_variants(vec![artifact_parent.to_path_buf()]);
 
     let mut builder = GitignoreBuilder::new(&root);
     let in_git_repo = find_git_root(&root).is_some();
@@ -111,13 +118,28 @@ pub fn build_watch_filter(project_root: &Path, db_path: &Path) -> Result<WatchFi
     Ok(WatchFilter {
         root,
         excluded,
+        artifact_parents,
         ignore,
     })
 }
 
+/// Yol, artefakt dizininin doğrudan altındaki bir atomik yazım geçici dosyası mı?
+/// Artefakt dizini dışındaki aynı adlı dosyalar normal proje dosyasıdır.
+fn is_artifact_temp_file(filter: &WatchFilter, path: &Path) -> bool {
+    let Some(name) = path.file_name().map(|name| name.to_string_lossy()) else {
+        return false;
+    };
+    crate::is_index_artifact_temp_name(&name)
+        && path
+            .parent()
+            .is_some_and(|parent| filter.artifact_parents.iter().any(|dir| dir == parent))
+}
+
 /// Olay yolunun indeksi değiştirebilecek bir proje dosyası olup olmadığını
-/// bildirir. Silinmiş yollar için de çalışır (dosya içeriği okunmaz; yalnızca
-/// dizin ayrımı için `is_dir` sorulur).
+/// bildirir. İndeksin kendi yazdığı yollar (artefaktlar, artefakt dizinindeki
+/// geçici dosyalar, `ccm_learn` verisi) ilgisizdir; aksi halde her yenileme kendi
+/// olayını okuyup ikinci bir tur çalıştırır. Silinmiş yollar için de çalışır
+/// (dosya içeriği okunmaz; yalnızca dizin ayrımı için `is_dir` sorulur).
 pub fn is_watch_relevant_path(filter: &WatchFilter, path: &Path) -> bool {
     let Ok(relative) = path.strip_prefix(&filter.root) else {
         return false;
@@ -132,9 +154,15 @@ pub fn is_watch_relevant_path(filter: &WatchFilter, path: &Path) -> bool {
     {
         return false;
     }
+    if is_artifact_temp_file(filter, path) {
+        return false;
+    }
     let tool_state = relative.components().any(|component| {
         let name = component.as_os_str().to_string_lossy();
-        name == ".ccm" || name == ".agent" || crate::is_index_staging_dir_name(&name)
+        name == ".ccm"
+            || name == ".agent"
+            || name == crate::LEARN_DIRECTORY
+            || crate::is_index_staging_dir_name(&name)
     });
     if tool_state || !crate::is_index_relevant_file(&filter.root, path) {
         return false;

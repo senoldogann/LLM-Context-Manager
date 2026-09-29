@@ -47,8 +47,10 @@ pub struct ServerState {
     /// Proje başına otomatik yenileme durumu (anahtar: kanonik proje yolu).
     freshness:
         std::sync::Mutex<std::collections::HashMap<String, Arc<crate::freshness::FreshnessHandle>>>,
-    /// Semantik yükseltmesi süren projeler (anahtar: kanonik proje yolu).
-    semantic_upgrades: std::sync::Mutex<std::collections::HashSet<String>>,
+    /// Süren semantik yükseltme sayısı, proje başına (anahtar: kanonik proje yolu).
+    /// Aynı projede üst üste hızlı indeks alınırsa yükseltmeler çakışır; sayaç
+    /// yenilemenin ancak sonuncusu bitince başlamasını sağlar.
+    semantic_upgrades: std::sync::Mutex<std::collections::HashMap<String, usize>>,
 }
 
 #[derive(Clone)]
@@ -150,8 +152,18 @@ impl ServerState {
         }
     }
 
+    /// Proje kilidini haritadan çıkarır, ama yalnızca başka kimse tutmuyorsa
+    /// (`Arc` sayısı 1: yalnızca harita). Kilidi tutan ya da bekleyen biri (ör.
+    /// yenileme görevi) varsa girdi kalır; aksi halde sonraki çağrı yeni bir mutex
+    /// üretir ve iki indeksleme aynı projede eşzamanlı çalışır.
     pub(crate) fn release_index_lock(&self, job_key: &str) {
-        self.index_locks.lock().unwrap().remove(job_key);
+        let mut locks = self.index_locks.lock().unwrap();
+        if locks
+            .get(job_key)
+            .is_some_and(|lock| std::sync::Arc::strong_count(lock) == 1)
+        {
+            locks.remove(job_key);
+        }
     }
 
     pub(crate) fn project_db_path(&self, project_path: &str) -> Result<PathBuf> {
@@ -165,6 +177,12 @@ impl ServerState {
         }
         let candidate = canonical_path.join("data/ccm_db");
         ccm_core::resolve_artifact_path(&canonical_path, &candidate)
+    }
+
+    /// Projenin etkin indeksi diskte var mı? `get_engine` ile aynı artefakt denetimini
+    /// kullanır; otomatik yenileme silinmiş bir indeksi yeniden kurmamak için sorar.
+    pub(crate) fn project_index_exists(&self, project_key: &str) -> Result<bool> {
+        Ok(index_artifacts_exist(&self.project_artifacts(project_key)?))
     }
 
     fn project_artifacts(&self, project_path: &str) -> Result<ccm_core::IndexArtifactPaths> {
@@ -268,7 +286,7 @@ impl ServerState {
             next_client_request_id: std::sync::atomic::AtomicU64::new(1),
             outgoing_requests: std::sync::Mutex::new(Vec::new()),
             freshness: std::sync::Mutex::new(std::collections::HashMap::new()),
-            semantic_upgrades: std::sync::Mutex::new(std::collections::HashSet::new()),
+            semantic_upgrades: std::sync::Mutex::new(std::collections::HashMap::new()),
         })
     }
 
@@ -344,20 +362,49 @@ impl ServerState {
 
     /// Hızlı indeksin semantik yükseltmesi başladı; otomatik yenileme ertelenir.
     pub(crate) fn begin_semantic_upgrade(&self, project_key: &str) {
-        self.semantic_upgrades
+        *self
+            .semantic_upgrades
             .lock()
             .unwrap()
-            .insert(project_key.to_string());
+            .entry(project_key.to_string())
+            .or_insert(0) += 1;
     }
 
-    /// Yükseltme bitti (başarılı ya da değil); ertelenen yenileme uyandırılır.
+    /// Yükseltme bitti (başarılı ya da değil). Projede başka yükseltme kalmadıysa
+    /// ertelenen yenileme uyandırılır; çakışan bir yükseltme sürüyorsa ertelenme
+    /// onun bitişine kadar sürer.
     pub(crate) fn end_semantic_upgrade(&self, project_key: &str) {
-        self.semantic_upgrades.lock().unwrap().remove(project_key);
-        self.request_refresh(project_key);
+        let remaining = {
+            let mut upgrades = self.semantic_upgrades.lock().unwrap();
+            match upgrades.get_mut(project_key) {
+                Some(count) if *count > 1 => {
+                    *count -= 1;
+                    *count
+                }
+                Some(_) => {
+                    upgrades.remove(project_key);
+                    0
+                }
+                None => {
+                    tracing::warn!(
+                        project = %project_key,
+                        "Semantic upgrade ended without a registered start"
+                    );
+                    0
+                }
+            }
+        };
+        if remaining == 0 {
+            self.request_refresh(project_key);
+        }
     }
 
     pub(crate) fn semantic_upgrade_running(&self, project_key: &str) -> bool {
-        self.semantic_upgrades.lock().unwrap().contains(project_key)
+        self.semantic_upgrades
+            .lock()
+            .unwrap()
+            .get(project_key)
+            .is_some_and(|count| *count > 0)
     }
 
     /// Projenin bekleyen yenilemesini en fazla `budget` kadar bekler; otomatik
@@ -477,13 +524,9 @@ impl ServerState {
         tracing::info!(path = %cache_key, "Loading context for project");
         let db_path = artifacts.db_path.to_string_lossy().to_string();
         let graph_path = artifacts.graph_path.to_string_lossy().to_string();
-        let manifest_path = artifacts.manifest_path.to_string_lossy().to_string();
 
         // Uzun full index retrieval çağrısının içinde çalıştırılmaz.
-        if !Path::new(&db_path).exists()
-            || !Path::new(&graph_path).is_file()
-            || !Path::new(&manifest_path).is_file()
-        {
+        if !index_artifacts_exist(&artifacts) {
             // İlk indeksleme sürerken okunacak generation yoktur; iş bitince aynı
             // çağrı çalışır. Var olan generation ise yeniden indeksleme sırasında
             // okunmaya devam eder (generation geçişi atomiktir).
@@ -591,6 +634,13 @@ impl ServerState {
             .iter()
             .any(|root| candidate.starts_with(root))
     }
+}
+
+/// Etkin generation'ın veritabanı, graf ve manifest artefaktlarının üçü de diskte mi?
+fn index_artifacts_exist(artifacts: &ccm_core::IndexArtifactPaths) -> bool {
+    artifacts.db_path.exists()
+        && artifacts.graph_path.is_file()
+        && artifacts.manifest_path.is_file()
 }
 
 fn load_allowed_roots() -> Vec<PathBuf> {
