@@ -320,21 +320,12 @@ pub async fn index_directory_with_mode(
     std::fs::create_dir_all(&staging_root)?;
 
     let fixture_namespace = fixture_namespace_for_db(&final_db_path);
-    let final_graph_path = artifact_parent.join("ccm_graph.json");
-    let final_manifest_path = artifact_parent.join("ccm_manifest.json");
     let build = build_index_generation(
         path,
         staging_db_path,
         &staging_root,
         &fixture_namespace,
-        &[
-            final_db_path.clone(),
-            final_graph_path,
-            final_manifest_path,
-            generations_root.clone(),
-            artifact_parent.join(CURRENT_GENERATION_FILE),
-            artifact_parent.join(ACTIVATION_LOCK_DIRECTORY),
-        ],
+        &index_artifact_paths(artifact_parent, &final_db_path),
         mode,
     )
     .await;
@@ -1211,6 +1202,9 @@ pub async fn update_index(path: &str, db_path: Option<&str>) -> Result<IndexStat
         // Hazırlanamayan dosyaların eski fingerprint'i korunur; sonraki koşu yeniden dener.
         if !stats.retry_files.is_empty() {
             committed_manifest.indexed_commit = manifest.indexed_commit.clone();
+            // Racy pencereyi korumak için indexed_at'ı da eski değerle geri eski dosyaların
+            // tekrar denemesi sırasında yeniden hash'lenmesini sağlar.
+            committed_manifest.indexed_at = manifest.indexed_at;
             for path in &stats.retry_files {
                 match manifest.files.get(path) {
                     Some(previous) => {
@@ -1658,15 +1652,27 @@ fn file_id_to_path(project_root: &Path, file_id: &str) -> PathBuf {
     project_root.join(rel)
 }
 
+/// Metadata'dan mtime'ı (saniye, nanosaniye) çıkarır. Stat önbelleği ve
+/// fingerprint karşılaştırmasında tutarlı hesaplama sağlar.
+fn modified_parts(meta: &std::fs::Metadata) -> (u64, u32) {
+    let modified = meta
+        .modified()
+        .ok()
+        .and_then(|value| value.duration_since(UNIX_EPOCH).ok());
+    let modified_sec = modified.as_ref().map(|value| value.as_secs()).unwrap_or(0);
+    let modified_nsec = modified
+        .as_ref()
+        .map(|value| value.subsec_nanos())
+        .unwrap_or(0);
+    (modified_sec, modified_nsec)
+}
+
 fn fingerprint_for_path(path: &Path) -> std::io::Result<FileFingerprint> {
     use std::io::Read;
 
     let mut file = std::fs::File::open(path)?;
     let meta = file.metadata()?;
-    let modified = meta
-        .modified()
-        .ok()
-        .and_then(|value| value.duration_since(UNIX_EPOCH).ok());
+    let (modified_sec, modified_nsec) = modified_parts(&meta);
     let mut content_hash = 0xcbf29ce484222325u64;
     let mut buffer = [0u8; 64 * 1024];
     loop {
@@ -1681,11 +1687,8 @@ fn fingerprint_for_path(path: &Path) -> std::io::Result<FileFingerprint> {
     }
 
     Ok(FileFingerprint {
-        modified_sec: modified.as_ref().map(|value| value.as_secs()).unwrap_or(0),
-        modified_nsec: modified
-            .as_ref()
-            .map(|value| value.subsec_nanos())
-            .unwrap_or(0),
+        modified_sec,
+        modified_nsec,
         size: meta.len(),
         content_hash,
     })
@@ -1704,15 +1707,7 @@ fn fingerprint_reusing_previous(
         return fingerprint_for_path(path);
     };
     let meta = std::fs::metadata(path)?;
-    let modified = meta
-        .modified()
-        .ok()
-        .and_then(|value| value.duration_since(UNIX_EPOCH).ok());
-    let modified_sec = modified.as_ref().map(|value| value.as_secs()).unwrap_or(0);
-    let modified_nsec = modified
-        .as_ref()
-        .map(|value| value.subsec_nanos())
-        .unwrap_or(0);
+    let (modified_sec, modified_nsec) = modified_parts(&meta);
     let stat_unchanged = previous.modified_sec == modified_sec
         && previous.modified_nsec == modified_nsec
         && previous.size == meta.len();
