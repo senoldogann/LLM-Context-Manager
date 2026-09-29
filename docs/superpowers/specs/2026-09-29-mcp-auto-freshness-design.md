@@ -41,10 +41,15 @@ Ajan kod aradığında indeks diskteki kodu yansıtmalı; geliştirici `index_no
 - `IndexManifest` → `#[serde(default)] indexed_at: Option<u64>` (unix saniye).
   `build_manifest` doldurur. Eski manifestlerde `None` olur; yeniden indeks
   tetiklenmez.
-- `pub fn is_watch_relevant_path(project_root: &Path, path: &Path) -> bool`
+- `pub fn build_watch_filter(project_root: &Path, db_path: &Path) -> Result<WatchFilter>`
+  ve `pub fn is_watch_relevant_path(filter: &WatchFilter, path: &Path) -> bool`
   - `is_index_relevant_file` (politika dışlaması, iç indeks dosyaları, binary
-    uzantılar) ile kök seviyesindeki `.gitignore`, `.ignore`, `.ccmignore`,
-    `.git/info/exclude` eşleştiricisini birleştirir.
+    uzantılar), manifest taramasıyla paylaşılan indeks artefakt listesi
+    (`ccm_current`, `.ccm-generations`, kilit dizini, DB), araç durum dizinleri
+    (`.ccm`, `.agent`) ve kök seviyesindeki `.gitignore`, `.ignore`,
+    `.ccmignore`, `.git/info/exclude` eşleştiricisini birleştirir.
+    (`is_index_relevant_file` generation yerleşimini tanımadığı için tek başına
+    yetmez.)
   - Amaç: `target/` gibi build çıktılarının ve indeksin kendi çıktı dizininin
     (`data/`, `.ccm`) yenileme tetiklememesi. İndeks çıktısının filtrelenmesi
     zorunludur; aksi halde yenileme kendi yazdığı dosyalarla döngüye girer.
@@ -75,8 +80,10 @@ Ajan kod aradığında indeks diskteki kodu yansıtmalı; geliştirici `index_no
   2. `ServerState::project_index_lock` (manuel `index_now` ile aynı mutex) al.
   3. `run_index_worker_process(project, db, Full)` → worker `update_index`
      çalıştırır.
-  4. Başarıda `refresh_project_engine`; `pending_paths = 0`,
-     `last_error = None`, `semantic_unavailable = stats.semantic_unavailable`.
+  4. Başarıda `get_engine` ile yeni generation önbelleğe alınır (generation
+     değişmediyse önbellekten döner, graf yeniden yüklenmez); kuyrukta olay
+     kalmadıysa `pending_paths = 0`, `last_error = None`,
+     `semantic_unavailable = stats.semantic_unavailable`.
   5. Çalışma sırasında yeni olay geldiyse 1'e dön.
   Tek görev olduğu için aynı projede yenilemeler sıraya girer.
 - `wait_until_fresh(handle, Duration)`: durum temizse (`pending_paths == 0` ve
@@ -92,9 +99,14 @@ Ajan kod aradığında indeks diskteki kodu yansıtmalı; geliştirici `index_no
   (anahtar: kanonik proje yolu).
 - İzlenen proje sayısı `CCM_MCP_ENGINE_CACHE_SIZE` ile sınırlı (varsayılan 8);
   aşılırsa durum `Unavailable("watcher limit reached")`.
-- `get_engine`: `index_job_in_progress` engeli ve `server.rs`'teki buna bağlı
-  hata eşlemesi kaldırılır. İndeks hiç yoksa mevcut "index missing" hatası
-  aynen kalır.
+- `get_engine`: `index_job_in_progress` engeli yalnızca henüz hiç generation
+  yokken (ilk indeksleme) uygulanır; var olan generation yeniden indeksleme
+  sırasında okunmaya devam eder. İndeks hiç yoksa ve iş de yoksa mevcut
+  "index missing" hatası aynen kalır.
+- Engine önbelleği bir projenin yalnızca en yeni generation'ını tutar; yeni
+  generation eklenince aynı projenin eski kayıtları düşürülür. Aksi halde her
+  kayıtta yeni generation üreten otomatik yenileme aynı projenin 8 grafını
+  bellekte biriktirir (Django'da her biri tam graf).
 - Okuma araçları (`get_context`, `search_code`, `find_nodes`, `read_graph`,
   `find_usages`, `trace_call_chain`, `impact_of_change`, `diff_context`):
   `wait_until_fresh` → `get_engine` → çıktının başına tazelik satırı.
@@ -169,10 +181,13 @@ düğümler) ve her çalışmada tüm dosyalar yeniden okunup hash'leniyor.
    `indexed_at`'e 1 sn'den yakın veya sonraysa yeniden hash'lenir;
    `indexed_at` olmayan manifestlerde her dosya hash'lenir.
    Beklenen: ~0,9 sn → ~0,05 sn.
-3. **Debounce 300 ms.**
+3. **Yüklü grafın staging'de yeniden kullanımı.** `update_index` grafı zaten
+   başta aktif generation'dan yüklüyor; staging için JSON'u kopyalayıp ikinci
+   kez ayrıştırmak yerine bu graf kullanılır (Django'da ~0,25 sn).
+4. **Debounce 300 ms.**
 
-Tahmini Django sonucu ~1,9 sn. Kalan maliyet graf JSON gidiş-dönüşü (worker
-yükleme/kaydetme + sunucunun yeniden yüklemesi, ~0,8 sn) ve tüm referans
+Tahmini Django sonucu ~1,6 sn. Kalan maliyet graf JSON gidiş-dönüşü (worker
+yükleme/kaydetme + sunucunun yeniden yüklemesi, ~0,55 sn) ve tüm referans
 kenarlarının yeniden kurulması (~0,6 sn); ikisi de P0.4 (grafın bellekte
 tutulması) kapsamında.
 
@@ -187,16 +202,17 @@ yeniden kullanım bunu kötüleştirmez).
   alanlarla `warn` log'u, durum `Unavailable(sebep)`; her okuma sonucunda
   görünür. Sessizce yutulmaz.
 - **Worker hatası** (embedder, "Index changed concurrently", zaman aşımı):
-  1 s / 2 s / 4 s aralıkla en fazla 3 deneme, her denemede `warn` log'u.
-  Sonra son hata `last_error`'a yazılır ve sonuçta gösterilir; okumalar
-  mevcut generation'dan devam eder. Sonraki dosya olayı yeniden dener.
-- **Watcher çalışırken hata olayı**: `last_error`'a yazılır ve olay kaybı
-  ihtimaline karşı yenileme tetiklenir.
+  en fazla 3 deneme; denemeler arasında 1 sn ve 2 sn; her başarısız denemede
+  `warn` log'u. Sonra son hata `last_error`'a yazılır ve sonuçta gösterilir;
+  okumalar mevcut generation'dan devam eder. Sonraki dosya olayı yeniden dener.
+- **Watcher çalışırken hata olayı**: `warn` log'u ve olay kaybı ihtimaline
+  karşı tam karşılaştırmalı yenileme; yenileme başarılıysa indeks tutarlıdır.
 - **Eşzamanlı yazarlar** (CLI `--watch`, detached semantic upgrade): mevcut
   activation lock + pointer CAS korur; CAS hatası yukarıdaki deneme yolundan
   geçer. İndeks çıktı dizini filtrelendiği için bu yazarlar döngü tetiklemez.
 - **Manuel `index_now`**: aynı proje mutex'ini bekler; bittiğinde engine
-  yenilenir ve tazelik durumu güncellenir.
+  yenilenir ve otomatik yenilemeden bir tam karşılaştırma istenir, böylece
+  önceki başarısız yenilemeden kalan hata satırı temizlenir.
 
 ## Test
 
@@ -214,9 +230,9 @@ Mevcut strateji korunur; yeni testler gerçek MCP binary'si üzerinden stdio ile
 - `core/tests/incremental_filesystem_test.rs`: `is_watch_relevant_path` için
   gerçek geçici dizinle senaryo (gitignore'lu yol, `.ccmignore`, indeks çıktı
   dizini, normal kaynak dosya).
-- `mcp/tests/mcp_integration_test.rs`: "indexing is in progress" bekleyen test,
-  iş sürerken mevcut generation'dan cevap verildiğini doğrulayacak şekilde
-  güncellenir.
+- `mcp/tests/mcp_integration_test.rs`: yeni test, yeniden indeksleme sürerken
+  okumanın mevcut generation'dan hatasız döndüğünü doğrular; ilk indekslemede
+  "indexing is in progress" bekleyen mevcut test değişmeden geçer.
 - `core/tests/incremental_filesystem_test.rs` — vektör yeniden kullanımı: çok
   fonksiyonlu bir dosyada tek fonksiyonu değiştir; `update_index` sonrası
   `embedded_chunks` yalnızca değişen parçaları, `reused_chunks` geri kalanını
