@@ -205,9 +205,10 @@ impl Extractor {
                 Some((NodeType::Struct, name))
             }
             "impl_item" => {
-                // For impl blocks, get the type being implemented
-                let name = self
-                    .find_child_text(node, "type_identifier")
+                // Uygulanan tip `type` alanındadır; `impl Display for Foo` → "Foo"
+                let name = node
+                    .child_by_field_name("type")
+                    .map(|type_node| self.rust_type_base_name(&type_node))
                     .unwrap_or_else(|| "anonymous_impl".to_string());
                 Some((NodeType::Class, name))
             }
@@ -645,6 +646,20 @@ impl Extractor {
     }
 
     /// Helper: Finds a child node by kind and returns its text.
+    /// Rust tip düğümünden jenerik/referans/yol öneklerini atarak çıplak tip
+    /// adını döndürür: `Foo<T>`, `&Foo`, `crate::a::Foo` → "Foo".
+    fn rust_type_base_name(&self, type_node: &Node) -> String {
+        let inner_field = match type_node.kind() {
+            "generic_type" | "reference_type" | "pointer_type" => Some("type"),
+            "scoped_type_identifier" => Some("name"),
+            _ => None,
+        };
+        match inner_field.and_then(|field| type_node.child_by_field_name(field)) {
+            Some(inner) => self.rust_type_base_name(&inner),
+            None => self.get_node_text(type_node),
+        }
+    }
+
     fn find_child_text(&self, node: &Node, child_kind: &str) -> Option<String> {
         let mut cursor = node.walk();
         for child in node.children(&mut cursor) {

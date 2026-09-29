@@ -132,6 +132,17 @@ impl CodeGraph {
                 symbols.entry(node.name.clone()).or_default().push(idx);
             }
         }
+        // Rust impl blokları tipin adını taşıyan Class düğümleridir; aynı adlı
+        // struct varken hedefi belirsizleştirip dosyalar arası kenarı
+        // engellerler. Tip referansı struct tanımına bağlanır.
+        for targets in symbols.values_mut() {
+            let has_struct = targets
+                .iter()
+                .any(|idx| self.graph[*idx].node_type == NodeType::Struct);
+            if has_struct {
+                targets.retain(|idx| !is_rust_impl_node(&self.graph[*idx]));
+            }
+        }
 
         let source_indices: Vec<NodeIndex> = self
             .graph
@@ -597,6 +608,11 @@ fn is_referenceable_symbol(name: &str) -> bool {
     let mut chars = name.chars();
     chars.next().is_some_and(is_identifier_start)
         && chars.all(|ch| is_identifier_start(ch) || ch.is_numeric())
+}
+
+pub(crate) fn is_rust_impl_node(node: &CodeNode) -> bool {
+    // Rust'ta sınıf yoktur; .rs dosyasındaki Class düğümleri impl bloklarıdır.
+    node.node_type == NodeType::Class && graph_node_file_path(&node.id).ends_with(".rs")
 }
 
 fn graph_node_file_path(node_id: &str) -> &str {

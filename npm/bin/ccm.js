@@ -353,7 +353,8 @@ async function getBinaryFor(commandName) {
         console.warn(`[CCM] Cached binary failed verification and will be replaced: ${binPath}`);
     }
 
-    console.log(`[CCM] Downloading ${commandName} v${VERSION} for ${target}...`);
+    // stderr: `mcp` modunda stdout yalnızca JSON-RPC kanalına aittir.
+    console.error(`[CCM] Downloading ${commandName} v${VERSION} for ${target}...`);
 
     if (!fs.existsSync(BIN_DIR)) {
         fs.mkdirSync(BIN_DIR, { recursive: true });

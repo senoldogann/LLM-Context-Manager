@@ -54,3 +54,59 @@ async fn incremental_index_adds_call_edges() -> Result<()> {
 
     Ok(())
 }
+
+#[tokio::test]
+async fn cross_file_reference_resolves_struct_that_has_impl_blocks() -> Result<()> {
+    std::env::set_var("CCM_DISABLE_EMBEDDER", "1");
+
+    let dir = tempdir()?;
+    // Aynı adlı struct ve impl blokları referans hedefini belirsizleştirmemeli;
+    // `impl Display for Foo` bloğu trait adıyla değil tip adıyla anılmalı.
+    std::fs::write(
+        dir.path().join("foo.rs"),
+        "use std::fmt::{Display, Formatter, Result};\n\
+         pub struct Foo {}\n\
+         impl Foo {\n    pub fn new() -> Foo { Foo {} }\n}\n\
+         impl Display for Foo {\n    fn fmt(&self, f: &mut Formatter) -> Result { Ok(()) }\n}\n",
+    )?;
+    std::fs::write(
+        dir.path().join("user.rs"),
+        "fn build() -> Foo {\n    let value: Foo = make();\n    value\n}\n",
+    )?;
+
+    let db_path = dir.path().join("db");
+    std::fs::create_dir_all(&db_path)?;
+    let store = LanceDbStore::new(db_path.to_string_lossy().as_ref(), "code_vectors").await?;
+    let engine = RetrievalEngine::new(Arc::new(RwLock::new(CodeGraph::new())), store);
+    engine
+        .incremental_index_paths(
+            dir.path().to_string_lossy().as_ref(),
+            &[PathBuf::from("foo.rs"), PathBuf::from("user.rs")],
+        )
+        .await?;
+
+    let graph = engine.graph.read().await;
+    let impl_names: Vec<&str> = graph
+        .graph
+        .node_weights()
+        .filter(|node| node.node_type == NodeType::Class)
+        .map(|node| node.name.as_str())
+        .collect();
+    assert_eq!(impl_names, vec!["Foo", "Foo"], "impl nodes: {impl_names:?}");
+
+    let find = |node_type: NodeType, name: &str| {
+        graph
+            .graph
+            .node_indices()
+            .find(|idx| graph.graph[*idx].node_type == node_type && graph.graph[*idx].name == name)
+            .unwrap_or_else(|| panic!("{name} node not found"))
+    };
+    let build_idx = find(NodeType::Function, "build");
+    let struct_idx = find(NodeType::Struct, "Foo");
+    assert!(
+        graph.graph.find_edge(build_idx, struct_idx).is_some(),
+        "cross-file reference edge to struct Foo not found"
+    );
+
+    Ok(())
+}

@@ -558,6 +558,7 @@ pub async fn handle_request(
         "initialized" | "notifications/initialized" => {
             Ok(Some(create_success_response(request.id, json!({}))))
         }
+        "ping" => Ok(Some(create_success_response(request.id, json!({})))),
         "tools/list" => handle_list_tools(request.id).map(Some),
         "resources/list" => Ok(Some(create_success_response(
             request.id,

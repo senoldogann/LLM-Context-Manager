@@ -1373,3 +1373,32 @@ fn mcp_resolves_class_import_constructor_context_and_impact(
     let _ = child.kill();
     Ok(())
 }
+
+#[test]
+fn mcp_answers_ping_with_empty_result() -> Result<(), Box<dyn std::error::Error>> {
+    let project = tempdir()?;
+    let mut cmd = Command::new(assert_cmd::cargo::cargo_bin!("ccm-mcp"));
+    cmd.env("CCM_DISABLE_EMBEDDER", "1")
+        .env("CCM_MCP_DEBUG", "0")
+        .env("CCM_PROJECT_ROOT", project.path())
+        .env("CCM_ALLOWED_ROOTS", project.path())
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null());
+
+    let mut child = cmd.spawn()?;
+    let mut stdin = child.stdin.take().unwrap();
+    let mut reader = BufReader::new(child.stdout.take().unwrap());
+    // MCP spec: ping isteği boş bir result ile yanıtlanmalıdır.
+    let response = send_request(
+        &mut stdin,
+        &mut reader,
+        json!({"jsonrpc":"2.0","id":"ping-1","method":"ping"}),
+    )?;
+    assert_eq!(response["id"], "ping-1");
+    assert_eq!(response["result"], json!({}));
+    assert!(response.get("error").is_none());
+
+    let _ = child.kill();
+    Ok(())
+}

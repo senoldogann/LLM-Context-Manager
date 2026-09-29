@@ -50,7 +50,7 @@ pub struct NodeNeighbors {
 }
 
 use std::collections::{HashMap, HashSet};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 /// The main intelligence engine for speculative retrieval.
@@ -230,7 +230,7 @@ impl RetrievalEngine {
             let Some(relative_path) = normalize_file_id_with_root(&root_path, &abs_path) else {
                 continue;
             };
-            if path_is_policy_excluded(&abs_path) {
+            if path_is_policy_excluded(Path::new(&relative_path)) {
                 let issue = IndexIssue {
                     path: relative_path,
                     reason: IndexIssueReason::SkippedByPolicy,
@@ -1409,12 +1409,31 @@ pub(crate) fn build_embedding_text(node: &CodeNode) -> String {
         NodeType::File => "file",
     };
     let file_path = extract_file_path(&node.id);
+    let label = match rust_trait_impl_declaration(node) {
+        Some(declaration) => format!("{} {} ({})", type_label, node.name, declaration),
+        None => format!("{} {}", type_label, node.name),
+    };
     // İsim/dosya başlığı içeriğin önünde tekrarlanır; sembol adı hash-embedding'de
     // içerik gürültüsüne karşı daha güçlü sinyal taşır (name-first weighting).
     format!(
-        "{} {}\nfile: {}\n{} {}\nfile: {}\n{}",
-        type_label, node.name, file_path, type_label, node.name, file_path, node.content
+        "{}\nfile: {}\n{}\nfile: {}\n{}",
+        label, file_path, label, file_path, node.content
     )
+}
+
+/// Rust trait impl düğümü tip adıyla anılır (`Room`); trait bilgisi
+/// (`impl Default for Room`) embedding başlığında korunarak trait adıyla
+/// yapılan sorgular da bu düğüme ulaşır.
+fn rust_trait_impl_declaration(node: &CodeNode) -> Option<&str> {
+    if !crate::graph::is_rust_impl_node(node) {
+        return None;
+    }
+    node.content
+        .lines()
+        .map(str::trim)
+        .find(|line| line.starts_with("impl"))
+        .filter(|line| line.contains(" for "))
+        .map(|line| line.trim_end_matches('{').trim_end())
 }
 
 pub(crate) fn repo_priority_score(file_path: &str) -> f32 {

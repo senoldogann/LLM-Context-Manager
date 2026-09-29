@@ -340,13 +340,14 @@ Semantic `search_code` tasks still require a configured embedder.
 
 **Latest Recorded Results:** The offline synthetic semantic gate passes
 **180/180 tasks (100%)** as of v0.3.12, and CI now enforces it with
-`--min-pass-rate 100` (no regression); structural-only gate is 50/50 100%. See
-[`eval/report.semantic.json`](./eval/report.semantic.json).
+`--min-pass-rate 100` (no regression); structural-only gate is 50/50 100%. The
+gate runs [`eval/fixtures/golden_tasks.synthetic.json`](./eval/fixtures/golden_tasks.synthetic.json)
+with deterministic fixture embeddings in [`eval.yml`](./.github/workflows/eval.yml).
 
 **External benchmark (v0.3.13):** 35 hand-verified golden tasks on real repos
 (serde, flask, express) with real Ollama embeddings. Hybrid scoring passes
 82.9% (29/35) vs 80.0% (28/35) semantic-only; `get_context`/`read_graph` are
-11/11. Full numbers, failure ledger and reproduction steps:
+20/20. On `search_code` alone Recall@5 is 0.600 vs 0.533. Full numbers, failure ledger and reproduction steps:
 [`benchmarks/README.md`](./benchmarks/README.md).
 
 ---

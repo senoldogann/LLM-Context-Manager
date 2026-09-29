@@ -422,7 +422,7 @@ async fn build_index_generation(
                     continue;
                 }
 
-                if path_is_policy_excluded(&file_path) {
+                if path_is_policy_excluded(Path::new(&file_id)) {
                     let issue = IndexIssue {
                         path: file_id,
                         reason: IndexIssueReason::SkippedByPolicy,
@@ -1550,11 +1550,11 @@ fn is_internal_index_file(file_id: &str) -> bool {
 /// CLI watch modu bunu kullanır; indexleyici ile aynı politikayı tek kaynaktan
 /// uygular (policy exclusion + internal artifact + binary uzantı filtresi).
 pub fn is_index_relevant_file(project_root: &Path, path: &Path) -> bool {
-    if path_is_policy_excluded(path) {
+    // Proje kökü dışındaki yollar indexlenemez; politika göreli yola uygulanır.
+    let Some(file_id) = normalize_file_id(project_root, path) else {
         return false;
-    }
-    if normalize_file_id(project_root, path).is_some_and(|file_id| is_internal_index_file(&file_id))
-    {
+    };
+    if path_is_policy_excluded(Path::new(&file_id)) || is_internal_index_file(&file_id) {
         return false;
     }
     let extension = path
@@ -1668,7 +1668,7 @@ fn build_manifest(project_root: &Path, excluded_paths: &[PathBuf]) -> Result<Ind
         if is_internal_index_file(&file_id) {
             continue;
         }
-        if path_is_policy_excluded(file_path) {
+        if path_is_policy_excluded(Path::new(&file_id)) {
             continue;
         }
 
@@ -1708,6 +1708,8 @@ fn diff_manifest(
     (changed, deleted)
 }
 
+/// `file_path` proje köküne göreli olmalıdır (ör. `./src/main.rs`); mutlak yol
+/// verilirse proje kökünün üst dizinleri de ("/build/app") politikaya takılır.
 pub(crate) fn path_is_policy_excluded(file_path: &Path) -> bool {
     // Yalnızca dizin adları politika kapsamındadır; "build" veya "out" adlı
     // bir dosya kendi adından dolayı dışlanmamalı.
