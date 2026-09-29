@@ -735,3 +735,63 @@ async fn unreachable_embedder_still_activates_a_graph_only_index() -> Result<()>
     }
     Ok(())
 }
+
+#[tokio::test]
+async fn update_index_detects_same_size_edit_inside_racy_window() -> Result<()> {
+    let _env_guard = ENV_LOCK.lock().await;
+    std::env::set_var("CCM_DISABLE_EMBEDDER", "1");
+    let project = tempdir()?;
+    let file = project.path().join("lib.rs");
+    std::fs::write(&file, "fn alpha() {}\n")?;
+    ccm_core::index_directory(project.path().to_string_lossy().as_ref(), None).await?;
+    let manifest_path = artifacts(project.path(), None)?.manifest_path;
+    assert!(ccm_core::read_index_timestamp(&manifest_path)?.is_some());
+
+    // Aynı boyutta içerik değişikliği; mtime geri yüklenerek stat bilgisi
+    // birebir korunur. İndeks az önce alındığı için dosya racy penceresindedir
+    // ve içerik yeniden hash'lenmelidir.
+    let original_mtime = std::fs::metadata(&file)?.modified()?;
+    std::fs::write(&file, "fn gamma() {}\n")?;
+    std::fs::OpenOptions::new()
+        .write(true)
+        .open(&file)?
+        .set_modified(original_mtime)?;
+    ccm_core::update_index(project.path().to_string_lossy().as_ref(), None).await?;
+
+    let paths = artifacts(project.path(), None)?;
+    let graph = CodeGraph::from_file(paths.graph_path.to_string_lossy().as_ref())?;
+    assert!(graph.graph.node_weights().any(|node| node.name == "gamma"));
+    assert!(!graph.graph.node_weights().any(|node| node.name == "alpha"));
+    Ok(())
+}
+
+#[tokio::test]
+async fn update_index_trusts_unchanged_stat_outside_racy_window() -> Result<()> {
+    let _env_guard = ENV_LOCK.lock().await;
+    std::env::set_var("CCM_DISABLE_EMBEDDER", "1");
+    let project = tempdir()?;
+    let file = project.path().join("lib.rs");
+    std::fs::write(&file, "fn alpha() {}\n")?;
+    let an_hour_ago = std::time::SystemTime::now() - std::time::Duration::from_secs(3_600);
+    std::fs::OpenOptions::new()
+        .write(true)
+        .open(&file)?
+        .set_modified(an_hour_ago)?;
+    ccm_core::index_directory(project.path().to_string_lossy().as_ref(), None).await?;
+
+    // Git ile aynı ödünleşim: mtime ve boyut birebir korunmuşsa ve dosya racy
+    // pencerenin dışındaysa içerik okunmaz. Bu test hızlı yolun devrede
+    // olduğunu sabitler; yol kapanırsa performans sessizce geriler.
+    std::fs::write(&file, "fn gamma() {}\n")?;
+    std::fs::OpenOptions::new()
+        .write(true)
+        .open(&file)?
+        .set_modified(an_hour_ago)?;
+    let stats = ccm_core::update_index(project.path().to_string_lossy().as_ref(), None).await?;
+
+    assert_eq!(
+        stats.files_indexed, 0,
+        "unchanged stat must skip re-hashing"
+    );
+    Ok(())
+}
