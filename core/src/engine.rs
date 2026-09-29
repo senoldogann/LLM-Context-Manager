@@ -1423,17 +1423,27 @@ pub(crate) fn build_embedding_text(node: &CodeNode) -> String {
 
 /// Rust trait impl düğümü tip adıyla anılır (`Room`); trait bilgisi
 /// (`impl Default for Room`) embedding başlığında korunarak trait adıyla
-/// yapılan sorgular da bu düğüme ulaşır.
-fn rust_trait_impl_declaration(node: &CodeNode) -> Option<&str> {
+/// yapılan sorgular da bu düğüme ulaşır. Birden çok satıra yayılan bildirimler
+/// (`impl<T>\n    Default for Room<T>`) tek satıra indirgenir.
+fn rust_trait_impl_declaration(node: &CodeNode) -> Option<String> {
     if !crate::graph::is_rust_impl_node(node) {
         return None;
     }
-    node.content
-        .lines()
-        .map(str::trim)
-        .find(|line| line.starts_with("impl"))
-        .filter(|line| line.contains(" for "))
-        .map(|line| line.trim_end_matches('{').trim_end())
+    let content: &str = &node.content;
+    // Doc yorumları ve attribute'lar atlanır; bildirim `impl` ile başlayan satırdadır.
+    let mut offset = 0;
+    let mut declaration_start = None;
+    for line in content.split('\n') {
+        let trimmed = line.trim_start();
+        if trimmed.starts_with("impl") {
+            declaration_start = Some(offset + (line.len() - trimmed.len()));
+            break;
+        }
+        offset += line.len() + 1;
+    }
+    let declaration = content[declaration_start?..].split('{').next()?;
+    let normalized = declaration.split_whitespace().collect::<Vec<_>>().join(" ");
+    normalized.contains(" for ").then_some(normalized)
 }
 
 pub(crate) fn repo_priority_score(file_path: &str) -> f32 {
@@ -1677,6 +1687,34 @@ mod retrieval_regression_tests {
     // Process-global env'i değiştiren testler paralel koşunca birbirini
     // etkiler; bu modülde bu testler tek sıraya alınır.
     static TEST_ENV_LOCK: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
+
+    #[test]
+    fn embedding_header_keeps_single_and_multi_line_trait_impls() {
+        let impl_node = |content: &str| CodeNode {
+            id: "./src/rooms.rs:impl_item:symbol:0123456789abcdef:0".to_string(),
+            node_type: NodeType::Class,
+            name: "Room".to_string(),
+            content: content.into(),
+            start_line: 1,
+            end_line: 3,
+        };
+        let single = super::build_embedding_text(&impl_node("impl Default for Room {\n}\n"));
+        assert!(
+            single.starts_with("class Room (impl Default for Room)\n"),
+            "{single}"
+        );
+
+        let multi = super::build_embedding_text(&impl_node(
+            "/// Varsayılan oda.\n#[allow(dead_code)]\nimpl<T>\n    Default for Room<T>\nwhere\n    T: Clone,\n{\n}\n",
+        ));
+        assert!(
+            multi.starts_with("class Room (impl<T> Default for Room<T> where T: Clone,)\n"),
+            "{multi}"
+        );
+
+        let inherent = super::build_embedding_text(&impl_node("impl Room {\n}\n"));
+        assert!(inherent.starts_with("class Room\n"), "{inherent}");
+    }
 
     #[test]
     fn stable_node_ids_report_the_actual_file_path() {
