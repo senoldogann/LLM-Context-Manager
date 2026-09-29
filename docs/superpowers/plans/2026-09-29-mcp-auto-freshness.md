@@ -19,7 +19,8 @@
 - İzlenen proje sınırı `CCM_MCP_ENGINE_CACHE_SIZE` (varsayılan 8); aşılınca durum `Unavailable("watcher limit reached")`.
 - `notify = "6.1"` (CLI ile aynı; lock'ta 6.1.1).
 - `INDEX_SCHEMA_VERSION` 4 kalır; yeni manifest ve `IndexStats` alanları `#[serde(default)]`.
-- Tazelik satırı biçimi: `_Index: <parçalar " · " ile birleşik>_`. Parçalar birebir: `fresh`, `auto-refresh on`, `stale`, `N changed file(s) pending`, `refresh running`, `last refresh failed: <hata>`, `auto-refresh off`, `auto-refresh unavailable (<sebep>)`, `indexed <yaş> ago`, `semantic search unavailable: <sebep>`.
+- Tazelik satırı biçimi: `_Index: <parçalar " · " ile birleşik>_`. Parçalar birebir: `fresh`, `auto-refresh on`, `stale`, `N changed file(s) pending`, `refresh running`, `waiting for semantic upgrade`, `last refresh failed: <hata>`, `auto-refresh off`, `auto-refresh unavailable (<sebep>)`, `indexed <yaş> ago`, `semantic search unavailable: <sebep>`.
+- Hızlı (quick) indeksin semantik yükseltmesi sürerken otomatik yenileme `update_index` çalıştırmaz (aksi halde eksik vektör tablosunu onarmaya/tam yeniden indekslemeye girip yükseltmenin embedding işini ikinci kez yapar); okumalar beklemez; yükseltme bitince ertelenen değişiklikler tek yenilemede işlenir.
 - Araç çıktıları İngilizce, kod yorumları Türkçe (repo stili). Loglar yapılandırılmış alan kullanır.
 - Saf fonksiyonlar girdilerini değiştirmez; yalnızca dönüş değeri üretir.
 - Ortam değişkeni değiştiren core testleri `ENV_LOCK`'u tutar ve değişkenleri `Drop` ile geri yükler.
@@ -1335,13 +1336,18 @@ pub(crate) struct ProjectFreshness {
     pub watcher: WatcherStatus,
     pub pending_paths: usize,
     pub refresh_in_flight: bool,
+    /// Hızlı indeksin semantik yükseltmesi sürerken yenileme ertelenir;
+    /// yükseltme bitince bekleyen değişiklikler tek seferde işlenir.
+    pub waiting_for_upgrade: bool,
     pub last_error: Option<String>,
     pub semantic_unavailable: Option<String>,
 }
 
-/// Bekleyen değişiklik ve süren yenileme yoksa bekleme gerekmez.
+/// Okumanın beklemesine gerek yoksa `true`: bekleyen iş yoktur ya da iş
+/// semantik yükseltme bitene kadar ertelenmiştir (beklemek sonucu değiştirmez).
 pub(crate) fn is_settled(freshness: &ProjectFreshness) -> bool {
-    freshness.pending_paths == 0 && !freshness.refresh_in_flight
+    freshness.waiting_for_upgrade
+        || (freshness.pending_paths == 0 && !freshness.refresh_in_flight)
 }
 
 /// Otomatik yenilemesi olmayan proje için durum.
@@ -1350,6 +1356,7 @@ pub(crate) fn disabled_freshness() -> ProjectFreshness {
         watcher: WatcherStatus::Disabled,
         pending_paths: 0,
         refresh_in_flight: false,
+        waiting_for_upgrade: false,
         last_error: None,
         semantic_unavailable: None,
     }
@@ -1374,7 +1381,8 @@ pub(crate) fn format_freshness_line(
     now_secs: u64,
 ) -> String {
     let fresh = freshness.watcher == WatcherStatus::Active
-        && is_settled(freshness)
+        && freshness.pending_paths == 0
+        && !freshness.refresh_in_flight
         && freshness.last_error.is_none();
     let mut parts: Vec<String> = Vec::new();
     match &freshness.watcher {
@@ -1393,6 +1401,9 @@ pub(crate) fn format_freshness_line(
             }
             if freshness.refresh_in_flight {
                 parts.push("refresh running".to_string());
+            }
+            if freshness.waiting_for_upgrade {
+                parts.push("waiting for semantic upgrade".to_string());
             }
             if let Some(error) = &freshness.last_error {
                 parts.push(format!("last refresh failed: {}", error));
@@ -1698,13 +1709,13 @@ EOF
 - Modify: `mcp/Cargo.toml` — `notify = "6.1"`
 - Modify: `mcp/src/freshness.rs` — watcher, yenileme döngüsü, bekleme
 - Modify: `mcp/src/server.rs` — `freshness` alanı, `ensure_auto_refresh`, `freshness_handle`, `wait_until_fresh`, `FRESHNESS_WAIT_BUDGET`, `handle_call_tool_inner`
-- Modify: `mcp/src/tools.rs` — `IndexModeArg` ve `run_index_worker_process` `pub(crate)`; `index_now` ve `run_index_project` başarıda `ensure_auto_refresh`
+- Modify: `mcp/src/tools.rs` — `IndexModeArg` ve `run_index_worker_process` `pub(crate)`; `index_now` ve `run_index_project` başarıda `ensure_auto_refresh` + `request_refresh`; `schedule_semantic_upgrade` (~617) yükseltmeyi kaydeder
 - Modify: `README.md` (~197), `npm/README.md` (~147) — `CCM_AUTO_REFRESH`
 - Test: `mcp/tests/auto_refresh_test.rs`
 
 **Interfaces:**
 - Consumes: `ccm_core::{build_watch_filter, is_watch_relevant_path, WatchFilter}` (Task 3); `freshness::{ProjectFreshness, WatcherStatus, is_settled, disabled_freshness, format_freshness_line, with_freshness_line}`, `engine_error_response`, `ServerState::project_key` (Task 5); `ServerState::{get_engine, project_index_lock, project_db_path}` (mevcut); test yardımcıları `McpSession`, `found_node`, `poll_find_nodes` (Task 5).
-- Produces: `freshness::{FreshnessHandle, auto_refresh_enabled, inactive_handle, start_auto_refresh, request_rescan, wait_until_fresh}`; `ServerState::{ensure_auto_refresh, freshness_handle, request_refresh, wait_until_fresh}`.
+- Produces: `freshness::{FreshnessHandle, auto_refresh_enabled, inactive_handle, start_auto_refresh, request_rescan, wait_until_fresh}`; `ServerState::{ensure_auto_refresh, freshness_handle, request_refresh, wait_until_fresh, begin_semantic_upgrade, end_semantic_upgrade, semantic_upgrade_running}`.
 
 - [ ] **Step 1: Başarısız testleri yaz**
 
@@ -1873,6 +1884,38 @@ fn graph_only_refresh_reports_semantic_notice() -> Result<(), Box<dyn Error>> {
 }
 
 #[test]
+fn quick_index_upgrade_defers_refresh_without_blocking_reads() -> Result<(), Box<dyn Error>> {
+    let project = tempdir()?;
+    fs::write(project.path().join("main.rs"), "fn existing_symbol() {}\n")?;
+    // Gecikme hem hızlı indeksi hem de ayrık semantik yükseltme sürecini uzatır.
+    let mut session =
+        McpSession::start(project.path(), &[("CCM_INTERNAL_INDEX_TEST_DELAY_MS", "3000")])?;
+    session.call_tool(
+        "index_now",
+        json!({ "project_path": project.path(), "mode": "quick" }),
+    )?;
+
+    fs::write(project.path().join("added.rs"), "fn during_upgrade_symbol() {}\n")?;
+    std::thread::sleep(Duration::from_millis(800));
+    let started = Instant::now();
+    let text = session.call_tool("find_nodes", json!({ "query": "existing_symbol" }))?;
+    assert!(
+        started.elapsed() < Duration::from_secs(1),
+        "reads must not wait while the upgrade defers the refresh: {:?}",
+        started.elapsed()
+    );
+    assert!(
+        text.contains("waiting for semantic upgrade"),
+        "unexpected freshness line: {text}"
+    );
+
+    poll_find_nodes(&mut session, "during_upgrade_symbol", Duration::from_secs(20), |text| {
+        found_node(text, "during_upgrade_symbol") && text.starts_with("_Index: fresh")
+    })?;
+    Ok(())
+}
+
+#[test]
 fn manual_index_during_auto_refresh_succeeds() -> Result<(), Box<dyn Error>> {
     let project = tempdir()?;
     fs::write(project.path().join("main.rs"), "fn existing_symbol() {}\n")?;
@@ -1986,6 +2029,7 @@ pub(crate) fn inactive_handle(watcher: WatcherStatus) -> Arc<FreshnessHandle> {
         watcher,
         pending_paths: 0,
         refresh_in_flight: false,
+        waiting_for_upgrade: false,
         last_error: None,
         semantic_unavailable: None,
     });
@@ -2039,6 +2083,7 @@ pub(crate) fn start_auto_refresh(
         watcher: WatcherStatus::Active,
         pending_paths: 0,
         refresh_in_flight: true,
+        waiting_for_upgrade: false,
         last_error: None,
         semantic_unavailable: None,
     });
@@ -2126,8 +2171,11 @@ async fn run_refresh_loop(
 ) {
     let root = PathBuf::from(&project_key);
     let mut pending: HashSet<PathBuf> = HashSet::new();
+    let mut waiting_for_upgrade = false;
     loop {
-        if pending.is_empty() {
+        // Bekleyen iş yoksa ya da iş yükseltme yüzünden ertelendiyse yeni sinyal
+        // beklenir; yükseltme bitince `end_semantic_upgrade` döngüyü uyandırır.
+        if pending.is_empty() || waiting_for_upgrade {
             let Some(signal) = signals.recv().await else {
                 return;
             };
@@ -2152,10 +2200,23 @@ async fn run_refresh_loop(
                 Err(_) => break,
             }
         }
+        // Hızlı indeksin semantik yükseltmesi sürerken `update_index` eksik
+        // vektör tablosunu onarmaya ya da tam yeniden indekslemeye girip
+        // yükseltmenin embedding işini ikinci kez yapar; yenileme ertelenir.
+        waiting_for_upgrade = server.semantic_upgrade_running(&project_key);
         let count = pending.len();
+        if waiting_for_upgrade {
+            handle.state.send_modify(|freshness| {
+                freshness.pending_paths = count;
+                freshness.refresh_in_flight = false;
+                freshness.waiting_for_upgrade = true;
+            });
+            continue;
+        }
         handle.state.send_modify(|freshness| {
             freshness.pending_paths = count;
             freshness.refresh_in_flight = true;
+            freshness.waiting_for_upgrade = false;
         });
         pending.clear();
         let outcome = refresh_with_retries(&server, &project_key, &db_path).await;
@@ -2273,10 +2334,18 @@ const FRESHNESS_WAIT_BUDGET: std::time::Duration = std::time::Duration::from_sec
     >,
 ```
 
+`ServerState` yapısına ayrıca ekle:
+
+```rust
+    /// Semantik yükseltmesi süren projeler (anahtar: kanonik proje yolu).
+    semantic_upgrades: std::sync::Mutex<std::collections::HashSet<String>>,
+```
+
 `ServerState::new` sonundaki `Ok(Self { ... })` literaline ekle:
 
 ```rust
             freshness: std::sync::Mutex::new(std::collections::HashMap::new()),
+            semantic_upgrades: std::sync::Mutex::new(std::collections::HashSet::new()),
 ```
 
 `impl ServerState` içine ekle:
@@ -2325,6 +2394,24 @@ const FRESHNESS_WAIT_BUDGET: std::time::Duration = std::time::Duration::from_sec
         if let Some(handle) = self.freshness_handle(project_key) {
             crate::freshness::request_rescan(&handle);
         }
+    }
+
+    /// Hızlı indeksin semantik yükseltmesi başladı; otomatik yenileme ertelenir.
+    pub(crate) fn begin_semantic_upgrade(&self, project_key: &str) {
+        self.semantic_upgrades
+            .lock()
+            .unwrap()
+            .insert(project_key.to_string());
+    }
+
+    /// Yükseltme bitti (başarılı ya da değil); ertelenen yenileme uyandırılır.
+    pub(crate) fn end_semantic_upgrade(&self, project_key: &str) {
+        self.semantic_upgrades.lock().unwrap().remove(project_key);
+        self.request_refresh(project_key);
+    }
+
+    pub(crate) fn semantic_upgrade_running(&self, project_key: &str) -> bool {
+        self.semantic_upgrades.lock().unwrap().contains(project_key)
     }
 
     /// Projenin bekleyen yenilemesini en fazla `budget` kadar bekler; otomatik
@@ -2392,6 +2479,43 @@ Sonuca satır ekleyen bloğu değiştir:
 ```
 
 Yeni başlatılan handle için bu iki Rescan sinyali aynı debounce penceresinde tek yenilemede birleşir.
+
+`schedule_semantic_upgrade` içinde `tokio::spawn`'dan önce yükseltmeyi kaydet, iş bitince (başarılı ya da değil) kaydı kaldır. Fonksiyonu şu hale getir (spawn içindeki mevcut `match` aynen kalır):
+
+```rust
+fn schedule_semantic_upgrade(
+    state: Arc<crate::server::ServerState>,
+    project_path: std::sync::Arc<str>,
+    db_path: String,
+) {
+    // Otomatik yenileme yükseltme bitene kadar ertelenir; aksi halde eksik
+    // vektör tablosunu görüp aynı embedding işini ikinci kez başlatır.
+    let project_key = crate::server::project_key_for_path(&project_path);
+    state.begin_semantic_upgrade(&project_key);
+    // Detached worker: MCP çıkışında ölmeyen, kendi process grubunda koşan süreç.
+    // Yalnızca iş tamamlandığında (süreç hâlâ yaşıyorsa) engine cache tazelenir.
+    tokio::spawn(async move {
+        let refresh_state = state.clone();
+        let refresh_path = project_path.clone();
+        match spawn_detached_upgrade_worker(&project_path, &db_path).await {
+            Ok(stats) => {
+                tracing::info!(
+                    nodes = stats.nodes_created,
+                    "Background semantic upgrade completed"
+                );
+                // Yeni generation graph+vektör içerdiğinden cache'i tazele.
+                let _ = refresh_state.refresh_project_engine(&refresh_path).await;
+            }
+            Err(error) => {
+                tracing::warn!(error = %error, "Background semantic upgrade failed");
+            }
+        }
+        refresh_state.end_semantic_upgrade(&project_key);
+    });
+}
+```
+
+`index_now` ve `run_index_project` içinde `ensure_auto_refresh`/`request_refresh` satırları Quick kontrolünden önce kalır: `begin_semantic_upgrade` `schedule_semantic_upgrade` içinde eşzamanlı çağrıldığı için yenileme döngüsü 300 ms'lik debounce'tan sonra yükseltmeyi zaten kayıtlı görür.
 
 - [ ] **Step 8: Belgeleme**
 

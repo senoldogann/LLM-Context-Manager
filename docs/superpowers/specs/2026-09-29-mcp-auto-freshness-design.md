@@ -210,6 +210,17 @@ yeniden kullanım bunu kötüleştirmez).
 - **Eşzamanlı yazarlar** (CLI `--watch`, detached semantic upgrade): mevcut
   activation lock + pointer CAS korur; CAS hatası yukarıdaki deneme yolundan
   geçer. İndeks çıktı dizini filtrelendiği için bu yazarlar döngü tetiklemez.
+- **Hızlı indeksin semantik yükseltmesi sürerken** otomatik yenileme
+  `update_index` çalıştırmaz: yükseltme sürerken vektör tablosu eksik
+  göründüğü için `update_index` onarıma ya da tam yeniden indekslemeye girer
+  ve aynı embedding işini ikinci kez yapar. Yenileme ertelenir, okumalar
+  beklemez, satır `waiting for semantic upgrade` gösterir; yükseltme bitince
+  (başarılı ya da değil) ertelenen değişiklikler tek yenilemede işlenir.
+  Bilinen sınır: MCP süreci yükseltme sürerken yeniden başlarsa bu kayıt
+  kaybolur ve ilk okuma yakalaması onarımı başlatabilir.
+- **Bilinen sınır (P0.2 kapatır):** embedding servisi kapalıyken değişiklik
+  içeren her yenileme PR #3'teki yoldan tam graf-only yeniden indekslemeye
+  gider (Django'da ~4 sn); hedefler embedder açıkken tanımlıdır.
 - **Manuel `index_now`**: aynı proje mutex'ini bekler; bittiğinde engine
   yenilenir ve otomatik yenilemeden bir tam karşılaştırma istenir, böylece
   önceki başarısız yenilemeden kalan hata satırı temizlenir.
