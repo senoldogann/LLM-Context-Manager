@@ -590,6 +590,15 @@ async fn quick_index_builds_graph_but_skips_vectors_then_upgrade_fills_them() ->
 #[tokio::test]
 async fn upgrade_repairs_a_generation_without_vectors_using_fixture_embedder() -> Result<()> {
     let _env_guard = ENV_LOCK.lock().await;
+    // Fixture modu kullanıldığı için ortam her çıkış yolunda geri yüklenmeli.
+    struct EnvRestore;
+    impl Drop for EnvRestore {
+        fn drop(&mut self) {
+            std::env::remove_var("CCM_EMBEDDING_FIXTURE");
+            std::env::set_var("CCM_DISABLE_EMBEDDER", "1");
+        }
+    }
+    let _restore = EnvRestore;
     std::env::set_var("CCM_DISABLE_EMBEDDER", "1");
     let project = tempdir()?;
     std::fs::write(
@@ -903,19 +912,6 @@ async fn update_index_embeds_only_changed_chunks() -> Result<()> {
 #[tokio::test]
 async fn watch_filter_skips_ignored_outputs_and_index_artifacts() -> Result<()> {
     let _env_guard = ENV_LOCK.lock().await;
-    struct EnvRestore;
-    impl Drop for EnvRestore {
-        fn drop(&mut self) {
-            std::env::remove_var("EMBEDDING_HOST");
-            std::env::remove_var("EMBEDDING_MODEL");
-            std::env::remove_var("CCM_EMBEDDING_FIXTURE");
-            std::env::set_var("CCM_DISABLE_EMBEDDER", "1");
-        }
-    }
-    let _restore = EnvRestore;
-    std::env::remove_var("EMBEDDING_HOST");
-    std::env::remove_var("EMBEDDING_MODEL");
-    std::env::remove_var("CCM_EMBEDDING_FIXTURE");
     std::env::set_var("CCM_DISABLE_EMBEDDER", "1");
 
     // Senaryo 1: Git reposunda .gitignore uygulanır.
