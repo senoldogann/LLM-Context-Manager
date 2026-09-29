@@ -3,6 +3,7 @@ use serde_json::Value;
 use std::sync::Arc;
 use tokio::io::{AsyncBufRead, AsyncBufReadExt, AsyncWriteExt, BufReader};
 
+mod freshness;
 mod protocol;
 mod server;
 mod tools;

@@ -63,8 +63,16 @@ fn engine_cache_size() -> usize {
 use lru::LruCache;
 use std::num::NonZeroUsize;
 
+/// Önbellekteki engine ve ait olduğu generation'ın indeksleme zamanı.
+#[derive(Clone)]
+pub struct CachedEngine {
+    pub engine: Arc<RetrievalEngine>,
+    /// Aktif generation manifestindeki indeksleme zamanı (unix saniye).
+    pub indexed_at: Option<u64>,
+}
+
 pub struct EngineCache {
-    cache: LruCache<String, Arc<RetrievalEngine>>,
+    cache: LruCache<String, CachedEngine>,
 }
 
 impl EngineCache {
@@ -75,16 +83,30 @@ impl EngineCache {
         }
     }
 
-    fn get(&mut self, key: &str) -> Option<Arc<RetrievalEngine>> {
+    fn get(&mut self, key: &str) -> Option<CachedEngine> {
         self.cache.get(key).cloned()
     }
 
     #[allow(dead_code)]
-    fn peek(&self, key: &str) -> Option<Arc<RetrievalEngine>> {
+    fn peek(&self, key: &str) -> Option<CachedEngine> {
         self.cache.peek(key).cloned()
     }
 
-    fn insert(&mut self, key: String, engine: Arc<RetrievalEngine>) -> Arc<RetrievalEngine> {
+    /// Projenin yeni generation'ını ekler ve aynı projenin eski
+    /// generation'larını düşürür. Otomatik yenileme her kayıtta yeni generation
+    /// ürettiği için aksi halde eski graflar bellekte birikir; eski engine'i
+    /// kullanan istekler `Arc` sayesinde bitene kadar onu korur.
+    fn insert(&mut self, project_key: &str, key: String, engine: CachedEngine) -> CachedEngine {
+        let prefix = format!("{}#", project_key);
+        let stale: Vec<String> = self
+            .cache
+            .iter()
+            .map(|(existing, _)| existing.clone())
+            .filter(|existing| existing.starts_with(&prefix) && *existing != key)
+            .collect();
+        for existing in stale {
+            self.cache.pop(&existing);
+        }
         self.cache.put(key, engine.clone());
         engine
     }
@@ -255,6 +277,17 @@ impl ServerState {
             .or_else(|| self.default_project_root.clone())
     }
 
+    /// İstekteki `project_path` ya da etkin proje kökü için kanonik anahtar;
+    /// ikisi de yoksa `None` (ev dizini deposu; tazelik satırı eklenmez).
+    pub(crate) fn project_key(&self, project_path: Option<&str>) -> Option<String> {
+        match project_path {
+            Some(path) => Some(project_key_for_path(path)),
+            None => self
+                .effective_project_root()
+                .map(|root| project_key_for_path(&root.to_string_lossy())),
+        }
+    }
+
     /// İstemciye gönderilmeyi bekleyen JSON-RPC isteklerini (ör. `roots/list`) boşaltır.
     pub fn take_outgoing_requests(&self) -> Vec<Value> {
         std::mem::take(&mut *self.outgoing_requests.lock().unwrap())
@@ -301,7 +334,7 @@ impl ServerState {
 
     /// Retrieves the engine for a specific project path, or defaults to the startup engine.
     /// Loads the engine dynamically if it's not in the cache.
-    pub async fn get_engine(&self, project_path: Option<&str>) -> Result<Arc<RetrievalEngine>> {
+    pub async fn get_engine(&self, project_path: Option<&str>) -> Result<CachedEngine> {
         let path = match project_path {
             Some(path) => path.to_string(),
             None => {
@@ -311,11 +344,20 @@ impl ServerState {
                             "No default project root is available and strict allowlist mode is enabled. Set CCM_PROJECT_ROOT and CCM_ALLOWED_ROOTS."
                         ));
                     }
-                    return self.default_engine.read().await.clone().ok_or_else(|| {
-                        anyhow::anyhow!(
-                            "No project root is available. Pass 'project_path' or set CCM_PROJECT_ROOT."
-                        )
-                    });
+                    return self
+                        .default_engine
+                        .read()
+                        .await
+                        .clone()
+                        .map(|engine| CachedEngine {
+                            engine,
+                            indexed_at: None,
+                        })
+                        .ok_or_else(|| {
+                            anyhow::anyhow!(
+                                "No project root is available. Pass 'project_path' or set CCM_PROJECT_ROOT."
+                            )
+                        });
                 };
                 root.to_string_lossy().to_string()
             }
@@ -388,17 +430,21 @@ impl ServerState {
         let policy_path = requested_db_path
             .parent()
             .map(|parent| parent.join("ccm_learn/policies.json"));
-        let engine = Arc::new(RetrievalEngine::new_with_active_policy(
-            Arc::new(RwLock::new(graph)),
-            store,
-            policy_path.as_deref(),
-        ));
+        let indexed_at = ccm_core::read_index_timestamp(&artifacts.manifest_path)?;
+        let engine = CachedEngine {
+            engine: Arc::new(RetrievalEngine::new_with_active_policy(
+                Arc::new(RwLock::new(graph)),
+                store,
+                policy_path.as_deref(),
+            )),
+            indexed_at,
+        };
 
         let mut engines = self.engines.write().await;
         if let Some(existing) = engines.get(&engine_cache_key) {
             return Ok(existing);
         }
-        Ok(engines.insert(engine_cache_key, engine))
+        Ok(engines.insert(&cache_key, engine_cache_key, engine))
     }
 
     pub async fn refresh_project_engine(&self, project_path: &str) -> Result<()> {
@@ -413,18 +459,24 @@ impl ServerState {
         let policy_path = requested_db_path
             .parent()
             .map(|parent| parent.join("ccm_learn/policies.json"));
-        let engine = Arc::new(RetrievalEngine::new_with_active_policy(
-            Arc::new(RwLock::new(graph)),
-            store,
-            policy_path.as_deref(),
-        ));
+        let engine = CachedEngine {
+            engine: Arc::new(RetrievalEngine::new_with_active_policy(
+                Arc::new(RwLock::new(graph)),
+                store,
+                policy_path.as_deref(),
+            )),
+            indexed_at: ccm_core::read_index_timestamp(&artifacts.manifest_path)?,
+        };
 
         let engine_cache_key = format!(
             "{}#{}",
             cache_key,
             artifacts.generation_id.as_deref().unwrap_or("legacy")
         );
-        self.engines.write().await.insert(engine_cache_key, engine);
+        self.engines
+            .write()
+            .await
+            .insert(&cache_key, engine_cache_key, engine);
         Ok(())
     }
 
@@ -580,6 +632,13 @@ fn canonicalize_project_path(path: &Path) -> PathBuf {
             .join(path)
     };
     std::fs::canonicalize(&abs).unwrap_or_else(|_| normalize_path(&abs))
+}
+
+/// Proje yolundan önbellek ve tazelik durumu için kanonik anahtar üretir.
+pub(crate) fn project_key_for_path(path: &str) -> String {
+    canonicalize_project_path(Path::new(path))
+        .to_string_lossy()
+        .to_string()
 }
 
 fn normalize_path(path: &Path) -> PathBuf {
@@ -973,30 +1032,12 @@ async fn handle_call_tool_inner(
         return Ok(create_success_response(id, json!(result)));
     }
 
-    // Resolve Engine
-    let engine = match state.get_engine(project_path).await {
-        Ok(e) => e,
-        Err(e) => {
-            tracing::warn!(error = %e, tool = %tool_name, "Failed to load project context");
-            let message = if e.to_string().contains("Project index is missing") {
-                "Project index is missing. Call index_project first.".to_string()
-            } else if e.to_string().contains("Project indexing is in progress") {
-                "Project indexing is in progress. Poll index_project before retrying this tool."
-                    .to_string()
-            } else if e.to_string().contains("not allowed")
-                || e.to_string().contains("No default project root")
-            {
-                e.to_string()
-            } else {
-                "Failed to load project context. Check project_path, allowlist, and index state."
-                    .to_string()
-            };
-            return Ok(create_error_response(
-                id, -32603, // Internal error / Invalid params
-                &message,
-            ));
-        }
+    let project_key = state.project_key(project_path);
+    let loaded = match state.get_engine(project_path).await {
+        Ok(loaded) => loaded,
+        Err(error) => return Ok(engine_error_response(id, tool_name, &error)),
     };
+    let engine = loaded.engine.clone();
 
     let result = match tool_name {
         "get_context" => tools::get_context(&engine, &arguments).await?,
@@ -1016,7 +1057,44 @@ async fn handle_call_tool_inner(
         }
     };
 
+    let result = match project_key {
+        Some(_) => crate::freshness::with_freshness_line(
+            result,
+            &crate::freshness::format_freshness_line(
+                &crate::freshness::disabled_freshness(),
+                loaded.indexed_at,
+                ccm_core::unix_now_secs(),
+            ),
+        ),
+        None => result,
+    };
+
     Ok(create_success_response(id, serde_json::to_value(result)?))
+}
+
+/// Engine yüklenemediğinde istemciye dönen JSON-RPC hata yanıtını üretir.
+fn engine_error_response(
+    id: Option<Value>,
+    tool_name: &str,
+    error: &anyhow::Error,
+) -> JsonRpcResponse {
+    tracing::warn!(error = %error, tool = %tool_name, "Failed to load project context");
+    let message = if error.to_string().contains("Project index is missing") {
+        "Project index is missing. Call index_project first.".to_string()
+    } else if error
+        .to_string()
+        .contains("Project indexing is in progress")
+    {
+        "Project indexing is in progress. Poll index_project before retrying this tool.".to_string()
+    } else if error.to_string().contains("not allowed")
+        || error.to_string().contains("No default project root")
+    {
+        error.to_string()
+    } else {
+        "Failed to load project context. Check project_path, allowlist, and index state."
+            .to_string()
+    };
+    create_error_response(id, -32603, &message)
 }
 
 fn validate_tool_arguments(tool_name: &str, arguments: &Value) -> std::result::Result<(), String> {
