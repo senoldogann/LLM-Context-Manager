@@ -795,3 +795,107 @@ async fn update_index_trusts_unchanged_stat_outside_racy_window() -> Result<()> 
     );
     Ok(())
 }
+
+/// Ollama `/api/embed` sözleşmesini konuşan deterministik yerel sunucu. CI'da
+/// gerçek embedding servisi olmadığı için yalnızca bu testte kullanılır ve
+/// istek başına gelen `input` sayısını toplar.
+fn start_counting_embed_server() -> Result<(String, std::sync::Arc<std::sync::atomic::AtomicUsize>)>
+{
+    use std::io::{BufRead, BufReader, Read, Write};
+    let listener = std::net::TcpListener::bind("127.0.0.1:0")?;
+    let address = format!("http://{}", listener.local_addr()?);
+    let embedded_inputs = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
+    let counter = embedded_inputs.clone();
+    std::thread::spawn(move || {
+        for stream in listener.incoming() {
+            let Ok(mut stream) = stream else { continue };
+            let Ok(read_half) = stream.try_clone() else {
+                continue;
+            };
+            let mut reader = BufReader::new(read_half);
+            let mut content_length = 0usize;
+            loop {
+                let mut line = String::new();
+                if reader.read_line(&mut line).unwrap_or(0) == 0 || line == "\r\n" {
+                    break;
+                }
+                if let Some(value) = line.to_ascii_lowercase().strip_prefix("content-length:") {
+                    content_length = value.trim().parse().unwrap_or(0);
+                }
+            }
+            let mut body = vec![0u8; content_length];
+            if reader.read_exact(&mut body).is_err() {
+                continue;
+            }
+            let request: serde_json::Value = serde_json::from_slice(&body).unwrap_or_default();
+            let inputs = request["input"].as_array().cloned().unwrap_or_default();
+            counter.fetch_add(inputs.len(), std::sync::atomic::Ordering::SeqCst);
+            let embeddings: Vec<Vec<f32>> = inputs
+                .iter()
+                .map(|input| {
+                    let seed = input
+                        .as_str()
+                        .unwrap_or_default()
+                        .bytes()
+                        .fold(0u32, |acc, byte| {
+                            acc.wrapping_mul(31).wrapping_add(u32::from(byte))
+                        });
+                    (0..8u32)
+                        .map(|offset| (seed.wrapping_add(offset) % 97) as f32 / 97.0 + 0.01)
+                        .collect()
+                })
+                .collect();
+            let payload = serde_json::json!({ "embeddings": embeddings }).to_string();
+            let response = format!(
+                "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+                payload.len(),
+                payload
+            );
+            let _ = stream.write_all(response.as_bytes());
+        }
+    });
+    Ok((address, embedded_inputs))
+}
+
+#[tokio::test]
+async fn update_index_embeds_only_changed_chunks() -> Result<()> {
+    let _env_guard = ENV_LOCK.lock().await;
+    struct EnvRestore;
+    impl Drop for EnvRestore {
+        fn drop(&mut self) {
+            std::env::remove_var("EMBEDDING_HOST");
+            std::env::remove_var("EMBEDDING_MODEL");
+            std::env::set_var("CCM_DISABLE_EMBEDDER", "1");
+        }
+    }
+    let _restore = EnvRestore;
+    let (host, embedded_inputs) = start_counting_embed_server()?;
+    std::env::remove_var("CCM_DISABLE_EMBEDDER");
+    std::env::set_var("EMBEDDING_HOST", &host);
+    std::env::set_var("EMBEDDING_MODEL", "ccm-test-embed");
+
+    let project = tempdir()?;
+    let file = project.path().join("lib.rs");
+    std::fs::write(
+        &file,
+        "fn alpha() { let a = 1; }\nfn beta() { let b = 2; }\nfn gamma() { let c = 3; }\n",
+    )?;
+    let first = ccm_core::update_index(project.path().to_string_lossy().as_ref(), None).await?;
+    assert_eq!(first.embedded_chunks, 3);
+    let after_full_index = embedded_inputs.load(std::sync::atomic::Ordering::SeqCst);
+
+    std::fs::write(
+        &file,
+        "fn alpha() { let a = 1; }\nfn beta() { let b = 2; }\nfn gamma() { let c = 30; }\n",
+    )?;
+    let second = ccm_core::update_index(project.path().to_string_lossy().as_ref(), None).await?;
+
+    assert_eq!(second.embedded_chunks, 1, "only gamma changed");
+    assert_eq!(second.reused_chunks, 2, "alpha and beta keep their vectors");
+    assert_eq!(
+        embedded_inputs.load(std::sync::atomic::Ordering::SeqCst) - after_full_index,
+        1,
+        "the embedding service must see only the changed chunk"
+    );
+    Ok(())
+}

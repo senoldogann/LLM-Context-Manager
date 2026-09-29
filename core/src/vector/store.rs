@@ -139,6 +139,14 @@ fn namespace_for_uri(uri: &str) -> String {
         .unwrap_or_else(|| "default".to_string())
 }
 
+/// Bir yazma turunda yeni embed edilen ve mevcut vektörü yeniden kullanılan
+/// parça sayıları.
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+pub struct ChunkEmbeddingCounts {
+    pub embedded: usize,
+    pub reused: usize,
+}
+
 pub struct LanceDbStore {
     conn: Connection,
     table_name: String,
@@ -275,10 +283,72 @@ impl LanceDbStore {
             .with_context(|| format!("vector table '{}' could not be scanned", self.table_name))
     }
 
+    /// Metinleri sınırlı eşzamanlılıkla batch'ler hâlinde embed eder ve girişle
+    /// aynı sırada vektör döndürür. Boş girişte servis hiç çağrılmaz.
+    async fn embed_in_batches(
+        &self,
+        texts: Vec<String>,
+        batch_size: usize,
+    ) -> Result<Vec<Vec<f32>>> {
+        if texts.is_empty() {
+            return Ok(Vec::new());
+        }
+        let embedder = self.embedder()?;
+        let total_batches = texts.len().div_ceil(batch_size);
+        // Sınırlı eşzamanlılık: Ollama varsayılan olarak tek model işçisiyle
+        // (`num_parallel=1`) istekleri sıraya alır; eşzamanlı istekler seri
+        // işlenir, hızlanma sağlamaz ve yavaş makinelerde 30s timeout'u
+        // aşıp tüm full index'i abort edebilir. Bu yüzden varsayılan 1'dir;
+        // `OLLAMA_NUM_PARALLEL>1` ortamlarında CCM_EMBED_CONCURRENCY
+        // yükseltilerek gerçek paralellik alınabilir.
+        let concurrency: usize = std::env::var("CCM_EMBED_CONCURRENCY")
+            .ok()
+            .and_then(|value| value.parse().ok())
+            .unwrap_or(1)
+            .clamp(1, 8);
+        let mut collected: Vec<Option<Vec<Vec<f32>>>> = vec![None; total_batches];
+        let batch_futures = texts
+            .chunks(batch_size)
+            .enumerate()
+            .map(|(batch_idx, batch)| {
+                let batch_texts: Vec<String> = batch.to_vec();
+                let embedder = Arc::clone(&embedder);
+                async move {
+                    let result = embedder.embed(batch_texts).await;
+                    (batch_idx, result)
+                }
+            });
+        let mut stream = futures::stream::iter(batch_futures).buffer_unordered(concurrency);
+        let mut completed = 0usize;
+        while let Some((batch_idx, result)) = stream.next().await {
+            let batch_embeddings = result?;
+            completed += 1;
+            if batch_idx % 20 == 0 || completed == total_batches {
+                tracing::info!(
+                    batch = batch_idx + 1,
+                    total = total_batches,
+                    chunks = batch_embeddings.len(),
+                    "Embedding batch progress"
+                );
+            }
+            collected[batch_idx] = Some(batch_embeddings);
+        }
+        let mut embeddings = Vec::with_capacity(texts.len());
+        for batch in collected {
+            embeddings.extend(batch.expect("embedding batch"));
+        }
+        Ok(embeddings)
+    }
+
     /// Embeds texts and inserts them into the LanceDB table.
-    pub async fn add_documents(&self, ids: Vec<String>, texts: Vec<String>) -> Result<()> {
+    pub async fn add_documents(
+        &self,
+        ids: Vec<String>,
+        texts: Vec<String>,
+        known_vectors: &HashMap<String, Vec<f32>>,
+    ) -> Result<ChunkEmbeddingCounts> {
         if ids.is_empty() {
-            return Ok(());
+            return Ok(ChunkEmbeddingCounts::default());
         }
 
         let max_chars: usize = std::env::var("CCM_MAX_CHUNK_CHARS")
@@ -319,60 +389,46 @@ impl LanceDbStore {
             .unwrap_or(32)
             .max(1); // guard: chunks(0) panics at runtime
         let mut embeddings: Vec<Vec<f32>> = Vec::with_capacity(all_chunks.len());
-
-        if let Some(fixture) = self.fixture.as_ref() {
+        let counts = if let Some(fixture) = self.fixture.as_ref() {
             for chunk_id in &all_chunk_ids {
                 embeddings.push(fixture.doc_vector(&self.fixture_ns, chunk_id)?);
             }
+            ChunkEmbeddingCounts {
+                embedded: all_chunk_ids.len(),
+                reused: 0,
+            }
         } else {
             if self.embedder_disabled {
-                return Ok(());
+                return Ok(ChunkEmbeddingCounts::default());
             }
-            let embedder = self.embedder()?;
-            let total_batches = all_chunks.len().div_ceil(batch_size);
-            // Sınırlı eşzamanlılık: Ollama varsayılan olarak tek model işçisiyle
-            // (`num_parallel=1`) istekleri sıraya alır; eşzamanlı istekler seri
-            // işlenir, hızlanma sağlamaz ve yavaş makinelerde 30s timeout'u
-            // aşıp tüm full index'i abort edebilir. Bu yüzden varsayılan 1'dir;
-            // `OLLAMA_NUM_PARALLEL>1` ortamlarında CCM_EMBED_CONCURRENCY
-            // yükseltilerek gerçek paralellik alınabilir.
-            let concurrency: usize = std::env::var("CCM_EMBED_CONCURRENCY")
-                .ok()
-                .and_then(|value| value.parse().ok())
-                .unwrap_or(1)
-                .clamp(1, 8);
-            let mut collected: Vec<Option<Vec<Vec<f32>>>> = vec![None; total_batches];
-            let batch_futures =
-                all_chunks
-                    .chunks(batch_size)
-                    .enumerate()
-                    .map(|(batch_idx, batch)| {
-                        let batch_texts: Vec<String> = batch.to_vec();
-                        let embedder = Arc::clone(&embedder);
-                        async move {
-                            let result = embedder.embed(batch_texts).await;
-                            (batch_idx, result)
-                        }
-                    });
-            let mut stream = futures::stream::iter(batch_futures).buffer_unordered(concurrency);
-            let mut completed = 0usize;
-            while let Some((batch_idx, result)) = stream.next().await {
-                let batch_embeddings = result?;
-                completed += 1;
-                if batch_idx % 20 == 0 || completed == total_batches {
-                    tracing::info!(
-                        batch = batch_idx + 1,
-                        total = total_batches,
-                        chunks = batch_embeddings.len(),
-                        "Embedding batch progress"
-                    );
-                }
-                collected[batch_idx] = Some(batch_embeddings);
+            // Metni değişmemiş parçalar mevcut vektörünü korur; embedding metnin
+            // saf fonksiyonu olduğundan sonuç aynıdır ve servis çağrısı atlanır.
+            let missing_texts: Vec<String> = all_chunks
+                .iter()
+                .filter(|chunk| !known_vectors.contains_key(chunk.as_str()))
+                .cloned()
+                .collect();
+            let counts = ChunkEmbeddingCounts {
+                embedded: missing_texts.len(),
+                reused: all_chunks.len() - missing_texts.len(),
+            };
+            let mut fresh_vectors = self
+                .embed_in_batches(missing_texts, batch_size)
+                .await?
+                .into_iter();
+            for chunk in &all_chunks {
+                let vector = match known_vectors.get(chunk.as_str()) {
+                    Some(known) => known.clone(),
+                    None => fresh_vectors.next().ok_or_else(|| {
+                        anyhow::anyhow!(
+                            "Embedding provider returned fewer vectors than requested chunks"
+                        )
+                    })?,
+                };
+                embeddings.push(vector);
             }
-            for batch in collected {
-                embeddings.extend(batch.expect("embedding batch"));
-            }
-        }
+            counts
+        };
 
         // Use all_chunks and all_chunk_ids for storage
         let texts = all_chunks;
@@ -453,7 +509,7 @@ impl LanceDbStore {
         };
         self.table_cache.lock().unwrap().replace(table);
 
-        Ok(())
+        Ok(counts)
     }
 
     /// Performs semantic search and returns (id, text, distance).
@@ -541,6 +597,53 @@ impl LanceDbStore {
         });
 
         Ok(hits)
+    }
+
+    /// Dosyanın mevcut parçalarını metinden vektöre eşler. Artımlı güncelleme
+    /// dosyanın satırlarını silmeden önce bunu okur; metni değişmeyen parçalar
+    /// yeniden embed edilmez. Tablo hiç oluşmamışsa (graf-only) boş döner.
+    pub async fn vectors_for_file(&self, file_id: &str) -> Result<HashMap<String, Vec<f32>>> {
+        let table = match self.table().await {
+            Ok(table) => table,
+            // `delete_by_prefix` ile aynı sözleşme: tablo yoksa okunacak vektör de yoktur.
+            Err(_) => return Ok(HashMap::new()),
+        };
+        let batches: Vec<RecordBatch> = table
+            .query()
+            .only_if(file_scoped_delete_predicate(file_id))
+            .select(lancedb::query::Select::columns(&["text", "vector"]))
+            .execute()
+            .await
+            .with_context(|| format!("Existing vectors for '{}' could not be queried", file_id))?
+            .try_collect()
+            .await?;
+
+        let mut vectors = HashMap::new();
+        for batch in batches {
+            let text_col = batch
+                .column_by_name("text")
+                .ok_or_else(|| anyhow::anyhow!("Missing 'text' column in stored vectors"))?
+                .as_any()
+                .downcast_ref::<StringArray>()
+                .ok_or_else(|| anyhow::anyhow!("Failed to cast 'text' column to StringArray"))?;
+            let vector_col = batch
+                .column_by_name("vector")
+                .ok_or_else(|| anyhow::anyhow!("Missing 'vector' column in stored vectors"))?
+                .as_any()
+                .downcast_ref::<FixedSizeListArray>()
+                .ok_or_else(|| {
+                    anyhow::anyhow!("Failed to cast 'vector' column to FixedSizeListArray")
+                })?;
+            for row in 0..batch.num_rows() {
+                let values = vector_col.value(row);
+                let floats = values
+                    .as_any()
+                    .downcast_ref::<Float32Array>()
+                    .ok_or_else(|| anyhow::anyhow!("Stored vector items are not Float32"))?;
+                vectors.insert(text_col.value(row).to_string(), floats.values().to_vec());
+            }
+        }
+        Ok(vectors)
     }
 
     /// Verilen dosyaya ait vektörleri siler (Garbage Collection).

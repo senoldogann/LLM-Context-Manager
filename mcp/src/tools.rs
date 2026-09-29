@@ -962,6 +962,12 @@ fn format_index_stats_result(stats: ccm_core::IndexStats, mode: IndexModeArg) ->
         format!("- Files Skipped: {}", stats.files_skipped),
         format!("- Nodes Created: {}", stats.nodes_created),
     ];
+    if stats.embedded_chunks + stats.reused_chunks > 0 {
+        lines.push(format!(
+            "- Chunks Embedded: {} (reused: {})",
+            stats.embedded_chunks, stats.reused_chunks
+        ));
+    }
 
     if !stats.reason_counts.is_empty() {
         lines.push(String::new());

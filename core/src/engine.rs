@@ -10,6 +10,7 @@ use crate::parser::SupportedLanguage;
 use crate::policy::RetrievalPolicy;
 use crate::trajectory::{current_context, record_if_enabled, RetrievalEvent, RetrievalResultItem};
 use crate::vector::extractor::Extractor;
+use crate::vector::store::ChunkEmbeddingCounts;
 use crate::vector::store::LanceDbStore;
 use crate::{
     path_is_policy_excluded, register_issue, suggestion_for_issue, IndexIssue, IndexIssueReason,
@@ -149,7 +150,7 @@ impl RetrievalEngine {
 
     /// Indexes the current graph into the vector store.
     /// This should be called after parsing/populating the graph.
-    pub async fn index_graph(&self) -> Result<()> {
+    pub async fn index_graph(&self) -> Result<ChunkEmbeddingCounts> {
         let embed_data_files = embed_data_files_enabled();
 
         // Node clone'ları Arc içerik taşır; pahalı metin/embedding üretimi lock dışında yapılır.
@@ -175,7 +176,8 @@ impl RetrievalEngine {
             nodes
         };
 
-        self.index_nodes_in_bounded_batches(&nodes).await
+        self.index_nodes_in_bounded_batches(&nodes, &HashMap::new())
+            .await
     }
 
     /// Performs incremental indexing using Git status.
@@ -206,6 +208,8 @@ impl RetrievalEngine {
         let mut parser = CodeParser::new();
         let mut nodes_to_index = Vec::new(); // Collect new nodes for vector DB
         let mut indexed_node_ids = HashSet::new();
+        // Silinmeden önce okunan parça vektörleri (metin → vektör).
+        let mut known_vectors: HashMap<String, Vec<f32>> = HashMap::new();
         let embed_data_files = embed_data_files_enabled();
         let mut stats = crate::IndexStats::default();
 
@@ -340,6 +344,20 @@ impl RetrievalEngine {
                 }
             }
 
+            // Metni değişmeyen parçalar yeniden embed edilmesin diye mevcut
+            // vektörler silmeden önce alınır.
+            let existing_vectors = self
+                .vector_store
+                .vectors_for_file(&relative_path)
+                .await
+                .map_err(|error| {
+                    anyhow::anyhow!(
+                        "Failed to read existing vectors for '{}': {}",
+                        relative_path,
+                        error
+                    )
+                })?;
+            known_vectors.extend(existing_vectors);
             self.vector_store
                 .delete_by_prefix(&relative_path)
                 .await
@@ -375,7 +393,11 @@ impl RetrievalEngine {
                 count = nodes_to_index.len(),
                 "Incremental: indexing semantic nodes"
             );
-            self.index_nodes_in_bounded_batches(&nodes_to_index).await?;
+            let counts = self
+                .index_nodes_in_bounded_batches(&nodes_to_index, &known_vectors)
+                .await?;
+            stats.embedded_chunks = counts.embedded;
+            stats.reused_chunks = counts.reused;
         }
 
         tracing::info!("Incremental update complete.");
@@ -388,9 +410,13 @@ impl RetrievalEngine {
         Ok(stats)
     }
 
-    async fn index_nodes_in_bounded_batches(&self, nodes: &[CodeNode]) -> Result<()> {
+    async fn index_nodes_in_bounded_batches(
+        &self,
+        nodes: &[CodeNode],
+        known_vectors: &HashMap<String, Vec<f32>>,
+    ) -> Result<ChunkEmbeddingCounts> {
         if nodes.is_empty() {
-            return Ok(());
+            return Ok(ChunkEmbeddingCounts::default());
         }
         let batch_size = std::env::var("CCM_INDEX_NODE_BATCH_SIZE")
             .ok()
@@ -409,6 +435,7 @@ impl RetrievalEngine {
             "Indexing nodes into vector store"
         );
 
+        let mut counts = ChunkEmbeddingCounts::default();
         let mut start = 0usize;
         let mut batch_index = 0usize;
         while start < nodes.len() {
@@ -425,7 +452,12 @@ impl RetrievalEngine {
             let batch = &nodes[start..end];
             let ids = batch.iter().map(|node| node.id.clone()).collect();
             let texts = batch.iter().map(build_embedding_text).collect();
-            self.vector_store.add_documents(ids, texts).await?;
+            let batch_counts = self
+                .vector_store
+                .add_documents(ids, texts, known_vectors)
+                .await?;
+            counts.embedded += batch_counts.embedded;
+            counts.reused += batch_counts.reused;
             if batch_index.is_multiple_of(20) || end == nodes.len() {
                 tracing::info!(
                     batch = batch_index + 1,
@@ -437,7 +469,7 @@ impl RetrievalEngine {
             start = end;
             batch_index += 1;
         }
-        Ok(())
+        Ok(counts)
     }
 
     /// Performs a purely semantic search using vectors.
@@ -1804,6 +1836,7 @@ mod retrieval_regression_tests {
             .add_documents(
                 vec!["./tests/scan_qr.rs:function_item:symbol:0000000000000002:0".to_string()],
                 vec!["async scanQr() {}".to_string()],
+                &std::collections::HashMap::new(),
             )
             .await?;
 

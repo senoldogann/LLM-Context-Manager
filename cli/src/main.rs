@@ -171,6 +171,8 @@ async fn main() -> anyhow::Result<()> {
                         failed = stats.files_failed,
                         skipped = stats.files_skipped,
                         nodes = stats.nodes_created,
+                        embedded_chunks = stats.embedded_chunks,
+                        reused_chunks = stats.reused_chunks,
                         "Initial indexing complete"
                     );
                     if !stats.reason_counts.is_empty() {

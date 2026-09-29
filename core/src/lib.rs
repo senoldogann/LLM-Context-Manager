@@ -548,11 +548,16 @@ async fn build_index_generation(
             if stats.nodes_created > 0 {
                 let engine = RetrievalEngine::new(graph_arc.clone(), store);
                 match engine.index_graph().await {
-                    Ok(()) => info!(
-                        nodes = stats.nodes_created,
-                        files = stats.files_indexed,
-                        "Indexing completed successfully"
-                    ),
+                    Ok(counts) => {
+                        stats.embedded_chunks = counts.embedded;
+                        stats.reused_chunks = counts.reused;
+                        info!(
+                            nodes = stats.nodes_created,
+                            files = stats.files_indexed,
+                            embedded_chunks = counts.embedded,
+                            "Indexing completed successfully"
+                        )
+                    }
                     // Graf-öncelikli: embedding servisi yokken graf araçları yine
                     // kullanılabilir olmalı. Eksik vektörler sonraki update_index'te
                     // (vector health kontrolü) onarılır.
@@ -1422,6 +1427,12 @@ pub struct IndexStats {
     /// Graf araçları çalışır; semantik arama servis gelince yeniden indekslemeyle döner.
     #[serde(default)]
     pub semantic_unavailable: Option<String>,
+    /// Bu koşuda embedding servisine gönderilen parça sayısı.
+    #[serde(default)]
+    pub embedded_chunks: usize,
+    /// Metni değişmediği için mevcut vektörü yeniden kullanılan parça sayısı.
+    #[serde(default)]
+    pub reused_chunks: usize,
     #[serde(skip)]
     pub(crate) retry_files: Vec<String>,
 }
