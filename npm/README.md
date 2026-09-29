@@ -261,7 +261,7 @@ Enable `CCM_EMBED_DATA_FILES=1` to include them in semantic search.
 - ✅ `evaluate_with_mode` emits `ranked` hit lists and per-task `latency_ms` for
   all query types, enabling Recall@K / MRR@K computation
 - ✅ Honest first results: hybrid 82.9% (29/35) vs semantic-only 80.0% (28/35);
-  `get_context`/`read_graph` 11/11 across all three repos
+  `get_context`/`read_graph` 20/20 across all three repos
 
 ### v0.3.12
 - ✅ Offline semantic gate raised to **180/180** (100%); the CI gate now requires

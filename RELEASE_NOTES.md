@@ -11,7 +11,7 @@
   for **all** query types (`search_code`, `read_graph`, `get_context`), so
   Recall@K and MRR@K can be computed from the comparison reports.
 - Honest first results: hybrid scoring passes 82.9% (29/35) vs 80.0% (28/35)
-  for semantic-only; graph query types (`get_context`/`read_graph`) are 11/11
+  for semantic-only; graph query types (`get_context`/`read_graph`) are 20/20
   across all three repos. The hybrid graph-expansion mechanism is demonstrated
   on real code (flask `test_client()` → `FlaskClient` recovered via a usage
   edge). Known gaps are logged in `benchmarks/README.md` (serde trait-heavy

@@ -644,3 +644,43 @@ async fn upgrade_repairs_a_generation_without_vectors_using_fixture_embedder() -
 
     Ok(())
 }
+
+#[tokio::test]
+async fn project_under_excluded_directory_name_is_still_indexed() -> Result<()> {
+    let _env_guard = ENV_LOCK.lock().await;
+    std::env::set_var("CCM_DISABLE_EMBEDDER", "1");
+    // Proje kökünün üst dizinlerinden biri "build" olsa bile politika yalnızca
+    // proje içi göreli yola uygulanmalı (ör. CI'daki /build/app checkout'u).
+    let workspace = tempdir()?;
+    let project = workspace.path().join("build").join("app");
+    std::fs::create_dir_all(project.join("src"))?;
+    std::fs::write(project.join("src/lib.rs"), "fn initial() {}\n")?;
+    ccm_core::index_directory(project.to_string_lossy().as_ref(), None).await?;
+
+    let initial_paths = artifacts(&project, None)?;
+    let initial = CodeGraph::from_file(initial_paths.graph_path.to_string_lossy().as_ref())?;
+    assert!(initial
+        .graph
+        .node_weights()
+        .any(|node| node.name == "initial"));
+
+    std::fs::write(project.join("src/added.rs"), "fn added() {}\n")?;
+    ccm_core::update_index(project.to_string_lossy().as_ref(), None).await?;
+
+    let updated_paths = artifacts(&project, None)?;
+    let updated = CodeGraph::from_file(updated_paths.graph_path.to_string_lossy().as_ref())?;
+    assert!(updated
+        .graph
+        .node_weights()
+        .any(|node| node.name == "added"));
+    assert!(ccm_core::is_index_relevant_file(
+        &project,
+        &project.join("src/added.rs")
+    ));
+    assert!(!ccm_core::is_index_relevant_file(
+        &project,
+        &project.join("target/debug/generated.rs")
+    ));
+
+    Ok(())
+}

@@ -19,6 +19,9 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 RESULTS = ROOT / "results"
+# Rapor anahtarı "structural" tarihsel bir addır; bu mod semantic-only aramadır.
+MODES = ("structural", "hybrid")
+MODE_LABELS = {"structural": "semantic-only", "hybrid": "hybrid"}
 
 
 def normalize_node_id(node_id: str) -> str:
@@ -89,6 +92,10 @@ def load_reports():
     return reports
 
 
+def mean_or_zero(values):
+    return statistics.mean(values) if values else 0.0
+
+
 def main():
     reports = load_reports()
     if not reports:
@@ -104,21 +111,22 @@ def main():
     metrics_by_repo = compute_exact_metrics(reports)
 
     for repo, report in sorted(reports.items()):
-        print(f"\n### {repo}")
-        print(f"{'mode':<12} {'tasks':>6} {'passed':>6} {'failed':>6} {'pass%':>7} "
+        print(f"\n### {repo} (all query types)")
+        print(f"{'mode':<14} {'tasks':>6} {'passed':>6} {'failed':>6} {'pass%':>7} "
               f"{'R@K':>7} {'MRR@K':>7} {'lat(ms)':>9}")
-        for mode in ("structural", "hybrid"):
+        for mode in MODES:
             rep = report[mode]
             totals = rep.get("totals", {})
             scored = totals.get("scored", 0)
             passed = totals.get("passed", 0)
             pct = (passed / scored * 100) if scored else 0.0
-            m = metrics_by_repo.get(repo, {}).get(mode, {})
+            per_task = metrics_by_repo.get(repo, {}).get(mode, {}).values()
             lat = [r.get("latency_ms") for r in rep.get("results", []) if r.get("latency_ms") is not None]
-            print(f"{mode:<12} {scored:>6} {passed:>6} {totals.get('failed', 0):>6} {pct:>6.1f}% "
-                  f"{m.get('recall@k', 0):>6.2f} {m.get('mrr@k', 0):>6.2f} "
-                  f"{(statistics.mean(lat) if lat else 0):>8.1f}ms")
-        for mode in ("structural", "hybrid"):
+            print(f"{MODE_LABELS[mode]:<14} {scored:>6} {passed:>6} {totals.get('failed', 0):>6} {pct:>6.1f}% "
+                  f"{mean_or_zero([m['recall@k'] for m in per_task]):>6.2f} "
+                  f"{mean_or_zero([m['mrr@k'] for m in per_task]):>6.2f} "
+                  f"{mean_or_zero(lat):>8.1f}ms")
+        for mode in MODES:
             rep = report[mode]
             by_type = defaultdict(lambda: [0, 0])
             for res in rep.get("results", []):
@@ -129,32 +137,34 @@ def main():
                 parts = []
                 for qt, (total, passed) in sorted(by_type.items()):
                     parts.append(f"  {qt}: {passed}/{total}")
-                print(f"  [{mode}] by query type: {', '.join(parts)}")
+                print(f"  [{MODE_LABELS[mode]}] by query type: {', '.join(parts)}")
 
-    # ---- Overall: semantic-only (structural) vs hybrid on search_code ----
+    # ---- Overall: semantic-only vs hybrid on search_code tasks only ----
     print("\n### Overall (search_code only: semantic-only vs hybrid)")
-    agg = {"structural": defaultdict(list), "hybrid": defaultdict(list)}
-    for repo, report in sorted(reports.items()):
-        for mode in ("structural", "hybrid"):
+    for mode in MODES:
+        rec, mrr, pas, lat = [], [], [], []
+        for repo, report in sorted(reports.items()):
+            per_task = metrics_by_repo.get(repo, {}).get(mode, {})
             for res in report[mode].get("results", []):
-                if res.get("query_type") != "search_code":
+                if res.get("query_type") != "search_code" or res.get("id") not in per_task:
                     continue
-                m = metrics_by_repo.get(repo, {}).get(mode, {})
-                agg[mode]["recall"].append(m.get("recall@k", 0))
-                agg[mode]["mrr"].append(m.get("mrr@k", 0))
-                agg[mode]["pass"].append(1 if res.get("status") == "pass" else 0)
-    for mode in ("structural", "hybrid"):
-        rec = agg[mode]["recall"]
-        mrr = agg[mode]["mrr"]
-        pas = agg[mode]["pass"]
-        print(f"{mode:<12} pass={sum(pas)}/{len(pas)}  R@K={statistics.mean(rec) if rec else 0:.3f}  "
-              f"MRR@K={statistics.mean(mrr) if mrr else 0:.3f}")
+                rec.append(per_task[res["id"]]["recall@k"])
+                mrr.append(per_task[res["id"]]["mrr@k"])
+                pas.append(1 if res.get("status") == "pass" else 0)
+                if res.get("latency_ms") is not None:
+                    lat.append(res["latency_ms"])
+        print(f"{MODE_LABELS[mode]:<14} pass={sum(pas)}/{len(pas)}  R@K={mean_or_zero(rec):.3f}  "
+              f"MRR@K={mean_or_zero(mrr):.3f}  lat={mean_or_zero(lat):.1f}ms")
 
     return 0
 
 
 def compute_exact_metrics(reports):
-    """Compute Recall@K and MRR@K using ground truth from the tasks files."""
+    """Compute per-task Recall@K and MRR@K using ground truth from the tasks files.
+
+    Returns {repo: {mode: {task_id: {"recall@k": float, "mrr@k": float}}}} so
+    callers can aggregate over exactly the query types they report.
+    """
     out = {}
     for tasks_path in sorted((ROOT / "tasks").glob("*.json")):
         repo = tasks_path.stem
@@ -163,19 +173,15 @@ def compute_exact_metrics(reports):
         tasks = json.loads(tasks_path.read_text())["tasks"]
         by_id = {t["id"]: t for t in tasks}
         out[repo] = {}
-        for mode in ("structural", "hybrid"):
-            rec, mrr = [], []
+        for mode in MODES:
+            per_task = {}
             for res in reports[repo][mode].get("results", []):
                 task = by_id.get(res.get("id"))
                 if not task or res.get("status") == "skipped":
                     continue
                 m = compute_metrics(task, res.get("ranked") or [])
-                rec.append(m["recall_at_k"])
-                mrr.append(m["mrr_at_k"])
-            out[repo][mode] = {
-                "recall@k": statistics.mean(rec) if rec else 0.0,
-                "mrr@k": statistics.mean(mrr) if mrr else 0.0,
-            }
+                per_task[res["id"]] = {"recall@k": m["recall_at_k"], "mrr@k": m["mrr_at_k"]}
+            out[repo][mode] = per_task
     return out
 
 

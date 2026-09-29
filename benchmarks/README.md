@@ -53,8 +53,11 @@ each clone under `data/` (gitignored). Tasks reference the pinned commit.
 
 | Mode | Pass | R@K | MRR@K | Mean latency |
 |---|---|---|---|---|
-| Semantic-only | 8/15 | 0.759 | 0.709 | ~110ms |
-| Hybrid | 9/15 | 0.784 | 0.744 | ~125ms |
+| Semantic-only | 8/15 | 0.533 | 0.352 | ~234ms |
+| Hybrid | 9/15 | 0.600 | 0.436 | ~266ms |
+
+Recall, MRR and latency here are means over the 15 `search_code` tasks only;
+the per-repo tables printed by `aggregate.py` cover all query types.
 
 ## What the numbers actually say
 
@@ -62,8 +65,8 @@ each clone under `data/` (gitignored). Tasks reference the pinned commit.
    task passed on all three repos. The call-graph edges the parser builds —
    including cross-file calls — are real enough to navigate with.
 
-2. **Hybrid beats semantic-only on retrieval, but modestly.** +1 task, +2.5pp
-   recall, +3.5pp MRR on 15 search queries. That is a real but small effect on
+2. **Hybrid beats semantic-only on retrieval, but modestly.** +1 task, +6.7pp
+   recall, +8.4pp MRR on 15 search queries, at ~32ms extra mean latency. That is a real but small effect on
    this corpus. It would be dishonest to claim more from 15 queries.
 
 3. **The concrete hybrid win is instructive.** `flask-search-003` ("how does

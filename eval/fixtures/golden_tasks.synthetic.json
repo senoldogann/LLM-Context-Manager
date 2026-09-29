@@ -3044,7 +3044,7 @@
         "max_rank": 5,
         "min_recall": 1,
         "node_ids": [
-          "./src/rooms.rs:function_item:symbol:c3503878270bf178:0"
+          "./src/rooms.rs:function_item:symbol:e1c63a44232cefa2:0"
         ]
       },
       "id": "syn-b-search-001",
@@ -3180,14 +3180,14 @@
         "max_rank": 5,
         "min_recall": 1,
         "node_ids": [
-          "./src/rooms.rs:impl_item:symbol:94ee677e85218251:0"
+          "./src/rooms.rs:impl_item:symbol:4c822d801db08fa7:0"
         ]
       },
       "id": "syn-b-search-005",
       "notes": "Deterministic synthetic fixture task",
       "priority": 1,
       "query": {
-        "text": "find where Default is implemented",
+        "text": "find where Room is implemented",
         "type": "search_code"
       },
       "repo": {
@@ -4909,14 +4909,14 @@
         "max_rank": 5,
         "min_recall": 1,
         "node_ids": [
-          "./src/rooms.rs:function_item:symbol:c3503878270bf178:0"
+          "./src/rooms.rs:function_item:symbol:e1c63a44232cefa2:0"
         ]
       },
       "id": "syn-b-graph-006",
       "notes": "Deterministic synthetic fixture task",
       "priority": 1,
       "query": {
-        "node_id": "./src/rooms.rs:function_item:symbol:c3503878270bf178:0",
+        "node_id": "./src/rooms.rs:function_item:symbol:e1c63a44232cefa2:0",
         "type": "read_graph"
       },
       "repo": {
@@ -5041,14 +5041,14 @@
         "max_rank": 5,
         "min_recall": 1,
         "node_ids": [
-          "./src/rooms.rs:impl_item:symbol:94ee677e85218251:0"
+          "./src/rooms.rs:impl_item:symbol:4c822d801db08fa7:0"
         ]
       },
       "id": "syn-b-graph-010",
       "notes": "Deterministic synthetic fixture task",
       "priority": 1,
       "query": {
-        "node_id": "./src/rooms.rs:impl_item:symbol:94ee677e85218251:0",
+        "node_id": "./src/rooms.rs:impl_item:symbol:4c822d801db08fa7:0",
         "type": "read_graph"
       },
       "repo": {

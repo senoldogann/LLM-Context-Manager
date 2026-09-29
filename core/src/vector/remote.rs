@@ -369,20 +369,17 @@ fn validate_embedding_host(base_url: &str) -> Result<()> {
     let host = url
         .host_str()
         .with_context(|| format!("EMBEDDING_HOST host içermiyor: {}", base_url))?;
-    let is_loopback = matches!(
-        host,
-        "localhost" | "127.0.0.1" | "::1" | "0.0.0.0" | "[::1]"
-    ) || host
-        .split('.')
-        .take(4)
-        .all(|part| part.chars().all(|ch| ch.is_ascii_digit()))
-        && host
-            .split('.')
-            .collect::<Vec<_>>()
-            .iter()
-            .take(4)
-            .zip([127, 0, 0, 1])
-            .all(|(part, expected)| part.parse::<u8>().ok() == Some(expected));
+    // Yalnızca tam bir IP adresi loopback olabilir: "127.0.0.1.evil.com" bir
+    // alan adıdır ve metin önekiyle loopback sayılmamalıdır.
+    let is_loopback = match host
+        .trim_start_matches('[')
+        .trim_end_matches(']')
+        .parse::<std::net::IpAddr>()
+    {
+        Ok(std::net::IpAddr::V4(ip)) => ip.is_loopback() || ip.is_unspecified(),
+        Ok(std::net::IpAddr::V6(ip)) => ip.is_loopback(),
+        Err(_) => false,
+    };
 
     // `localhost.` gibi son noktalı yerel adlar da loopback kabul edilir.
     let normalized = host.trim_end_matches('.').to_ascii_lowercase();
@@ -535,6 +532,9 @@ mod tests {
         // Varsayılan olarak dış hedef reddedilir.
         assert!(validate_embedding_host("https://api.openai.com/v1").is_err());
         assert!(validate_embedding_host("https://10.0.0.1").is_err());
+        // IP gibi başlayan alan adları loopback değildir.
+        assert!(validate_embedding_host("http://127.0.0.1.evil.com:11434").is_err());
+        assert!(validate_embedding_host("http://localhost.evil.com").is_err());
         // Açık onay ile dış hedef kabul edilir.
         std::env::set_var("CCM_ALLOW_REMOTE_EMBEDDING", "1");
         assert!(validate_embedding_host("https://api.openai.com/v1").is_ok());
