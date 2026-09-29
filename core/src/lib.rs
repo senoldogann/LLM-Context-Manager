@@ -14,6 +14,7 @@ pub mod policy;
 pub mod rng;
 pub mod trajectory;
 pub mod vector;
+mod watch_filter;
 
 use crate::engine::{CursorPosition, RetrievalEngine};
 use crate::fs_utils::{detect_language, read_text_file_limited, FileReadError};
@@ -28,9 +29,9 @@ use std::path::{Path, PathBuf};
 use std::time::UNIX_EPOCH;
 
 pub const INDEX_SCHEMA_VERSION: u32 = 4;
-const GENERATIONS_DIRECTORY: &str = ".ccm-generations";
+pub const GENERATIONS_DIRECTORY: &str = ".ccm-generations";
 const CURRENT_GENERATION_FILE: &str = "ccm_current";
-const ACTIVATION_LOCK_DIRECTORY: &str = ".ccm-activation.lock";
+pub const ACTIVATION_LOCK_DIRECTORY: &str = ".ccm-activation.lock";
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct IndexArtifactPaths {
@@ -102,6 +103,7 @@ pub fn init() {
 
 // Re-export ContextSuggestion for external use
 pub use crate::engine::ContextSuggestion;
+pub use watch_filter::{build_watch_filter, is_watch_relevant_path, WatchFilter};
 
 /// Run a semantic search query against the index.
 /// Returns a list of context suggestions.

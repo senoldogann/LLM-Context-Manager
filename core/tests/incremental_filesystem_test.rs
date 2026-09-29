@@ -899,3 +899,58 @@ async fn update_index_embeds_only_changed_chunks() -> Result<()> {
     );
     Ok(())
 }
+
+#[tokio::test]
+async fn watch_filter_skips_ignored_outputs_and_index_artifacts() -> Result<()> {
+    let _env_guard = ENV_LOCK.lock().await;
+    struct EnvRestore;
+    impl Drop for EnvRestore {
+        fn drop(&mut self) {
+            std::env::remove_var("EMBEDDING_HOST");
+            std::env::remove_var("EMBEDDING_MODEL");
+            std::env::remove_var("CCM_EMBEDDING_FIXTURE");
+            std::env::set_var("CCM_DISABLE_EMBEDDER", "1");
+        }
+    }
+    let _restore = EnvRestore;
+    std::env::remove_var("EMBEDDING_HOST");
+    std::env::remove_var("EMBEDDING_MODEL");
+    std::env::remove_var("CCM_EMBEDDING_FIXTURE");
+    std::env::set_var("CCM_DISABLE_EMBEDDER", "1");
+    let project = tempdir()?;
+    let root = std::fs::canonicalize(project.path())?;
+    std::fs::create_dir_all(root.join("src"))?;
+    std::fs::write(root.join("src/lib.rs"), "fn alpha() {}\n")?;
+    std::fs::write(root.join(".gitignore"), "generated/\n")?;
+    std::fs::write(root.join(".ccmignore"), "fixtures/\n")?;
+    ccm_core::index_directory(root.to_string_lossy().as_ref(), None).await?;
+    let active = artifacts(&root, None)?;
+    let filter = ccm_core::build_watch_filter(&root, &root.join("data/ccm_db"))?;
+
+    for relevant in ["src/lib.rs", "src/removed.rs", "src/my file.rs", "Makefile"] {
+        assert!(
+            ccm_core::is_watch_relevant_path(&filter, &root.join(relevant)),
+            "{relevant} should trigger a refresh"
+        );
+    }
+    let ignored = [
+        root.join("generated/out.rs"),
+        root.join("fixtures/sample.rs"),
+        root.join("target/debug/build.rs"),
+        root.join(".git/index"),
+        root.join(".ccm/semantic-upgrade.log"),
+        root.join("data/ccm_current"),
+        active.graph_path.clone(),
+        active.db_path.join("code_vectors.lance/data.lance"),
+        root.clone(),
+        std::path::PathBuf::from("/outside/project.rs"),
+    ];
+    for path in ignored {
+        assert!(
+            !ccm_core::is_watch_relevant_path(&filter, &path),
+            "{} should not trigger a refresh",
+            path.display()
+        );
+    }
+    Ok(())
+}
