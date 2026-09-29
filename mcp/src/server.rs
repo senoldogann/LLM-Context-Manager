@@ -332,12 +332,6 @@ impl ServerState {
         let canonical_path = canonicalize_project_path(Path::new(&path));
         let cache_key = canonical_path.to_string_lossy().to_string();
 
-        if self.index_job_in_progress(&cache_key) {
-            return Err(anyhow::anyhow!(
-                "Project indexing is in progress. Retry this tool after index_project reports completion."
-            ));
-        }
-
         let artifacts = self.project_artifacts(&cache_key)?;
         let engine_cache_key = format!(
             "{}#{}",
@@ -363,6 +357,14 @@ impl ServerState {
             || !Path::new(&graph_path).is_file()
             || !Path::new(&manifest_path).is_file()
         {
+            // İlk indeksleme sürerken okunacak generation yoktur; iş bitince aynı
+            // çağrı çalışır. Var olan generation ise yeniden indeksleme sırasında
+            // okunmaya devam eder (generation geçişi atomiktir).
+            if self.index_job_in_progress(&cache_key) {
+                return Err(anyhow::anyhow!(
+                    "Project indexing is in progress. Retry this tool after index_project reports completion."
+                ));
+            }
             return Err(anyhow::anyhow!(
                 "Project index is missing. Call index_project first; large indexes run in the background."
             ));
