@@ -933,12 +933,24 @@ async fn run_index_worker_process(
 }
 
 fn format_index_stats_result(stats: ccm_core::IndexStats, mode: IndexModeArg) -> String {
+    // Graf-yalnız aktivasyon ajana açıkça bildirilir; aksi halde search_code'un
+    // yalnızca sözcüksel sonuç döndürmesinin nedeni görünmez kalır.
+    let semantic_notice = stats.semantic_unavailable.as_ref().map(|reason| {
+        format!(
+            "Semantic search is unavailable: {}. Graph tools (find_usages, impact_of_change, trace_call_chain, get_context, read_graph) work normally; call index_project again once the embedding service is reachable.",
+            reason
+        )
+    });
     if stats.files_indexed == 0
         && stats.files_failed == 0
         && stats.files_skipped == 0
         && stats.nodes_created == 0
     {
-        return "No changes detected. Existing index is already up to date.".to_string();
+        let up_to_date = "No changes detected. Existing index is already up to date.".to_string();
+        return match semantic_notice {
+            Some(notice) => format!("{}\n\n{}", up_to_date, notice),
+            None => up_to_date,
+        };
     }
 
     let mut lines = vec![
@@ -980,6 +992,11 @@ fn format_index_stats_result(stats: ccm_core::IndexStats, mode: IndexModeArg) ->
         for pattern in stats.suggested_ignores.iter().take(10) {
             lines.push(format!("- {}", pattern));
         }
+    }
+
+    if let Some(notice) = semantic_notice {
+        lines.push(String::new());
+        lines.push(notice);
     }
 
     lines.push(String::new());

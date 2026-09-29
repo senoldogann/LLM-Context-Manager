@@ -217,7 +217,7 @@ Advanced overrides:
 - `.env.example` contains the full advanced tuning surface for chunking, batch size, hybrid ranking weights, and compatibility aliases such as `OPENAI_API_KEY`, `CCM_SKIP_CHECKSUM`, `CCM_MCP_REQUIRE_ALLOWED_ROOTS`, `CCM_EMBED_DATA`, and `EMBEDDING_DISABLED`.
 - Hybrid weight tuning details live in [`docs/hybrid-ranking.md`](./docs/hybrid-ranking.md).
 
-**Note:** Requires Ollama running (`ollama serve`) with model pulled (`ollama pull mxbai-embed-large`).
+**Note:** Semantic search requires Ollama running (`ollama serve`) with the model pulled (`ollama pull mxbai-embed-large`). If the embedding service is unreachable, indexing still activates a graph-only index (graph tools work, `search_code` falls back to lexical matching) and reports why; the next index run with the service reachable fills in the vectors. `ccm-cli doctor` sends a real probe request to the embedding service.
 **Security:** MCP enforces a strict allowlist by default — only directories under `CCM_ALLOWED_ROOTS` (falling back to `CCM_PROJECT_ROOT`) and workspaces the host reports via MCP `roots` can be indexed or read. Set `CCM_REQUIRE_ALLOWED_ROOTS=0` only if you explicitly want the relaxed mode; even then, access stays confined to the startup project root.
 
 ---

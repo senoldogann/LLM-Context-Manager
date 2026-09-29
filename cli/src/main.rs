@@ -117,7 +117,11 @@ async fn main() -> anyhow::Result<()> {
     let filter = std::env::var("RUST_LOG").unwrap_or_else(|_| "info".to_string());
     let env_filter = tracing_subscriber::EnvFilter::try_new(filter)
         .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new("info"));
-    tracing_subscriber::fmt().with_env_filter(env_filter).init();
+    // Loglar stderr'e: `doctor --json` ve `eval` stdout'a makine okunur JSON yazar.
+    tracing_subscriber::fmt()
+        .with_env_filter(env_filter)
+        .with_writer(std::io::stderr)
+        .init();
 
     let args = Args::parse();
 
@@ -173,6 +177,12 @@ async fn main() -> anyhow::Result<()> {
                         for (reason, count) in &stats.reason_counts {
                             tracing::info!(reason = %reason, count = *count, "Index issue summary");
                         }
+                    }
+                    if let Some(reason) = &stats.semantic_unavailable {
+                        tracing::warn!(
+                            reason = %reason,
+                            "Graph index is ready; semantic search stays off until the next index run with the embedding service reachable"
+                        );
                     }
                 }
                 Err(e) => {
@@ -460,6 +470,24 @@ async fn main() -> anyhow::Result<()> {
     Ok(())
 }
 
+/// Yapılandırılmış embedding servisine tek bir küçük istek gönderir.
+async fn probe_embedder() -> anyhow::Result<String> {
+    let embedder = ccm_core::vector::remote::RemoteEmbedder::from_env()?;
+    let vectors = embedder.embed(vec!["ccm doctor probe".to_string()]).await?;
+    let dimension = vectors.first().map(Vec::len).unwrap_or(0);
+    if dimension == 0 {
+        anyhow::bail!(
+            "{} returned an empty embedding vector",
+            embedder.endpoint_summary()
+        );
+    }
+    Ok(format!(
+        "{} (dimension {})",
+        embedder.endpoint_summary(),
+        dimension
+    ))
+}
+
 async fn run_doctor(path: &std::path::Path, json: bool) -> anyhow::Result<()> {
     let root = path.canonicalize()?;
     let artifacts = ccm_core::resolve_index_artifacts(&root.to_string_lossy(), None)?;
@@ -486,12 +514,6 @@ async fn run_doctor(path: &std::path::Path, json: bool) -> anyhow::Result<()> {
         .or_else(|| std::env::var("CCM_PROJECT_ROOT").ok());
     let allowed_roots_ok =
         allowed_roots_check(&root, strict_roots, effective_allowed_roots.as_deref());
-    let provider = std::env::var("CCM_EMBEDDING_PROVIDER")
-        .or_else(|_| std::env::var("EMBEDDING_PROVIDER"))
-        .unwrap_or_else(|_| "local".to_string());
-    let model = std::env::var("CCM_EMBEDDING_MODEL")
-        .or_else(|_| std::env::var("EMBEDDING_MODEL"))
-        .unwrap_or_else(|_| "default".to_string());
     let graph_result = ccm_core::graph::CodeGraph::load_from_file(&graph_path.to_string_lossy());
     let graph_error = graph_result.as_ref().err().map(ToString::to_string);
     let graph_nodes = graph_result
@@ -537,6 +559,15 @@ async fn run_doctor(path: &std::path::Path, json: bool) -> anyhow::Result<()> {
             )),
         }
     };
+    // Embedding servisi gerçekten çağrılır; ayarın dolu olması erişilebilirliği kanıtlamaz.
+    let embedding_check = if embedder_disabled {
+        serde_json::json!({"ok": true, "disabled": true})
+    } else {
+        match probe_embedder().await {
+            Ok(endpoint) => serde_json::json!({"ok": true, "endpoint": endpoint}),
+            Err(error) => serde_json::json!({"ok": false, "error": format!("{error:#}")}),
+        }
+    };
     let vector_error = vector_result.as_ref().err().cloned();
     let vector_rows = vector_result.as_ref().ok().copied().flatten();
 
@@ -567,7 +598,7 @@ async fn run_doctor(path: &std::path::Path, json: bool) -> anyhow::Result<()> {
             "disabled": embedder_disabled,
             "error": vector_error
         },
-        "embedding": {"ok": !provider.trim().is_empty(), "provider": provider, "model": model},
+        "embedding": embedding_check,
         "binary": {"ok": true, "version": env!("CARGO_PKG_VERSION")}
     });
 
