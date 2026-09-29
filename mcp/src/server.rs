@@ -19,6 +19,8 @@ use ccm_core::vector::store::LanceDbStore;
 const LATEST_PROTOCOL_VERSION: &str = "2025-11-25";
 const SUPPORTED_PROTOCOL_VERSIONS: [&str; 3] =
     [LATEST_PROTOCOL_VERSION, "2025-06-18", "2025-03-26"];
+/// Okuma araçlarının süren yenilemeyi bekleyeceği en uzun süre.
+const FRESHNESS_WAIT_BUDGET: std::time::Duration = std::time::Duration::from_secs(2);
 
 /// Holds the server's shared state.
 pub struct ServerState {
@@ -42,6 +44,11 @@ pub struct ServerState {
     pending_roots_request_id: std::sync::Mutex<Option<String>>,
     next_client_request_id: std::sync::atomic::AtomicU64,
     outgoing_requests: std::sync::Mutex<Vec<Value>>,
+    /// Proje başına otomatik yenileme durumu (anahtar: kanonik proje yolu).
+    freshness:
+        std::sync::Mutex<std::collections::HashMap<String, Arc<crate::freshness::FreshnessHandle>>>,
+    /// Semantik yükseltmesi süren projeler (anahtar: kanonik proje yolu).
+    semantic_upgrades: std::sync::Mutex<std::collections::HashSet<String>>,
 }
 
 #[derive(Clone)]
@@ -260,6 +267,8 @@ impl ServerState {
             pending_roots_request_id: std::sync::Mutex::new(None),
             next_client_request_id: std::sync::atomic::AtomicU64::new(1),
             outgoing_requests: std::sync::Mutex::new(Vec::new()),
+            freshness: std::sync::Mutex::new(std::collections::HashMap::new()),
+            semantic_upgrades: std::sync::Mutex::new(std::collections::HashSet::new()),
         })
     }
 
@@ -285,6 +294,82 @@ impl ServerState {
             None => self
                 .effective_project_root()
                 .map(|root| project_key_for_path(&root.to_string_lossy())),
+        }
+    }
+
+    /// Proje için otomatik yenilemeyi bir kez başlatır. Kapalıysa ya da izlenen
+    /// proje sınırı doluysa ilgili durumla kaydedilir; sonraki çağrılar bir şey
+    /// yapmaz.
+    pub(crate) fn ensure_auto_refresh(self: &Arc<Self>, project_key: &str) {
+        let mut handles = self.freshness.lock().unwrap();
+        if handles.contains_key(project_key) {
+            return;
+        }
+        let handle = if !crate::freshness::auto_refresh_enabled() {
+            crate::freshness::inactive_handle(crate::freshness::WatcherStatus::Disabled)
+        } else if handles.len() >= engine_cache_size() {
+            crate::freshness::inactive_handle(crate::freshness::WatcherStatus::Unavailable(
+                "watcher limit reached".to_string(),
+            ))
+        } else {
+            match self.project_db_path(project_key) {
+                Ok(db_path) => crate::freshness::start_auto_refresh(
+                    self.clone(),
+                    project_key.to_string(),
+                    db_path,
+                ),
+                Err(error) => {
+                    crate::freshness::inactive_handle(crate::freshness::WatcherStatus::Unavailable(
+                        format!("index path could not be resolved: {error}"),
+                    ))
+                }
+            }
+        };
+        handles.insert(project_key.to_string(), handle);
+    }
+
+    pub(crate) fn freshness_handle(
+        &self,
+        project_key: &str,
+    ) -> Option<Arc<crate::freshness::FreshnessHandle>> {
+        self.freshness.lock().unwrap().get(project_key).cloned()
+    }
+
+    /// Elle indeksleme sonrası otomatik yenilemeden durum doğrulaması ister.
+    pub(crate) fn request_refresh(&self, project_key: &str) {
+        if let Some(handle) = self.freshness_handle(project_key) {
+            crate::freshness::request_rescan(&handle);
+        }
+    }
+
+    /// Hızlı indeksin semantik yükseltmesi başladı; otomatik yenileme ertelenir.
+    pub(crate) fn begin_semantic_upgrade(&self, project_key: &str) {
+        self.semantic_upgrades
+            .lock()
+            .unwrap()
+            .insert(project_key.to_string());
+    }
+
+    /// Yükseltme bitti (başarılı ya da değil); ertelenen yenileme uyandırılır.
+    pub(crate) fn end_semantic_upgrade(&self, project_key: &str) {
+        self.semantic_upgrades.lock().unwrap().remove(project_key);
+        self.request_refresh(project_key);
+    }
+
+    pub(crate) fn semantic_upgrade_running(&self, project_key: &str) -> bool {
+        self.semantic_upgrades.lock().unwrap().contains(project_key)
+    }
+
+    /// Projenin bekleyen yenilemesini en fazla `budget` kadar bekler; otomatik
+    /// yenileme kaydı yoksa kapalı durum döner.
+    pub(crate) async fn wait_until_fresh(
+        &self,
+        project_key: &str,
+        budget: std::time::Duration,
+    ) -> crate::freshness::ProjectFreshness {
+        match self.freshness_handle(project_key) {
+            Some(handle) => crate::freshness::wait_until_fresh(&handle, budget).await,
+            None => crate::freshness::disabled_freshness(),
         }
     }
 
@@ -1033,6 +1118,19 @@ async fn handle_call_tool_inner(
     }
 
     let project_key = state.project_key(project_path);
+    // İlk yükleme izin listesini ve indeksin varlığını doğrular; watcher yalnızca
+    // izinli ve indeksi olan projelerde başlar.
+    if let Err(error) = state.get_engine(project_path).await {
+        return Ok(engine_error_response(id, tool_name, &error));
+    }
+    let freshness = match &project_key {
+        Some(key) => {
+            state.ensure_auto_refresh(key);
+            Some(state.wait_until_fresh(key, FRESHNESS_WAIT_BUDGET).await)
+        }
+        None => None,
+    };
+    // Bekleme sırasında yeni generation aktive edilmiş olabilir.
     let loaded = match state.get_engine(project_path).await {
         Ok(loaded) => loaded,
         Err(error) => return Ok(engine_error_response(id, tool_name, &error)),
@@ -1057,11 +1155,11 @@ async fn handle_call_tool_inner(
         }
     };
 
-    let result = match project_key {
-        Some(_) => crate::freshness::with_freshness_line(
+    let result = match freshness {
+        Some(freshness) => crate::freshness::with_freshness_line(
             result,
             &crate::freshness::format_freshness_line(
-                &crate::freshness::disabled_freshness(),
+                &freshness,
                 loaded.indexed_at,
                 ccm_core::unix_now_secs(),
             ),

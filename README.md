@@ -196,6 +196,8 @@ CCM_REQUIRE_ALLOWED_ROOTS=1
 # MCP Runtime
 CCM_MCP_ENGINE_CACHE_SIZE=8
 CCM_MCP_DEBUG=0
+# Re-index automatically when project files change (0 = manual index_now only)
+CCM_AUTO_REFRESH=1
 
 # Optional: disable embeddings entirely (semantic search disabled)
 CCM_DISABLE_EMBEDDER=0
