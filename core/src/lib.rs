@@ -29,9 +29,34 @@ use std::path::{Path, PathBuf};
 use std::time::UNIX_EPOCH;
 
 pub const INDEX_SCHEMA_VERSION: u32 = 4;
-pub const GENERATIONS_DIRECTORY: &str = ".ccm-generations";
+const GENERATIONS_DIRECTORY: &str = ".ccm-generations";
 const CURRENT_GENERATION_FILE: &str = "ccm_current";
-pub const ACTIVATION_LOCK_DIRECTORY: &str = ".ccm-activation.lock";
+const ACTIVATION_LOCK_DIRECTORY: &str = ".ccm-activation.lock";
+
+/// Ham ve kanonik yol varyasyonlarını çıkarır: eğer kanonik form raw'dan
+/// farklıysa her ikisini de verir, yoksa raw'ı verir. Symlink'leri yakalar.
+fn with_canonical_variants(paths: Vec<PathBuf>) -> Vec<PathBuf> {
+    paths
+        .into_iter()
+        .flat_map(|path| {
+            let raw = path;
+            match std::fs::canonicalize(&raw) {
+                Ok(canonical) if canonical != raw => vec![raw, canonical],
+                _ => vec![raw],
+            }
+        })
+        .collect()
+}
+
+/// Indekslemenin taranması sırasında atlanan hazırlama ve generation
+/// dizinlerini tanır: `.ccm-generations`, `.ccm-activation.lock`,
+/// `.ccm-rebuild-*`, `.ccm-backup-*` prefixleri.
+fn is_index_staging_dir_name(name: &str) -> bool {
+    name == GENERATIONS_DIRECTORY
+        || name == ACTIVATION_LOCK_DIRECTORY
+        || name.starts_with(".ccm-rebuild-")
+        || name.starts_with(".ccm-backup-")
+}
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct IndexArtifactPaths {
@@ -216,16 +241,7 @@ const EXCLUDED_SECRET_FILE_NAMES: &[&str] = &[
 fn build_project_walker(path: &Path, excluded_paths: &[PathBuf]) -> ignore::Walk {
     use ignore::WalkBuilder;
 
-    let excluded_paths: Vec<PathBuf> = excluded_paths
-        .iter()
-        .flat_map(|excluded| {
-            let raw = excluded.to_path_buf();
-            match std::fs::canonicalize(excluded) {
-                Ok(canonical) if canonical != raw => vec![raw, canonical],
-                _ => vec![raw],
-            }
-        })
-        .collect();
+    let excluded_paths = with_canonical_variants(excluded_paths.to_vec());
 
     WalkBuilder::new(path)
         .hidden(false)
@@ -250,11 +266,7 @@ fn should_traverse_entry(entry: &ignore::DirEntry) -> bool {
     let file_type = entry.file_type();
 
     if file_type.map(|ft| ft.is_dir()).unwrap_or(false) {
-        if name == GENERATIONS_DIRECTORY
-            || name.starts_with(".ccm-rebuild-")
-            || name.starts_with(".ccm-backup-")
-            || name == ACTIVATION_LOCK_DIRECTORY
-        {
+        if is_index_staging_dir_name(name) {
             return false;
         }
         return !EXCLUDED_DIRECTORY_NAMES.contains(&name);

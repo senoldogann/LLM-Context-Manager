@@ -917,8 +917,11 @@ async fn watch_filter_skips_ignored_outputs_and_index_artifacts() -> Result<()> 
     std::env::remove_var("EMBEDDING_MODEL");
     std::env::remove_var("CCM_EMBEDDING_FIXTURE");
     std::env::set_var("CCM_DISABLE_EMBEDDER", "1");
+
+    // Senaryo 1: Git reposunda .gitignore uygulanır.
     let project = tempdir()?;
     let root = std::fs::canonicalize(project.path())?;
+    git2::Repository::init(&root)?;
     std::fs::create_dir_all(root.join("src"))?;
     std::fs::write(root.join("src/lib.rs"), "fn alpha() {}\n")?;
     std::fs::write(root.join(".gitignore"), "generated/\n")?;
@@ -952,5 +955,19 @@ async fn watch_filter_skips_ignored_outputs_and_index_artifacts() -> Result<()> 
             path.display()
         );
     }
+
+    // Senaryo 2: Git olmayan projede .gitignore yok sayılır; generated/out.rs RELEVANT olmalı.
+    let project2 = tempdir()?;
+    let root2 = std::fs::canonicalize(project2.path())?;
+    std::fs::create_dir_all(root2.join("src"))?;
+    std::fs::write(root2.join("src/lib.rs"), "fn beta() {}\n")?;
+    std::fs::write(root2.join(".gitignore"), "generated/\n")?;
+    ccm_core::index_directory(root2.to_string_lossy().as_ref(), None).await?;
+    let filter2 = ccm_core::build_watch_filter(&root2, &root2.join("data/ccm_db"))?;
+    assert!(
+        ccm_core::is_watch_relevant_path(&filter2, &root2.join("generated/out.rs")),
+        "non-git project ignores .gitignore, so generated/out.rs should be relevant"
+    );
+
     Ok(())
 }
