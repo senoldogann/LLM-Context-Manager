@@ -39,20 +39,31 @@ cargo build --release
 ```bash
 docker build -t ccm:local .
 
-# Index the current directory (mounted at /workspace)
-docker run --rm -v "$PWD":/workspace -w /workspace \
-  -e EMBEDDING_HOST=http://host.docker.internal:11434 \
-  -e EMBEDDING_MODEL=mxbai-embed-large \
+# Index the current directory (mounted at /workspace). The built-in embedding
+# model is downloaded once into the `ccm-models` volume.
+docker run --rm -v "$PWD":/workspace -v ccm-models:/models -w /workspace \
   ccm:local index --path /workspace
 
 # Query it
-docker run --rm -v "$PWD":/workspace -w /workspace \
-  -e EMBEDDING_HOST=http://host.docker.internal:11434 \
+docker run --rm -v "$PWD":/workspace -v ccm-models:/models -w /workspace \
   ccm:local query --text "authentication flow"
 ```
 
-Or use `docker compose run --rm ccm index --path /workspace`. On Linux, replace
-`host.docker.internal` with your host IP if the Docker bridge cannot resolve it.
+The image runs Linux, so the built-in model works there on Intel Macs too. To
+use Ollama on the host instead, pass the same settings to every command:
+
+```bash
+docker run --rm -v "$PWD":/workspace -w /workspace \
+  -e EMBEDDING_PROVIDER=ollama \
+  -e EMBEDDING_HOST=http://host.docker.internal:11434 \
+  -e EMBEDDING_MODEL=mxbai-embed-large \
+  ccm:local index --path /workspace
+```
+
+Or use `docker compose run --rm ccm index --path /workspace` (it mounts the
+models volume; the Ollama settings are commented out in `docker-compose.yml`).
+On Linux, replace `host.docker.internal` with your host IP if the Docker bridge
+cannot resolve it.
 
 ### Step 2: Configure
 
