@@ -19,6 +19,8 @@ use ccm_core::vector::store::LanceDbStore;
 const LATEST_PROTOCOL_VERSION: &str = "2025-11-25";
 const SUPPORTED_PROTOCOL_VERSIONS: [&str; 3] =
     [LATEST_PROTOCOL_VERSION, "2025-06-18", "2025-03-26"];
+/// Okuma araçlarının süren yenilemeyi bekleyeceği en uzun süre.
+const FRESHNESS_WAIT_BUDGET: std::time::Duration = std::time::Duration::from_secs(2);
 
 /// Holds the server's shared state.
 pub struct ServerState {
@@ -42,6 +44,13 @@ pub struct ServerState {
     pending_roots_request_id: std::sync::Mutex<Option<String>>,
     next_client_request_id: std::sync::atomic::AtomicU64,
     outgoing_requests: std::sync::Mutex<Vec<Value>>,
+    /// Proje başına otomatik yenileme durumu (anahtar: kanonik proje yolu).
+    freshness:
+        std::sync::Mutex<std::collections::HashMap<String, Arc<crate::freshness::FreshnessHandle>>>,
+    /// Süren semantik yükseltme sayısı, proje başına (anahtar: kanonik proje yolu).
+    /// Aynı projede üst üste hızlı indeks alınırsa yükseltmeler çakışır; sayaç
+    /// yenilemenin ancak sonuncusu bitince başlamasını sağlar.
+    semantic_upgrades: std::sync::Mutex<std::collections::HashMap<String, usize>>,
 }
 
 #[derive(Clone)]
@@ -63,8 +72,16 @@ fn engine_cache_size() -> usize {
 use lru::LruCache;
 use std::num::NonZeroUsize;
 
+/// Önbellekteki engine ve ait olduğu generation'ın indeksleme zamanı.
+#[derive(Clone)]
+pub struct CachedEngine {
+    pub engine: Arc<RetrievalEngine>,
+    /// Aktif generation manifestindeki indeksleme zamanı (unix saniye).
+    pub indexed_at: Option<u64>,
+}
+
 pub struct EngineCache {
-    cache: LruCache<String, Arc<RetrievalEngine>>,
+    cache: LruCache<String, CachedEngine>,
 }
 
 impl EngineCache {
@@ -75,16 +92,30 @@ impl EngineCache {
         }
     }
 
-    fn get(&mut self, key: &str) -> Option<Arc<RetrievalEngine>> {
+    fn get(&mut self, key: &str) -> Option<CachedEngine> {
         self.cache.get(key).cloned()
     }
 
     #[allow(dead_code)]
-    fn peek(&self, key: &str) -> Option<Arc<RetrievalEngine>> {
+    fn peek(&self, key: &str) -> Option<CachedEngine> {
         self.cache.peek(key).cloned()
     }
 
-    fn insert(&mut self, key: String, engine: Arc<RetrievalEngine>) -> Arc<RetrievalEngine> {
+    /// Projenin yeni generation'ını ekler ve aynı projenin eski
+    /// generation'larını düşürür. Otomatik yenileme her kayıtta yeni generation
+    /// ürettiği için aksi halde eski graflar bellekte birikir; eski engine'i
+    /// kullanan istekler `Arc` sayesinde bitene kadar onu korur.
+    fn insert(&mut self, project_key: &str, key: String, engine: CachedEngine) -> CachedEngine {
+        let prefix = format!("{}#", project_key);
+        let stale: Vec<String> = self
+            .cache
+            .iter()
+            .map(|(existing, _)| existing.clone())
+            .filter(|existing| existing.starts_with(&prefix) && *existing != key)
+            .collect();
+        for existing in stale {
+            self.cache.pop(&existing);
+        }
         self.cache.put(key, engine.clone());
         engine
     }
@@ -121,8 +152,18 @@ impl ServerState {
         }
     }
 
+    /// Proje kilidini haritadan çıkarır, ama yalnızca başka kimse tutmuyorsa
+    /// (`Arc` sayısı 1: yalnızca harita). Kilidi tutan ya da bekleyen biri (ör.
+    /// yenileme görevi) varsa girdi kalır; aksi halde sonraki çağrı yeni bir mutex
+    /// üretir ve iki indeksleme aynı projede eşzamanlı çalışır.
     pub(crate) fn release_index_lock(&self, job_key: &str) {
-        self.index_locks.lock().unwrap().remove(job_key);
+        let mut locks = self.index_locks.lock().unwrap();
+        if locks
+            .get(job_key)
+            .is_some_and(|lock| std::sync::Arc::strong_count(lock) == 1)
+        {
+            locks.remove(job_key);
+        }
     }
 
     pub(crate) fn project_db_path(&self, project_path: &str) -> Result<PathBuf> {
@@ -136,6 +177,12 @@ impl ServerState {
         }
         let candidate = canonical_path.join("data/ccm_db");
         ccm_core::resolve_artifact_path(&canonical_path, &candidate)
+    }
+
+    /// Projenin etkin indeksi diskte var mı? `get_engine` ile aynı artefakt denetimini
+    /// kullanır; otomatik yenileme silinmiş bir indeksi yeniden kurmamak için sorar.
+    pub(crate) fn project_index_exists(&self, project_key: &str) -> Result<bool> {
+        Ok(index_artifacts_exist(&self.project_artifacts(project_key)?))
     }
 
     fn project_artifacts(&self, project_path: &str) -> Result<ccm_core::IndexArtifactPaths> {
@@ -238,6 +285,8 @@ impl ServerState {
             pending_roots_request_id: std::sync::Mutex::new(None),
             next_client_request_id: std::sync::atomic::AtomicU64::new(1),
             outgoing_requests: std::sync::Mutex::new(Vec::new()),
+            freshness: std::sync::Mutex::new(std::collections::HashMap::new()),
+            semantic_upgrades: std::sync::Mutex::new(std::collections::HashMap::new()),
         })
     }
 
@@ -253,6 +302,122 @@ impl ServerState {
             .first()
             .cloned()
             .or_else(|| self.default_project_root.clone())
+    }
+
+    /// İstekteki `project_path` ya da etkin proje kökü için kanonik anahtar;
+    /// ikisi de yoksa `None` (ev dizini deposu; tazelik satırı eklenmez).
+    pub(crate) fn project_key(&self, project_path: Option<&str>) -> Option<String> {
+        match project_path {
+            Some(path) => Some(project_key_for_path(path)),
+            None => self
+                .effective_project_root()
+                .map(|root| project_key_for_path(&root.to_string_lossy())),
+        }
+    }
+
+    /// Proje için otomatik yenilemeyi bir kez başlatır. Kapalıysa ya da izlenen
+    /// proje sınırı doluysa ilgili durumla kaydedilir; sonraki çağrılar bir şey
+    /// yapmaz.
+    pub(crate) fn ensure_auto_refresh(self: &Arc<Self>, project_key: &str) {
+        let mut handles = self.freshness.lock().unwrap();
+        if handles.contains_key(project_key) {
+            return;
+        }
+        let handle = if !crate::freshness::auto_refresh_enabled() {
+            crate::freshness::inactive_handle(crate::freshness::WatcherStatus::Disabled)
+        } else if handles.len() >= engine_cache_size() {
+            crate::freshness::inactive_handle(crate::freshness::WatcherStatus::Unavailable(
+                "watcher limit reached".to_string(),
+            ))
+        } else {
+            match self.project_db_path(project_key) {
+                Ok(db_path) => crate::freshness::start_auto_refresh(
+                    self.clone(),
+                    project_key.to_string(),
+                    db_path,
+                ),
+                Err(error) => {
+                    crate::freshness::inactive_handle(crate::freshness::WatcherStatus::Unavailable(
+                        format!("index path could not be resolved: {error}"),
+                    ))
+                }
+            }
+        };
+        handles.insert(project_key.to_string(), handle);
+    }
+
+    pub(crate) fn freshness_handle(
+        &self,
+        project_key: &str,
+    ) -> Option<Arc<crate::freshness::FreshnessHandle>> {
+        self.freshness.lock().unwrap().get(project_key).cloned()
+    }
+
+    /// Elle indeksleme sonrası otomatik yenilemeden durum doğrulaması ister.
+    pub(crate) fn request_refresh(&self, project_key: &str) {
+        if let Some(handle) = self.freshness_handle(project_key) {
+            crate::freshness::request_rescan(&handle);
+        }
+    }
+
+    /// Hızlı indeksin semantik yükseltmesi başladı; otomatik yenileme ertelenir.
+    pub(crate) fn begin_semantic_upgrade(&self, project_key: &str) {
+        *self
+            .semantic_upgrades
+            .lock()
+            .unwrap()
+            .entry(project_key.to_string())
+            .or_insert(0) += 1;
+    }
+
+    /// Yükseltme bitti (başarılı ya da değil). Projede başka yükseltme kalmadıysa
+    /// ertelenen yenileme uyandırılır; çakışan bir yükseltme sürüyorsa ertelenme
+    /// onun bitişine kadar sürer.
+    pub(crate) fn end_semantic_upgrade(&self, project_key: &str) {
+        let remaining = {
+            let mut upgrades = self.semantic_upgrades.lock().unwrap();
+            match upgrades.get_mut(project_key) {
+                Some(count) if *count > 1 => {
+                    *count -= 1;
+                    *count
+                }
+                Some(_) => {
+                    upgrades.remove(project_key);
+                    0
+                }
+                None => {
+                    tracing::warn!(
+                        project = %project_key,
+                        "Semantic upgrade ended without a registered start"
+                    );
+                    0
+                }
+            }
+        };
+        if remaining == 0 {
+            self.request_refresh(project_key);
+        }
+    }
+
+    pub(crate) fn semantic_upgrade_running(&self, project_key: &str) -> bool {
+        self.semantic_upgrades
+            .lock()
+            .unwrap()
+            .get(project_key)
+            .is_some_and(|count| *count > 0)
+    }
+
+    /// Projenin bekleyen yenilemesini en fazla `budget` kadar bekler; otomatik
+    /// yenileme kaydı yoksa kapalı durum döner.
+    pub(crate) async fn wait_until_fresh(
+        &self,
+        project_key: &str,
+        budget: std::time::Duration,
+    ) -> crate::freshness::ProjectFreshness {
+        match self.freshness_handle(project_key) {
+            Some(handle) => crate::freshness::wait_until_fresh(&handle, budget).await,
+            None => crate::freshness::disabled_freshness(),
+        }
     }
 
     /// İstemciye gönderilmeyi bekleyen JSON-RPC isteklerini (ör. `roots/list`) boşaltır.
@@ -301,7 +466,7 @@ impl ServerState {
 
     /// Retrieves the engine for a specific project path, or defaults to the startup engine.
     /// Loads the engine dynamically if it's not in the cache.
-    pub async fn get_engine(&self, project_path: Option<&str>) -> Result<Arc<RetrievalEngine>> {
+    pub async fn get_engine(&self, project_path: Option<&str>) -> Result<CachedEngine> {
         let path = match project_path {
             Some(path) => path.to_string(),
             None => {
@@ -311,11 +476,20 @@ impl ServerState {
                             "No default project root is available and strict allowlist mode is enabled. Set CCM_PROJECT_ROOT and CCM_ALLOWED_ROOTS."
                         ));
                     }
-                    return self.default_engine.read().await.clone().ok_or_else(|| {
-                        anyhow::anyhow!(
-                            "No project root is available. Pass 'project_path' or set CCM_PROJECT_ROOT."
-                        )
-                    });
+                    return self
+                        .default_engine
+                        .read()
+                        .await
+                        .clone()
+                        .map(|engine| CachedEngine {
+                            engine,
+                            indexed_at: None,
+                        })
+                        .ok_or_else(|| {
+                            anyhow::anyhow!(
+                                "No project root is available. Pass 'project_path' or set CCM_PROJECT_ROOT."
+                            )
+                        });
                 };
                 root.to_string_lossy().to_string()
             }
@@ -331,12 +505,6 @@ impl ServerState {
         // Cache key normalize edilir; "/repo" ile "/repo/" ayrı entry oluşturmasın.
         let canonical_path = canonicalize_project_path(Path::new(&path));
         let cache_key = canonical_path.to_string_lossy().to_string();
-
-        if self.index_job_in_progress(&cache_key) {
-            return Err(anyhow::anyhow!(
-                "Project indexing is in progress. Retry this tool after index_project reports completion."
-            ));
-        }
 
         let artifacts = self.project_artifacts(&cache_key)?;
         let engine_cache_key = format!(
@@ -356,13 +524,17 @@ impl ServerState {
         tracing::info!(path = %cache_key, "Loading context for project");
         let db_path = artifacts.db_path.to_string_lossy().to_string();
         let graph_path = artifacts.graph_path.to_string_lossy().to_string();
-        let manifest_path = artifacts.manifest_path.to_string_lossy().to_string();
 
         // Uzun full index retrieval çağrısının içinde çalıştırılmaz.
-        if !Path::new(&db_path).exists()
-            || !Path::new(&graph_path).is_file()
-            || !Path::new(&manifest_path).is_file()
-        {
+        if !index_artifacts_exist(&artifacts) {
+            // İlk indeksleme sürerken okunacak generation yoktur; iş bitince aynı
+            // çağrı çalışır. Var olan generation ise yeniden indeksleme sırasında
+            // okunmaya devam eder (generation geçişi atomiktir).
+            if self.index_job_in_progress(&cache_key) {
+                return Err(anyhow::anyhow!(
+                    "Project indexing is in progress. Retry this tool after index_project reports completion."
+                ));
+            }
             return Err(anyhow::anyhow!(
                 "Project index is missing. Call index_project first; large indexes run in the background."
             ));
@@ -386,17 +558,21 @@ impl ServerState {
         let policy_path = requested_db_path
             .parent()
             .map(|parent| parent.join("ccm_learn/policies.json"));
-        let engine = Arc::new(RetrievalEngine::new_with_active_policy(
-            Arc::new(RwLock::new(graph)),
-            store,
-            policy_path.as_deref(),
-        ));
+        let indexed_at = ccm_core::read_index_timestamp(&artifacts.manifest_path)?;
+        let engine = CachedEngine {
+            engine: Arc::new(RetrievalEngine::new_with_active_policy(
+                Arc::new(RwLock::new(graph)),
+                store,
+                policy_path.as_deref(),
+            )),
+            indexed_at,
+        };
 
         let mut engines = self.engines.write().await;
         if let Some(existing) = engines.get(&engine_cache_key) {
             return Ok(existing);
         }
-        Ok(engines.insert(engine_cache_key, engine))
+        Ok(engines.insert(&cache_key, engine_cache_key, engine))
     }
 
     pub async fn refresh_project_engine(&self, project_path: &str) -> Result<()> {
@@ -411,18 +587,24 @@ impl ServerState {
         let policy_path = requested_db_path
             .parent()
             .map(|parent| parent.join("ccm_learn/policies.json"));
-        let engine = Arc::new(RetrievalEngine::new_with_active_policy(
-            Arc::new(RwLock::new(graph)),
-            store,
-            policy_path.as_deref(),
-        ));
+        let engine = CachedEngine {
+            engine: Arc::new(RetrievalEngine::new_with_active_policy(
+                Arc::new(RwLock::new(graph)),
+                store,
+                policy_path.as_deref(),
+            )),
+            indexed_at: ccm_core::read_index_timestamp(&artifacts.manifest_path)?,
+        };
 
         let engine_cache_key = format!(
             "{}#{}",
             cache_key,
             artifacts.generation_id.as_deref().unwrap_or("legacy")
         );
-        self.engines.write().await.insert(engine_cache_key, engine);
+        self.engines
+            .write()
+            .await
+            .insert(&cache_key, engine_cache_key, engine);
         Ok(())
     }
 
@@ -452,6 +634,13 @@ impl ServerState {
             .iter()
             .any(|root| candidate.starts_with(root))
     }
+}
+
+/// Etkin generation'ın veritabanı, graf ve manifest artefaktlarının üçü de diskte mi?
+fn index_artifacts_exist(artifacts: &ccm_core::IndexArtifactPaths) -> bool {
+    artifacts.db_path.exists()
+        && artifacts.graph_path.is_file()
+        && artifacts.manifest_path.is_file()
 }
 
 fn load_allowed_roots() -> Vec<PathBuf> {
@@ -578,6 +767,13 @@ fn canonicalize_project_path(path: &Path) -> PathBuf {
             .join(path)
     };
     std::fs::canonicalize(&abs).unwrap_or_else(|_| normalize_path(&abs))
+}
+
+/// Proje yolundan önbellek ve tazelik durumu için kanonik anahtar üretir.
+pub(crate) fn project_key_for_path(path: &str) -> String {
+    canonicalize_project_path(Path::new(path))
+        .to_string_lossy()
+        .to_string()
 }
 
 fn normalize_path(path: &Path) -> PathBuf {
@@ -971,30 +1167,25 @@ async fn handle_call_tool_inner(
         return Ok(create_success_response(id, json!(result)));
     }
 
-    // Resolve Engine
-    let engine = match state.get_engine(project_path).await {
-        Ok(e) => e,
-        Err(e) => {
-            tracing::warn!(error = %e, tool = %tool_name, "Failed to load project context");
-            let message = if e.to_string().contains("Project index is missing") {
-                "Project index is missing. Call index_project first.".to_string()
-            } else if e.to_string().contains("Project indexing is in progress") {
-                "Project indexing is in progress. Poll index_project before retrying this tool."
-                    .to_string()
-            } else if e.to_string().contains("not allowed")
-                || e.to_string().contains("No default project root")
-            {
-                e.to_string()
-            } else {
-                "Failed to load project context. Check project_path, allowlist, and index state."
-                    .to_string()
-            };
-            return Ok(create_error_response(
-                id, -32603, // Internal error / Invalid params
-                &message,
-            ));
+    let project_key = state.project_key(project_path);
+    // İlk yükleme izin listesini ve indeksin varlığını doğrular; watcher yalnızca
+    // izinli ve indeksi olan projelerde başlar.
+    if let Err(error) = state.get_engine(project_path).await {
+        return Ok(engine_error_response(id, tool_name, &error));
+    }
+    let freshness = match &project_key {
+        Some(key) => {
+            state.ensure_auto_refresh(key);
+            Some(state.wait_until_fresh(key, FRESHNESS_WAIT_BUDGET).await)
         }
+        None => None,
     };
+    // Bekleme sırasında yeni generation aktive edilmiş olabilir.
+    let loaded = match state.get_engine(project_path).await {
+        Ok(loaded) => loaded,
+        Err(error) => return Ok(engine_error_response(id, tool_name, &error)),
+    };
+    let engine = loaded.engine.clone();
 
     let result = match tool_name {
         "get_context" => tools::get_context(&engine, &arguments).await?,
@@ -1014,7 +1205,44 @@ async fn handle_call_tool_inner(
         }
     };
 
+    let result = match freshness {
+        Some(freshness) => crate::freshness::with_freshness_line(
+            result,
+            &crate::freshness::format_freshness_line(
+                &freshness,
+                loaded.indexed_at,
+                ccm_core::unix_now_secs(),
+            ),
+        ),
+        None => result,
+    };
+
     Ok(create_success_response(id, serde_json::to_value(result)?))
+}
+
+/// Engine yüklenemediğinde istemciye dönen JSON-RPC hata yanıtını üretir.
+fn engine_error_response(
+    id: Option<Value>,
+    tool_name: &str,
+    error: &anyhow::Error,
+) -> JsonRpcResponse {
+    tracing::warn!(error = %error, tool = %tool_name, "Failed to load project context");
+    let message = if error.to_string().contains("Project index is missing") {
+        "Project index is missing. Call index_project first.".to_string()
+    } else if error
+        .to_string()
+        .contains("Project indexing is in progress")
+    {
+        "Project indexing is in progress. Poll index_project before retrying this tool.".to_string()
+    } else if error.to_string().contains("not allowed")
+        || error.to_string().contains("No default project root")
+    {
+        error.to_string()
+    } else {
+        "Failed to load project context. Check project_path, allowlist, and index state."
+            .to_string()
+    };
+    create_error_response(id, -32603, &message)
 }
 
 fn validate_tool_arguments(tool_name: &str, arguments: &Value) -> std::result::Result<(), String> {

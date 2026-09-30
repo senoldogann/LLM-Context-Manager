@@ -586,6 +586,9 @@ pub async fn index_now(state: Arc<crate::server::ServerState>, args: &Value) -> 
                     &format!("indexing completed but engine refresh failed: {}", error),
                 ));
             }
+            let project_key = crate::server::project_key_for_path(project_path);
+            state.ensure_auto_refresh(&project_key);
+            state.request_refresh(&project_key);
             if mode == IndexModeArg::Quick {
                 schedule_semantic_upgrade(state, project_path.to_string().into(), db_path.clone());
             }
@@ -619,6 +622,10 @@ fn schedule_semantic_upgrade(
     project_path: std::sync::Arc<str>,
     db_path: String,
 ) {
+    // Otomatik yenileme yükseltme bitene kadar ertelenir; aksi halde eksik
+    // vektör tablosunu görüp aynı embedding işini ikinci kez başlatır.
+    let project_key = crate::server::project_key_for_path(&project_path);
+    state.begin_semantic_upgrade(&project_key);
     // Detached worker: MCP çıkışında ölmeyen, kendi process grubunda koşan süreç.
     // Yalnızca iş tamamlandığında (süreç hâlâ yaşıyorsa) engine cache tazelenir.
     tokio::spawn(async move {
@@ -637,6 +644,7 @@ fn schedule_semantic_upgrade(
                 tracing::warn!(error = %error, "Background semantic upgrade failed");
             }
         }
+        refresh_state.end_semantic_upgrade(&project_key);
     });
 }
 
@@ -720,7 +728,7 @@ fn semantic_upgrade_log(project_path: &str) -> std::process::Stdio {
 
 /// `index_project`/`index_now` mod değerini normalize eder.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
-enum IndexModeArg {
+pub(crate) enum IndexModeArg {
     #[default]
     Full,
     Quick,
@@ -848,6 +856,10 @@ async fn run_index_project(
                 };
             }
 
+            let project_key = crate::server::project_key_for_path(project_path);
+            state.ensure_auto_refresh(&project_key);
+            state.request_refresh(&project_key);
+
             // Quick mod ilk yanıtı graph-only döndürür; embedding yüklendiğinde
             // arka planda aynı projede semantic upgrade başlatılır.
             if mode == IndexModeArg::Quick {
@@ -880,7 +892,7 @@ async fn run_index_project(
     }
 }
 
-async fn run_index_worker_process(
+pub(crate) async fn run_index_worker_process(
     project_path: &str,
     db_path: &str,
     mode: IndexModeArg,
@@ -962,6 +974,12 @@ fn format_index_stats_result(stats: ccm_core::IndexStats, mode: IndexModeArg) ->
         format!("- Files Skipped: {}", stats.files_skipped),
         format!("- Nodes Created: {}", stats.nodes_created),
     ];
+    if stats.embedded_chunks + stats.reused_chunks > 0 {
+        lines.push(format!(
+            "- Chunks Embedded: {} (reused: {})",
+            stats.embedded_chunks, stats.reused_chunks
+        ));
+    }
 
     if !stats.reason_counts.is_empty() {
         lines.push(String::new());

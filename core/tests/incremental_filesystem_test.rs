@@ -590,6 +590,15 @@ async fn quick_index_builds_graph_but_skips_vectors_then_upgrade_fills_them() ->
 #[tokio::test]
 async fn upgrade_repairs_a_generation_without_vectors_using_fixture_embedder() -> Result<()> {
     let _env_guard = ENV_LOCK.lock().await;
+    // Fixture modu kullanıldığı için ortam her çıkış yolunda geri yüklenmeli.
+    struct EnvRestore;
+    impl Drop for EnvRestore {
+        fn drop(&mut self) {
+            std::env::remove_var("CCM_EMBEDDING_FIXTURE");
+            std::env::set_var("CCM_DISABLE_EMBEDDER", "1");
+        }
+    }
+    let _restore = EnvRestore;
     std::env::set_var("CCM_DISABLE_EMBEDDER", "1");
     let project = tempdir()?;
     std::fs::write(
@@ -733,5 +742,253 @@ async fn unreachable_embedder_still_activates_a_graph_only_index() -> Result<()>
             "{name} missing from graph-only index"
         );
     }
+    Ok(())
+}
+
+#[tokio::test]
+async fn update_index_detects_same_size_edit_inside_racy_window() -> Result<()> {
+    let _env_guard = ENV_LOCK.lock().await;
+    std::env::set_var("CCM_DISABLE_EMBEDDER", "1");
+    let project = tempdir()?;
+    let file = project.path().join("lib.rs");
+    std::fs::write(&file, "fn alpha() {}\n")?;
+    ccm_core::index_directory(project.path().to_string_lossy().as_ref(), None).await?;
+    let manifest_path = artifacts(project.path(), None)?.manifest_path;
+    assert!(ccm_core::read_index_timestamp(&manifest_path)?.is_some());
+
+    // Aynı boyutta içerik değişikliği; mtime geri yüklenerek stat bilgisi
+    // birebir korunur. İndeks az önce alındığı için dosya racy penceresindedir
+    // ve içerik yeniden hash'lenmelidir.
+    let original_mtime = std::fs::metadata(&file)?.modified()?;
+    std::fs::write(&file, "fn gamma() {}\n")?;
+    std::fs::OpenOptions::new()
+        .write(true)
+        .open(&file)?
+        .set_modified(original_mtime)?;
+    ccm_core::update_index(project.path().to_string_lossy().as_ref(), None).await?;
+
+    let paths = artifacts(project.path(), None)?;
+    let graph = CodeGraph::from_file(paths.graph_path.to_string_lossy().as_ref())?;
+    assert!(graph.graph.node_weights().any(|node| node.name == "gamma"));
+    assert!(!graph.graph.node_weights().any(|node| node.name == "alpha"));
+    Ok(())
+}
+
+#[tokio::test]
+async fn update_index_trusts_unchanged_stat_outside_racy_window() -> Result<()> {
+    let _env_guard = ENV_LOCK.lock().await;
+    std::env::set_var("CCM_DISABLE_EMBEDDER", "1");
+    let project = tempdir()?;
+    let file = project.path().join("lib.rs");
+    std::fs::write(&file, "fn alpha() {}\n")?;
+    let an_hour_ago = std::time::SystemTime::now() - std::time::Duration::from_secs(3_600);
+    std::fs::OpenOptions::new()
+        .write(true)
+        .open(&file)?
+        .set_modified(an_hour_ago)?;
+    ccm_core::index_directory(project.path().to_string_lossy().as_ref(), None).await?;
+
+    // Git ile aynı ödünleşim: mtime ve boyut birebir korunmuşsa ve dosya racy
+    // pencerenin dışındaysa içerik okunmaz. Bu test hızlı yolun devrede
+    // olduğunu sabitler; yol kapanırsa performans sessizce geriler.
+    std::fs::write(&file, "fn gamma() {}\n")?;
+    std::fs::OpenOptions::new()
+        .write(true)
+        .open(&file)?
+        .set_modified(an_hour_ago)?;
+    let stats = ccm_core::update_index(project.path().to_string_lossy().as_ref(), None).await?;
+
+    assert_eq!(
+        stats.files_indexed, 0,
+        "unchanged stat must skip re-hashing"
+    );
+    Ok(())
+}
+
+/// Ollama `/api/embed` sözleşmesini konuşan deterministik yerel sunucu. CI'da
+/// gerçek embedding servisi olmadığı için yalnızca bu testte kullanılır ve
+/// istek başına gelen `input` sayısını toplar.
+fn start_counting_embed_server() -> Result<(String, std::sync::Arc<std::sync::atomic::AtomicUsize>)>
+{
+    use std::io::{BufRead, BufReader, Read, Write};
+    let listener = std::net::TcpListener::bind("127.0.0.1:0")?;
+    let address = format!("http://{}", listener.local_addr()?);
+    let embedded_inputs = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
+    let counter = embedded_inputs.clone();
+    std::thread::spawn(move || {
+        for stream in listener.incoming() {
+            let Ok(mut stream) = stream else { continue };
+            let Ok(read_half) = stream.try_clone() else {
+                continue;
+            };
+            let mut reader = BufReader::new(read_half);
+            let mut content_length = 0usize;
+            loop {
+                let mut line = String::new();
+                if reader.read_line(&mut line).unwrap_or(0) == 0 || line == "\r\n" {
+                    break;
+                }
+                if let Some(value) = line.to_ascii_lowercase().strip_prefix("content-length:") {
+                    content_length = value.trim().parse().unwrap_or(0);
+                }
+            }
+            let mut body = vec![0u8; content_length];
+            if reader.read_exact(&mut body).is_err() {
+                continue;
+            }
+            let request: serde_json::Value = serde_json::from_slice(&body).unwrap_or_default();
+            let inputs = request["input"].as_array().cloned().unwrap_or_default();
+            counter.fetch_add(inputs.len(), std::sync::atomic::Ordering::SeqCst);
+            let embeddings: Vec<Vec<f32>> = inputs
+                .iter()
+                .map(|input| {
+                    let seed = input
+                        .as_str()
+                        .unwrap_or_default()
+                        .bytes()
+                        .fold(0u32, |acc, byte| {
+                            acc.wrapping_mul(31).wrapping_add(u32::from(byte))
+                        });
+                    (0..8u32)
+                        .map(|offset| (seed.wrapping_add(offset) % 97) as f32 / 97.0 + 0.01)
+                        .collect()
+                })
+                .collect();
+            let payload = serde_json::json!({ "embeddings": embeddings }).to_string();
+            let response = format!(
+                "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+                payload.len(),
+                payload
+            );
+            let _ = stream.write_all(response.as_bytes());
+        }
+    });
+    Ok((address, embedded_inputs))
+}
+
+#[tokio::test]
+async fn update_index_embeds_only_changed_chunks() -> Result<()> {
+    let _env_guard = ENV_LOCK.lock().await;
+    struct EnvRestore;
+    impl Drop for EnvRestore {
+        fn drop(&mut self) {
+            std::env::remove_var("EMBEDDING_HOST");
+            std::env::remove_var("EMBEDDING_MODEL");
+            std::env::set_var("CCM_DISABLE_EMBEDDER", "1");
+        }
+    }
+    let _restore = EnvRestore;
+    let (host, embedded_inputs) = start_counting_embed_server()?;
+    std::env::remove_var("CCM_DISABLE_EMBEDDER");
+    std::env::set_var("EMBEDDING_HOST", &host);
+    std::env::set_var("EMBEDDING_MODEL", "ccm-test-embed");
+
+    let project = tempdir()?;
+    let file = project.path().join("lib.rs");
+    std::fs::write(
+        &file,
+        "fn alpha() { let a = 1; }\nfn beta() { let b = 2; }\nfn gamma() { let c = 3; }\n",
+    )?;
+    let first = ccm_core::update_index(project.path().to_string_lossy().as_ref(), None).await?;
+    assert_eq!(first.embedded_chunks, 3);
+    let after_full_index = embedded_inputs.load(std::sync::atomic::Ordering::SeqCst);
+
+    std::fs::write(
+        &file,
+        "fn alpha() { let a = 1; }\nfn beta() { let b = 2; }\nfn gamma() { let c = 30; }\n",
+    )?;
+    let second = ccm_core::update_index(project.path().to_string_lossy().as_ref(), None).await?;
+
+    assert_eq!(second.embedded_chunks, 1, "only gamma changed");
+    assert_eq!(second.reused_chunks, 2, "alpha and beta keep their vectors");
+    assert_eq!(
+        embedded_inputs.load(std::sync::atomic::Ordering::SeqCst) - after_full_index,
+        1,
+        "the embedding service must see only the changed chunk"
+    );
+    Ok(())
+}
+
+#[tokio::test]
+async fn watch_filter_skips_ignored_outputs_and_index_artifacts() -> Result<()> {
+    let _env_guard = ENV_LOCK.lock().await;
+    std::env::set_var("CCM_DISABLE_EMBEDDER", "1");
+
+    // Senaryo 1: Git reposunda .gitignore uygulanır.
+    let project = tempdir()?;
+    let root = std::fs::canonicalize(project.path())?;
+    git2::Repository::init(&root)?;
+    std::fs::create_dir_all(root.join("src"))?;
+    std::fs::write(root.join("src/lib.rs"), "fn alpha() {}\n")?;
+    std::fs::write(root.join(".gitignore"), "generated/\n")?;
+    std::fs::write(root.join(".ccmignore"), "fixtures/\n")?;
+    ccm_core::index_directory(root.to_string_lossy().as_ref(), None).await?;
+    let active = artifacts(&root, None)?;
+    let filter = ccm_core::build_watch_filter(&root, &root.join("data/ccm_db"))?;
+
+    for relevant in ["src/lib.rs", "src/removed.rs", "src/my file.rs", "Makefile"] {
+        assert!(
+            ccm_core::is_watch_relevant_path(&filter, &root.join(relevant)),
+            "{relevant} should trigger a refresh"
+        );
+    }
+    let ignored = [
+        root.join("generated/out.rs"),
+        root.join("fixtures/sample.rs"),
+        root.join("target/debug/build.rs"),
+        root.join(".git/index"),
+        root.join(".ccm/semantic-upgrade.log"),
+        root.join("data/ccm_current"),
+        active.graph_path.clone(),
+        active.db_path.join("code_vectors.lance/data.lance"),
+        root.clone(),
+        std::path::PathBuf::from("/outside/project.rs"),
+    ];
+    for path in ignored {
+        assert!(
+            !ccm_core::is_watch_relevant_path(&filter, &path),
+            "{} should not trigger a refresh",
+            path.display()
+        );
+    }
+
+    // Senaryo 2: Git olmayan projede .gitignore yok sayılır; generated/out.rs RELEVANT olmalı.
+    let project2 = tempdir()?;
+    let root2 = std::fs::canonicalize(project2.path())?;
+    std::fs::create_dir_all(root2.join("src"))?;
+    std::fs::write(root2.join("src/lib.rs"), "fn beta() {}\n")?;
+    std::fs::write(root2.join(".gitignore"), "generated/\n")?;
+    ccm_core::index_directory(root2.to_string_lossy().as_ref(), None).await?;
+    let filter2 = ccm_core::build_watch_filter(&root2, &root2.join("data/ccm_db"))?;
+    assert!(
+        ccm_core::is_watch_relevant_path(&filter2, &root2.join("generated/out.rs")),
+        "non-git project ignores .gitignore, so generated/out.rs should be relevant"
+    );
+
+    // Git olmayan projede `.git/info/exclude` yoktur (git deposunda indeks oraya
+    // `/data/ccm_*` desenlerini yazar); indeksin kendi çıktısını yalnızca filtrenin
+    // kendi kuralları eler. `src/ccm_current.notes.tmp` işaretçi geçici dosyasına
+    // yalnızca ad olarak benzer; artefakt dizininin dışında olduğu için normal
+    // proje dosyasıdır.
+    assert!(
+        ccm_core::is_watch_relevant_path(&filter2, &root2.join("src/ccm_current.notes.tmp")),
+        "a project file outside the artifact directory must stay relevant"
+    );
+    for own_output in [
+        // Atomik yazımın geçici dosyaları artefakt dizininde durur.
+        "data/ccm_current.4242.1790000000000000000.tmp",
+        "data/ccm_manifest.json.4242.tmp",
+        "data/ccm_graph.json.4242.tmp",
+        // Trajectory günlüğü ve politika deposu araç durumudur.
+        "data/ccm_learn",
+        "data/ccm_learn/experiences.jsonl",
+        "data/ccm_learn/policies.json",
+    ] {
+        assert!(
+            !ccm_core::is_watch_relevant_path(&filter2, &root2.join(own_output)),
+            "{own_output} is written by the tool itself and must not trigger a refresh"
+        );
+    }
+
     Ok(())
 }

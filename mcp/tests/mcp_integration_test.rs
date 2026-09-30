@@ -1477,3 +1477,56 @@ fn mcp_client_roots_select_and_allow_the_workspace() -> Result<(), Box<dyn std::
     let _ = child.kill();
     Ok(())
 }
+
+#[test]
+fn mcp_serves_the_active_generation_while_reindexing() -> Result<(), Box<dyn std::error::Error>> {
+    let project = tempdir()?;
+    fs::write(project.path().join("main.rs"), "fn stable_symbol() {}\n")?;
+    let mut cmd = Command::new(assert_cmd::cargo::cargo_bin!("ccm-mcp"));
+    cmd.env("CCM_DISABLE_EMBEDDER", "1")
+        .env("CCM_MCP_DEBUG", "0")
+        .env("CCM_AUTO_REFRESH", "0")
+        .env("CCM_INDEX_RESPONSE_TIMEOUT_MS", "1")
+        .env("CCM_INTERNAL_INDEX_TEST_DELAY_MS", "3000")
+        .env("CCM_PROJECT_ROOT", project.path())
+        .env("CCM_ALLOWED_ROOTS", project.path())
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null());
+    let mut child = cmd.spawn()?;
+    let mut stdin = child.stdin.take().unwrap();
+    let mut reader = BufReader::new(child.stdout.take().unwrap());
+    send_request(
+        &mut stdin,
+        &mut reader,
+        json!({"jsonrpc":"2.0","id":0,"method":"initialize","params":{}}),
+    )?;
+    let indexed = send_request(
+        &mut stdin,
+        &mut reader,
+        json!({"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"index_now","arguments":{"project_path": project.path()}}}),
+    )?;
+    assert!(tool_text(&indexed).contains("Project index refreshed successfully"));
+
+    fs::write(project.path().join("extra.rs"), "fn added_later() {}\n")?;
+    let started = send_request(
+        &mut stdin,
+        &mut reader,
+        json!({"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"index_project","arguments":{"project_path": project.path()}}}),
+    )?;
+    assert!(tool_text(&started).contains("started in the background"));
+
+    let retrieval = send_request(
+        &mut stdin,
+        &mut reader,
+        json!({"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"find_nodes","arguments":{"query":"stable_symbol"}}}),
+    )?;
+    assert!(
+        retrieval.get("error").is_none(),
+        "reads must keep serving the active generation: {retrieval}"
+    );
+    assert!(tool_text(&retrieval).contains("stable_symbol (Score:"));
+
+    let _ = child.kill();
+    Ok(())
+}

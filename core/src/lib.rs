@@ -14,6 +14,7 @@ pub mod policy;
 pub mod rng;
 pub mod trajectory;
 pub mod vector;
+mod watch_filter;
 
 use crate::engine::{CursorPosition, RetrievalEngine};
 use crate::fs_utils::{detect_language, read_text_file_limited, FileReadError};
@@ -31,6 +32,58 @@ pub const INDEX_SCHEMA_VERSION: u32 = 4;
 const GENERATIONS_DIRECTORY: &str = ".ccm-generations";
 const CURRENT_GENERATION_FILE: &str = "ccm_current";
 const ACTIVATION_LOCK_DIRECTORY: &str = ".ccm-activation.lock";
+/// Öğrenme verisinin dizin adı: trajectory günlüğü (`data/ccm_learn/experiences.jsonl`)
+/// ve politika deposu (`<db dizini>/ccm_learn/policies.json`) burada tutulur. Araç
+/// durumudur; indeksin girdisi değildir.
+const LEARN_DIRECTORY: &str = "ccm_learn";
+
+/// Ham ve kanonik yol varyasyonlarını çıkarır: eğer kanonik form raw'dan
+/// farklıysa her ikisini de verir, yoksa raw'ı verir. Symlink'leri yakalar.
+fn with_canonical_variants(paths: Vec<PathBuf>) -> Vec<PathBuf> {
+    paths
+        .into_iter()
+        .flat_map(|path| {
+            let raw = path;
+            match std::fs::canonicalize(&raw) {
+                Ok(canonical) if canonical != raw => vec![raw, canonical],
+                _ => vec![raw],
+            }
+        })
+        .collect()
+}
+
+/// Indekslemenin taranması sırasında atlanan hazırlama ve generation
+/// dizinlerini tanır: `.ccm-generations`, `.ccm-activation.lock`,
+/// `.ccm-rebuild-*`, `.ccm-backup-*` prefixleri.
+fn is_index_staging_dir_name(name: &str) -> bool {
+    name == GENERATIONS_DIRECTORY
+        || name == ACTIVATION_LOCK_DIRECTORY
+        || name.starts_with(".ccm-rebuild-")
+        || name.starts_with(".ccm-backup-")
+}
+
+/// İndeks artefaktlarının atomik yazımda kullandığı geçici dosya adlarını tanır.
+/// Adlar yazan koddaki `format!`/`with_extension` çağrılarıyla birebir aynı desenleri
+/// izler: `ccm_current.<generation>.tmp` (etkin işaretçi, generation aktivasyonu),
+/// `ccm_manifest.json.<pid>.tmp` (`save_manifest`) ve `ccm_graph.json.<pid>.tmp`
+/// (`CodeGraph::save_to_file`). Manifest ve graf geçici dosyaları güncel akışta
+/// staging dizininde oluşur; düz yerleşimde artefakt dizininde de görülebileceği
+/// için aynı desenler tanınır.
+fn is_index_artifact_temp_name(name: &str) -> bool {
+    let Some(stem) = name.strip_suffix(".tmp") else {
+        return false;
+    };
+    [
+        CURRENT_GENERATION_FILE,
+        "ccm_manifest.json",
+        "ccm_graph.json",
+    ]
+    .iter()
+    .any(|artifact| {
+        stem.strip_prefix(artifact)
+            .is_some_and(|rest| rest.starts_with('.'))
+    })
+}
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct IndexArtifactPaths {
@@ -102,6 +155,7 @@ pub fn init() {
 
 // Re-export ContextSuggestion for external use
 pub use crate::engine::ContextSuggestion;
+pub use watch_filter::{build_watch_filter, is_watch_relevant_path, WatchFilter};
 
 /// Run a semantic search query against the index.
 /// Returns a list of context suggestions.
@@ -214,16 +268,7 @@ const EXCLUDED_SECRET_FILE_NAMES: &[&str] = &[
 fn build_project_walker(path: &Path, excluded_paths: &[PathBuf]) -> ignore::Walk {
     use ignore::WalkBuilder;
 
-    let excluded_paths: Vec<PathBuf> = excluded_paths
-        .iter()
-        .flat_map(|excluded| {
-            let raw = excluded.to_path_buf();
-            match std::fs::canonicalize(excluded) {
-                Ok(canonical) if canonical != raw => vec![raw, canonical],
-                _ => vec![raw],
-            }
-        })
-        .collect();
+    let excluded_paths = with_canonical_variants(excluded_paths.to_vec());
 
     WalkBuilder::new(path)
         .hidden(false)
@@ -248,11 +293,7 @@ fn should_traverse_entry(entry: &ignore::DirEntry) -> bool {
     let file_type = entry.file_type();
 
     if file_type.map(|ft| ft.is_dir()).unwrap_or(false) {
-        if name == GENERATIONS_DIRECTORY
-            || name.starts_with(".ccm-rebuild-")
-            || name.starts_with(".ccm-backup-")
-            || name == ACTIVATION_LOCK_DIRECTORY
-        {
+        if is_index_staging_dir_name(name) {
             return false;
         }
         return !EXCLUDED_DIRECTORY_NAMES.contains(&name);
@@ -320,21 +361,12 @@ pub async fn index_directory_with_mode(
     std::fs::create_dir_all(&staging_root)?;
 
     let fixture_namespace = fixture_namespace_for_db(&final_db_path);
-    let final_graph_path = artifact_parent.join("ccm_graph.json");
-    let final_manifest_path = artifact_parent.join("ccm_manifest.json");
     let build = build_index_generation(
         path,
         staging_db_path,
         &staging_root,
         &fixture_namespace,
-        &[
-            final_db_path.clone(),
-            final_graph_path,
-            final_manifest_path,
-            generations_root.clone(),
-            artifact_parent.join(CURRENT_GENERATION_FILE),
-            artifact_parent.join(ACTIVATION_LOCK_DIRECTORY),
-        ],
+        &index_artifact_paths(artifact_parent, &final_db_path),
         mode,
     )
     .await;
@@ -381,6 +413,9 @@ async fn build_index_generation(
     let project_root = std::fs::canonicalize(path).unwrap_or_else(|_| PathBuf::from(path));
 
     info!(path = path, db_path = %db_path_str, "Starting directory indexing");
+
+    // Manifestin racy penceresi taramadan önceki ana göre hesaplanır.
+    let snapshot_started_at = unix_now_secs();
 
     let mut graph = CodeGraph::new();
     let store = LanceDbStore::new_with_fixture_namespace(
@@ -554,11 +589,16 @@ async fn build_index_generation(
             if stats.nodes_created > 0 {
                 let engine = RetrievalEngine::new(graph_arc.clone(), store);
                 match engine.index_graph().await {
-                    Ok(()) => info!(
-                        nodes = stats.nodes_created,
-                        files = stats.files_indexed,
-                        "Indexing completed successfully"
-                    ),
+                    Ok(counts) => {
+                        stats.embedded_chunks = counts.embedded;
+                        stats.reused_chunks = counts.reused;
+                        info!(
+                            nodes = stats.nodes_created,
+                            files = stats.files_indexed,
+                            embedded_chunks = counts.embedded,
+                            "Indexing completed successfully"
+                        )
+                    }
                     // Graf-öncelikli: embedding servisi yokken graf araçları yine
                     // kullanılabilir olmalı. Eksik vektörler sonraki update_index'te
                     // (vector health kontrolü) onarılır.
@@ -596,6 +636,7 @@ async fn build_index_generation(
     let manifest_path = artifact_parent.join("ccm_manifest.json");
     manifest.schema_version = INDEX_SCHEMA_VERSION;
     manifest.indexed_commit = current_head_oid(&project_root);
+    manifest.indexed_at = Some(snapshot_started_at);
     save_manifest(&manifest_path, &manifest)?;
 
     Ok(stats)
@@ -971,6 +1012,19 @@ fn sync_directory(path: &Path) -> Result<()> {
     Ok(())
 }
 
+/// İndeksin kendi yazdığı artefaktlar. Manifest taraması ve dosya izleyici
+/// bunları proje dosyası saymaz; aksi halde her yenileme kendini tetikler.
+fn index_artifact_paths(artifact_parent: &Path, requested_db_path: &Path) -> Vec<PathBuf> {
+    vec![
+        requested_db_path.to_path_buf(),
+        artifact_parent.join("ccm_graph.json"),
+        artifact_parent.join("ccm_manifest.json"),
+        artifact_parent.join(CURRENT_GENERATION_FILE),
+        artifact_parent.join(GENERATIONS_DIRECTORY),
+        artifact_parent.join(ACTIVATION_LOCK_DIRECTORY),
+    ]
+}
+
 fn copy_directory(source: &Path, destination: &Path) -> Result<()> {
     std::fs::create_dir_all(destination)?;
     for entry in std::fs::read_dir(source)? {
@@ -1075,14 +1129,8 @@ pub async fn update_index(path: &str, db_path: Option<&str>) -> Result<IndexStat
 
     let new_manifest = build_manifest(
         &project_root,
-        &[
-            requested_db_path.clone(),
-            artifact_parent.join("ccm_graph.json"),
-            artifact_parent.join("ccm_manifest.json"),
-            artifact_parent.join(CURRENT_GENERATION_FILE),
-            artifact_parent.join(GENERATIONS_DIRECTORY),
-            artifact_parent.join(ACTIVATION_LOCK_DIRECTORY),
-        ],
+        &index_artifact_paths(artifact_parent, &requested_db_path),
+        &manifest,
     )?;
     let (changed_rel, deleted_rel) = diff_manifest(&manifest, &new_manifest);
 
@@ -1181,10 +1229,10 @@ pub async fn update_index(path: &str, db_path: Option<&str>) -> Result<IndexStat
 
     let staged_result: Result<IndexStats> = async {
         copy_directory(&active.db_path, &staged_db_path)?;
-        std::fs::copy(&active.graph_path, &staged_graph_path)?;
-        std::fs::copy(&active.manifest_path, &staged_manifest_path)?;
-
-        let staged_graph = CodeGraph::from_file(&staged_graph_path.to_string_lossy())?;
+        // Graf bu fonksiyonun başında aktif generation'dan zaten yüklendi; JSON'u
+        // kopyalayıp yeniden ayrıştırmak büyük repolarda ~0,25 sn sürer. Graf ve
+        // manifest aşağıda staging'e yeniden yazılır.
+        let staged_graph = graph;
         let store = LanceDbStore::new_with_fixture_namespace(
             &staged_db_path.to_string_lossy(),
             "code_vectors",
@@ -1200,6 +1248,9 @@ pub async fn update_index(path: &str, db_path: Option<&str>) -> Result<IndexStat
         // Hazırlanamayan dosyaların eski fingerprint'i korunur; sonraki koşu yeniden dener.
         if !stats.retry_files.is_empty() {
             committed_manifest.indexed_commit = manifest.indexed_commit.clone();
+            // Racy pencereyi korumak için indexed_at'ı da eski değerle geri eski dosyaların
+            // tekrar denemesi sırasında yeniden hash'lenmesini sağlar.
+            committed_manifest.indexed_at = manifest.indexed_at;
             for path in &stats.retry_files {
                 match manifest.files.get(path) {
                     Some(previous) => {
@@ -1417,6 +1468,12 @@ pub struct IndexStats {
     /// Graf araçları çalışır; semantik arama servis gelince yeniden indekslemeyle döner.
     #[serde(default)]
     pub semantic_unavailable: Option<String>,
+    /// Bu koşuda embedding servisine gönderilen parça sayısı.
+    #[serde(default)]
+    pub embedded_chunks: usize,
+    /// Metni değişmediği için mevcut vektörü yeniden kullanılan parça sayısı.
+    #[serde(default)]
+    pub reused_chunks: usize,
     #[serde(skip)]
     pub(crate) retry_files: Vec<String>,
 }
@@ -1529,7 +1586,50 @@ struct IndexManifest {
     schema_version: u32,
     #[serde(default)]
     indexed_commit: Option<String>,
+    /// Taramanın başladığı an (unix saniye). Stat önbelleğinin racy penceresi
+    /// ve MCP tazelik satırındaki indeks yaşı bu değere dayanır.
+    #[serde(default)]
+    indexed_at: Option<u64>,
     files: HashMap<String, FileFingerprint>,
+}
+
+/// Kaba zaman çözünürlüklü dosya sistemlerinde (FAT: 2 sn) aynı pencerede
+/// yapılan düzenlemeler kaçmasın diye stat önbelleği bu aralığa giren
+/// dosyaları yeniden hash'ler (git'in "racy clean" kuralı).
+const RACY_WINDOW_SECS: u64 = 2;
+
+/// Şu anki zamanı unix saniye olarak döndürür.
+pub fn unix_now_secs() -> u64 {
+    std::time::SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|value| value.as_secs())
+        .unwrap_or(0)
+}
+
+/// Manifestteki indeksleme zamanını okur; alan yoksa (eski manifest) `None`.
+/// Dosya listesi ayrıştırılmadan atlandığı için büyük manifestlerde de ucuzdur.
+pub fn read_index_timestamp(manifest_path: &Path) -> Result<Option<u64>> {
+    #[derive(Deserialize)]
+    struct ManifestTimestamp {
+        #[serde(default)]
+        indexed_at: Option<u64>,
+    }
+    let file = std::fs::File::open(manifest_path).map_err(|error| {
+        anyhow::anyhow!(
+            "Index manifest '{}' could not be opened: {}",
+            manifest_path.display(),
+            error
+        )
+    })?;
+    let parsed: ManifestTimestamp = serde_json::from_reader(std::io::BufReader::new(file))
+        .map_err(|error| {
+            anyhow::anyhow!(
+                "Index manifest '{}' could not be parsed: {}",
+                manifest_path.display(),
+                error
+            )
+        })?;
+    Ok(parsed.indexed_at)
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -1604,15 +1704,27 @@ fn file_id_to_path(project_root: &Path, file_id: &str) -> PathBuf {
     project_root.join(rel)
 }
 
+/// Metadata'dan mtime'ı (saniye, nanosaniye) çıkarır. Stat önbelleği ve
+/// fingerprint karşılaştırmasında tutarlı hesaplama sağlar.
+fn modified_parts(meta: &std::fs::Metadata) -> (u64, u32) {
+    let modified = meta
+        .modified()
+        .ok()
+        .and_then(|value| value.duration_since(UNIX_EPOCH).ok());
+    let modified_sec = modified.as_ref().map(|value| value.as_secs()).unwrap_or(0);
+    let modified_nsec = modified
+        .as_ref()
+        .map(|value| value.subsec_nanos())
+        .unwrap_or(0);
+    (modified_sec, modified_nsec)
+}
+
 fn fingerprint_for_path(path: &Path) -> std::io::Result<FileFingerprint> {
     use std::io::Read;
 
     let mut file = std::fs::File::open(path)?;
     let meta = file.metadata()?;
-    let modified = meta
-        .modified()
-        .ok()
-        .and_then(|value| value.duration_since(UNIX_EPOCH).ok());
+    let (modified_sec, modified_nsec) = modified_parts(&meta);
     let mut content_hash = 0xcbf29ce484222325u64;
     let mut buffer = [0u8; 64 * 1024];
     loop {
@@ -1627,14 +1739,34 @@ fn fingerprint_for_path(path: &Path) -> std::io::Result<FileFingerprint> {
     }
 
     Ok(FileFingerprint {
-        modified_sec: modified.as_ref().map(|value| value.as_secs()).unwrap_or(0),
-        modified_nsec: modified
-            .as_ref()
-            .map(|value| value.subsec_nanos())
-            .unwrap_or(0),
+        modified_sec,
+        modified_nsec,
         size: meta.len(),
         content_hash,
     })
+}
+
+/// Önceki fingerprint'in stat bilgisi (mtime + boyut) değişmemişse ve dosya
+/// racy pencerenin dışındaysa içerik hash'ini dosyayı okumadan yeniden
+/// kullanır. `reuse_before_sec` 0 ise (zaman damgasız eski manifest) her dosya
+/// yeniden hash'lenir.
+fn fingerprint_reusing_previous(
+    path: &Path,
+    previous: Option<&FileFingerprint>,
+    reuse_before_sec: u64,
+) -> std::io::Result<FileFingerprint> {
+    let Some(previous) = previous else {
+        return fingerprint_for_path(path);
+    };
+    let meta = std::fs::metadata(path)?;
+    let (modified_sec, modified_nsec) = modified_parts(&meta);
+    let stat_unchanged = previous.modified_sec == modified_sec
+        && previous.modified_nsec == modified_nsec
+        && previous.size == meta.len();
+    if stat_unchanged && modified_sec < reuse_before_sec {
+        return Ok(previous.clone());
+    }
+    fingerprint_for_path(path)
 }
 
 fn load_manifest(path: &Path) -> IndexManifest {
@@ -1672,10 +1804,22 @@ fn save_manifest(path: &Path, manifest: &IndexManifest) -> Result<()> {
     Ok(())
 }
 
-fn build_manifest(project_root: &Path, excluded_paths: &[PathBuf]) -> Result<IndexManifest> {
+fn build_manifest(
+    project_root: &Path,
+    excluded_paths: &[PathBuf],
+    previous: &IndexManifest,
+) -> Result<IndexManifest> {
+    // Zaman damgası tarama başlamadan alınır; tarama sırasında değişen
+    // dosyalar bir sonraki koşuda racy pencereye düşer ve yeniden hash'lenir.
+    let indexed_at = unix_now_secs();
+    let reuse_before_sec = previous
+        .indexed_at
+        .map(|value| value.saturating_sub(RACY_WINDOW_SECS))
+        .unwrap_or(0);
     let mut manifest = IndexManifest {
         schema_version: INDEX_SCHEMA_VERSION,
         indexed_commit: current_head_oid(project_root),
+        indexed_at: Some(indexed_at),
         files: HashMap::new(),
     };
     let walker = build_project_walker(project_root, excluded_paths);
@@ -1704,13 +1848,15 @@ fn build_manifest(project_root: &Path, excluded_paths: &[PathBuf]) -> Result<Ind
             continue;
         }
 
-        let fingerprint = fingerprint_for_path(file_path).map_err(|error| {
-            anyhow::anyhow!(
-                "Project snapshot could not read '{}': {}. Existing index was preserved.",
-                file_path.display(),
-                error
-            )
-        })?;
+        let fingerprint =
+            fingerprint_reusing_previous(file_path, previous.files.get(&file_id), reuse_before_sec)
+                .map_err(|error| {
+                    anyhow::anyhow!(
+                        "Project snapshot could not read '{}': {}. Existing index was preserved.",
+                        file_path.display(),
+                        error
+                    )
+                })?;
         manifest.files.insert(file_id, fingerprint);
     }
 
@@ -2004,6 +2150,7 @@ mod policy_tests {
         let old = IndexManifest {
             schema_version: 2,
             indexed_commit: Some("old".to_string()),
+            indexed_at: None,
             files: HashMap::from([(
                 "./src/lib.rs".to_string(),
                 FileFingerprint {
@@ -2017,6 +2164,7 @@ mod policy_tests {
         let new = IndexManifest {
             schema_version: 2,
             indexed_commit: Some("new".to_string()),
+            indexed_at: None,
             files: HashMap::from([(
                 "./src/lib.rs".to_string(),
                 FileFingerprint {
