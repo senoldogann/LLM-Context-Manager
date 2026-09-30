@@ -522,6 +522,14 @@ impl CodeGraph {
             std::fs::create_dir_all(parent)?;
         }
         let temp_path = path.with_extension(format!("json.{}.tmp", std::process::id()));
+        self.write_json_file(&temp_path)?;
+        std::fs::rename(temp_path, path)?;
+        Ok(())
+    }
+
+    /// Grafı verilen dosyaya yazar ve diske senkronlar; yazılan bayt sayısını
+    /// döndürür. Atomik değiştirme (geçici dosya + rename) çağırana aittir.
+    pub fn write_json_file(&self, path: &std::path::Path) -> anyhow::Result<u64> {
         #[cfg(unix)]
         let file = {
             use std::os::unix::fs::OpenOptionsExt;
@@ -530,17 +538,16 @@ impl CodeGraph {
                 .create(true)
                 .truncate(true)
                 .mode(0o600)
-                .open(&temp_path)?
+                .open(path)?
         };
         #[cfg(not(unix))]
-        let file = std::fs::File::create(&temp_path)?;
+        let file = std::fs::File::create(path)?;
         let mut writer = std::io::BufWriter::new(file);
         serde_json::to_writer(&mut writer, &self.graph)?;
         use std::io::Write;
         writer.flush()?;
         writer.get_ref().sync_all()?;
-        std::fs::rename(temp_path, path)?;
-        Ok(())
+        Ok(writer.get_ref().metadata()?.len())
     }
 
     /// Loads the graph from a JSON file.

@@ -6,6 +6,7 @@ mod fs_utils;
 pub mod git;
 pub mod graph;
 pub mod hash;
+pub mod live;
 
 pub mod parser;
 
@@ -265,23 +266,51 @@ const EXCLUDED_SECRET_FILE_NAMES: &[&str] = &[
     "id_ed25519",
 ];
 
-fn build_project_walker(path: &Path, excluded_paths: &[PathBuf]) -> ignore::Walk {
-    use ignore::WalkBuilder;
-
-    let excluded_paths = with_canonical_variants(excluded_paths.to_vec());
-
-    WalkBuilder::new(path)
+/// Tam ve kapsamlı taramaların ortak ayarları: gitignore, `.ignore`,
+/// `.ccmignore` ve üst dizinlerin ignore dosyaları uygulanır.
+fn project_walk_builder(path: &Path) -> ignore::WalkBuilder {
+    let mut builder = ignore::WalkBuilder::new(path);
+    builder
         .hidden(false)
         .git_ignore(true)
         .git_exclude(true)
         .parents(true)
         .ignore(true)
-        .add_custom_ignore_filename(".ccmignore")
+        .add_custom_ignore_filename(".ccmignore");
+    builder
+}
+
+fn build_project_walker(path: &Path, excluded_paths: &[PathBuf]) -> ignore::Walk {
+    let excluded_paths = with_canonical_variants(excluded_paths.to_vec());
+    project_walk_builder(path)
         .filter_entry(move |entry| {
             should_traverse_entry(entry)
                 && !excluded_paths
                     .iter()
                     .any(|excluded| entry.path().starts_with(excluded))
+        })
+        .build()
+}
+
+/// Tam taramayla aynı kök ve kurallarla yürür ama yalnızca `scope` yollarının
+/// atalarına ve altlarına iner. Bir dosyanın dahil edilip edilmediği tam
+/// taramayla birebir aynıdır; yalnızca ziyaret edilen dizinler azalır.
+fn build_scoped_project_walker(
+    path: &Path,
+    excluded_paths: &[PathBuf],
+    scope: Vec<PathBuf>,
+) -> ignore::Walk {
+    let excluded_paths = with_canonical_variants(excluded_paths.to_vec());
+    project_walk_builder(path)
+        .filter_entry(move |entry| {
+            let entry_path = entry.path();
+            should_traverse_entry(entry)
+                && !excluded_paths
+                    .iter()
+                    .any(|excluded| entry_path.starts_with(excluded))
+                && scope
+                    .iter()
+                    .any(|target| target.starts_with(entry_path) || entry_path.starts_with(target))
         })
         .build()
 }
@@ -1186,7 +1215,20 @@ pub async fn update_index(path: &str, db_path: Option<&str>) -> Result<IndexStat
     let staged_manifest_path = staging_root.join("ccm_manifest.json");
 
     let staged_result: Result<IndexStats> = async {
-        copy_directory(&active.db_path, &staged_db_path)?;
+        {
+            // MCP'nin canlı yenilemesi etkin vektör tablosunu yerinde ve aynı kilit
+            // altında değiştirir; kopya bu yüzden tutarlı bir tablo sürümü görür.
+            let _activation_lock = ActivationLock::acquire(artifact_parent)?;
+            let current = read_current_pointer_value(artifact_parent)?;
+            if current != active.generation_id {
+                anyhow::bail!(
+                    "Index changed concurrently while an update was starting (expected {:?}, found {:?}); retry the update",
+                    active.generation_id,
+                    current
+                );
+            }
+            copy_directory(&active.db_path, &staged_db_path)?;
+        }
         // Graf bu fonksiyonun başında aktif generation'dan zaten yüklendi; JSON'u
         // kopyalayıp yeniden ayrıştırmak büyük repolarda ~0,25 sn sürer. Graf ve
         // manifest aşağıda staging'e yeniden yazılır.
@@ -1386,13 +1428,6 @@ pub async fn upgrade_active_index_semantics(
         );
     }
 
-    let graph = CodeGraph::from_file(&active.graph_path.to_string_lossy())?;
-    let semantic_nodes = semantic_node_count(&graph);
-    if semantic_nodes == 0 {
-        info!("No semantic nodes; semantic upgrade has nothing to do");
-        return Ok(IndexStats::default());
-    }
-
     let activation_generation = read_current_pointer_value(artifact_parent)?;
     let generation_id = new_generation_id();
     let generations_root = artifact_parent.join(GENERATIONS_DIRECTORY);
@@ -1400,13 +1435,24 @@ pub async fn upgrade_active_index_semantics(
     let staging_root = generations_root.join(format!("{}.staging", generation_id));
     std::fs::create_dir_all(&staging_root)?;
     let staged_db_path = staging_root.join("ccm_db");
+    let staged_graph_path = staging_root.join("ccm_graph.json");
 
     // Active generation'dan graph + manifest'i taşı; vektör staging'de sıfırdan kurulur.
-    std::fs::copy(&active.graph_path, staging_root.join("ccm_graph.json"))?;
+    // MCP canlı yenilemesi etkin generation'a önce grafı sonra manifesti yazar;
+    // manifest önce kopyalanınca kopyalanan manifest graftan yeni olamaz. Vektörler
+    // kopyalanan graftan üretilir, böylece staging grafıyla birebir eşleşir.
     std::fs::copy(
         &active.manifest_path,
         staging_root.join("ccm_manifest.json"),
     )?;
+    std::fs::copy(&active.graph_path, &staged_graph_path)?;
+    let graph = CodeGraph::from_file(&staged_graph_path.to_string_lossy())?;
+    let semantic_nodes = semantic_node_count(&graph);
+    if semantic_nodes == 0 {
+        std::fs::remove_dir_all(&staging_root)?;
+        info!("No semantic nodes; semantic upgrade has nothing to do");
+        return Ok(IndexStats::default());
+    }
 
     let fixture_namespace = fixture_namespace_for_db(&requested_db_path);
     let store = LanceDbStore::new_with_fixture_namespace(
@@ -1958,7 +2004,21 @@ fn save_manifest(path: &Path, manifest: &IndexManifest) -> Result<()> {
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent)?;
     }
-    let temp_path = path.with_extension(format!("json.{}.tmp", std::process::id()));
+    let temp_path = artifact_temp_path(path);
+    write_manifest_file(&temp_path, manifest)?;
+    std::fs::rename(&temp_path, path)?;
+    Ok(())
+}
+
+/// Artefaktın atomik yazımda kullanılan geçici dosya yolu
+/// (`<ad>.json.<pid>.tmp`; `is_index_artifact_temp_name` bu deseni tanır).
+fn artifact_temp_path(path: &Path) -> PathBuf {
+    path.with_extension(format!("json.{}.tmp", std::process::id()))
+}
+
+/// Manifesti verilen dosyaya yazar ve diske senkronlar; atomik değiştirme
+/// çağırana aittir.
+fn write_manifest_file(path: &Path, manifest: &IndexManifest) -> Result<()> {
     #[cfg(unix)]
     let file = {
         use std::os::unix::fs::OpenOptionsExt;
@@ -1967,16 +2027,15 @@ fn save_manifest(path: &Path, manifest: &IndexManifest) -> Result<()> {
             .create(true)
             .truncate(true)
             .mode(0o600)
-            .open(&temp_path)?
+            .open(path)?
     };
     #[cfg(not(unix))]
-    let file = std::fs::File::create(&temp_path)?;
+    let file = std::fs::File::create(path)?;
     let mut writer = std::io::BufWriter::new(file);
     serde_json::to_writer_pretty(&mut writer, manifest)?;
     use std::io::Write;
     writer.flush()?;
     writer.get_ref().sync_all()?;
-    std::fs::rename(&temp_path, path)?;
     Ok(())
 }
 
@@ -2001,6 +2060,21 @@ fn build_manifest(
         graph_bytes: None,
         files,
     })
+}
+
+/// Manifestin yalnızca `scope` yollarına düşen dosyalarını tam taramanın
+/// kurallarıyla tarar (bkz. `build_scoped_project_walker`).
+fn scan_manifest_scope(
+    project_root: &Path,
+    excluded_paths: &[PathBuf],
+    previous: &IndexManifest,
+    scope: &[PathBuf],
+) -> Result<HashMap<String, FileFingerprint>> {
+    fingerprint_walk(
+        build_scoped_project_walker(project_root, excluded_paths, scope.to_vec()),
+        project_root,
+        previous,
+    )
 }
 
 /// Tarayıcının verdiği indekslenebilir dosyaların parmak izleri. Stat bilgisi
@@ -2059,6 +2133,36 @@ fn racy_reuse_boundary(previous: &IndexManifest) -> u64 {
         .indexed_at
         .map(|value| value.saturating_sub(RACY_WINDOW_SECS))
         .unwrap_or(0)
+}
+
+/// Kapsamlı taramayı manifestin aynı kapsamdaki eski girdileriyle karşılaştırır;
+/// `diff_manifest` kuralının kapsamla sınırlı hâli.
+fn diff_manifest_scope(
+    previous: &IndexManifest,
+    scope_ids: &[String],
+    scanned: &HashMap<String, FileFingerprint>,
+) -> (Vec<String>, Vec<String>) {
+    let changed = scanned
+        .iter()
+        .filter(|(file_id, fingerprint)| previous.files.get(*file_id) != Some(*fingerprint))
+        .map(|(file_id, _)| file_id.clone())
+        .collect();
+    let deleted = previous
+        .files
+        .keys()
+        .filter(|file_id| file_id_in_scope(file_id, scope_ids) && !scanned.contains_key(*file_id))
+        .cloned()
+        .collect();
+    (changed, deleted)
+}
+
+/// Dosya kimliği kapsam kimliklerinden birine eşit ya da onun altında mı?
+fn file_id_in_scope(file_id: &str, scope_ids: &[String]) -> bool {
+    scope_ids.iter().any(|scope| {
+        file_id
+            .strip_prefix(scope.as_str())
+            .is_some_and(|rest| rest.is_empty() || rest.starts_with('/'))
+    })
 }
 
 fn diff_manifest(
