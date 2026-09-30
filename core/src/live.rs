@@ -36,6 +36,11 @@ use tokio::sync::{Mutex, RwLock};
 /// biri değişince hedefli tarama yerine tam karşılaştırma yapılır.
 const IGNORE_RULE_FILES: [&str; 3] = [".gitignore", ".ignore", ".ccmignore"];
 
+/// Hedefli taramanın üst sınırı. Kapsamlı tarayıcı ziyaret ettiği her girdiyi
+/// tüm yollarla karşılaştırır; toplu değişikliklerde (ör. `git checkout`) tek bir
+/// tam yürüyüş daha ucuzdur.
+const MAX_TARGETED_PATHS: usize = 128;
+
 /// Bir projenin etkin generation'ına bağlı canlı indeks.
 pub struct LiveIndex {
     project_root: PathBuf,
@@ -189,15 +194,19 @@ impl LiveIndex {
 
     /// Watcher'ın bildirdiği yolları uygular: yalnızca bu yollar (dizinse
     /// altları) tam taramanın kurallarıyla taranır ve manifestle karşılaştırılır.
-    /// Yüklemeden sonraki ilk tur, yarıda kalmış bir turun ardından gelen tur ve
-    /// ignore dosyası değişikliği tam karşılaştırma yapar.
+    /// Yüklemeden sonraki ilk tur, yarıda kalmış bir turun ardından gelen tur,
+    /// ignore dosyası değişikliği ve `MAX_TARGETED_PATHS`'i aşan toplu değişiklik
+    /// tam karşılaştırma yapar.
     pub async fn apply_paths(&self, paths: &[PathBuf]) -> Result<LiveRefresh> {
         let started_at = unix_now_secs();
         let mut state = self.state.lock().await;
         if state.superseded {
             return Ok(LiveRefresh::Superseded);
         }
-        let delta = if state.needs_rescan || touches_ignore_rules(paths) {
+        let delta = if state.needs_rescan
+            || touches_ignore_rules(paths)
+            || paths.len() > MAX_TARGETED_PATHS
+        {
             tracing::info!(
                 project = %self.project_root.display(),
                 paths = paths.len(),
