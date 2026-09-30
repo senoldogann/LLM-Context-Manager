@@ -307,7 +307,11 @@ impl LanceDbStore {
             .unwrap_or(1)
             .clamp(1, 8);
         let mut collected: Vec<Option<Vec<Vec<f32>>>> = vec![None; total_batches];
-        let batch_futures = texts
+        // Batch future'ları önce toplanır: akış, `texts`'i ödünç alan bir closure
+        // yerine sahipli future'ları taşır. Aksi halde gelecek, `tokio::spawn`
+        // edilen görevlerde (MCP canlı yenilemesi) gereken `Send` sınırını
+        // derleyicinin genelleştiremediği bir tür içerir.
+        let batch_futures: Vec<_> = texts
             .chunks(batch_size)
             .enumerate()
             .map(|(batch_idx, batch)| {
@@ -317,7 +321,8 @@ impl LanceDbStore {
                     let result = embedder.embed(batch_texts).await;
                     (batch_idx, result)
                 }
-            });
+            })
+            .collect();
         let mut stream = futures::stream::iter(batch_futures).buffer_unordered(concurrency);
         let mut completed = 0usize;
         while let Some((batch_idx, result)) = stream.next().await {
