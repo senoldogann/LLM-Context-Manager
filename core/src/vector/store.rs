@@ -1,5 +1,6 @@
 use crate::vector::embedder::{
     embedder_disabled_by_env, fixture_path_from_env, Embedder, EmbeddingIdentity,
+    EmbeddingIdentityMismatch,
 };
 use anyhow::{Context, Result};
 use arrow_array::{FixedSizeListArray, Float32Array, RecordBatch, StringArray};
@@ -180,6 +181,9 @@ pub struct LanceDbStore {
     fixture: Option<Arc<EmbeddingFixture>>,
     fixture_ns: String,
     table_cache: Mutex<Option<Arc<Table>>>,
+    /// Tablodaki vektörler yapılandırılmış embedder'dan farklı bir kaynaktan
+    /// geliyorsa arama ve yazma bu hatayla reddedilir; vektörler karışmaz.
+    identity_mismatch: Option<EmbeddingIdentityMismatch>,
 }
 
 impl LanceDbStore {
@@ -218,7 +222,15 @@ impl LanceDbStore {
             fixture,
             fixture_ns,
             table_cache: Mutex::new(None),
+            identity_mismatch: None,
         })
+    }
+
+    /// Tablodaki vektörlerin yapılandırılmış embedder'la uyuşmadığını bildirir:
+    /// arama ve yazma bu hatayla reddedilir (bkz. `EmbeddingSource::mismatch_with`).
+    pub fn with_identity_mismatch(mut self, mismatch: Option<EmbeddingIdentityMismatch>) -> Self {
+        self.identity_mismatch = mismatch;
+        self
     }
 
     /// Embedder'ı ilk kullanımda başlatır. Fixture modunda veya disabled
@@ -289,6 +301,32 @@ impl LanceDbStore {
         }
 
         Ok(())
+    }
+
+    /// Vektör tablosunun boyutu; tablo hiç oluşmamışsa `None`.
+    pub async fn vector_dim(&self) -> Result<Option<usize>> {
+        let table = match self.table().await {
+            Ok(table) => table,
+            Err(error) if is_table_not_found(&error) => return Ok(None),
+            Err(error) => return Err(error),
+        };
+        let schema = table.schema().await.with_context(|| {
+            format!(
+                "vector table '{}' schema could not be read",
+                self.table_name
+            )
+        })?;
+        let field = schema.field_with_name("vector").with_context(|| {
+            format!("vector table '{}' has no 'vector' column", self.table_name)
+        })?;
+        match field.data_type() {
+            DataType::FixedSizeList(_, size) => Ok(Some(*size as usize)),
+            other => anyhow::bail!(
+                "vector table '{}' has an unexpected vector column type {:?}",
+                self.table_name,
+                other
+            ),
+        }
     }
 
     pub async fn validate_table(&self) -> Result<usize> {
@@ -402,6 +440,9 @@ impl LanceDbStore {
     ) -> Result<(EmbeddedChunks, ChunkEmbeddingCounts)> {
         if ids.is_empty() {
             return Ok((EmbeddedChunks::default(), ChunkEmbeddingCounts::default()));
+        }
+        if let Some(mismatch) = &self.identity_mismatch {
+            return Err(mismatch.clone().into());
         }
 
         let max_chars: usize = std::env::var("CCM_MAX_CHUNK_CHARS")
@@ -608,6 +649,10 @@ impl LanceDbStore {
         if !self.is_table_readable().await {
             tracing::warn!("Vector table is missing; semantic search falls back to graph");
             return Ok(vec![]);
+        }
+
+        if let Some(mismatch) = &self.identity_mismatch {
+            return Err(mismatch.clone().into());
         }
 
         // 1. Embed Query

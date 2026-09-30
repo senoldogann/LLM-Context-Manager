@@ -19,13 +19,18 @@
 //!   diskteki manifest graftan yeni olamaz, yeni graf değişiklikleri yeniden
 //!   uygulatır (idempotent). Kalıcılaştırma atlanırsa sonraki tam karşılaştırma
 //!   diski yakalar.
+//! - Etkin generation'ın vektörleri başka bir embedding modeliyle kurulduysa
+//!   canlı yenileme grafı günceller ama vektör yazmaz (karışmaz); semantik arama
+//!   kapalı bildirilir ve bir sonraki elle indeksleme vektörleri bir kez yeniden
+//!   üretir.
 
-use crate::engine::{EmbeddedNodes, RetrievalEngine};
+use crate::engine::RetrievalEngine;
 use crate::graph::CodeGraph;
+use crate::vector::embedder::{EmbeddingIdentity, EmbeddingIdentityMismatch, EmbeddingSource};
 use crate::vector::store::LanceDbStore;
 use crate::{
-    artifact_temp_path, build_manifest, diff_manifest, diff_manifest_scope, file_id_to_path,
-    fixture_namespace_for_db, graph_uses_legacy_paths, index_artifact_paths,
+    artifact_temp_path, build_manifest, diff_manifest, diff_manifest_scope, embedded_node_count,
+    file_id_to_path, fixture_namespace_for_db, graph_uses_legacy_paths, index_artifact_paths,
     read_current_pointer_value, read_manifest, relative_file_id, replace_file_atomically,
     resolve_index_artifacts, resolve_requested_db_path, restore_retry_files, scan_manifest_scope,
     semantic_node_counts, sync_directory, unix_now_secs, write_manifest_file, ActivationLock,
@@ -89,6 +94,11 @@ pub struct LiveIndex {
     /// Tazelik satırının kilitsiz okuduğu son uygulama zamanı (unix saniye);
     /// `UNKNOWN_TIMESTAMP` bilinmediğini söyler.
     applied_at: AtomicU64,
+    /// Yapılandırılmış embedding kaynağı; yüklemede kurulamadıysa `None` (hata
+    /// embedding sırasında olduğu gibi yüzeye çıkar).
+    source: Option<EmbeddingSource>,
+    /// Etkin generation'ın vektörleri yapılandırılmış kaynakla uyuşmuyorsa nedeni.
+    identity_mismatch: Option<EmbeddingIdentityMismatch>,
 }
 
 /// `applied_at` için "zaman bilinmiyor" değeri; geçerli bir unix zamanı 0 olamaz.
@@ -204,12 +214,37 @@ impl LiveIndex {
             nodes = graph.graph.node_count(),
             "Loaded live index"
         );
+        // Yapılandırma hatası grafı kullanılamaz kılmaz: embedder kurulurken
+        // aynı hata açıkça yüzeye çıkar.
+        let source = match EmbeddingSource::from_env() {
+            Ok(source) => Some(source),
+            Err(error) => {
+                tracing::warn!(
+                    project = %project_root.display(),
+                    error = %error,
+                    "Embedding configuration could not be resolved for the live index"
+                );
+                None
+            }
+        };
+        let identity_mismatch = source
+            .as_ref()
+            .and_then(|source| source.mismatch_with(manifest.embedding.as_ref()))
+            .filter(|_| embedded_node_count(semantic_node_counts(&graph)) > 0);
+        if let Some(mismatch) = &identity_mismatch {
+            tracing::warn!(
+                project = %project_root.display(),
+                reason = %mismatch,
+                "Live index keeps the graph fresh but skips vectors until the project is re-indexed"
+            );
+        }
         let store = LanceDbStore::new_with_fixture_namespace(
             &artifacts.db_path.to_string_lossy(),
             "code_vectors",
             Some(&fixture_namespace_for_db(&requested_db_path)),
         )
-        .await?;
+        .await?
+        .with_identity_mismatch(identity_mismatch.clone());
         let engine = Arc::new(RetrievalEngine::new_with_active_policy(
             Arc::new(RwLock::new(graph)),
             store,
@@ -228,10 +263,12 @@ impl LiveIndex {
                 needs_rescan: true,
                 superseded: false,
                 dirty_files: BTreeSet::new(),
-                semantic_unavailable: None,
+                semantic_unavailable: identity_mismatch.as_ref().map(ToString::to_string),
             }),
             persist_gate: Mutex::new(()),
             applied_at: AtomicU64::new(applied_at),
+            source,
+            identity_mismatch,
         })
     }
 
@@ -459,19 +496,25 @@ impl LiveIndex {
             .engine
             .prepare_file_changes(&project_root, &changed_files)
             .await?;
-        let embedded = match self.engine.embed_prepared(&prepared).await {
-            Ok(embedded) => embedded,
-            // Graf değişikliği yine uygulanır; yalnızca yeni düğümlerin vektörleri eksik kalır.
-            Err(error) if crate::vector::remote::is_embedder_unavailable(&error) => {
-                tracing::warn!(
-                    project = %self.project_root.display(),
-                    error = %error,
-                    "Embedding service unreachable during live refresh; graph changes are applied without vectors"
-                );
-                state.semantic_unavailable = Some(error.to_string());
-                EmbeddedNodes::default()
-            }
-            Err(error) => return Err(error),
+        // `None`: bu turda vektör yazılmaz, graf yine güncellenir. Farklı modelin
+        // tablosuna vektör eklenmez (karışmaz); nedeni yüklemeden beri tazelik
+        // satırındadır.
+        let embedded = match &self.identity_mismatch {
+            Some(_) => None,
+            None => match self.engine.embed_prepared(&prepared).await {
+                Ok(embedded) => Some(embedded),
+                // Graf değişikliği yine uygulanır; yalnızca yeni düğümlerin vektörleri eksik kalır.
+                Err(error) if crate::vector::remote::is_embedder_unavailable(&error) => {
+                    tracing::warn!(
+                        project = %self.project_root.display(),
+                        error = %error,
+                        "Embedding service unreachable during live refresh; graph changes are applied without vectors"
+                    );
+                    state.semantic_unavailable = Some(error.to_string());
+                    None
+                }
+                Err(error) => return Err(error),
+            },
         };
 
         let artifact_parent = self.artifact_parent()?.to_path_buf();
@@ -497,16 +540,25 @@ impl LiveIndex {
         self.engine.vector_store.checkout_latest().await?;
         let file_count = files.len();
         state.dirty_files = files;
-        let counts = embedded.counts;
-        self.engine.write_file_vectors(&prepared, embedded).await?;
+        let counts = embedded
+            .as_ref()
+            .map(|embedded| embedded.counts)
+            .unwrap_or_default();
+        let embedding_applied = embedded.is_some();
+        self.engine
+            .write_file_vectors(&prepared, embedded.unwrap_or_default())
+            .await?;
+        let mut next_manifest = delta.next_manifest;
+        if embedding_applied && next_manifest.embedding.is_none() {
+            next_manifest.embedding = self.written_embedding_identity().await?;
+        }
         fail_before_graph_swap_for_tests()?;
         let mut stats = self.engine.swap_file_graphs(prepared).await;
         stats.embedded_chunks = counts.embedded;
         stats.reused_chunks = counts.reused;
         // Okunamayan dosyaların eski düğümleri kaldı; sonraki tur onları yeniden dener.
         state.dirty_files = stats.retry_files.iter().cloned().collect();
-        state.manifest =
-            restore_retry_files(&state.manifest, delta.next_manifest, &stats.retry_files);
+        state.manifest = restore_retry_files(&state.manifest, next_manifest, &stats.retry_files);
         state.version += 1;
         state.needs_rescan = false;
         stats.semantic_unavailable = state.semantic_unavailable.clone();
@@ -521,6 +573,22 @@ impl LiveIndex {
             "Applied live index refresh"
         );
         Ok(LiveRefresh::Applied(Box::new(stats)))
+    }
+
+    /// Kimliksiz (eski) manifestin vektör yazılan ilk yenilemede kazandığı
+    /// kimlik: yapılandırılmış kaynağın kimliği ve tablonun boyutu. Sonraki
+    /// sağlayıcı değişikliği böylece fark edilir. Embedding kapalıysa ya da
+    /// tablo yoksa `None`.
+    async fn written_embedding_identity(&self) -> Result<Option<EmbeddingIdentity>> {
+        match &self.source {
+            Some(source) if *source != EmbeddingSource::Disabled => Ok(self
+                .engine
+                .vector_store
+                .vector_dim()
+                .await?
+                .and_then(|dim| source.identity(dim))),
+            _ => Ok(None),
+        }
     }
 
     fn record_applied_at(&self, started_at: u64) {

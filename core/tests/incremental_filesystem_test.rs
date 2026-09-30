@@ -1069,6 +1069,262 @@ async fn live_refresh_reuses_vectors_in_the_active_table() -> Result<()> {
     Ok(())
 }
 
+/// Sayaçlı embedding sunucusuna bağlı testlerin ortamını geri alır: embedding
+/// yeniden kapatılır, sağlayıcı değişkenleri silinir.
+struct EmbeddingEnvRestore;
+
+impl Drop for EmbeddingEnvRestore {
+    fn drop(&mut self) {
+        std::env::remove_var("EMBEDDING_HOST");
+        std::env::remove_var("EMBEDDING_MODEL");
+        std::env::set_var("CCM_DISABLE_EMBEDDER", "1");
+    }
+}
+
+const THREE_FUNCTIONS: &str =
+    "fn alpha() { let a = 1; }\nfn beta() { let b = 2; }\nfn gamma() { let c = 3; }\n";
+const THREE_FUNCTIONS_GAMMA_EDITED: &str =
+    "fn alpha() { let a = 1; }\nfn beta() { let b = 2; }\nfn gamma() { let c = 30; }\n";
+
+fn recorded_embedding(
+    root: &std::path::Path,
+) -> Result<Option<ccm_core::vector::embedder::EmbeddingIdentity>> {
+    ccm_core::read_index_embedding(&artifacts(root, None)?.manifest_path)
+}
+
+/// Etkin manifestten embedding kimliğini siler: kimlik kaydından önceki bir
+/// sürümün yazdığı indeksi taklit eder.
+fn forget_recorded_embedding(root: &std::path::Path) -> Result<()> {
+    let manifest_path = artifacts(root, None)?.manifest_path;
+    let mut manifest: serde_json::Value = serde_json::from_slice(&std::fs::read(&manifest_path)?)?;
+    manifest
+        .as_object_mut()
+        .expect("manifest object")
+        .remove("embedding");
+    std::fs::write(&manifest_path, serde_json::to_vec(&manifest)?)?;
+    Ok(())
+}
+
+#[tokio::test]
+async fn embedding_model_change_reembeds_everything_once_then_reuses_chunks() -> Result<()> {
+    let _env_guard = ENV_LOCK.lock().await;
+    let _restore = EmbeddingEnvRestore;
+    let (host, embedded_inputs) = start_counting_embed_server()?;
+    let embedded = || embedded_inputs.load(std::sync::atomic::Ordering::SeqCst);
+    std::env::remove_var("CCM_DISABLE_EMBEDDER");
+    std::env::set_var("EMBEDDING_HOST", &host);
+    std::env::set_var("EMBEDDING_MODEL", "ccm-test-embed");
+
+    let project = tempdir()?;
+    let root = std::fs::canonicalize(project.path())?;
+    let project_path = root.to_string_lossy().to_string();
+    let file = root.join("lib.rs");
+    std::fs::write(&file, THREE_FUNCTIONS)?;
+    ccm_core::update_index(&project_path, None).await?;
+    let first = recorded_embedding(&root)?.expect("a full index records its embedding identity");
+    assert_eq!(
+        (first.provider.as_str(), first.model.as_str(), first.dim),
+        ("ollama", "ccm-test-embed", 8)
+    );
+
+    // Kaynak değişmedi, model değişti: vektörler karışmaz, hepsi bir kez yeniden embed edilir.
+    std::env::set_var("EMBEDDING_MODEL", "ccm-test-embed-v2");
+    let before_switch = embedded();
+    let switched = ccm_core::update_index(&project_path, None).await?;
+    assert_eq!(embedded() - before_switch, 3, "every chunk is re-embedded");
+    assert_eq!(switched.embedded_chunks, 3);
+    assert_eq!(
+        switched.reused_chunks, 0,
+        "vectors of another model are never reused"
+    );
+    assert_eq!(
+        recorded_embedding(&root)?.map(|identity| identity.model),
+        Some("ccm-test-embed-v2".to_string())
+    );
+
+    let before_repeat = embedded();
+    ccm_core::update_index(&project_path, None).await?;
+    assert_eq!(
+        embedded(),
+        before_repeat,
+        "the re-embed happens exactly once"
+    );
+
+    // Aynı kimlikle parça yeniden kullanımı sürer.
+    std::fs::write(&file, THREE_FUNCTIONS_GAMMA_EDITED)?;
+    let edited = ccm_core::update_index(&project_path, None).await?;
+    assert_eq!(edited.embedded_chunks, 1, "only gamma changed");
+    assert_eq!(edited.reused_chunks, 2, "alpha and beta keep their vectors");
+    Ok(())
+}
+
+#[tokio::test]
+async fn embedding_model_change_with_pending_edits_rebuilds_without_reuse() -> Result<()> {
+    let _env_guard = ENV_LOCK.lock().await;
+    let _restore = EmbeddingEnvRestore;
+    let (host, embedded_inputs) = start_counting_embed_server()?;
+    let embedded = || embedded_inputs.load(std::sync::atomic::Ordering::SeqCst);
+    std::env::remove_var("CCM_DISABLE_EMBEDDER");
+    std::env::set_var("EMBEDDING_HOST", &host);
+    std::env::set_var("EMBEDDING_MODEL", "ccm-test-embed");
+
+    let project = tempdir()?;
+    let root = std::fs::canonicalize(project.path())?;
+    let project_path = root.to_string_lossy().to_string();
+    std::fs::write(root.join("lib.rs"), THREE_FUNCTIONS)?;
+    ccm_core::update_index(&project_path, None).await?;
+
+    std::env::set_var("EMBEDDING_MODEL", "ccm-test-embed-v2");
+    std::fs::write(root.join("lib.rs"), THREE_FUNCTIONS_GAMMA_EDITED)?;
+    let before = embedded();
+    let rebuilt = ccm_core::update_index(&project_path, None).await?;
+
+    assert_eq!(
+        embedded() - before,
+        3,
+        "the rebuild embeds every chunk once"
+    );
+    assert_eq!(rebuilt.reused_chunks, 0);
+    assert_eq!(
+        recorded_embedding(&root)?.map(|identity| identity.model),
+        Some("ccm-test-embed-v2".to_string())
+    );
+    Ok(())
+}
+
+#[tokio::test]
+async fn index_without_recorded_identity_keeps_its_remote_vectors() -> Result<()> {
+    let _env_guard = ENV_LOCK.lock().await;
+    let _restore = EmbeddingEnvRestore;
+    let (host, embedded_inputs) = start_counting_embed_server()?;
+    let embedded = || embedded_inputs.load(std::sync::atomic::Ordering::SeqCst);
+    std::env::remove_var("CCM_DISABLE_EMBEDDER");
+    std::env::set_var("EMBEDDING_HOST", &host);
+    std::env::set_var("EMBEDDING_MODEL", "ccm-test-embed");
+
+    let project = tempdir()?;
+    let root = std::fs::canonicalize(project.path())?;
+    let project_path = root.to_string_lossy().to_string();
+    let file = root.join("lib.rs");
+    std::fs::write(&file, THREE_FUNCTIONS)?;
+    ccm_core::update_index(&project_path, None).await?;
+    // Kimlik kaydından önceki bir sürümün manifesti: aynı uzak yapılandırma
+    // mevcut vektörleri kullanmaya devam eder, zorunlu yeniden embed yoktur.
+    forget_recorded_embedding(&root)?;
+
+    let before = embedded();
+    ccm_core::update_index(&project_path, None).await?;
+    assert_eq!(
+        embedded(),
+        before,
+        "a legacy remote index is not re-embedded"
+    );
+
+    std::fs::write(&file, THREE_FUNCTIONS_GAMMA_EDITED)?;
+    let edited = ccm_core::update_index(&project_path, None).await?;
+    assert_eq!((edited.embedded_chunks, edited.reused_chunks), (1, 2));
+    assert_eq!(
+        recorded_embedding(&root)?.map(|identity| identity.model),
+        Some("ccm-test-embed".to_string()),
+        "the first write records the identity of the existing vectors"
+    );
+    Ok(())
+}
+
+#[tokio::test]
+async fn live_refresh_records_the_identity_of_a_legacy_index() -> Result<()> {
+    let _env_guard = ENV_LOCK.lock().await;
+    let _restore = EmbeddingEnvRestore;
+    let (host, _embedded_inputs) = start_counting_embed_server()?;
+    std::env::remove_var("CCM_DISABLE_EMBEDDER");
+    std::env::set_var("EMBEDDING_HOST", &host);
+    std::env::set_var("EMBEDDING_MODEL", "ccm-test-embed");
+
+    let project = tempdir()?;
+    let root = std::fs::canonicalize(project.path())?;
+    let project_path = root.to_string_lossy().to_string();
+    let file = root.join("lib.rs");
+    std::fs::write(&file, THREE_FUNCTIONS)?;
+    ccm_core::update_index(&project_path, None).await?;
+    forget_recorded_embedding(&root)?;
+
+    let live = ccm_core::live::LiveIndex::load(&project_path, None, None).await?;
+    std::fs::write(&file, THREE_FUNCTIONS_GAMMA_EDITED)?;
+    let ccm_core::live::LiveRefresh::Applied(stats) = live.apply_rescan().await? else {
+        panic!("live refresh must apply to the active generation");
+    };
+    assert_eq!((stats.embedded_chunks, stats.reused_chunks), (1, 2));
+    assert_eq!(
+        live.persist().await?,
+        ccm_core::live::LivePersist::Persisted
+    );
+    assert_eq!(
+        recorded_embedding(&root)?.map(|identity| identity.model),
+        Some("ccm-test-embed".to_string()),
+        "the first live write records the identity of the existing vectors"
+    );
+    Ok(())
+}
+
+#[tokio::test]
+async fn live_refresh_never_mixes_vectors_from_another_model() -> Result<()> {
+    let _env_guard = ENV_LOCK.lock().await;
+    let _restore = EmbeddingEnvRestore;
+    let (host, embedded_inputs) = start_counting_embed_server()?;
+    let embedded = || embedded_inputs.load(std::sync::atomic::Ordering::SeqCst);
+    std::env::remove_var("CCM_DISABLE_EMBEDDER");
+    std::env::set_var("EMBEDDING_HOST", &host);
+    std::env::set_var("EMBEDDING_MODEL", "ccm-test-embed");
+
+    let project = tempdir()?;
+    let root = std::fs::canonicalize(project.path())?;
+    let project_path = root.to_string_lossy().to_string();
+    let file = root.join("lib.rs");
+    std::fs::write(&file, THREE_FUNCTIONS)?;
+    ccm_core::update_index(&project_path, None).await?;
+
+    std::env::set_var("EMBEDDING_MODEL", "ccm-test-embed-v2");
+    let live = ccm_core::live::LiveIndex::load(&project_path, None, None).await?;
+    let ccm_core::live::LiveRefresh::Applied(startup) = live.apply_rescan().await? else {
+        panic!("the startup comparison must apply to the active generation");
+    };
+    assert!(
+        startup
+            .semantic_unavailable
+            .as_deref()
+            .is_some_and(|reason| reason.contains("ccm-test-embed-v2")),
+        "the reason names the configured model: {:?}",
+        startup.semantic_unavailable
+    );
+
+    let before_edit = embedded();
+    std::fs::write(&file, THREE_FUNCTIONS_GAMMA_EDITED)?;
+    let ccm_core::live::LiveRefresh::Applied(stats) =
+        live.apply_paths(std::slice::from_ref(&file)).await?
+    else {
+        panic!("live refresh must apply to the active generation");
+    };
+    assert_eq!(stats.files_indexed, 1, "the graph stays fresh");
+    assert_eq!(stats.embedded_chunks, 0);
+    assert_eq!(
+        embedded(),
+        before_edit,
+        "no vector of the new model enters the old table"
+    );
+    assert!(stats.semantic_unavailable.is_some());
+    let hits = live.engine().search_code_hybrid("gamma", 5).await?;
+    assert!(
+        hits.iter().any(|hit| hit.title.contains("gamma")),
+        "search falls back to graph results instead of failing"
+    );
+
+    // Elle indeksleme vektörleri yeni modelle tek seferde yeniden kurar.
+    let before_reindex = embedded();
+    ccm_core::update_index(&project_path, None).await?;
+    assert_eq!(embedded() - before_reindex, 3);
+    Ok(())
+}
+
 #[tokio::test]
 async fn watch_filter_skips_ignored_outputs_and_index_artifacts() -> Result<()> {
     let _env_guard = ENV_LOCK.lock().await;

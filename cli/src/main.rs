@@ -707,6 +707,24 @@ async fn run_doctor(path: &std::path::Path, json: bool) -> anyhow::Result<()> {
             )),
         }
     };
+    // Vektörler başka bir embedding modeliyle kurulduysa tablo sağlam olsa da
+    // yapılandırılmış modelle aranamaz; bir kez yeniden indekslemek gerekir.
+    // Okuma/yapılandırma hataları kendi kontrollerinde (manifest, embedding) raporlanır.
+    let recorded_embedding = ccm_core::read_index_embedding(&manifest_path)
+        .ok()
+        .flatten();
+    let identity_error = if embedder_disabled || semantic_nodes == 0 {
+        None
+    } else {
+        ccm_core::vector::embedder::EmbeddingSource::from_env()
+            .ok()
+            .and_then(|source| source.mismatch_with(recorded_embedding.as_ref()))
+            .map(|mismatch| mismatch.to_string())
+    };
+    let vector_result = match (vector_result, identity_error) {
+        (Ok(_), Some(error)) => Err(error),
+        (result, _) => result,
+    };
     // Embedding servisi gerçekten çağrılır; ayarın dolu olması erişilebilirliği kanıtlamaz.
     let embedding_check = if embedder_disabled {
         serde_json::json!({"ok": true, "disabled": true})
@@ -740,6 +758,7 @@ async fn run_doctor(path: &std::path::Path, json: bool) -> anyhow::Result<()> {
             "ok": vector_result.is_ok(),
             "path": db_path,
             "rows": vector_rows,
+            "embedding": recorded_embedding,
             "disabled": embedder_disabled,
             "error": vector_error
         },
