@@ -236,8 +236,10 @@ pub enum EmbeddingSource {
 
 impl EmbeddingSource {
     /// Ortamdan çözer: fixture, ardından kapatma bayrağı, ardından sağlayıcı
-    /// seçimi. Fixture ve kapalı modda `.env` yüklenmez.
+    /// seçimi. Bayraklar okunmadan önce `~/.ccm/.env` yüklenir; oradaki
+    /// `CCM_DISABLE_EMBEDDER` ya da fixture ayarı da geçerlidir.
     pub fn from_env() -> Result<Self> {
+        load_user_env_file()?;
         if let Some(path) = fixture_path_from_env() {
             let fixture = crate::vector::store::load_fixture_cached(&path)?;
             return Ok(Self::Fixture(fixture.identity()));

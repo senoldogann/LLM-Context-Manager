@@ -111,6 +111,89 @@ fn doctor_rejects_semantic_graph_without_vectors() -> Result<(), Box<dyn std::er
     Ok(())
 }
 
+/// `~/.ccm/.env` komut çalışmadan önce yüklenir: oradaki `CCM_DISABLE_EMBEDDER`
+/// indeksi graf-yalnız kurar (model indirilmez, sonraki indeks onu model
+/// değişikliği sayıp yeniden kurmaz), `CCM_MODEL_DIR` ve `HF_ENDPOINT`
+/// `models pull`'un dizinini ve kaynağını belirler, doktor kapalı embedder'ı görür.
+#[test]
+fn user_env_file_configures_the_cli_at_startup() -> Result<(), Box<dyn std::error::Error>> {
+    let dir = tempdir()?;
+    let project_root = dir.path().join("project");
+    let home = dir.path().join("home");
+    let models = dir.path().join("models-from-env");
+    fs::create_dir_all(&project_root)?;
+    fs::create_dir_all(home.join(".ccm"))?;
+    fs::write(project_root.join("main.rs"), "fn existing_symbol() {}\n")?;
+    // Kapalı port: indirme denenirse hızla başarısız olur.
+    fs::write(
+        home.join(".ccm/.env"),
+        format!(
+            "CCM_DISABLE_EMBEDDER=1\nCCM_MODEL_DIR={}\nHF_ENDPOINT=http://127.0.0.1:9\n",
+            models.display()
+        ),
+    )?;
+    let project = project_root.to_string_lossy().to_string();
+    let ccm = |args: &[&str]| {
+        Command::new(assert_cmd::cargo::cargo_bin!("ccm-cli"))
+            .current_dir(&project_root)
+            .env("HOME", &home)
+            .env("CCM_PROJECT_ROOT", &project_root)
+            .env_remove("CCM_DISABLE_EMBEDDER")
+            .env_remove("EMBEDDING_DISABLED")
+            .env_remove("CCM_EMBEDDING_FIXTURE")
+            .env_remove("EMBEDDING_PROVIDER")
+            .env_remove("EMBEDDING_HOST")
+            .env_remove("EMBEDDING_MODEL")
+            .env_remove("CCM_MODEL_DIR")
+            .env_remove("HF_ENDPOINT")
+            .args(args)
+            .output()
+    };
+
+    let first = ccm(&["index", "--path", &project])?;
+    assert!(
+        first.status.success(),
+        "index failed: {}",
+        String::from_utf8_lossy(&first.stderr)
+    );
+    assert!(
+        !models.exists() && !home.join(".ccm/models").exists(),
+        "a disabled embedder must not download the model"
+    );
+    let artifacts = ccm_core::resolve_index_artifacts(&project, None)?;
+    assert_eq!(
+        ccm_core::read_index_embedding(&artifacts.manifest_path)?,
+        None
+    );
+    let second = ccm(&["index", "--path", &project])?;
+    assert!(second.status.success());
+    assert_eq!(
+        ccm_core::resolve_index_artifacts(&project, None)?.generation_id,
+        artifacts.generation_id,
+        "an unchanged graph-only index is not rebuilt"
+    );
+
+    let doctor = ccm(&["doctor", "--path", &project, "--json"])?;
+    let report: serde_json::Value = serde_json::from_slice(&doctor.stdout)?;
+    assert_eq!(report["checks"]["embedding"]["disabled"], true, "{report}");
+
+    let pull = ccm(&["models", "pull"])?;
+    assert!(
+        !pull.status.success(),
+        "the closed HF_ENDPOINT port must fail the download"
+    );
+    let pull_stdout = String::from_utf8_lossy(&pull.stdout);
+    assert!(
+        pull_stdout.contains(&models.display().to_string()),
+        "models pull must use CCM_MODEL_DIR from ~/.ccm/.env: {pull_stdout}"
+    );
+    assert!(
+        String::from_utf8_lossy(&pull.stderr).contains("127.0.0.1:9"),
+        "models pull must use HF_ENDPOINT from ~/.ccm/.env"
+    );
+    Ok(())
+}
+
 /// Gerçek yerel modelle uçtan uca: hiçbir embedding ayarı yokken `index`
 /// semantik indeks kurar, manifest yerel modeli kaydeder ve `query` sonucu
 /// semantik skor taşır. ~120 MB model indirir (önbellek: `~/.ccm/models`);

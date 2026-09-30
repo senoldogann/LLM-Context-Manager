@@ -203,6 +203,9 @@ impl LanceDbStore {
     ) -> Result<Self> {
         let conn = connect(uri).execute().await?;
 
+        // Kapatma ve fixture bayrakları `~/.ccm/.env`'de de olabilir; okunmadan
+        // önce yüklenir (bkz. `EmbeddingSource::from_env`).
+        crate::vector::remote::load_user_env_file()?;
         let embedder_disabled = embedder_disabled_by_env();
 
         let fixture = match fixture_path_from_env() {

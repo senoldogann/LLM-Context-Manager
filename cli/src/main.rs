@@ -135,6 +135,9 @@ async fn main() -> anyhow::Result<()> {
         .init();
 
     let args = Args::parse();
+    // Embedding, model dizini ve kapatma ayarları `~/.ccm/.env`'de de tanımlanabilir;
+    // MCP sunucusundaki gibi komut çalışmadan önce yüklenir (ortam önceliklidir).
+    ccm_core::vector::remote::load_user_env_file()?;
 
     match args.cmd {
         Commands::Query { text } => {
