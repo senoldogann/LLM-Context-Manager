@@ -68,9 +68,23 @@ pub struct ResourcesCapability {
 #[derive(Debug, Serialize)]
 pub struct ToolDefinition {
     pub name: String,
+    /// İstemci arayüzlerinde gösterilen okunur ad.
+    pub title: String,
     pub description: Option<String>,
     #[serde(rename = "inputSchema")]
     pub input_schema: Value,
+    pub annotations: ToolAnnotations,
+}
+
+/// Aracın davranış ipuçları. İstemciler (ör. otomatik onay arayüzleri) salt
+/// okunur araçları değiştiren araçlardan bu alanlarla ayırır.
+#[derive(Debug, Clone, Copy, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ToolAnnotations {
+    pub read_only_hint: bool,
+    pub destructive_hint: bool,
+    pub idempotent_hint: bool,
+    pub open_world_hint: bool,
 }
 
 /// MCP Tool Call Result

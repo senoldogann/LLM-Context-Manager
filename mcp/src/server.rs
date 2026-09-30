@@ -8,7 +8,8 @@ use tokio::sync::RwLock;
 
 use crate::protocol::{
     create_error_response, create_success_response, JsonRpcRequest, JsonRpcResponse,
-    ResourcesCapability, ServerCapabilities, ServerInfo, ToolDefinition, ToolsCapability,
+    ResourcesCapability, ServerCapabilities, ServerInfo, ToolAnnotations, ToolDefinition,
+    ToolsCapability,
 };
 use crate::tools;
 
@@ -22,6 +23,22 @@ const SUPPORTED_PROTOCOL_VERSIONS: [&str; 3] =
     [LATEST_PROTOCOL_VERSION, "2025-06-18", "2025-03-26"];
 /// Okuma araçlarının süren yenilemeyi bekleyeceği en uzun süre.
 const FRESHNESS_WAIT_BUDGET: std::time::Duration = std::time::Duration::from_secs(2);
+
+/// Okuma araçları indeksi yalnızca okur; etki alanı yerel projedir.
+const READ_ONLY_TOOL: ToolAnnotations = ToolAnnotations {
+    read_only_hint: true,
+    destructive_hint: false,
+    idempotent_hint: true,
+    open_world_hint: false,
+};
+/// İndeksleme araçları indeksi yazar ama proje dosyalarını silmez; aynı girdiyle
+/// tekrar çağrı aynı indeksi üretir.
+const INDEXING_TOOL: ToolAnnotations = ToolAnnotations {
+    read_only_hint: false,
+    destructive_hint: false,
+    idempotent_hint: true,
+    open_world_hint: false,
+};
 
 /// Holds the server's shared state.
 pub struct ServerState {
@@ -1072,6 +1089,7 @@ fn handle_list_tools(id: Option<Value>) -> Result<JsonRpcResponse> {
     let tools_list = vec![
         ToolDefinition {
             name: "get_context".to_string(),
+            title: "Get Code Context".to_string(),
             description: Some("Get code context for a given file and line.".to_string()),
             input_schema: json!({
                 "type": "object",
@@ -1084,9 +1102,11 @@ fn handle_list_tools(id: Option<Value>) -> Result<JsonRpcResponse> {
                 },
                 "required": ["file", "line"]
             }),
+            annotations: READ_ONLY_TOOL,
         },
         ToolDefinition {
             name: "search_code".to_string(),
+            title: "Search Code".to_string(),
             description: Some("Search the codebase using hybrid semantic and graph-aware ranking. Returns node IDs and location metadata so results can be chained into read_graph.".to_string()),
             input_schema: serde_json::json!({
                 "type": "object",
@@ -1099,9 +1119,11 @@ fn handle_list_tools(id: Option<Value>) -> Result<JsonRpcResponse> {
                 },
                 "required": ["query"]
             }),
+            annotations: READ_ONLY_TOOL,
         },
         ToolDefinition {
             name: "find_nodes".to_string(),
+            title: "Find Graph Nodes".to_string(),
             description: Some("Find graph nodes by name, file path, or node ID fragment. Use this before read_graph when you do not already know the node ID.".to_string()),
             input_schema: serde_json::json!({
                 "type": "object",
@@ -1114,9 +1136,11 @@ fn handle_list_tools(id: Option<Value>) -> Result<JsonRpcResponse> {
                 },
                 "required": ["query"]
             }),
+            annotations: READ_ONLY_TOOL,
         },
         ToolDefinition {
             name: "read_graph".to_string(),
+            title: "Read Graph Node".to_string(),
             description: Some("Get details of a specific code node by ID.".to_string()),
             input_schema: serde_json::json!({
                 "type": "object",
@@ -1128,9 +1152,11 @@ fn handle_list_tools(id: Option<Value>) -> Result<JsonRpcResponse> {
                 },
                 "required": ["node_id"]
             }),
+            annotations: READ_ONLY_TOOL,
         },
         ToolDefinition {
             name: "index_project".to_string(),
+            title: "Index Project".to_string(),
             description: Some("Refresh the project index. Usually performs an incremental update and reports when the existing index is already up to date. Use mode:'quick' for a fast graph-only index with deferred background semantic embeddings.".to_string()),
             input_schema: serde_json::json!({
                 "type": "object",
@@ -1140,9 +1166,11 @@ fn handle_list_tools(id: Option<Value>) -> Result<JsonRpcResponse> {
                 },
                 "required": ["project_path"]
             }),
+            annotations: INDEXING_TOOL,
         },
         ToolDefinition {
             name: "index_now".to_string(),
+            title: "Index Project and Wait".to_string(),
             description: Some("Synchronously index the project and return the final stats when complete. Use mode:'quick' to return after graph-only indexing, or 'full' to wait for semantic embeddings.".to_string()),
             input_schema: serde_json::json!({
                 "type": "object",
@@ -1152,9 +1180,11 @@ fn handle_list_tools(id: Option<Value>) -> Result<JsonRpcResponse> {
                 },
                 "required": ["project_path"]
             }),
+            annotations: INDEXING_TOOL,
         },
         ToolDefinition {
             name: "find_usages".to_string(),
+            title: "Find Usages".to_string(),
             description: Some("Find all nodes that call or reference a given node. Answers 'who calls this function?'.".to_string()),
             input_schema: serde_json::json!({
                 "type": "object",
@@ -1167,9 +1197,11 @@ fn handle_list_tools(id: Option<Value>) -> Result<JsonRpcResponse> {
                 },
                 "required": ["node_id"]
             }),
+            annotations: READ_ONLY_TOOL,
         },
         ToolDefinition {
             name: "trace_call_chain".to_string(),
+            title: "Trace Call Chain".to_string(),
             description: Some("Find the BFS call chain between two nodes. Shows how execution flows from one function to another.".to_string()),
             input_schema: serde_json::json!({
                 "type": "object",
@@ -1183,9 +1215,11 @@ fn handle_list_tools(id: Option<Value>) -> Result<JsonRpcResponse> {
                 },
                 "required": ["from_id", "to_id"]
             }),
+            annotations: READ_ONLY_TOOL,
         },
         ToolDefinition {
             name: "impact_of_change".to_string(),
+            title: "Impact of Change".to_string(),
             description: Some("Analyze the blast radius of changing a file. Returns all dependents across the codebase. Essential for safe refactoring.".to_string()),
             input_schema: serde_json::json!({
                 "type": "object",
@@ -1198,9 +1232,11 @@ fn handle_list_tools(id: Option<Value>) -> Result<JsonRpcResponse> {
                 },
                 "required": ["file"]
             }),
+            annotations: READ_ONLY_TOOL,
         },
         ToolDefinition {
             name: "diff_context".to_string(),
+            title: "Recently Changed Code".to_string(),
             description: Some("Get graph nodes for recently changed files based on git history. Shows what code has changed in the last N days.".to_string()),
             input_schema: serde_json::json!({
                 "type": "object",
@@ -1213,6 +1249,7 @@ fn handle_list_tools(id: Option<Value>) -> Result<JsonRpcResponse> {
                 },
                 "required": ["project_path"]
             }),
+            annotations: READ_ONLY_TOOL,
         },
     ];
 
