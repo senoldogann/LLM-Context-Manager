@@ -81,7 +81,9 @@ async fn serve_stdio(state: Arc<server::ServerState>, debug: bool) -> Result<()>
 
         match server::classify_message(trimmed) {
             server::IncomingMessage::Rejected(response) => outbox.send(&response).await?,
-            server::IncomingMessage::Dropped => {}
+            server::IncomingMessage::Dropped(reason) => {
+                tracing::warn!(reason = %reason, "Dropped an invalid notification without a response")
+            }
             server::IncomingMessage::ClientResponse(response) => {
                 state.handle_client_response(&response)
             }

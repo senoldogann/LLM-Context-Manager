@@ -8,8 +8,9 @@ use std::sync::Arc;
 use crate::protocol::{ToolResult, ToolResultContent};
 use ccm_core::engine::{CursorPosition, RetrievalEngine};
 
-/// İstemci girdisinden kaynaklanan tool argüman hatası. JSON-RPC'de -32602
-/// (Invalid params) olarak raporlanır; iç hatalardan (-> -32603) ayrılır.
+/// İstemci girdisinden kaynaklanan araç argüman hatası. MCP 2025-11-25 gereği
+/// araç yürütme hatası (`isError: true`) olarak döner; model argümanı düzeltip
+/// yeniden deneyebilir.
 #[derive(Debug)]
 pub struct ToolInputError(pub String);
 

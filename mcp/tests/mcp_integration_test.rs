@@ -821,7 +821,8 @@ fn mcp_rejects_invalid_tools_before_lazy_indexing() -> Result<(), Box<dyn std::e
             "params":{"name":"get_context","arguments":{"project_path":project.path()}}
         }),
     )?;
-    assert_eq!(malformed["error"]["code"], -32602);
+    // Argüman doğrulama hatası araç yürütme hatasıdır (MCP 2025-11-25).
+    assert_tool_error(&malformed, "Missing or invalid 'file' argument");
     assert!(!project.path().join("data").exists());
 
     let _ = child.kill();
@@ -963,7 +964,12 @@ fn mcp_default_corrupt_graph_requires_and_accepts_rebuild() -> Result<(), Box<dy
             "params":{"name":"get_context","arguments":{"file":"main.rs","line":1}}
         }),
     )?;
-    assert_tool_error(&rejected, "Failed to load project context");
+    // Asıl sebep ve düzeltme yolu modele gösterilir.
+    assert_tool_error(&rejected, "could not be loaded");
+    assert!(
+        tool_text(&rejected).contains("Run index_project to rebuild it"),
+        "{rejected}"
+    );
 
     let rebuilt = send_request(
         &mut stdin,

@@ -969,8 +969,8 @@ fn normalize_path(path: &Path) -> PathBuf {
 pub enum IncomingMessage {
     /// Hemen yazılacak protokol hatası (bozuk JSON, geçersiz istek).
     Rejected(JsonRpcResponse),
-    /// Yanıtsız bırakılan geçersiz bildirim.
-    Dropped,
+    /// Yanıtsız bırakılan geçersiz bildirim; sebebi günlüğe yazılır.
+    Dropped(&'static str),
     /// Sunucunun istemciye gönderdiği isteğin (ör. `roots/list`) yanıtı.
     ClientResponse(serde_json::Map<String, Value>),
     /// Bildirim: okuma döngüsünde sırayla işlenir, yanıt üretmez.
@@ -1027,7 +1027,7 @@ pub fn classify_message(raw_message: &str) -> IncomingMessage {
         .is_some_and(|params| !(params.is_object() || params.is_array()))
     {
         if is_notification {
-            return IncomingMessage::Dropped;
+            return IncomingMessage::Dropped("notification params must be an object or array");
         }
         return IncomingMessage::Rejected(create_error_response(
             request_id,
@@ -1343,10 +1343,22 @@ async fn handle_call_tool_inner(
     let Some(tool_name) = params.get("name").and_then(|v| v.as_str()) else {
         return create_error_response(id, -32602, "Missing tool name");
     };
+    if !is_known_tool(tool_name) {
+        return create_error_response(id, -32602, &format!("Unknown tool: {}", tool_name));
+    }
     let arguments = params.get("arguments").cloned().unwrap_or(json!({}));
+    if !arguments.is_object() {
+        return create_error_response(
+            id,
+            -32602,
+            "Invalid params: tools/call arguments must be an object",
+        );
+    }
 
+    // Argüman doğrulama hatası araç yürütme hatasıdır (MCP 2025-11-25): model
+    // mesajı görür ve argümanı düzeltip yeniden dener.
     if let Err(message) = validate_tool_arguments(tool_name, &arguments) {
-        return create_error_response(id, -32602, &message);
+        return tool_result_response(id, tool_error_result(message));
     }
 
     match run_tool(state, tool_name, &arguments).await {
@@ -1443,17 +1455,13 @@ fn tool_result_response(id: Option<Value>, result: ToolResult) -> JsonRpcRespons
     }
 }
 
-/// Aracın döndürdüğü hatayı yanıta çevirir: argüman hatası (`ToolInputError`)
-/// JSON-RPC -32602 olarak kalır; diğer hatalar araç yürütme hatasıdır ve
-/// `isError: true` sonucu olarak modele gösterilir.
+/// Aracın döndürdüğü hatayı (argüman hatası dahil) araç yürütme hatasına
+/// çevirir: `isError: true` sonucu olarak modele gösterilir.
 fn tool_failure_response(
     id: Option<Value>,
     tool_name: &str,
     error: &anyhow::Error,
 ) -> JsonRpcResponse {
-    if let Some(input_error) = error.downcast_ref::<tools::ToolInputError>() {
-        return create_error_response(id, -32602, &input_error.0);
-    }
     let detail = format!("{error:#}");
     tracing::warn!(tool = %tool_name, error = %detail, "Tool execution failed");
     tool_result_response(
@@ -1477,10 +1485,32 @@ fn engine_error_result(tool_name: &str, error: &anyhow::Error) -> ToolResult {
     {
         error.to_string()
     } else {
-        "Failed to load project context. Check project_path, allowlist, and index state."
-            .to_string()
+        // Asıl sebep (ör. bozuk graf ve "Run index_project to rebuild it") modele
+        // gösterilir; genel bir mesaj onu düzeltme yolundan yoksun bırakırdı.
+        let cause = format!("{error:#}");
+        format!(
+            "Failed to load project context: {}. Check project_path, allowlist, and index state.",
+            cause.trim_end_matches('.')
+        )
     };
     tool_error_result(message)
+}
+
+/// `tools/list`'te yayımlanan araç mı?
+fn is_known_tool(tool_name: &str) -> bool {
+    matches!(
+        tool_name,
+        "get_context"
+            | "search_code"
+            | "find_nodes"
+            | "read_graph"
+            | "index_project"
+            | "index_now"
+            | "find_usages"
+            | "trace_call_chain"
+            | "impact_of_change"
+            | "diff_context"
+    )
 }
 
 fn validate_tool_arguments(tool_name: &str, arguments: &Value) -> std::result::Result<(), String> {
