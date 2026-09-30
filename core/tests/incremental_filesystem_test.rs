@@ -389,6 +389,45 @@ async fn orphan_artifact_directories_are_never_indexed() -> Result<()> {
 }
 
 #[tokio::test]
+async fn activation_lock_artifacts_are_never_indexed() -> Result<()> {
+    let _env_guard = ENV_LOCK.lock().await;
+    std::env::set_var("CCM_DISABLE_EMBEDDER", "1");
+    let project = tempdir()?;
+    // Eski sürümlerin geride kalmış kilit dizini artık kilit olarak kullanılmaz ama
+    // kalır; içindekiler indekse girmemeli.
+    let legacy_lock = project.path().join("data/.ccm-activation.lock");
+    std::fs::create_dir_all(&legacy_lock)?;
+    std::fs::write(legacy_lock.join("leak.rs"), "fn leaked_legacy_lock() {}\n")?;
+    std::fs::write(project.path().join("main.rs"), "fn business() {}\n")?;
+
+    // İlk indeksleme etkinleştirme kilidini alır ve kilit dosyası bırakılırken silinmez;
+    // ikinci tam tarama dosya yerindeyken çalışır.
+    ccm_core::index_directory(project.path().to_string_lossy().as_ref(), None).await?;
+    assert!(
+        project.path().join("data/.ccm-activation.flock").exists(),
+        "the lock file stays in place after the activation"
+    );
+    ccm_core::index_directory(project.path().to_string_lossy().as_ref(), None).await?;
+
+    let active = artifacts(project.path(), None)?;
+    let manifest = std::fs::read_to_string(&active.manifest_path)?;
+    assert!(
+        !manifest.contains(".ccm-activation"),
+        "the lock artifacts must not enter the manifest: {manifest}"
+    );
+    let graph = CodeGraph::from_file(active.graph_path.to_string_lossy().as_ref())?;
+    assert!(graph
+        .graph
+        .node_weights()
+        .any(|node| node.name == "business"));
+    assert!(!graph
+        .graph
+        .node_weights()
+        .any(|node| node.name == "leaked_legacy_lock"));
+    Ok(())
+}
+
+#[tokio::test]
 async fn full_rebuild_invalid_supported_source_preserves_active_generation() -> Result<()> {
     let _env_guard = ENV_LOCK.lock().await;
     std::env::set_var("CCM_DISABLE_EMBEDDER", "1");
@@ -1097,6 +1136,7 @@ async fn watch_filter_skips_ignored_outputs_and_index_artifacts() -> Result<()> 
         root.join("data/ccm_learn"),
         root.join("data/.ccm-generations/next"),
         root.join("data/.ccm-rebuild-4242"),
+        root.join("data/.ccm-activation.lock"),
         active.db_path.clone(),
         root.clone(),
         std::path::PathBuf::from("/outside/project"),
@@ -1140,6 +1180,8 @@ async fn watch_filter_skips_ignored_outputs_and_index_artifacts() -> Result<()> 
         "data/ccm_current.4242.1790000000000000000.tmp",
         "data/ccm_manifest.json.4242.tmp",
         "data/ccm_graph.json.4242.tmp",
+        // Etkinleştirme kilidinin dosyası bırakılırken silinmez; artefakt dizininde kalır.
+        "data/.ccm-activation.flock",
         // Trajectory günlüğü ve politika deposu araç durumudur.
         "data/ccm_learn",
         "data/ccm_learn/experiences.jsonl",

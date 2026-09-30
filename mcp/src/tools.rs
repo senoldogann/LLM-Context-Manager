@@ -483,7 +483,7 @@ pub async fn index_project(
 /// ve sonucunu bekler. İş isteğe bağlı değildir: istek iptal edilirse yalnızca
 /// bekleme durur; indeksleme (worker, etkinleştirme ve kilit bırakma) tamamlanır
 /// ve sonucu sonraki `index_now`/`index_project` çağrısına kalır. Worker'ı yarıda
-/// öldürmek etkinleştirme kilidini ve staging kopyasını geride bırakırdı.
+/// öldürmek staging kopyasını geride bırakırdı.
 pub async fn index_now(state: Arc<crate::server::ServerState>, args: &Value) -> Result<ToolResult> {
     let project_path = args
         .get("project_path")
