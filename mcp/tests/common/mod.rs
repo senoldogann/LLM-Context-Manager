@@ -6,7 +6,7 @@
 
 use serde_json::{json, Value};
 use std::error::Error;
-use std::io::{BufRead, BufReader, Write};
+use std::io::{BufRead, BufReader, Read, Write};
 use std::path::Path;
 use std::process::{Child, ChildStdin, ChildStdout, Command, Stdio};
 use std::sync::mpsc::{self, Receiver, RecvTimeoutError, Sender};
@@ -239,6 +239,96 @@ pub fn poll_find_nodes(
         }
         std::thread::sleep(Duration::from_millis(200));
     }
+}
+
+/// Ollama `/api/embed` sözleşmesini konuşan deterministik yerel embedding
+/// sunucusu; adresini döndürür. Her metin baytlarından türetilen 8 boyutlu bir
+/// vektör alır; `rejected_models` içindeki modellerin istekleri HTTP 400 ile
+/// reddedilir. Sunucu test süreci bitene kadar çalışır.
+pub fn start_embed_server(rejected_models: &'static [&'static str]) -> TestResult<String> {
+    let listener = std::net::TcpListener::bind("127.0.0.1:0")?;
+    let address = format!("http://{}", listener.local_addr()?);
+    std::thread::spawn(move || {
+        for stream in listener.incoming().flatten() {
+            // MCP sunucusu ve ayrık worker aynı anda istek gönderebilir.
+            std::thread::spawn(move || answer_embed_request(stream, rejected_models));
+        }
+    });
+    Ok(address)
+}
+
+/// Tek bir `/api/embed` isteğini okuyup yanıtlar; bağlantı ardından kapanır.
+fn answer_embed_request(mut stream: std::net::TcpStream, rejected_models: &[&str]) {
+    let Ok(read_half) = stream.try_clone() else {
+        return;
+    };
+    let mut reader = BufReader::new(read_half);
+    let mut content_length = 0usize;
+    loop {
+        let mut line = String::new();
+        if reader.read_line(&mut line).unwrap_or(0) == 0 || line == "\r\n" {
+            break;
+        }
+        if let Some(value) = line.to_ascii_lowercase().strip_prefix("content-length:") {
+            content_length = value.trim().parse().unwrap_or(0);
+        }
+    }
+    let mut body = vec![0u8; content_length];
+    if reader.read_exact(&mut body).is_err() {
+        return;
+    }
+    let request: Value = serde_json::from_slice(&body).unwrap_or_default();
+    let model = request["model"].as_str().unwrap_or_default();
+    let (status, payload) = if rejected_models.contains(&model) {
+        (
+            "400 Bad Request",
+            json!({ "error": format!("embedding rejected by the test server for {model}") }),
+        )
+    } else {
+        let embeddings: Vec<Vec<f32>> = request["input"]
+            .as_array()
+            .map(|inputs| {
+                inputs
+                    .iter()
+                    .map(|input| text_vector(input.as_str().unwrap_or_default()))
+                    .collect()
+            })
+            .unwrap_or_default();
+        ("200 OK", json!({ "embeddings": embeddings }))
+    };
+    let payload = payload.to_string();
+    let response = format!(
+        "HTTP/1.1 {status}\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{payload}",
+        payload.len()
+    );
+    let _ = stream.write_all(response.as_bytes());
+}
+
+/// `start_embed_server` sunucusuna bağlı Ollama yapılandırması.
+pub fn embedding_env<'a>(host: &'a str, model: &'a str) -> Vec<(&'a str, &'a str)> {
+    vec![
+        ("CCM_DISABLE_EMBEDDER", "0"),
+        ("EMBEDDING_PROVIDER", "ollama"),
+        ("EMBEDDING_HOST", host),
+        ("EMBEDDING_MODEL", model),
+    ]
+}
+
+/// Projeyi `model` ile `index_now` üzerinden indeksler ve sunucuyu kapatır.
+pub fn index_with_model(project: &Path, host: &str, model: &str) -> TestResult<()> {
+    let mut session = McpSession::start(project, &embedding_env(host, model))?;
+    session.call_tool("index_now", json!({ "project_path": project }))?;
+    Ok(())
+}
+
+/// Metnin baytlarından türetilen deterministik 8 boyutlu vektör.
+fn text_vector(text: &str) -> Vec<f32> {
+    let seed = text.bytes().fold(0u32, |acc, byte| {
+        acc.wrapping_mul(31).wrapping_add(u32::from(byte))
+    });
+    (0..8u32)
+        .map(|offset| (seed.wrapping_add(offset) % 97) as f32 / 97.0 + 0.01)
+        .collect()
 }
 
 /// `ccm-cli index` ile aynı yolu (`update_index`) ayrı bir süreçte çalıştırır:

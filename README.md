@@ -255,9 +255,12 @@ Ollama/OpenAI behavior, so existing configurations work unchanged; otherwise the
 local model is used. `CCM_DISABLE_EMBEDDER=1` turns semantic search off.
 
 **Changing models:** the index manifest records which provider, model, revision
-and dimension produced its vectors. After a change, the next `ccm-cli index` /
-`index_project` re-embeds the index once instead of mixing vectors; until then
-auto-refresh keeps the graph fresh and `search_code` uses graph results.
+and dimension produced its vectors, and vectors of two models are never mixed.
+After a change (including an upgrade from 0.3.x, whose Ollama-built index meets
+the new local default), the MCP server re-embeds the active index once in the
+background (the freshness line says `semantic index being rebuilt`; auto-refresh
+waits for it and `search_code` uses graph results until it finishes).
+`ccm-cli index` / `index_project` re-embed on demand the same way.
 
 If the embedding source is unavailable (Ollama down, model download failed),
 indexing still activates a graph-only index (graph tools work, `search_code`

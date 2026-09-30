@@ -44,6 +44,9 @@ pub(crate) struct ProjectFreshness {
     /// Hızlı indeksin semantik yükseltmesi sürerken yenileme ertelenir;
     /// yükseltme bitince bekleyen değişiklikler tek seferde işlenir.
     pub waiting_for_upgrade: bool,
+    /// Semantik yükseltme (hızlı indeks ya da embedding modeli değişikliği)
+    /// vektör tablosunu arka planda yeniden kuruyor.
+    pub semantic_upgrade_running: bool,
     pub last_error: Option<String>,
     pub semantic_unavailable: Option<String>,
 }
@@ -61,6 +64,7 @@ pub(crate) fn disabled_freshness() -> ProjectFreshness {
         pending_paths: 0,
         refresh_in_flight: false,
         waiting_for_upgrade: false,
+        semantic_upgrade_running: false,
         last_error: None,
         semantic_unavailable: None,
     }
@@ -130,7 +134,14 @@ pub(crate) fn format_freshness_line(
             ));
         }
     }
-    if let Some(reason) = &freshness.semantic_unavailable {
+    // Süren yükseltme semantik aramanın yokluk nedenini (eksik ya da başka
+    // modelin vektörleri) zaten gideriyor; satır onun yerine yükseltmeyi söyler.
+    if freshness.semantic_upgrade_running {
+        parts.push(
+            "semantic index being rebuilt in the background (search_code uses graph results until it finishes)"
+                .to_string(),
+        );
+    } else if let Some(reason) = &freshness.semantic_unavailable {
         parts.push(format!("semantic search unavailable: {}", reason));
     }
     format!("_Index: {}_", parts.join(" · "))
@@ -210,6 +221,7 @@ pub(crate) fn inactive_handle(watcher: WatcherStatus) -> Arc<FreshnessHandle> {
         pending_paths: 0,
         refresh_in_flight: false,
         waiting_for_upgrade: false,
+        semantic_upgrade_running: false,
         last_error: None,
         semantic_unavailable: None,
     });
@@ -264,6 +276,7 @@ pub(crate) fn start_auto_refresh(
         pending_paths: 0,
         refresh_in_flight: true,
         waiting_for_upgrade: false,
+        semantic_upgrade_running: false,
         last_error: None,
         semantic_unavailable: None,
     });
@@ -705,7 +718,7 @@ async fn refresh_once(
     apply_test_delay().await?;
     inject_targeted_refresh_failure(request)?;
     match apply_request(&live, request).await? {
-        LiveRefresh::Applied(stats) => Ok(RefreshOutcome::Refreshed { stats, live }),
+        LiveRefresh::Applied(stats) => refreshed(server, project_key, stats, live),
         LiveRefresh::Superseded => {
             tracing::info!(
                 project = %project_key,
@@ -722,16 +735,28 @@ async fn refresh_once(
                 }
             };
             match reloaded.apply_rescan().await? {
-                LiveRefresh::Applied(stats) => Ok(RefreshOutcome::Refreshed {
-                    stats,
-                    live: reloaded,
-                }),
+                LiveRefresh::Applied(stats) => refreshed(server, project_key, stats, reloaded),
                 LiveRefresh::Superseded => anyhow::bail!(
                     "The index generation changed again while it was being reloaded; retrying the refresh"
                 ),
             }
         }
     }
+}
+
+/// Uygulanan turun sonucu. Etkin indeksin vektörleri başka bir embedding
+/// modeline aitse (kimlik değişti) proje kilidi hâlâ tutulurken vektörlerin
+/// arka planda bir kez yeniden embed edilmesi planlanır.
+fn refreshed(
+    server: &Arc<ServerState>,
+    project_key: &str,
+    stats: Box<ccm_core::IndexStats>,
+    live: Arc<ccm_core::live::LiveIndex>,
+) -> anyhow::Result<RefreshOutcome> {
+    if let Some(mismatch) = live.embedding_mismatch() {
+        server.schedule_reembed_once(project_key, mismatch)?;
+    }
+    Ok(RefreshOutcome::Refreshed { stats, live })
 }
 
 /// Canlı güncellenemeyen indeksi (eski şema ya da dosya yolu biçimi) worker'ın
@@ -755,10 +780,7 @@ async fn migrate_with_worker(
     )
     .await?;
     match server.refresh_engine(project_key).await?.source {
-        EngineSource::Live(live) => Ok(RefreshOutcome::Refreshed {
-            stats: Box::new(stats),
-            live,
-        }),
+        EngineSource::Live(live) => refreshed(server, project_key, Box::new(stats), live),
         EngineSource::NeedsMigration { reason, .. } => anyhow::bail!(
             "The index still needs a migration after a full update ({}); run index_project",
             reason

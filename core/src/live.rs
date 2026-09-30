@@ -281,6 +281,14 @@ impl LiveIndex {
         self.artifacts.generation_id.as_deref()
     }
 
+    /// Etkin generation'ın vektörleri yapılandırılmış embedding kaynağıyla
+    /// uyuşmuyorsa nedeni. Bu durumda yenilemeler yalnızca grafı günceller;
+    /// vektörler bir kez yeniden embed edilince (semantik yükseltme ya da tam
+    /// indeks) kurulan yeni generation uyuşmazlıksız yüklenir.
+    pub fn embedding_mismatch(&self) -> Option<&EmbeddingIdentityMismatch> {
+        self.identity_mismatch.as_ref()
+    }
+
     /// İndeksin diski en son yansıttığı an: son yenilemenin başladığı zaman.
     pub fn indexed_at(&self) -> Option<u64> {
         let applied_at = self.applied_at.load(Ordering::Acquire);

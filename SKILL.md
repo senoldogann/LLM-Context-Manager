@@ -98,8 +98,10 @@ npx @senoldogann/context-manager install
 # EMBEDDING_MODEL=text-embedding-3-small
 ```
 
-Pre-fetch the built-in model (optional): `ccm-cli models pull`. Changing the
-embedding provider or model re-embeds the index once on the next `index_project`.
+Pre-fetch the built-in model (optional): `ccm-cli models pull`. After the
+embedding provider or model changes, the MCP server re-embeds the index once in
+the background; while the freshness line says `semantic index being rebuilt`,
+`search_code` returns graph results, so prefer graph tools or wait.
 
 ## Workflow Modes
 

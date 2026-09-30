@@ -621,7 +621,7 @@ async fn wait_for_index_job(
 /// ve aktif generation atomik şekilde vektörlü hale gelir. Upgrade yarıda kalırsa
 /// bile `update_index`'in self-repair yolu (`vector_table_required && unhealthy`)
 /// sonraki `index_project` çağrısında eksik vektörleri onarır.
-fn schedule_semantic_upgrade(
+pub(crate) fn schedule_semantic_upgrade(
     state: Arc<crate::server::ServerState>,
     project_path: std::sync::Arc<str>,
     db_path: String,
