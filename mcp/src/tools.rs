@@ -456,36 +456,42 @@ pub async fn index_project(
         .unwrap_or_else(|_| std::path::PathBuf::from(project_path));
     let job_key = canonical_path.to_string_lossy().to_string();
 
-    let existing = state.index_jobs.lock().unwrap().get(&job_key).cloned();
-    if let Some(job) = existing {
-        let receiver = job.receiver;
-        if let Some(result) = receiver.borrow().clone() {
-            state.index_jobs.lock().unwrap().remove(&job_key);
-            return Ok(result);
-        }
-        return Ok(index_in_progress_result(project_path));
-    }
-
     const MAX_INDEX_JOBS: usize = 64;
-    if state.index_jobs.lock().unwrap().len() >= MAX_INDEX_JOBS {
-        return Ok(index_task_failed_result(
-            project_path,
-            "too many index jobs are awaiting completion or result polling; poll existing jobs and retry",
-        ));
-    }
+    // Denetim ve kayıt tek kilit altında yapılır: eşzamanlı iki çağrı aynı
+    // projede iki iş başlatmaz; ikincisi süren işi görür.
+    let (sender, mut receiver, job_id) = {
+        let mut jobs = state.index_jobs.lock().unwrap();
+        if let Some(existing) = jobs.get(&job_key) {
+            let finished = existing.receiver.borrow().clone();
+            return Ok(match finished {
+                Some(result) => {
+                    jobs.remove(&job_key);
+                    result
+                }
+                None => index_in_progress_result(project_path),
+            });
+        }
+        if jobs.len() >= MAX_INDEX_JOBS {
+            return Ok(index_task_failed_result(
+                project_path,
+                "too many index jobs are awaiting completion or result polling; poll existing jobs and retry",
+            ));
+        }
+        let (sender, receiver) = tokio::sync::watch::channel(None);
+        let job_id = state
+            .next_index_job_id
+            .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        jobs.insert(
+            job_key.clone(),
+            crate::server::IndexJob {
+                id: job_id,
+                receiver: receiver.clone(),
+            },
+        );
+        (sender, receiver, job_id)
+    };
 
     tracing::info!(path = %project_path, "Starting manual index");
-    let (sender, mut receiver) = tokio::sync::watch::channel(None);
-    let job_id = state
-        .next_index_job_id
-        .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-    state.index_jobs.lock().unwrap().insert(
-        job_key.clone(),
-        crate::server::IndexJob {
-            id: job_id,
-            receiver: receiver.clone(),
-        },
-    );
 
     let job_state = state.clone();
     let job_path = project_path.to_string();
@@ -785,7 +791,7 @@ fn index_started_result(project_path: &str) -> ToolResult {
         content: vec![ToolResultContent {
             content_type: "text".to_string(),
             text: format!(
-                "Project indexing started in the background for {}. Call index_project again to check status; other tools become available when indexing completes.",
+                "Project indexing started in the background for {}. Call index_project again to check status. Read tools keep answering from the current index meanwhile; a project without an index becomes readable when indexing completes.",
                 project_path
             ),
         }],
