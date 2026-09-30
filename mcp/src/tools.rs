@@ -452,7 +452,7 @@ pub async fn index_project(
         .map(normalize_index_mode)
         .transpose()?
         .unwrap_or_default();
-    let job_key = index_job_key(project_path);
+    let job_key = crate::server::project_key_for_path(project_path);
 
     let job = match claim_index_job(&state, project_path, &job_key, mode) {
         IndexJobClaim::Existing(job) => {
@@ -495,7 +495,7 @@ pub async fn index_now(state: Arc<crate::server::ServerState>, args: &Value) -> 
         .map(normalize_index_mode)
         .transpose()?
         .unwrap_or_default();
-    let job_key = index_job_key(project_path);
+    let job_key = crate::server::project_key_for_path(project_path);
 
     match claim_index_job(&state, project_path, &job_key, mode) {
         IndexJobClaim::Existing(job) | IndexJobClaim::Started(job) => {
@@ -503,14 +503,6 @@ pub async fn index_now(state: Arc<crate::server::ServerState>, args: &Value) -> 
         }
         IndexJobClaim::Rejected(result) => Ok(result),
     }
-}
-
-/// İş haritasının anahtarı: projenin kanonik yolu.
-fn index_job_key(project_path: &str) -> String {
-    std::fs::canonicalize(project_path)
-        .unwrap_or_else(|_| std::path::PathBuf::from(project_path))
-        .to_string_lossy()
-        .to_string()
 }
 
 /// Projede indeksleme işi talebinin sonucu.
@@ -525,6 +517,8 @@ enum IndexJobClaim {
 
 /// Projede süren işi döndürür ya da yeni iş kaydedip başlatır. Denetim ve kayıt
 /// tek kilit altında yapılır: eşzamanlı iki çağrı aynı projede iki iş başlatmaz.
+/// `job_key`, indeks kilidinin ve tazelik durumunun anahtarıyla aynı proje
+/// anahtarıdır (`project_key_for_path`); farklı türetilirse kilit kaydı silinemez.
 fn claim_index_job(
     state: &Arc<crate::server::ServerState>,
     project_path: &str,
