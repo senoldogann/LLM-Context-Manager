@@ -34,6 +34,7 @@ use crate::{
 use anyhow::Result;
 use std::collections::{BTreeSet, HashMap};
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 use tokio::sync::{Mutex, RwLock};
 
@@ -57,9 +58,13 @@ pub struct LiveIndex {
     /// Kalıcılaştırmalar sırayla yapılır; eski bir anlık görüntü yenisinin
     /// üzerine yazılmaz.
     persist_gate: Mutex<()>,
-    /// Tazelik satırının kilitsiz okuduğu son uygulama zamanı (unix saniye).
-    applied_at: std::sync::Mutex<Option<u64>>,
+    /// Tazelik satırının kilitsiz okuduğu son uygulama zamanı (unix saniye);
+    /// `UNKNOWN_TIMESTAMP` bilinmediğini söyler.
+    applied_at: AtomicU64,
 }
+
+/// `applied_at` için "zaman bilinmiyor" değeri; geçerli bir unix zamanı 0 olamaz.
+const UNKNOWN_TIMESTAMP: u64 = 0;
 
 struct LiveState {
     manifest: IndexManifest,
@@ -165,7 +170,7 @@ impl LiveIndex {
             store,
             policy_path,
         ));
-        let applied_at = manifest.indexed_at;
+        let applied_at = manifest.indexed_at.unwrap_or(UNKNOWN_TIMESTAMP);
         Ok(Self {
             project_root,
             requested_db_path,
@@ -181,7 +186,7 @@ impl LiveIndex {
                 semantic_unavailable: None,
             }),
             persist_gate: Mutex::new(()),
-            applied_at: std::sync::Mutex::new(applied_at),
+            applied_at: AtomicU64::new(applied_at),
         })
     }
 
@@ -196,10 +201,8 @@ impl LiveIndex {
 
     /// İndeksin diski en son yansıttığı an: son yenilemenin başladığı zaman.
     pub fn indexed_at(&self) -> Option<u64> {
-        *self
-            .applied_at
-            .lock()
-            .expect("live index timestamp lock poisoned")
+        let applied_at = self.applied_at.load(Ordering::Acquire);
+        (applied_at != UNKNOWN_TIMESTAMP).then_some(applied_at)
     }
 
     /// Watcher'ın bildirdiği yolları uygular: yalnızca bu yollar (dizinse
@@ -476,10 +479,7 @@ impl LiveIndex {
     }
 
     fn record_applied_at(&self, started_at: u64) {
-        *self
-            .applied_at
-            .lock()
-            .expect("live index timestamp lock poisoned") = Some(started_at);
+        self.applied_at.store(started_at, Ordering::Release);
     }
 }
 
