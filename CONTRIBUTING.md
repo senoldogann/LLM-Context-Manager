@@ -8,7 +8,7 @@ Thank you for your interest in contributing! We want to make it as easy as possi
 2.  **Clone** your fork locally.
 3.  **Install Dependencies:**
     *   Rust (latest stable)
-    *   Ollama (optional, for local embeddings)
+    *   Ollama (optional; the built-in local embedding model is the default)
 
 ## 🧪 Development Workflow
 

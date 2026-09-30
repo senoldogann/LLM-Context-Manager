@@ -21,9 +21,11 @@ closed mid-upgrade) and raised the offline semantic gate to 180/180.
 ### Prerequisites
 
 1. **Node.js** 16+ installed
-2. **Ollama** installed and running (for local embeddings)
-   - Download: https://ollama.com
-   - Pull required model: `ollama pull mxbai-embed-large`
+
+That's all: semantic search uses a built-in embedding model that runs inside the
+binary. The first index downloads it once (~124 MB, from Hugging Face, checksum
+verified). Ollama or OpenAI remain optional providers. On Intel Macs the built-in
+model is not available and Ollama stays the default (see [Embeddings](#embeddings)).
 
 ### Installation
 
@@ -112,8 +114,8 @@ npx @senoldogann/context-manager index --path . --db-path /custom/path
 CCM uses a **Local-First** architecture:
 
 - ✅ Your code **never** leaves your machine
-- ✅ All embeddings run locally via Ollama
-- ✅ No external API calls (unless you configure OpenAI)
+- ✅ Embeddings run locally inside the binary (built-in model) or via your own Ollama
+- ✅ The only default network access is the one-time model download from Hugging Face; no code is sent (OpenAI is opt-in)
 
 ---
 
@@ -121,10 +123,13 @@ CCM uses a **Local-First** architecture:
 
 ### Environment Variables
 
-Create `~/.ccm/.env` (or start from the repository's `.env.example`):
+Nothing is required for embeddings. Create `~/.ccm/.env` (or start from the
+repository's `.env.example`) only to change defaults:
 
 ```ini
-# Local (Recommended)
+# Default: built-in local model, nothing to set.
+
+# Ollama (Optional)
 EMBEDDING_PROVIDER=ollama
 EMBEDDING_HOST=http://127.0.0.1:11434
 EMBEDDING_MODEL=mxbai-embed-large
@@ -162,6 +167,15 @@ CCM_ALLOW_UNVERIFIED_BINARIES=0
 CCM_DOWNLOAD_TIMEOUT_MS=120000
 CCM_DOWNLOAD_ATTEMPTS=3
 ```
+
+### Embeddings
+
+- **Default model:** [`ibm-granite/granite-embedding-97m-multilingual-r2`](https://huggingface.co/ibm-granite/granite-embedding-97m-multilingual-r2) (Apache-2.0, int8 ONNX, 384-d), run in-process with ONNX Runtime on all physical CPU cores (`CCM_EMBED_THREADS` overrides).
+- **Download:** ~124 MB on first use, or ahead of time with `npx @senoldogann/context-manager models pull`. Files are pinned to a Hugging Face revision, SHA-256 verified, and stored in `~/.ccm/models/` (`CCM_MODEL_DIR` moves it; `HF_ENDPOINT` selects a mirror). A mismatch or failed download is reported explicitly; the index then stays graph-only until the next run.
+- **Air-gapped:** copy a verified `~/.ccm/models` directory to the target machine; pre-placed files are used after checksum verification.
+- **Provider selection:** `EMBEDDING_PROVIDER=local|ollama|openai` wins. If it is unset but `EMBEDDING_HOST` or `EMBEDDING_MODEL` is set, the previous Ollama/OpenAI behavior is kept, so existing configs work unchanged. `CCM_DISABLE_EMBEDDER=1` turns semantic search off.
+- **Changing models** re-embeds the index once on the next index run; vectors of different models are never mixed.
+- **Intel Macs (`x86_64-apple-darwin`):** no prebuilt ONNX Runtime exists for this target, so the built-in model is not included and Ollama remains the default.
 
 Advanced overrides:
 - `CCM_PROJECT_ROOT` pins the default project root and overrides the workspace reported by the host. Without it the MCP server resolves its default project in this order: the workspace the host reports via MCP `roots` → the launch directory when it lies inside `CCM_ALLOWED_ROOTS` (never `/` or your home directory) → the single `CCM_ALLOWED_ROOTS` entry.

@@ -82,24 +82,24 @@ npx @senoldogann/context-manager install
 
 ### Minimal environment (~/.ccm/.env)
 ```ini
-# Option A: Local inference (recommended, no API cost)
-EMBEDDING_PROVIDER=ollama
-EMBEDDING_HOST=http://127.0.0.1:11434
-EMBEDDING_MODEL=mxbai-embed-large
-EMBEDDING_API_KEY=ollama
+# Default: nothing to set. The built-in local embedding model
+# (granite-embedding-97m-multilingual-r2, ~124 MB, downloaded once and
+# checksum-verified) runs inside the binary. Not available on Intel Macs,
+# where Ollama is the default.
 
-# Option B: Cloud (OpenAI)
+# Option B: Ollama
+# EMBEDDING_PROVIDER=ollama
+# EMBEDDING_HOST=http://127.0.0.1:11434
+# EMBEDDING_MODEL=mxbai-embed-large
+
+# Option C: Cloud (OpenAI)
 # EMBEDDING_PROVIDER=openai
 # EMBEDDING_API_KEY=sk-your-key
 # EMBEDDING_MODEL=text-embedding-3-small
-
 ```
 
-Ollama prerequisites:
-```bash
-ollama serve
-ollama pull mxbai-embed-large
-```
+Pre-fetch the built-in model (optional): `ccm-cli models pull`. Changing the
+embedding provider or model re-embeds the index once on the next `index_project`.
 
 ## Workflow Modes
 

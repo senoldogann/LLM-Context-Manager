@@ -58,11 +58,22 @@ Or use `docker compose run --rm ccm index --path /workspace`. On Linux, replace
 
 Create `~/.ccm/.env` with the basics below, or start from the repository's `.env.example` for the full advanced list.
 
-Ensure [Ollama](https://ollama.com) is running:
+Embeddings need no setup: a built-in model runs inside the binary and is
+downloaded once (~124 MB) on the first index. To fetch it ahead of time (or to
+prepare an offline machine), run:
+
+```bash
+npx @senoldogann/context-manager models pull
+```
+
+To use [Ollama](https://ollama.com) instead (and on Intel Macs, where the
+built-in model is not available and Ollama is the default):
 
 ```bash
 ollama serve
 ollama pull mxbai-embed-large
+# ~/.ccm/.env
+EMBEDDING_PROVIDER=ollama
 ```
 
 Optional production settings (recommended for server use):
