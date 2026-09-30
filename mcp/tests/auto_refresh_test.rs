@@ -760,3 +760,44 @@ fn persist_failure_is_reported_in_the_freshness_line() -> Result<(), Box<dyn Err
     assert!(found_node(&text, "unsaved_symbol"), "{text}");
     Ok(())
 }
+
+#[test]
+fn changes_from_a_failed_round_are_recovered_by_the_next_round() -> Result<(), Box<dyn Error>> {
+    let project = tempdir()?;
+    fs::write(project.path().join("main.rs"), "fn existing_symbol() {}\n")?;
+    // İlk hedefli tur üç denemede de tarama hatası alır (tam karşılaştırmalar etkilenmez).
+    let mut session = McpSession::start(
+        project.path(),
+        &[("CCM_INTERNAL_REFRESH_TEST_FAIL_TARGETED", "3")],
+    )?;
+    session.call_tool("index_now", json!({ "project_path": project.path() }))?;
+    poll_find_nodes(
+        &mut session,
+        "existing_symbol",
+        Duration::from_secs(15),
+        |text| text.starts_with("_Index: fresh"),
+    )?;
+
+    fs::write(project.path().join("lost.rs"), "fn lost_symbol() {}\n")?;
+    poll_find_nodes(
+        &mut session,
+        "existing_symbol",
+        Duration::from_secs(20),
+        |text| text.contains("last refresh failed"),
+    )?;
+
+    // Sonraki olay tam karşılaştırma başlatır; başarısız turun değişikliği de uygulanır.
+    fs::write(project.path().join("later.rs"), "fn later_symbol() {}\n")?;
+    poll_find_nodes(
+        &mut session,
+        "later_symbol",
+        Duration::from_secs(20),
+        |text| found_node(text, "later_symbol") && text.starts_with("_Index: fresh"),
+    )?;
+    let lost = session.call_tool("find_nodes", json!({ "query": "lost_symbol" }))?;
+    assert!(
+        found_node(&lost, "lost_symbol"),
+        "the change from the failed round must not be lost: {lost}"
+    );
+    Ok(())
+}

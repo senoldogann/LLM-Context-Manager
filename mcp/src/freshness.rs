@@ -412,6 +412,9 @@ async fn run_refresh_loop(
     let root = PathBuf::from(&project_key);
     let mut pending: HashSet<PathBuf> = HashSet::new();
     let mut waiting_for_upgrade = false;
+    // Başarısız bir tur değişiklikleri uygulayamadan bekleyen kümeyi boşaltır;
+    // sonraki tur bu yüzden tam karşılaştırma yapar, kaybolan değişiklik kalmaz.
+    let mut rescan_after_failure = false;
     loop {
         // Bekleyen iş yoksa ya da iş yükseltme yüzünden ertelendiyse yeni sinyal
         // beklenir; yükseltme bitince `end_semantic_upgrade` döngüyü uyandırır.
@@ -459,6 +462,9 @@ async fn run_refresh_loop(
             freshness.refresh_in_flight = true;
             freshness.waiting_for_upgrade = false;
         });
+        if rescan_after_failure {
+            pending.insert(root.clone());
+        }
         let request = refresh_request(&pending, &root);
         let outcome = match refresh_with_retries(&server, &project_key, &request).await {
             Ok(RefreshOutcome::Refreshed { stats, live }) => Ok((stats, live)),
@@ -471,6 +477,7 @@ async fn run_refresh_loop(
             }
             Err(error) => Err(error),
         };
+        rescan_after_failure = outcome.is_err();
         pending.clear();
         handle.state.send_modify(|freshness| {
             // Yenileme sırasında kuyruğa düşen olaylar bir sonraki turu başlatır.
@@ -678,6 +685,7 @@ async fn refresh_once(
     // Test kancası canlı indeks yüklendikten sonra bekler: başka bir sürecin
     // generation kurması yükleme ile uygulama arasına düşer.
     apply_test_delay().await?;
+    inject_targeted_refresh_failure(request)?;
     match apply_request(&live, request).await? {
         LiveRefresh::Applied(stats) => Ok(RefreshOutcome::Refreshed { stats, live }),
         LiveRefresh::Superseded => {
@@ -785,4 +793,32 @@ pub(crate) async fn wait_until_fresh(
         ),
     }
     handle.state.borrow().clone()
+}
+
+/// Test kancası: `CCM_INTERNAL_REFRESH_TEST_FAIL_TARGETED=<n>` ilk `n` hedefli
+/// yenileme denemesini tarama hatasıyla düşürür (tam karşılaştırmalar etkilenmez).
+fn inject_targeted_refresh_failure(request: &RefreshRequest) -> anyhow::Result<()> {
+    static REMAINING: std::sync::OnceLock<std::sync::atomic::AtomicUsize> =
+        std::sync::OnceLock::new();
+    if !matches!(request, RefreshRequest::Paths(_)) {
+        return Ok(());
+    }
+    let remaining = REMAINING.get_or_init(|| {
+        let count = std::env::var("CCM_INTERNAL_REFRESH_TEST_FAIL_TARGETED")
+            .ok()
+            .and_then(|value| value.parse::<usize>().ok())
+            .unwrap_or(0);
+        std::sync::atomic::AtomicUsize::new(count)
+    });
+    let injected = remaining
+        .fetch_update(
+            std::sync::atomic::Ordering::SeqCst,
+            std::sync::atomic::Ordering::SeqCst,
+            |count| count.checked_sub(1),
+        )
+        .is_ok();
+    if injected {
+        anyhow::bail!("injected targeted scan failure (CCM_INTERNAL_REFRESH_TEST_FAIL_TARGETED)");
+    }
+    Ok(())
 }
