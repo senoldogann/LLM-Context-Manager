@@ -162,15 +162,21 @@ pub(crate) struct FreshnessHandle {
     _watcher: std::sync::Mutex<Option<notify::RecommendedWatcher>>,
 }
 
-/// Elle indeksleme sonrası durumun doğrulanması için tam karşılaştırma ister;
-/// böylece önceki başarısız yenilemeden kalan hata satırı temizlenir. Watcher'ı
-/// olmayan handle'da yapılacak iş yoktur.
+/// Tam karşılaştırma ister ve bekleyen işi hemen yayınlar: okumalar yenilemeyi
+/// bekler ya da bayat raporlanır. İşaret ve sinyal durum kilidi altında birlikte
+/// verilir; yenileme döngüsü tur sonu yayınını aynı kilitte yaptığı için bu
+/// istek o yayında kaybolmaz. Watcher'ı olmayan handle'da yapılacak iş yoktur.
 pub(crate) fn request_rescan(handle: &FreshnessHandle) {
-    if let Some(signals) = &handle.signals {
+    let Some(signals) = &handle.signals else {
+        return;
+    };
+    handle.state.send_modify(|freshness| {
         if signals.send(RefreshSignal::Rescan).is_err() {
             tracing::warn!("Refresh loop is not running; rescan request was dropped");
+            return;
         }
-    }
+        freshness.pending_paths = freshness.pending_paths.max(1);
+    });
 }
 
 /// Yenileme görevine giden sinyaller.
@@ -401,13 +407,15 @@ async fn run_refresh_loop(
             Err(error) => Err(error),
         };
         pending.clear();
-        // Yenileme sırasında kuyruğa düşen olaylar bir sonraki turu başlatır.
-        while let Ok(signal) = signals.try_recv() {
-            log_signal(&project_key, &signal);
-            pending.insert(pending_path(&signal, &root));
-        }
-        let queued = pending.len();
         handle.state.send_modify(|freshness| {
+            // Yenileme sırasında kuyruğa düşen olaylar bir sonraki turu başlatır.
+            // Kuyruk durum kilidi altında boşaltılır: `request_rescan` işaretini
+            // aynı kilitte koyduğu için arada gelen bir istek silinemez.
+            while let Ok(signal) = signals.try_recv() {
+                log_signal(&project_key, &signal);
+                pending.insert(pending_path(&signal, &root));
+            }
+            let queued = pending.len();
             freshness.pending_paths = queued;
             freshness.refresh_in_flight = queued > 0;
             match &outcome {
@@ -422,7 +430,7 @@ async fn run_refresh_loop(
         });
         // Taze durum yayınlandıktan sonra diske yazılır; okumalar yazımı beklemez.
         if let Ok((_, live)) = outcome {
-            spawn_persist(live, project_key.clone());
+            spawn_persist(live, project_key.clone(), handle.clone());
         }
     }
 }
@@ -446,16 +454,27 @@ fn refresh_request(pending: &HashSet<PathBuf>, root: &Path) -> RefreshRequest {
 
 /// Canlı indeksi arka planda etkin generation'a yazar. Yazım atlanırsa ya da
 /// başarısız olursa disk geride kalır; sonraki tam karşılaştırma onu yakalar.
-fn spawn_persist(live: Arc<ccm_core::live::LiveIndex>, project_key: String) {
+/// Başka bir süreç yeni
+/// generation kurduysa canlı durum bırakılır ve yeni generation için tam
+/// karşılaştırma istenir: o generation bu durumun uyguladığı değişiklikleri
+/// içermeyebilir.
+fn spawn_persist(
+    live: Arc<ccm_core::live::LiveIndex>,
+    project_key: String,
+    handle: Arc<FreshnessHandle>,
+) {
     tokio::spawn(async move {
         match live.persist().await {
             Ok(ccm_core::live::LivePersist::Persisted)
             | Ok(ccm_core::live::LivePersist::UpToDate) => {}
-            Ok(ccm_core::live::LivePersist::Superseded) => tracing::info!(
-                project = %project_key,
-                generation = ?live.generation_id(),
-                "Live index was not persisted: another process activated a new generation"
-            ),
+            Ok(ccm_core::live::LivePersist::Superseded) => {
+                tracing::info!(
+                    project = %project_key,
+                    generation = ?live.generation_id(),
+                    "Live index was not persisted: another process activated a new generation; scheduling a full comparison"
+                );
+                request_rescan(&handle);
+            }
             Err(error) => tracing::warn!(
                 project = %project_key,
                 error = %error,
@@ -576,7 +595,6 @@ async fn refresh_once(
         );
         return Ok(RefreshOutcome::Deferred);
     }
-    apply_test_delay().await?;
     let live = match server.refresh_engine(project_key).await?.source {
         EngineSource::Live(live) => live,
         EngineSource::NeedsMigration { reason, .. } => {
@@ -586,6 +604,9 @@ async fn refresh_once(
             anyhow::bail!("Project '{}' has no index to refresh", project_key)
         }
     };
+    // Test kancası canlı indeks yüklendikten sonra bekler: başka bir sürecin
+    // generation kurması yükleme ile uygulama arasına düşer.
+    apply_test_delay().await?;
     match apply_request(&live, request).await? {
         LiveRefresh::Applied(stats) => Ok(RefreshOutcome::Refreshed { stats, live }),
         LiveRefresh::Superseded => {

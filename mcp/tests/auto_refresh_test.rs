@@ -19,6 +19,25 @@ struct McpSession {
 
 impl McpSession {
     fn start(project: &Path, extra_env: &[(&str, &str)]) -> Result<Self, Box<dyn Error>> {
+        Self::spawn(project, extra_env, Stdio::null())
+    }
+
+    /// Sunucunun log'unu (`RUST_LOG=info`) verilen dosyaya yazdırarak başlatır.
+    fn start_logged(
+        project: &Path,
+        extra_env: &[(&str, &str)],
+        log_path: &Path,
+    ) -> Result<Self, Box<dyn Error>> {
+        let mut env = extra_env.to_vec();
+        env.push(("RUST_LOG", "info"));
+        Self::spawn(project, &env, Stdio::from(fs::File::create(log_path)?))
+    }
+
+    fn spawn(
+        project: &Path,
+        extra_env: &[(&str, &str)],
+        stderr: Stdio,
+    ) -> Result<Self, Box<dyn Error>> {
         let mut command = Command::new(assert_cmd::cargo::cargo_bin!("ccm-mcp"));
         command
             .env("CCM_DISABLE_EMBEDDER", "1")
@@ -27,7 +46,7 @@ impl McpSession {
             .env("CCM_ALLOWED_ROOTS", project)
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
-            .stderr(Stdio::null());
+            .stderr(stderr);
         for (key, value) in extra_env {
             command.env(key, value);
         }
@@ -130,6 +149,32 @@ fn wait_for_persisted_file(
         }
         std::thread::sleep(Duration::from_millis(50));
     }
+}
+
+/// Dizini alt dizinleriyle birlikte kopyalar.
+fn copy_dir(source: &Path, destination: &Path) -> Result<(), Box<dyn Error>> {
+    fs::create_dir_all(destination)?;
+    for entry in fs::read_dir(source)? {
+        let entry = entry?;
+        let target = destination.join(entry.file_name());
+        if entry.file_type()?.is_dir() {
+            copy_dir(&entry.path(), &target)?;
+        } else {
+            fs::copy(entry.path(), target)?;
+        }
+    }
+    Ok(())
+}
+
+/// Etkin işaretçiyi verilen generation'a atomik olarak çevirir; başka bir sürecin
+/// generation kurmasını taklit eder. Geçici dosya indeksin kendi adlandırmasını
+/// izler, izleyici onu yok sayar.
+fn activate_generation(project: &Path, generation: &str) -> Result<(), Box<dyn Error>> {
+    let data = project.join("data");
+    let temp = data.join(format!("ccm_current.{generation}.tmp"));
+    fs::write(&temp, generation)?;
+    fs::rename(&temp, data.join("ccm_current"))?;
+    Ok(())
 }
 
 /// `ccm-cli index` ile aynı yolu (`update_index`) ayrı bir süreçte çalıştırır:
@@ -629,22 +674,32 @@ fn live_refresh_is_persisted_and_a_skipped_write_is_reconciled() -> Result<(), B
 #[test]
 fn generation_installed_by_another_process_is_picked_up() -> Result<(), Box<dyn Error>> {
     let project = tempdir()?;
+    let logs = tempdir()?;
+    let log_path = logs.path().join("mcp.log");
     fs::write(project.path().join("main.rs"), "fn existing_symbol() {}\n")?;
-    // Yenileme 2 sn beklerken CLI'ın `update_index`'i yeni generation kurar.
-    let mut session = McpSession::start(
+    // Her tur canlı indeksi yükledikten sonra 5 sn bekler; CLI'ın `update_index`'i
+    // yeni generation'ı tam bu aralıkta, yükleme ile uygulama arasında kurar.
+    let mut session = McpSession::start_logged(
         project.path(),
-        &[("CCM_INTERNAL_REFRESH_TEST_DELAY_MS", "2000")],
+        &[("CCM_INTERNAL_REFRESH_TEST_DELAY_MS", "5000")],
+        &log_path,
     )?;
     session.call_tool("index_now", json!({ "project_path": project.path() }))?;
     poll_find_nodes(
         &mut session,
         "existing_symbol",
-        Duration::from_secs(15),
+        Duration::from_secs(20),
         |text| text.starts_with("_Index: fresh"),
     )?;
     let generation_before = active_generation_dir(project.path())?;
 
     fs::write(project.path().join("cli.rs"), "fn cli_symbol() {}\n")?;
+    poll_find_nodes(
+        &mut session,
+        "existing_symbol",
+        Duration::from_secs(10),
+        |text| text.contains("refresh running"),
+    )?;
     let stats = run_update_index_process(project.path())?;
     assert_eq!(
         stats["files_indexed"], 1,
@@ -659,10 +714,15 @@ fn generation_installed_by_another_process_is_picked_up() -> Result<(), Box<dyn 
     let text = poll_find_nodes(
         &mut session,
         "cli_symbol",
-        Duration::from_secs(15),
+        Duration::from_secs(30),
         |text| found_node(text, "cli_symbol") && text.starts_with("_Index: fresh"),
     )?;
     assert!(!text.contains("last refresh failed"), "{text}");
+    let log = fs::read_to_string(&log_path)?;
+    assert!(
+        log.contains("discarding the prepared live changes"),
+        "the refresh must reach the superseded path, log:\n{log}"
+    );
 
     // Canlı yenileme yeni generation üzerinde sürer ve onun dizinine yazar.
     fs::write(
@@ -672,11 +732,54 @@ fn generation_installed_by_another_process_is_picked_up() -> Result<(), Box<dyn 
     poll_find_nodes(
         &mut session,
         "after_cli_symbol",
-        Duration::from_secs(15),
+        Duration::from_secs(30),
         |text| found_node(text, "after_cli_symbol") && text.starts_with("_Index: fresh"),
     )?;
     wait_for_persisted_file(project.path(), "./after.rs", Duration::from_secs(10))?;
     assert_eq!(active_generation_dir(project.path())?, generation_after);
+    Ok(())
+}
+
+#[test]
+fn generation_activated_by_another_process_is_not_reported_fresh() -> Result<(), Box<dyn Error>> {
+    let project = tempdir()?;
+    fs::write(project.path().join("main.rs"), "fn existing_symbol() {}\n")?;
+    let mut session = McpSession::start(project.path(), &[])?;
+    session.call_tool("index_now", json!({ "project_path": project.path() }))?;
+    poll_find_nodes(
+        &mut session,
+        "existing_symbol",
+        Duration::from_secs(10),
+        |text| text.starts_with("_Index: fresh"),
+    )?;
+
+    // Başka bir süreç, canlı değişiklikten önceki bir anlık görüntüden generation
+    // kurar (ör. takılıp geç biten bir semantik yükseltme); o generation'da
+    // değişiklik yoktur.
+    let snapshot = "99999.stale-snapshot";
+    let generation = active_generation_dir(project.path())?;
+    copy_dir(&generation, &generation.with_file_name(snapshot))?;
+    fs::write(project.path().join("late.rs"), "fn late_symbol() {}\n")?;
+    poll_find_nodes(
+        &mut session,
+        "late_symbol",
+        Duration::from_secs(10),
+        |text| found_node(text, "late_symbol") && text.starts_with("_Index: fresh"),
+    )?;
+    wait_for_persisted_file(project.path(), "./late.rs", Duration::from_secs(10))?;
+    activate_generation(project.path(), snapshot)?;
+
+    let text = session.call_tool("find_nodes", json!({ "query": "late_symbol" }))?;
+    assert!(
+        found_node(&text, "late_symbol") || !text.starts_with("_Index: fresh"),
+        "a generation without the live change must not be reported fresh: {text}"
+    );
+    poll_find_nodes(
+        &mut session,
+        "late_symbol",
+        Duration::from_secs(10),
+        |text| found_node(text, "late_symbol") && text.starts_with("_Index: fresh"),
+    )?;
     Ok(())
 }
 

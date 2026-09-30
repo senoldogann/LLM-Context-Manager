@@ -97,6 +97,13 @@ pub enum EngineSource {
     Rootless,
 }
 
+/// Önbellekten alınan engine'in yeni mi yüklendiği.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum EngineLoad {
+    Cached,
+    Loaded,
+}
+
 impl CachedEngine {
     fn live(live: LiveIndex) -> Self {
         let live = Arc::new(live);
@@ -466,6 +473,18 @@ impl ServerState {
         }
     }
 
+    /// Projenin anlık tazelik durumu (beklemeden); otomatik yenileme kaydı yoksa
+    /// kapalı durum.
+    pub(crate) fn current_freshness(
+        &self,
+        project_key: &str,
+    ) -> crate::freshness::ProjectFreshness {
+        match self.freshness_handle(project_key) {
+            Some(handle) => handle.state.borrow().clone(),
+            None => crate::freshness::disabled_freshness(),
+        }
+    }
+
     /// İstemciye gönderilmeyi bekleyen JSON-RPC isteklerini (ör. `roots/list`) boşaltır.
     pub fn take_outgoing_requests(&self) -> Vec<Value> {
         std::mem::take(&mut *self.outgoing_requests.lock().unwrap())
@@ -551,8 +570,34 @@ impl ServerState {
         // Cache key normalize edilir; "/repo" ile "/repo/" ayrı entry oluşturmasın.
         let canonical_path = canonicalize_project_path(Path::new(&path));
         let cache_key = canonical_path.to_string_lossy().to_string();
+        let (engine, load) = self.cached_project_engine(&cache_key).await?;
+        // Okuma yeni bir generation yükledi (başka bir süreç kurdu ya da önbellekten
+        // düştü): bu generation canlı uygulanmış değişiklikleri içermeyebilir. Tam
+        // karşılaştırma istenir ve bekleyen iş hemen yayınlanır; okumalar onu
+        // bekler ya da bayat raporlanır, yanlışlıkla "fresh" görünmez.
+        if load == EngineLoad::Loaded {
+            self.request_refresh(&cache_key);
+        }
+        Ok(engine)
+    }
 
-        let artifacts = self.project_artifacts(&cache_key)?;
+    /// Otomatik yenilemenin kullandığı engine. `get_engine`'den farkı: yeni
+    /// yüklenen generation için ayrıca tam karşılaştırma istemez; yenileme turu
+    /// yeni canlı indekste zaten tam karşılaştırma yapar.
+    pub(crate) async fn refresh_engine(&self, project_key: &str) -> Result<CachedEngine> {
+        if !self.is_path_allowed(project_key) {
+            return Err(anyhow::anyhow!(
+                "Project path '{}' is not allowed. Set CCM_ALLOWED_ROOTS to permit access.",
+                project_key
+            ));
+        }
+        let (engine, _) = self.cached_project_engine(project_key).await?;
+        Ok(engine)
+    }
+
+    /// Projenin etkin generation'ına ait engine'i önbellekten döndürür ya da yükler.
+    async fn cached_project_engine(&self, cache_key: &str) -> Result<(CachedEngine, EngineLoad)> {
+        let artifacts = self.project_artifacts(cache_key)?;
         let engine_cache_key = format!(
             "{}#{}",
             cache_key,
@@ -563,7 +608,7 @@ impl ServerState {
         {
             let mut engines = self.engines.write().await;
             if let Some(engine) = engines.get(&engine_cache_key) {
-                return Ok(engine);
+                return Ok((engine, EngineLoad::Cached));
             }
         }
 
@@ -574,7 +619,7 @@ impl ServerState {
             // İlk indeksleme sürerken okunacak generation yoktur; iş bitince aynı
             // çağrı çalışır. Var olan generation ise yeniden indeksleme sırasında
             // okunmaya devam eder (generation geçişi atomiktir).
-            if self.index_job_in_progress(&cache_key) {
+            if self.index_job_in_progress(cache_key) {
                 return Err(anyhow::anyhow!(
                     "Project indexing is in progress. Retry this tool after index_project reports completion."
                 ));
@@ -584,15 +629,18 @@ impl ServerState {
             ));
         }
 
-        let engine = self.load_project_engine(&cache_key).await?;
+        let engine = self.load_project_engine(cache_key).await?;
         // İşaretçi yükleme sırasında ilerlemiş olabilir; anahtar yüklenen
         // generation'dan alınır.
-        let engine_cache_key = project_engine_cache_key(&cache_key, &engine);
+        let engine_cache_key = project_engine_cache_key(cache_key, &engine);
         let mut engines = self.engines.write().await;
         if let Some(existing) = engines.get(&engine_cache_key) {
-            return Ok(existing);
+            return Ok((existing, EngineLoad::Cached));
         }
-        Ok(engines.insert(&cache_key, engine_cache_key, engine))
+        Ok((
+            engines.insert(cache_key, engine_cache_key, engine),
+            EngineLoad::Loaded,
+        ))
     }
 
     pub async fn refresh_project_engine(&self, project_path: &str) -> Result<()> {
@@ -606,12 +654,6 @@ impl ServerState {
             .await
             .insert(&cache_key, engine_cache_key, engine);
         Ok(())
-    }
-
-    /// Otomatik yenilemenin kullandığı engine: etkin generation'ın önbellekteki
-    /// engine'i (işaretçi değiştiyse yeni generation yüklenir).
-    pub(crate) async fn refresh_engine(&self, project_key: &str) -> Result<CachedEngine> {
-        self.get_engine(Some(project_key)).await
     }
 
     /// Projenin etkin generation'ını canlı indeks olarak yükler. Canlı
@@ -1247,18 +1289,20 @@ async fn handle_call_tool_inner(
     if let Err(error) = state.get_engine(project_path).await {
         return Ok(engine_error_response(id, tool_name, &error));
     }
-    let freshness = match &project_key {
-        Some(key) => {
-            state.ensure_auto_refresh(key);
-            Some(state.wait_until_fresh(key, FRESHNESS_WAIT_BUDGET).await)
-        }
-        None => None,
-    };
+    if let Some(key) = &project_key {
+        state.ensure_auto_refresh(key);
+        state.wait_until_fresh(key, FRESHNESS_WAIT_BUDGET).await;
+    }
     // Bekleme sırasında yeni generation aktive edilmiş olabilir.
     let loaded = match state.get_engine(project_path).await {
         Ok(loaded) => loaded,
         Err(error) => return Ok(engine_error_response(id, tool_name, &error)),
     };
+    // Satır son engine yüklemesinden sonraki durumdan üretilir: bu yükleme yeni bir
+    // generation getirdiyse tam karşılaştırma istenmiştir ve satır bayat görünür.
+    let freshness = project_key
+        .as_deref()
+        .map(|key| state.current_freshness(key));
     let engine = loaded.engine.clone();
 
     let result = match tool_name {
