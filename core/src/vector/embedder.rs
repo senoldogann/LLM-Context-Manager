@@ -32,31 +32,32 @@ pub fn embedder_disabled_by_env() -> bool {
         .unwrap_or(false)
 }
 
-/// `CCM_EMBED_BATCH_SIZE`: tek embedding çağrısındaki en fazla metin sayısı
-/// (uzak sağlayıcıda bir HTTP isteği, yerel modelde bir ONNX çıkarımı).
-/// Tanımsız ya da boşsa `None`: sağlayıcının varsayılanı geçerlidir. Pozitif
+/// `CCM_EMBED_BATCH_SIZE` verilmediğinde uzak sağlayıcıya tek HTTP isteğinde
+/// gönderilen metin sayısı.
+const DEFAULT_REMOTE_BATCH_SIZE: usize = 32;
+
+/// Pozitif tam sayı alan ortam değişkeni. Tanımsız ya da boşsa `None`; pozitif
 /// tam sayı olmayan değer açık bir hatadır.
-pub fn embed_batch_size_from_env() -> Result<Option<usize>> {
-    match std::env::var("CCM_EMBED_BATCH_SIZE") {
+pub(crate) fn positive_count_from_env(name: &str) -> Result<Option<usize>> {
+    match std::env::var(name) {
         Ok(value) if value.trim().is_empty() => Ok(None),
         Ok(value) => value
             .trim()
             .parse::<usize>()
             .ok()
-            .filter(|size| *size > 0)
+            .filter(|count| *count > 0)
             .map(Some)
-            .ok_or_else(|| {
-                anyhow::anyhow!(
-                    "CCM_EMBED_BATCH_SIZE must be a positive integer, got '{}'",
-                    value
-                )
-            }),
+            .ok_or_else(|| anyhow::anyhow!("{} must be a positive integer, got '{}'", name, value)),
         Err(std::env::VarError::NotPresent) => Ok(None),
-        Err(error) => Err(anyhow::anyhow!(
-            "CCM_EMBED_BATCH_SIZE is not valid: {}",
-            error
-        )),
+        Err(error) => Err(anyhow::anyhow!("{} is not valid: {}", name, error)),
     }
+}
+
+/// `CCM_EMBED_BATCH_SIZE`: uzak sağlayıcıya (Ollama/OpenAI) tek HTTP isteğinde
+/// gönderilen en fazla metin sayısı. Yerel modeli etkilemez; onun çıkarım
+/// batch'i `CCM_LOCAL_EMBED_BATCH`'tir (bkz. `vector::local`).
+pub fn remote_batch_size_from_env() -> Result<usize> {
+    Ok(positive_count_from_env("CCM_EMBED_BATCH_SIZE")?.unwrap_or(DEFAULT_REMOTE_BATCH_SIZE))
 }
 
 /// `CCM_EMBEDDING_FIXTURE` ile verilen fixture yolu (boş değer tanımsız sayılır).
@@ -369,6 +370,17 @@ impl Embedder {
                 "Embedder not initialized. Configure EMBEDDING_PROVIDER/EMBEDDING_HOST/EMBEDDING_MODEL and EMBEDDING_API_KEY (or OPENAI_API_KEY), or disable semantic search with CCM_DISABLE_EMBEDDER=1.",
             ),
             ProviderChoice::Local => local_embedder().await,
+        }
+    }
+
+    /// Vektör deposunun tek `embed` çağrısına verdiği en fazla metin sayısı:
+    /// uzak sağlayıcıda bir HTTP isteği; yerel model çağrıyı kendi çıkarım
+    /// batch'lerine böler.
+    pub fn texts_per_call(&self) -> Result<usize> {
+        match self {
+            Self::Remote(_) => remote_batch_size_from_env(),
+            #[cfg(not(all(target_os = "macos", target_arch = "x86_64")))]
+            Self::Local(local) => Ok(local.texts_per_call()),
         }
     }
 

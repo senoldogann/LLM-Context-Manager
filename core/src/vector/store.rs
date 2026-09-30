@@ -1,6 +1,6 @@
 use crate::vector::embedder::{
-    embed_batch_size_from_env, embedder_disabled_by_env, fixture_path_from_env, Embedder,
-    EmbeddingIdentity, EmbeddingIdentityMismatch,
+    embedder_disabled_by_env, fixture_path_from_env, Embedder, EmbeddingIdentity,
+    EmbeddingIdentityMismatch,
 };
 use anyhow::{Context, Result};
 use arrow_array::{FixedSizeListArray, Float32Array, RecordBatch, StringArray};
@@ -156,11 +156,6 @@ fn namespace_for_uri(uri: &str) -> String {
         .map(|name| name.to_string_lossy().to_string())
         .unwrap_or_else(|| "default".to_string())
 }
-
-/// `CCM_EMBED_BATCH_SIZE` verilmediğinde embedder'a tek çağrıda verilen metin
-/// sayısı; uzak sağlayıcıda bir HTTP isteğidir. Yerel model aldığı metinleri
-/// kendi çıkarım batch'ine böler (varsayılan tek metin, bkz. `vector::local`).
-const DEFAULT_EMBED_BATCH_SIZE: usize = 32;
 
 /// Embed edilmiş, tabloya yazılmayı bekleyen parçalar (kimlik, metin, vektör).
 #[derive(Debug, Default)]
@@ -357,15 +352,14 @@ impl LanceDbStore {
     /// Metinler uzunluğa göre sıralanıp batch'lenir: benzer uzunluktakiler aynı
     /// batch'e düşer ve batch'i tek çıkarımda çalıştıran sağlayıcılarda dolgu
     /// (padding) hesabı azalır. Sonuçlar giriş sırasına geri yazılır.
-    async fn embed_in_batches(
-        &self,
-        texts: Vec<String>,
-        batch_size: usize,
-    ) -> Result<Vec<Vec<f32>>> {
+    async fn embed_in_batches(&self, texts: Vec<String>) -> Result<Vec<Vec<f32>>> {
         if texts.is_empty() {
             return Ok(Vec::new());
         }
         let embedder = self.embedder().await?;
+        // Batch ayarı yalnızca gerçekten embed edilirken okunur: geçersiz bir
+        // değer graf-yalnız ya da fixture indekslemesini bozmaz.
+        let batch_size = embedder.texts_per_call()?;
         let mut order: Vec<usize> = (0..texts.len()).collect();
         order.sort_by_key(|&index| texts[index].len());
         let total_batches = texts.len().div_ceil(batch_size);
@@ -491,7 +485,6 @@ impl LanceDbStore {
         // 1. Generate Embeddings in batches for performance.
         // Fixture modunda vektörler NDJSON'dan alınır (eksik chunk hata üretir);
         // aksi halde embedder yoksa vektör indeksleme atlanır (mevcut davranış).
-        let batch_size = embed_batch_size_from_env()?.unwrap_or(DEFAULT_EMBED_BATCH_SIZE);
         let mut embeddings: Vec<Vec<f32>> = Vec::with_capacity(all_chunks.len());
         let counts = if let Some(fixture) = self.fixture.as_ref() {
             for chunk_id in &all_chunk_ids {
@@ -516,10 +509,7 @@ impl LanceDbStore {
                 embedded: missing_texts.len(),
                 reused: all_chunks.len() - missing_texts.len(),
             };
-            let mut fresh_vectors = self
-                .embed_in_batches(missing_texts, batch_size)
-                .await?
-                .into_iter();
+            let mut fresh_vectors = self.embed_in_batches(missing_texts).await?.into_iter();
             for chunk in &all_chunks {
                 let vector = match known_vectors.get(chunk.as_str()) {
                     Some(known) => known.clone(),

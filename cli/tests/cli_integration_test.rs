@@ -111,6 +111,28 @@ fn doctor_rejects_semantic_graph_without_vectors() -> Result<(), Box<dyn std::er
     Ok(())
 }
 
+/// `CCM_EMBED_BATCH_SIZE` yalnızca uzak sağlayıcıya embed edilirken okunur:
+/// geçersiz bir değer graf-yalnız indekslemeyi bozmaz.
+#[test]
+fn invalid_remote_batch_size_does_not_break_graph_only_indexing(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let dir = tempdir()?;
+    fs::write(dir.path().join("main.rs"), "fn existing_symbol() {}\n")?;
+    let output = Command::new(assert_cmd::cargo::cargo_bin!("ccm-cli"))
+        .env("CCM_DISABLE_EMBEDDER", "1")
+        .env("CCM_EMBED_BATCH_SIZE", "not-a-number")
+        .arg("index")
+        .arg("--path")
+        .arg(dir.path())
+        .output()?;
+    assert!(
+        output.status.success(),
+        "graph-only indexing must ignore the remote batch size: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    Ok(())
+}
+
 /// `~/.ccm/.env` komut çalışmadan önce yüklenir: oradaki `CCM_DISABLE_EMBEDDER`
 /// indeksi graf-yalnız kurar (model indirilmez, sonraki indeks onu model
 /// değişikliği sayıp yeniden kurmaz), `CCM_MODEL_DIR` ve `HF_ENDPOINT`

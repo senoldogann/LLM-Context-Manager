@@ -236,8 +236,9 @@ token'da kesilir) ONNX Runtime üzerinden, tüm fiziksel çekirdeklerle embed ed
 - **Ayar:** `CCM_EMBED_THREADS` (varsayılan: fiziksel çekirdek sayısı). Model
   çıkarım başına tek parça embed eder: int8 aktivasyonları çağrı başına quantize
   edildiğinden batch'leme bir parçanın vektörünü aynı çağrıdaki parçalara bağlı
-  kılardı. `CCM_EMBED_BATCH_SIZE` çağrı başına metin sayısını değiştirir
-  (varsayılan yerel modelde 1, Ollama/OpenAI isteklerinde 32).
+  kılardı. `CCM_LOCAL_EMBED_BATCH` yerel çıkarım batch'ini ayarlar (varsayılan 1);
+  `CCM_EMBED_BATCH_SIZE` Ollama/OpenAI isteği başına metin sayısını belirler
+  (varsayılan 32).
 - **Intel Mac (`x86_64-apple-darwin`):** ONNX Runtime bu hedef için hazır ikili
   yayımlamadığından yerel model derlenmez; orada varsayılan Ollama'dır
   (`ccm-cli doctor` bunu bildirir).

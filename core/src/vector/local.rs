@@ -11,10 +11,11 @@
 //! aktivasyonları çağrı başına, tüm batch tensörü üzerinden dinamik quantize
 //! eder: aynı çağrıdaki metinler (ve dolgu) birbirinin vektörünü değiştirir.
 //! Tek metinle vektör yalnızca metnin fonksiyonudur; parça yeniden kullanımı ve
-//! canlı indeks bu belirlenimciliğe dayanır. `CCM_EMBED_BATCH_SIZE` çıkarım
-//! batch'ini açıkça büyütür.
+//! canlı indeks bu belirlenimciliğe dayanır. `CCM_LOCAL_EMBED_BATCH` çıkarım
+//! batch'ini açıkça büyütür (uzak sağlayıcıların `CCM_EMBED_BATCH_SIZE`'ı bu
+//! modeli etkilemez).
 
-use crate::vector::embedder::embed_batch_size_from_env;
+use crate::vector::embedder::positive_count_from_env;
 use crate::vector::local_model::{
     download_missing_files, model_dir, read_verified, LocalModelSpec, ModelSource,
     DEFAULT_LOCAL_MODEL,
@@ -27,9 +28,14 @@ use fastembed::{
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 
-/// `CCM_EMBED_BATCH_SIZE` verilmediğinde tek ONNX çıkarımındaki metin sayısı
+/// `CCM_LOCAL_EMBED_BATCH` verilmediğinde tek ONNX çıkarımındaki metin sayısı
 /// (bkz. modül belgesi).
 const DEFAULT_INFERENCE_BATCH: usize = 1;
+
+/// Vektör deposunun tek çağrıda verdiği en az metin sayısı: `spawn_blocking` ve
+/// ilerleme günlüğünün maliyetini dağıtır. Çağrı her zaman en az bir çıkarım
+/// batch'i alır; kilit çıkarım başına tutulduğu için sorgu gecikmesini artırmaz.
+const MIN_TEXTS_PER_CALL: usize = 32;
 
 /// Yüklenmiş yerel embedding modeli.
 pub struct LocalEmbedder {
@@ -60,7 +66,8 @@ async fn load(spec: &'static LocalModelSpec) -> Result<Arc<LocalEmbedder>> {
     let source = ModelSource::from_env(spec);
     download_missing_files(&spec.files(), &directory, &source).await?;
     let threads = embedding_threads()?;
-    let inference_batch = embed_batch_size_from_env()?.unwrap_or(DEFAULT_INFERENCE_BATCH);
+    let inference_batch =
+        positive_count_from_env("CCM_LOCAL_EMBED_BATCH")?.unwrap_or(DEFAULT_INFERENCE_BATCH);
     tokio::task::spawn_blocking(move || {
         LocalEmbedder::load(spec, directory, &source, threads, inference_batch)
     })
@@ -143,6 +150,11 @@ impl LocalEmbedder {
             inference_batch,
             directory,
         })
+    }
+
+    /// Vektör deposunun tek `embed` çağrısına verdiği metin sayısı.
+    pub fn texts_per_call(&self) -> usize {
+        self.inference_batch.max(MIN_TEXTS_PER_CALL)
     }
 
     /// Metinleri giriş sırasıyla embed eder; her ONNX çıkarımı en fazla
@@ -287,7 +299,7 @@ mod tests {
         Ok(())
     }
 
-    /// Varsayılan ayarla (`CCM_EMBED_BATCH_SIZE` tanımsız) vektör yalnızca metnin
+    /// Varsayılan ayarla (`CCM_LOCAL_EMBED_BATCH` tanımsız) vektör yalnızca metnin
     /// fonksiyonudur: aynı metin tek başına ve farklı uzunluktaki metinlerle aynı
     /// çağrıda embed edildiğinde birebir aynı vektörü verir. Parça yeniden
     /// kullanımı ve canlı indeks bu belirlenimciliğe dayanır.
@@ -298,8 +310,8 @@ mod tests {
             return Ok(());
         }
         assert!(
-            std::env::var_os("CCM_EMBED_BATCH_SIZE").is_none(),
-            "this test checks the default inference batch; unset CCM_EMBED_BATCH_SIZE"
+            std::env::var_os("CCM_LOCAL_EMBED_BATCH").is_none(),
+            "this test checks the default inference batch; unset CCM_LOCAL_EMBED_BATCH"
         );
         let embedder = shared_local_embedder().await?;
         let target = "pub fn compute_invoice_tax(amount: f64, rate: f64) -> f64 { amount * rate }"

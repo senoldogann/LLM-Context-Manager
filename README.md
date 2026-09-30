@@ -243,8 +243,8 @@ to 512 tokens) through ONNX Runtime, using all physical CPU cores.
 - **Tuning:** `CCM_EMBED_THREADS` (default: physical cores). The model embeds one
   chunk per inference call: its int8 activations are quantized per call, so
   batching would make a chunk's vector depend on the chunks embedded with it.
-  `CCM_EMBED_BATCH_SIZE` overrides the texts per call (default 1 for the local
-  model, 32 for Ollama/OpenAI requests).
+  `CCM_LOCAL_EMBED_BATCH` sets the local inference batch (default 1);
+  `CCM_EMBED_BATCH_SIZE` sets the texts per Ollama/OpenAI request (default 32).
 - **Intel Macs (`x86_64-apple-darwin`):** ONNX Runtime ships no prebuilt binary
   for this target, so the local model is not compiled in and Ollama stays the
   default there (`ccm-cli doctor` says so).
