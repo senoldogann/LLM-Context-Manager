@@ -173,10 +173,7 @@ fn cancelled_index_now_finishes_indexing_and_the_next_call_joins_it() -> TestRes
     );
     assert_no_late_response(&mut session, cancelled)?;
 
-    assert!(
-        !project.path().join("data/.ccm-activation.lock").exists(),
-        "the activation lock was left behind"
-    );
+    assert_activation_lock_is_free(&project.path().join("data"))?;
     assert_eq!(
         staging_dirs(&generations)?,
         Vec::<String>::new(),
@@ -186,6 +183,27 @@ fn cancelled_index_now_finishes_indexing_and_the_next_call_joins_it() -> TestRes
     let found = session.call_tool("find_nodes", json!({ "query": last_symbol }))?;
     assert!(found_node(&found, &last_symbol), "{found}");
     Ok(())
+}
+
+/// Etkinleştirme kilidini hiçbir süreç tutmuyor: kilit dosyası ya yok ya da hemen
+/// kilitlenebiliyor. Kilit dosyası bırakılırken silinmediği için varlığı kilidin
+/// tutulduğunu göstermez.
+fn assert_activation_lock_is_free(data_dir: &Path) -> TestResult<()> {
+    let lock_path = data_dir.join(".ccm-activation.flock");
+    let file = match fs::OpenOptions::new().write(true).open(&lock_path) {
+        Ok(file) => file,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(()),
+        Err(error) => return Err(error.into()),
+    };
+    match file.try_lock() {
+        Ok(()) => Ok(()),
+        Err(fs::TryLockError::WouldBlock) => Err(format!(
+            "the activation lock '{}' is still held after the index job finished",
+            lock_path.display()
+        )
+        .into()),
+        Err(fs::TryLockError::Error(error)) => Err(error.into()),
+    }
 }
 
 /// Generation dizinindeki bitmemiş (`.staging`) kopyalar.

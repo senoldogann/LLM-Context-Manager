@@ -359,22 +359,40 @@ fn classify_event_path(kind: &notify::EventKind, path: &Path) -> EventPath {
     }
 }
 
+/// Dizin olayının tam karşılaştırma isteyip istemediği. Yalnızca dizinin
+/// oluşması, silinmesi ya da yeniden adlandırılması altındaki dosyalar için ayrı
+/// olay üretmeyebilir. Dizinin veri ya da üst veri değişimi içerik değişikliği
+/// değildir: Windows'ta her dosya kaydı üst dizin için `Modify(Any)` bildirir,
+/// FSEvents dizin üst verisini bildirebilir. Dosyanın kendi olayı hedefli
+/// yenilemeyi zaten sürer; bu olaylar için tam karşılaştırma her kayıtta bütün
+/// projeyi dolaştırırdı.
+fn directory_event_needs_rescan(kind: &notify::EventKind) -> bool {
+    matches!(
+        kind,
+        notify::EventKind::Create(_)
+            | notify::EventKind::Remove(_)
+            | notify::EventKind::Modify(notify::event::ModifyKind::Name(_))
+    )
+}
+
 /// Tek bir olay yolunun sinyali. Dizinin oluşması, silinmesi ya da taşınması
 /// altındaki dosyalar için ayrı olay üretmeyebilir (içeriğiyle taşınan dizin
-/// yalnızca kendisi için olay üretir); bu yüzden dizin olayları tam
-/// karşılaştırma ister ve dizinlere dosya uzantısı süzgeci uygulanmaz. Türü
-/// bilinmeyen kaybolmuş yol, dizin olarak ilgiliyse hedefli taramaya girer:
-/// tarama o yolun altındaki bütün indekslenmiş dosyaları düşürür, kaybolan bir
-/// ikili dosya içinse bir şey yapmaz (tam karşılaştırmaya gerek kalmaz).
+/// yalnızca kendisi için olay üretir); bu yüzden dizin oluşturma, silme ve
+/// yeniden adlandırma olayları tam karşılaştırma ister ve dizinlere dosya
+/// uzantısı süzgeci uygulanmaz. Dizinin veri ya da üst veri değişimi ise
+/// istemez (bkz. `directory_event_needs_rescan`). Türü bilinmeyen kaybolmuş
+/// yol, dizin olarak ilgiliyse hedefli taramaya girer: tarama o yolun altındaki
+/// bütün indekslenmiş dosyaları düşürür, kaybolan bir ikili dosya içinse bir
+/// şey yapmaz (tam karşılaştırmaya gerek kalmaz).
 fn signal_for_path(
     filter: &ccm_core::WatchFilter,
     kind: &notify::EventKind,
     path: PathBuf,
 ) -> Option<RefreshSignal> {
     match classify_event_path(kind, &path) {
-        EventPath::Directory => {
-            ccm_core::is_watch_relevant_dir(filter, &path).then_some(RefreshSignal::Rescan)
-        }
+        EventPath::Directory => (directory_event_needs_rescan(kind)
+            && ccm_core::is_watch_relevant_dir(filter, &path))
+        .then_some(RefreshSignal::Rescan),
         EventPath::File => {
             ccm_core::is_watch_relevant_path(filter, &path).then_some(RefreshSignal::Changed(path))
         }
@@ -821,4 +839,94 @@ fn inject_targeted_refresh_failure(request: &RefreshRequest) -> anyhow::Result<(
         anyhow::bail!("injected targeted scan failure (CCM_INTERNAL_REFRESH_TEST_FAIL_TARGETED)");
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{directory_event_needs_rescan, signal_for_path, RefreshSignal};
+    use notify::event::{CreateKind, DataChange, MetadataKind, ModifyKind, RemoveKind, RenameMode};
+    use notify::EventKind;
+
+    #[test]
+    fn only_directory_create_remove_and_rename_need_a_rescan() {
+        let needs_rescan = [
+            EventKind::Create(CreateKind::Folder),
+            EventKind::Create(CreateKind::Any),
+            EventKind::Remove(RemoveKind::Folder),
+            EventKind::Remove(RemoveKind::Any),
+            EventKind::Modify(ModifyKind::Name(RenameMode::Any)),
+            EventKind::Modify(ModifyKind::Name(RenameMode::From)),
+            EventKind::Modify(ModifyKind::Name(RenameMode::To)),
+            EventKind::Modify(ModifyKind::Name(RenameMode::Both)),
+        ];
+        for kind in needs_rescan {
+            assert!(
+                directory_event_needs_rescan(&kind),
+                "{kind:?} must request a rescan"
+            );
+        }
+        let ignored = [
+            EventKind::Modify(ModifyKind::Any),
+            EventKind::Modify(ModifyKind::Data(DataChange::Any)),
+            EventKind::Modify(ModifyKind::Data(DataChange::Content)),
+            EventKind::Modify(ModifyKind::Metadata(MetadataKind::Any)),
+            EventKind::Modify(ModifyKind::Metadata(MetadataKind::WriteTime)),
+            EventKind::Modify(ModifyKind::Other),
+            EventKind::Any,
+            EventKind::Other,
+        ];
+        for kind in ignored {
+            assert!(
+                !directory_event_needs_rescan(&kind),
+                "{kind:?} must not request a rescan"
+            );
+        }
+    }
+
+    /// Gerçek bir filtre ve diskte var olan bir dizinle: dizinin veri ya da üst veri
+    /// değişimi sinyal üretmez (Windows her dosya kaydında üst dizine `Modify(Any)`
+    /// verir), oluşturma ve yeniden adlandırma tam karşılaştırma ister, dosyanın
+    /// kendi olayı hedefli yenilemeye gider.
+    #[test]
+    fn directory_modify_events_are_ignored_but_file_events_still_signal() -> anyhow::Result<()> {
+        let project = tempfile::tempdir()?;
+        let root = std::fs::canonicalize(project.path())?;
+        std::fs::create_dir_all(root.join("src"))?;
+        std::fs::write(root.join("src/lib.rs"), "fn alpha() {}\n")?;
+        let filter = ccm_core::build_watch_filter(&root, &root.join("data/ccm_db"))?;
+        let directory = root.join("src");
+        let file = root.join("src/lib.rs");
+
+        for kind in [
+            EventKind::Modify(ModifyKind::Any),
+            EventKind::Modify(ModifyKind::Data(DataChange::Content)),
+            EventKind::Modify(ModifyKind::Metadata(MetadataKind::WriteTime)),
+        ] {
+            assert!(
+                signal_for_path(&filter, &kind, directory.clone()).is_none(),
+                "{kind:?} on a directory must not signal"
+            );
+        }
+        for kind in [
+            EventKind::Create(CreateKind::Folder),
+            EventKind::Remove(RemoveKind::Folder),
+            EventKind::Modify(ModifyKind::Name(RenameMode::Any)),
+            EventKind::Modify(ModifyKind::Name(RenameMode::To)),
+        ] {
+            assert!(
+                matches!(
+                    signal_for_path(&filter, &kind, directory.clone()),
+                    Some(RefreshSignal::Rescan)
+                ),
+                "{kind:?} on a directory must request a rescan"
+            );
+        }
+
+        let signal = signal_for_path(&filter, &EventKind::Modify(ModifyKind::Any), file.clone());
+        assert!(
+            matches!(signal, Some(RefreshSignal::Changed(ref changed)) if *changed == file),
+            "a file event must still drive the targeted refresh"
+        );
+        Ok(())
+    }
 }
