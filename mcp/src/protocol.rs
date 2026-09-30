@@ -113,6 +113,18 @@ pub fn create_success_response(id: Option<Value>, result: Value) -> JsonRpcRespo
     }
 }
 
+/// Araç yürütme hatası: JSON-RPC hatası yerine `isError: true` sonucu olarak
+/// döner; istemci mesajı modele gösterir.
+pub fn tool_error_result(text: String) -> ToolResult {
+    ToolResult {
+        content: vec![ToolResultContent {
+            content_type: "text".to_string(),
+            text,
+        }],
+        is_error: Some(true),
+    }
+}
+
 pub fn create_error_response(id: Option<Value>, code: i32, message: &str) -> JsonRpcResponse {
     JsonRpcResponse {
         jsonrpc: "2.0".to_string(),

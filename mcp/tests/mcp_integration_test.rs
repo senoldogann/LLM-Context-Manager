@@ -23,6 +23,25 @@ fn tool_text(response: &serde_json::Value) -> &str {
         .unwrap_or_default()
 }
 
+/// Araç çağrısı başarılı mı: ne JSON-RPC hatası ne de `isError: true` sonucu var.
+fn tool_succeeded(response: &serde_json::Value) -> bool {
+    response.get("error").is_none() && response["result"]["isError"] != true
+}
+
+/// Araç yürütme hatası JSON-RPC hatası olarak değil, `isError: true` sonucu
+/// olarak döner; metin beklenen ifadeyi içerir.
+fn assert_tool_error(response: &serde_json::Value, expected: &str) {
+    assert!(
+        response.get("error").is_none(),
+        "tool failures must not be JSON-RPC errors: {response}"
+    );
+    assert_eq!(response["result"]["isError"], true, "{response}");
+    assert!(
+        tool_text(response).contains(expected),
+        "tool error must mention '{expected}': {response}"
+    );
+}
+
 #[test]
 fn mcp_large_index_returns_before_client_timeout_and_supports_polling(
 ) -> Result<(), Box<dyn std::error::Error>> {
@@ -94,11 +113,7 @@ fn mcp_large_index_returns_before_client_timeout_and_supports_polling(
             }
         }),
     )?;
-    assert_eq!(retrieval["error"]["code"], -32603);
-    assert!(retrieval["error"]["message"]
-        .as_str()
-        .unwrap_or_default()
-        .contains("indexing is in progress"));
+    assert_tool_error(&retrieval, "indexing is in progress");
 
     let deadline = Instant::now() + Duration::from_secs(30);
     loop {
@@ -448,7 +463,8 @@ fn mcp_rejects_project_outside_allowlist() -> Result<(), Box<dyn std::error::Err
     stdin.flush()?;
 
     reader.read_line(&mut line)?;
-    assert!(line.contains("Project path is not allowed"));
+    let response: serde_json::Value = serde_json::from_str(&line)?;
+    assert_tool_error(&response, "Project path is not allowed");
 
     let _ = child.kill();
 
@@ -511,11 +527,8 @@ fn mcp_symlinked_data_dir_never_writes_outside_the_allowlist(
     stdin.flush()?;
     reader.read_line(&mut line)?;
     let response: serde_json::Value = serde_json::from_str(&line)?;
-    assert!(
-        response["error"].is_object() || tool_text(&response).contains("resolved safely"),
-        "symlink'li data dizini güvenli çözümleme hatası üretmeli: {}",
-        line
-    );
+    // Symlink'li data dizini güvenli çözümleme hatası üretmeli.
+    assert_tool_error(&response, "resolved safely");
 
     // Allowlist dışındaki dizine hiçbir index artifact'i yazılmamalı.
     assert!(
@@ -579,7 +592,7 @@ fn mcp_defaults_to_strict_allowlist() -> Result<(), Box<dyn std::error::Error>> 
             }}
         }),
     )?;
-    assert!(tool_text(&denied).contains("not allowed") || denied.get("error").is_some());
+    assert_tool_error(&denied, "not allowed");
 
     let _ = child.kill();
     Ok(())
@@ -628,7 +641,7 @@ fn mcp_non_strict_empty_allowlist_stays_within_default_root(
             }}
         }),
     )?;
-    assert!(tool_text(&denied).contains("not allowed") || denied.get("error").is_some());
+    assert_tool_error(&denied, "not allowed");
 
     let _ = child.kill();
     Ok(())
@@ -661,7 +674,7 @@ fn mcp_implicit_default_path_obeys_strict_allowlist() -> Result<(), Box<dyn std:
             "params":{"name":"get_context","arguments":{"file":"main.rs","line":1}}
         }),
     )?;
-    assert_eq!(denied["error"]["code"], -32603);
+    assert_tool_error(&denied, "not allowed");
 
     let _ = child.kill();
     Ok(())
@@ -695,12 +708,7 @@ fn mcp_strict_mode_without_default_root_rejects_implicit_retrieval(
             "params":{"name":"get_context","arguments":{"file":"main.rs","line":1}}
         }),
     )?;
-    assert_eq!(denied["error"]["code"], -32603);
-    let message = denied["error"]["message"].as_str().unwrap_or_default();
-    assert!(
-        message.contains("No default project root"),
-        "unexpected strict-root error: {message}"
-    );
+    assert_tool_error(&denied, "No default project root");
 
     let _ = child.kill();
     Ok(())
@@ -857,11 +865,7 @@ fn mcp_missing_index_fails_fast_without_hidden_rebuild() -> Result<(), Box<dyn s
         }),
     )?;
     assert!(started.elapsed() < Duration::from_secs(2));
-    assert_eq!(response["error"]["code"], -32603);
-    assert!(response["error"]["message"]
-        .as_str()
-        .unwrap_or_default()
-        .contains("Call index_project first"));
+    assert_tool_error(&response, "Call index_project first");
     assert!(!project.path().join("data").exists());
 
     let _ = child.kill();
@@ -959,7 +963,7 @@ fn mcp_default_corrupt_graph_requires_and_accepts_rebuild() -> Result<(), Box<dy
             "params":{"name":"get_context","arguments":{"file":"main.rs","line":1}}
         }),
     )?;
-    assert_eq!(rejected["error"]["code"], -32603);
+    assert_tool_error(&rejected, "Failed to load project context");
 
     let rebuilt = send_request(
         &mut stdin,
@@ -1077,7 +1081,7 @@ fn mcp_quick_index_returns_synchronously_and_search_falls_back_to_graph(
             }}
         }),
     )?;
-    assert!(indexed.get("error").is_none(), "index_now quick: {indexed}");
+    assert!(tool_succeeded(&indexed), "index_now quick: {indexed}");
     let text = tool_text(&indexed);
     assert!(
         text.contains("graph-only"),
@@ -1096,7 +1100,7 @@ fn mcp_quick_index_returns_synchronously_and_search_falls_back_to_graph(
         }),
     )?;
     assert!(
-        search.get("error").is_none(),
+        tool_succeeded(&search),
         "search_code bozuk vektör tablosunda hata değil graph fallback döndürmeli: {search}"
     );
     assert!(tool_text(&search).contains("quick_compute_tax"));
@@ -1458,10 +1462,7 @@ fn mcp_client_roots_select_and_allow_the_workspace() -> Result<(), Box<dyn std::
                "params":{"name":"index_now","arguments":{
                    "project_path":workspace.path().to_string_lossy()}}}),
     )?;
-    assert!(
-        indexed.get("error").is_none(),
-        "index_now failed: {indexed}"
-    );
+    assert!(tool_succeeded(&indexed), "index_now failed: {indexed}");
 
     let context = send_request(
         &mut stdin,
@@ -1522,7 +1523,7 @@ fn mcp_serves_the_active_generation_while_reindexing() -> Result<(), Box<dyn std
         json!({"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"find_nodes","arguments":{"query":"stable_symbol"}}}),
     )?;
     assert!(
-        retrieval.get("error").is_none(),
+        tool_succeeded(&retrieval),
         "reads must keep serving the active generation: {retrieval}"
     );
     assert!(tool_text(&retrieval).contains("stable_symbol (Score:"));

@@ -7,9 +7,9 @@ use std::sync::Arc;
 use tokio::sync::RwLock;
 
 use crate::protocol::{
-    create_error_response, create_success_response, JsonRpcRequest, JsonRpcResponse,
-    ResourcesCapability, ServerCapabilities, ServerInfo, ToolAnnotations, ToolDefinition,
-    ToolsCapability,
+    create_error_response, create_success_response, tool_error_result, JsonRpcRequest,
+    JsonRpcResponse, ResourcesCapability, ServerCapabilities, ServerInfo, ToolAnnotations,
+    ToolDefinition, ToolResult, ToolsCapability,
 };
 use crate::tools;
 
@@ -23,7 +23,6 @@ const SUPPORTED_PROTOCOL_VERSIONS: [&str; 3] =
     [LATEST_PROTOCOL_VERSION, "2025-06-18", "2025-03-26"];
 /// Okuma araçlarının süren yenilemeyi bekleyeceği en uzun süre.
 const FRESHNESS_WAIT_BUDGET: std::time::Duration = std::time::Duration::from_secs(2);
-
 /// Okuma araçları indeksi yalnızca okur; etki alanı yerel projedir.
 const READ_ONLY_TOOL: ToolAnnotations = ToolAnnotations {
     read_only_hint: true,
@@ -527,7 +526,7 @@ impl ServerState {
     }
 
     /// İstemcinin sunucu isteğine verdiği yanıtı işler (şu an yalnızca `roots/list`).
-    fn handle_client_response(&self, response: &serde_json::Map<String, Value>) {
+    pub(crate) fn handle_client_response(&self, response: &serde_json::Map<String, Value>) {
         let response_id = response.get("id").and_then(Value::as_str);
         let mut pending = self.pending_roots_request_id.lock().unwrap();
         if response_id.is_none() || pending.as_deref() != response_id {
@@ -925,19 +924,35 @@ fn normalize_path(path: &Path) -> PathBuf {
     result
 }
 
-/// Main request dispatcher.
-/// Returns Ok(Some(response)) for requests, Ok(None) for notifications.
-pub async fn handle_request(
-    state: &Arc<ServerState>,
-    raw_request: &str,
-) -> Result<Option<JsonRpcResponse>> {
-    let raw_value: Value = serde_json::from_str(raw_request)?;
-    let Some(object) = raw_value.as_object() else {
-        return Ok(Some(create_error_response(
+/// Okuma döngüsüne gelen tek bir mesajın sınıfı.
+pub enum IncomingMessage {
+    /// Hemen yazılacak protokol hatası (bozuk JSON, geçersiz istek).
+    Rejected(JsonRpcResponse),
+    /// Yanıtsız bırakılan geçersiz bildirim.
+    Dropped,
+    /// Sunucunun istemciye gönderdiği isteğin (ör. `roots/list`) yanıtı.
+    ClientResponse(serde_json::Map<String, Value>),
+    /// Bildirim: okuma döngüsünde sırayla işlenir, yanıt üretmez.
+    Notification(JsonRpcRequest),
+    /// Yanıt bekleyen istek.
+    Request(JsonRpcRequest),
+}
+
+/// Ham JSON-RPC mesajını doğrular ve sınıflandırır; sunucu durumuna dokunmaz.
+pub fn classify_message(raw_message: &str) -> IncomingMessage {
+    let raw_value: Value = match serde_json::from_str(raw_message) {
+        Ok(value) => value,
+        Err(error) => {
+            tracing::warn!(error = %error, "Rejected a JSON-RPC message that is not valid JSON");
+            return IncomingMessage::Rejected(create_error_response(None, -32700, "Parse error"));
+        }
+    };
+    let Value::Object(object) = raw_value else {
+        return IncomingMessage::Rejected(create_error_response(
             None,
             -32600,
             "Invalid Request: JSON-RPC payload must be an object",
-        )));
+        ));
     };
     let request_id = object.get("id").cloned();
     let is_notification = !object.contains_key("id");
@@ -945,52 +960,83 @@ pub async fn handle_request(
         .as_ref()
         .is_some_and(|id| !(id.is_null() || id.is_string() || id.is_number()))
     {
-        return Ok(Some(create_error_response(
+        return IncomingMessage::Rejected(create_error_response(
             None,
             -32600,
             "Invalid Request: id must be a string, number, or null",
-        )));
+        ));
     }
     // Sunucunun istemciye gönderdiği isteklerin (ör. roots/list) yanıtları.
     if !object.contains_key("method")
         && (object.contains_key("result") || object.contains_key("error"))
     {
-        state.handle_client_response(object);
-        return Ok(None);
+        return IncomingMessage::ClientResponse(object);
     }
     if object.get("jsonrpc").and_then(Value::as_str) != Some("2.0")
         || object.get("method").and_then(Value::as_str).is_none()
     {
-        return Ok(Some(create_error_response(
+        return IncomingMessage::Rejected(create_error_response(
             request_id,
             -32600,
             "Invalid Request: jsonrpc must be '2.0' and method must be a string",
-        )));
+        ));
     }
     if object
         .get("params")
         .is_some_and(|params| !(params.is_object() || params.is_array()))
     {
         if is_notification {
-            return Ok(None);
+            return IncomingMessage::Dropped;
         }
-        return Ok(Some(create_error_response(
+        return IncomingMessage::Rejected(create_error_response(
             request_id,
             -32602,
             "Invalid params: params must be an object or array",
-        )));
+        ));
     }
-    let request: JsonRpcRequest = serde_json::from_value(raw_value)?;
-
-    if request.jsonrpc != "2.0" {
-        return Ok(Some(create_error_response(
-            request.id,
+    match serde_json::from_value::<JsonRpcRequest>(Value::Object(object)) {
+        Ok(message) if is_notification => IncomingMessage::Notification(message),
+        Ok(message) => IncomingMessage::Request(message),
+        Err(error) => IncomingMessage::Rejected(create_error_response(
+            request_id,
             -32600,
-            "Invalid Request: jsonrpc must be '2.0'",
-        )));
+            &format!("Invalid Request: {error}"),
+        )),
     }
+}
 
-    let response = match request.method.as_str() {
+/// Oturumu kuran istekler (`initialize` ve eski istemcilerin `initialized`
+/// isteği) sonraki bildirimlerin dayandığı durumu yazar; okuma döngüsünde
+/// sırayla yanıtlanır. `initialize` spesifikasyon gereği iptal edilemez.
+pub fn is_session_request(method: &str) -> bool {
+    matches!(
+        method,
+        "initialize" | "initialized" | "notifications/initialized"
+    )
+}
+
+/// Bildirimi okuma döngüsünde sırayla işler. `notifications/cancelled` süren
+/// isteklere eriştiği için dağıtıcıda işlenir.
+pub fn handle_notification(state: &ServerState, notification: &JsonRpcRequest) {
+    match notification.method.as_str() {
+        "initialized" | "notifications/initialized" | "notifications/roots/list_changed" => {
+            state.queue_roots_request()
+        }
+        // `tools/call` notification'ı MCP sözleşmesinin parçası değildir ve yanıt
+        // üretmez; ağır bir aracı (örn. index_project) bu yoldan çalıştırmanın
+        // anlamı yoktur, güvenle yok sayılır.
+        "tools/call" => {
+            tracing::warn!("tools/call notification ignored; use a request with an id instead")
+        }
+        method => tracing::debug!(method = %method, "Ignoring an unsupported notification"),
+    }
+}
+
+/// İsteği yanıtlar. Araç yürütme hataları `isError: true` sonucu olarak,
+/// protokol hataları (bilinmeyen yöntem, geçersiz parametre) JSON-RPC hatası
+/// olarak döner.
+pub async fn handle_request(state: &Arc<ServerState>, request: JsonRpcRequest) -> JsonRpcResponse {
+    match request.method.as_str() {
         "initialize" => {
             let supports_roots = request
                 .params
@@ -1000,59 +1046,26 @@ pub async fn handle_request(
             state
                 .client_supports_roots
                 .store(supports_roots, std::sync::atomic::Ordering::SeqCst);
-            handle_initialize(request.id, request.params.as_ref()).map(Some)
+            handle_initialize(request.id, request.params.as_ref())
         }
         "initialized" | "notifications/initialized" => {
             state.queue_roots_request();
-            Ok(Some(create_success_response(request.id, json!({}))))
+            create_success_response(request.id, json!({}))
         }
-        "notifications/roots/list_changed" => {
-            state.queue_roots_request();
-            Ok(None)
+        "ping" => create_success_response(request.id, json!({})),
+        "tools/list" => handle_list_tools(request.id),
+        "resources/list" => create_success_response(request.id, json!({ "resources": [] })),
+        "resources/templates/list" => {
+            create_success_response(request.id, json!({ "resourceTemplates": [] }))
         }
-        "ping" => Ok(Some(create_success_response(request.id, json!({})))),
-        "tools/list" => handle_list_tools(request.id).map(Some),
-        "resources/list" => Ok(Some(create_success_response(
-            request.id,
-            json!({ "resources": [] }),
-        ))),
-        "resources/templates/list" => Ok(Some(create_success_response(
-            request.id,
-            json!({ "resourceTemplates": [] }),
-        ))),
-        "tools/call" => {
-            // `tools/call` notification'ı MCP sözleşmesinin parçası değildir.
-            // Yanıt üretmediği için ağır bir tool'u (örn. index_project) bu
-            // yoldan çalıştırmak ana JSON-RPC loop'unu bloklar ve sonraki
-            // gerçek istekleri geciktirir. Notification olarak gelen
-            // tools/call güvenle yok sayılır.
-            if is_notification {
-                tracing::warn!("tools/call notification ignored; use a request with an id instead");
-                Ok(None)
-            } else {
-                handle_call_tool(state, request.id, request.params)
-                    .await
-                    .map(Some)
-            }
+        "tools/call" => handle_call_tool(state, request.id, request.params).await,
+        method => {
+            create_error_response(request.id, -32601, &format!("Method not found: {}", method))
         }
-        _ => Ok(Some(create_error_response(
-            request.id,
-            -32601,
-            &format!("Method not found: {}", request.method),
-        ))),
-    };
-
-    if is_notification {
-        if let Err(error) = response {
-            tracing::warn!(method = %request.method, error = %error, "Notification failed");
-        }
-        Ok(None)
-    } else {
-        response
     }
 }
 
-fn handle_initialize(id: Option<Value>, params: Option<&Value>) -> Result<JsonRpcResponse> {
+fn handle_initialize(id: Option<Value>, params: Option<&Value>) -> JsonRpcResponse {
     let result = json!({
         "protocolVersion": negotiate_protocol_version(params),
         "capabilities": ServerCapabilities {
@@ -1067,7 +1080,7 @@ fn handle_initialize(id: Option<Value>, params: Option<&Value>) -> Result<JsonRp
             version: env!("CARGO_PKG_VERSION").to_string(),
         },
     });
-    Ok(create_success_response(id, result))
+    create_success_response(id, result)
 }
 
 fn negotiate_protocol_version(params: Option<&Value>) -> &'static str {
@@ -1085,7 +1098,7 @@ fn negotiate_protocol_version(params: Option<&Value>) -> &'static str {
     }
 }
 
-fn handle_list_tools(id: Option<Value>) -> Result<JsonRpcResponse> {
+fn handle_list_tools(id: Option<Value>) -> JsonRpcResponse {
     let tools_list = vec![
         ToolDefinition {
             name: "get_context".to_string(),
@@ -1253,14 +1266,14 @@ fn handle_list_tools(id: Option<Value>) -> Result<JsonRpcResponse> {
         },
     ];
 
-    Ok(create_success_response(id, json!({ "tools": tools_list })))
+    create_success_response(id, json!({ "tools": tools_list }))
 }
 
 async fn handle_call_tool(
     state: &Arc<ServerState>,
     id: Option<Value>,
     params: Option<Value>,
-) -> Result<JsonRpcResponse> {
+) -> JsonRpcResponse {
     let request_id = id.as_ref().map(|value| match value {
         Value::String(text) => text.clone(),
         _ => value.to_string(),
@@ -1282,49 +1295,55 @@ async fn handle_call_tool_inner(
     state: &Arc<ServerState>,
     id: Option<Value>,
     params: Option<Value>,
-) -> Result<JsonRpcResponse> {
+) -> JsonRpcResponse {
     let Some(params) = params else {
-        return Ok(create_error_response(
-            id,
-            -32602,
-            "Missing tools/call params",
-        ));
+        return create_error_response(id, -32602, "Missing tools/call params");
     };
     let Some(tool_name) = params.get("name").and_then(|v| v.as_str()) else {
-        return Ok(create_error_response(id, -32602, "Missing tool name"));
+        return create_error_response(id, -32602, "Missing tool name");
     };
     let arguments = params.get("arguments").cloned().unwrap_or(json!({}));
 
     if let Err(message) = validate_tool_arguments(tool_name, &arguments) {
-        return Ok(create_error_response(id, -32602, &message));
+        return create_error_response(id, -32602, &message);
     }
 
+    match run_tool(state, tool_name, &arguments).await {
+        Ok(result) => tool_result_response(id, result),
+        Err(error) => tool_failure_response(id, tool_name, &error),
+    }
+}
+
+/// Aracı çalıştırır. Beklenen yürütme hataları (indeks yok, izin verilmeyen yol,
+/// indeksleme hatası) `isError` sonucu olarak döner; `Err` argüman hatası
+/// (`ToolInputError`) ya da araç kodundan yayılan beklenmedik bir hatadır.
+async fn run_tool(
+    state: &Arc<ServerState>,
+    tool_name: &str,
+    arguments: &Value,
+) -> Result<ToolResult> {
     // Extract project_path if present
     let project_path = arguments.get("project_path").and_then(|v| v.as_str());
 
     if tool_name == "index_project" || tool_name == "index_now" {
-        let path = project_path.ok_or_else(|| anyhow::anyhow!("Missing project_path"))?;
+        let path = project_path.ok_or_else(|| tools::input_error("Missing project_path"))?;
         if !state.is_path_allowed(path) {
-            return Ok(create_error_response(
-                id,
-                -32602,
-                "Project path is not allowed. Set CCM_ALLOWED_ROOTS (or disable CCM_REQUIRE_ALLOWED_ROOTS).",
+            return Ok(tool_error_result(
+                "Project path is not allowed. Set CCM_ALLOWED_ROOTS (or disable CCM_REQUIRE_ALLOWED_ROOTS).".to_string(),
             ));
         }
-
-        let result = if tool_name == "index_now" {
-            tools::index_now(state.clone(), &arguments).await?
+        return if tool_name == "index_now" {
+            tools::index_now(state.clone(), arguments).await
         } else {
-            tools::index_project(state.clone(), &arguments).await?
+            tools::index_project(state.clone(), arguments).await
         };
-        return Ok(create_success_response(id, json!(result)));
     }
 
     let project_key = state.project_key(project_path);
     // İlk yükleme izin listesini ve indeksin varlığını doğrular; watcher yalnızca
     // izinli ve indeksi olan projelerde başlar.
     if let Err(error) = state.get_engine(project_path).await {
-        return Ok(engine_error_response(id, tool_name, &error));
+        return Ok(engine_error_result(tool_name, &error));
     }
     if let Some(key) = &project_key {
         state.ensure_auto_refresh(key);
@@ -1333,7 +1352,7 @@ async fn handle_call_tool_inner(
     // Bekleme sırasında yeni generation aktive edilmiş olabilir.
     let loaded = match state.get_engine(project_path).await {
         Ok(loaded) => loaded,
-        Err(error) => return Ok(engine_error_response(id, tool_name, &error)),
+        Err(error) => return Ok(engine_error_result(tool_name, &error)),
     };
     // Satır son engine yüklemesinden sonraki durumdan üretilir: bu yükleme yeni bir
     // generation getirdiyse tam karşılaştırma istenmiştir ve satır bayat görünür.
@@ -1343,24 +1362,18 @@ async fn handle_call_tool_inner(
     let engine = loaded.engine.clone();
 
     let result = match tool_name {
-        "get_context" => tools::get_context(&engine, &arguments).await?,
-        "search_code" => tools::search_code(&engine, &arguments).await?,
-        "find_nodes" => tools::find_nodes(&engine, &arguments).await?,
-        "read_graph" => tools::read_graph(&engine, &arguments).await?,
-        "find_usages" => tools::find_usages(&engine, &arguments).await?,
-        "trace_call_chain" => tools::trace_call_chain(&engine, &arguments).await?,
-        "impact_of_change" => tools::impact_of_change(&engine, &arguments).await?,
-        "diff_context" => tools::diff_context(&engine, &arguments).await?,
-        _ => {
-            return Ok(create_error_response(
-                id,
-                -32602,
-                &format!("Unknown tool: {}", tool_name),
-            ))
-        }
+        "get_context" => tools::get_context(&engine, arguments).await?,
+        "search_code" => tools::search_code(&engine, arguments).await?,
+        "find_nodes" => tools::find_nodes(&engine, arguments).await?,
+        "read_graph" => tools::read_graph(&engine, arguments).await?,
+        "find_usages" => tools::find_usages(&engine, arguments).await?,
+        "trace_call_chain" => tools::trace_call_chain(&engine, arguments).await?,
+        "impact_of_change" => tools::impact_of_change(&engine, arguments).await?,
+        "diff_context" => tools::diff_context(&engine, arguments).await?,
+        _ => return Err(tools::input_error(format!("Unknown tool: {}", tool_name))),
     };
 
-    let result = match freshness {
+    Ok(match freshness {
         Some(freshness) => crate::freshness::with_freshness_line(
             result,
             &crate::freshness::format_freshness_line(
@@ -1370,17 +1383,42 @@ async fn handle_call_tool_inner(
             ),
         ),
         None => result,
-    };
-
-    Ok(create_success_response(id, serde_json::to_value(result)?))
+    })
 }
 
-/// Engine yüklenemediğinde istemciye dönen JSON-RPC hata yanıtını üretir.
-fn engine_error_response(
+/// Araç sonucunu (başarılı ya da `isError`) JSON-RPC yanıtına çevirir.
+fn tool_result_response(id: Option<Value>, result: ToolResult) -> JsonRpcResponse {
+    match serde_json::to_value(result) {
+        Ok(value) => create_success_response(id, value),
+        Err(error) => create_error_response(
+            id,
+            -32603,
+            &format!("Tool result could not be serialized: {error}"),
+        ),
+    }
+}
+
+/// Aracın döndürdüğü hatayı yanıta çevirir: argüman hatası (`ToolInputError`)
+/// JSON-RPC -32602 olarak kalır; diğer hatalar araç yürütme hatasıdır ve
+/// `isError: true` sonucu olarak modele gösterilir.
+fn tool_failure_response(
     id: Option<Value>,
     tool_name: &str,
     error: &anyhow::Error,
 ) -> JsonRpcResponse {
+    if let Some(input_error) = error.downcast_ref::<tools::ToolInputError>() {
+        return create_error_response(id, -32602, &input_error.0);
+    }
+    let detail = format!("{error:#}");
+    tracing::warn!(tool = %tool_name, error = %detail, "Tool execution failed");
+    tool_result_response(
+        id,
+        tool_error_result(format!("{tool_name} failed: {detail}")),
+    )
+}
+
+/// Engine yüklenemediğinde dönen araç yürütme hatası (`isError: true`).
+fn engine_error_result(tool_name: &str, error: &anyhow::Error) -> ToolResult {
     tracing::warn!(error = %error, tool = %tool_name, "Failed to load project context");
     let message = if error.to_string().contains("Project index is missing") {
         "Project index is missing. Call index_project first.".to_string()
@@ -1397,7 +1435,7 @@ fn engine_error_response(
         "Failed to load project context. Check project_path, allowlist, and index state."
             .to_string()
     };
-    create_error_response(id, -32603, &message)
+    tool_error_result(message)
 }
 
 fn validate_tool_arguments(tool_name: &str, arguments: &Value) -> std::result::Result<(), String> {

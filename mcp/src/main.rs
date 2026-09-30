@@ -1,8 +1,9 @@
 use anyhow::{Context, Result};
 use serde_json::Value;
 use std::sync::Arc;
-use tokio::io::{AsyncBufRead, AsyncBufReadExt, AsyncWriteExt, BufReader};
+use tokio::io::{AsyncBufRead, AsyncBufReadExt, BufReader};
 
+mod dispatch;
 mod freshness;
 mod protocol;
 mod server;
@@ -25,11 +26,6 @@ async fn main() -> Result<()> {
         return Ok(());
     }
 
-    // MCP uses stdio for communication
-    let stdin = tokio::io::stdin();
-    let mut stdout = tokio::io::stdout();
-    let mut reader = BufReader::new(stdin);
-
     // Allowlist/kök gibi başlangıç ayarları `~/.ccm/.env`'de de tanımlanabilir;
     // ServerState bunları okumadan önce yüklenir (host env'i önceliklidir).
     ccm_core::vector::remote::load_user_env_file()?;
@@ -42,14 +38,35 @@ async fn main() -> Result<()> {
         .map(|val| matches!(val.to_lowercase().as_str(), "1" | "true" | "yes"))
         .unwrap_or(false);
 
+    serve_stdio(server_state, debug).await
+}
+
+/// MCP stdio oturumu. Okuma döngüsü mesajları sırayla okur: istekler kendi
+/// görevlerinde çalışır (yavaş bir araç diğer istekleri bekletmez); bildirimler,
+/// istemci yanıtları ve oturumu kuran istekler döngüde sırayla işlenir. Stdout'a
+/// yalnızca yazıcı görev yazar. Girdi kapanınca süren isteklerin yanıtları
+/// yazılır ve oturum biter.
+async fn serve_stdio(state: Arc<server::ServerState>, debug: bool) -> Result<()> {
+    let mut reader = BufReader::new(tokio::io::stdin());
+    let (outbox, mut writer) = dispatch::start_writer(tokio::io::stdout(), debug);
+    let mut dispatcher = dispatch::Dispatcher::new(state.clone(), outbox.clone());
+
     loop {
-        let line = match read_jsonrpc_message(&mut reader, MAX_REQUEST_BYTES).await {
+        let frame = tokio::select! {
+            // Yazıcı yalnızca yazma hatasında durur: yanıt verilemeyen oturum biter.
+            stopped = &mut writer => {
+                dispatch::writer_result(stopped)?;
+                anyhow::bail!("stdout writer stopped before the session ended");
+            }
+            frame = read_jsonrpc_message(&mut reader, MAX_REQUEST_BYTES) => frame,
+        };
+        let line = match frame {
             Ok(Some(line)) => line,
             Ok(None) => break,
             Err(error) if is_recoverable_message_error(&error) => {
                 tracing::warn!(error = %error, "Rejected invalid JSON-RPC frame");
                 let response = protocol::create_error_response(None, -32700, "Parse error");
-                write_response(&mut stdout, &response).await?;
+                outbox.send(&response).await?;
                 continue;
             }
             Err(error) => return Err(error),
@@ -58,55 +75,52 @@ async fn main() -> Result<()> {
         if trimmed.is_empty() {
             continue;
         }
-
-        // DEBUG: Log incoming request to stderr
         if debug {
-            tracing::debug!(payload = %sanitize_payload(trimmed), "Received JSON-RPC request");
+            tracing::debug!(payload = %sanitize_payload(trimmed), "Received JSON-RPC message");
         }
 
-        // Process the JSON-RPC request
-        let handled = server::handle_request(&server_state, trimmed).await;
-        // Sunucudan istemciye istekler (ör. roots/list) yanıttan önce gönderilir.
-        for outgoing in server_state.take_outgoing_requests() {
-            write_response(&mut stdout, &outgoing).await?;
-        }
-        match handled {
-            Ok(Some(response)) => {
-                // Only send response for requests (not notifications)
-                let response_str = serde_json::to_string(&response)?;
-                if debug {
-                    tracing::debug!(payload = %sanitize_payload(&response_str), "Sending JSON-RPC response");
-                }
-                write_response(&mut stdout, &response).await?;
+        match server::classify_message(trimmed) {
+            server::IncomingMessage::Rejected(response) => outbox.send(&response).await?,
+            server::IncomingMessage::Dropped => {}
+            server::IncomingMessage::ClientResponse(response) => {
+                state.handle_client_response(&response)
             }
-            Ok(None) => {
-                // Notification - no response needed
-                if debug {
-                    tracing::debug!("Notification handled (no response)");
-                }
+            server::IncomingMessage::Notification(notification)
+                if notification.method == "notifications/cancelled" =>
+            {
+                dispatcher.cancel(notification.params.as_ref())
             }
-            Err(e) => {
-                tracing::error!(error = %e, "Error processing request");
-                let parsed = serde_json::from_str::<serde_json::Value>(trimmed);
-                let (request_id, code, message) =
-                    if let Some(input_error) = e.downcast_ref::<crate::tools::ToolInputError>() {
-                        let request_id = parsed
-                            .as_ref()
-                            .ok()
-                            .and_then(|value| value.get("id").cloned());
-                        (request_id, -32602, input_error.0.clone())
-                    } else if let Ok(value) = parsed {
-                        let request_id = value.get("id").cloned();
-                        (request_id, -32603, e.to_string())
-                    } else {
-                        (None, -32700, "Parse error".to_string())
-                    };
-                let error_response = protocol::create_error_response(request_id, code, &message);
-                write_response(&mut stdout, &error_response).await?;
+            server::IncomingMessage::Notification(notification) => {
+                server::handle_notification(&state, &notification);
+                send_server_requests(&state, &outbox).await?;
             }
+            server::IncomingMessage::Request(request)
+                if server::is_session_request(&request.method) =>
+            {
+                let response = server::handle_request(&state, request).await;
+                // Sunucudan istemciye istekler (ör. roots/list) yanıttan önce gönderilir.
+                send_server_requests(&state, &outbox).await?;
+                outbox.send(&response).await?;
+            }
+            server::IncomingMessage::Request(request) => dispatcher.dispatch(request),
         }
     }
 
+    dispatcher.drain().await;
+    // Son `Outbox` kopyası bırakılınca yazıcı kuyruğu boşaltıp kapanır.
+    drop(outbox);
+    dispatch::writer_result(writer.await)
+}
+
+/// Sunucunun istemciye göndermek üzere kuyruğa aldığı istekleri (ör.
+/// `roots/list`) yazıcıya iletir.
+async fn send_server_requests(
+    state: &server::ServerState,
+    outbox: &dispatch::Outbox,
+) -> Result<()> {
+    for request in state.take_outgoing_requests() {
+        outbox.send(&request).await?;
+    }
     Ok(())
 }
 
@@ -155,18 +169,6 @@ fn is_recoverable_message_error(error: &anyhow::Error) -> bool {
     let message = error.to_string();
     message.starts_with("JSON-RPC request exceeds")
         || message.starts_with("JSON-RPC request is not valid UTF-8")
-}
-
-async fn write_response<W, M>(writer: &mut W, response: &M) -> Result<()>
-where
-    W: tokio::io::AsyncWrite + Unpin,
-    M: serde::Serialize,
-{
-    let response_str = serde_json::to_string(response)?;
-    writer.write_all(response_str.as_bytes()).await?;
-    writer.write_all(b"\n").await?;
-    writer.flush().await?;
-    Ok(())
 }
 
 async fn read_jsonrpc_message<R>(reader: &mut R, max_bytes: usize) -> Result<Option<String>>
