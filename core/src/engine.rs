@@ -54,6 +54,14 @@ use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
+/// Artımlı güncellemede embedding bekleyen düğümler ve silinmeden önce okunan
+/// parça vektörleri (metin → vektör).
+#[derive(Default)]
+pub(crate) struct PendingEmbeddings {
+    nodes: Vec<CodeNode>,
+    known_vectors: HashMap<String, Vec<f32>>,
+}
+
 /// The main intelligence engine for speculative retrieval.
 pub struct RetrievalEngine {
     pub graph: Arc<RwLock<CodeGraph>>,
@@ -195,9 +203,26 @@ impl RetrievalEngine {
         project_root: &str,
         changed_files: &[PathBuf],
     ) -> Result<crate::IndexStats> {
+        let (mut stats, pending) = self.apply_file_changes(project_root, changed_files).await?;
+        let counts = self.embed_pending(&pending).await?;
+        stats.embedded_chunks = counts.embedded;
+        stats.reused_chunks = counts.reused;
+        tracing::info!("Incremental update complete.");
+        Ok(stats)
+    }
+
+    /// Artımlı güncellemenin ilk aşaması: değişen dosyalar ayrıştırılır, graf ve
+    /// referans kenarları güncellenir, eski vektörler silinir. Yeni düğümlerin
+    /// embedding'i `embed_pending` ile ayrı yapılır; embedding servisi yokken graf
+    /// güncellemesi böylece korunabilir.
+    pub(crate) async fn apply_file_changes(
+        &self,
+        project_root: &str,
+        changed_files: &[PathBuf],
+    ) -> Result<(crate::IndexStats, PendingEmbeddings)> {
         if changed_files.is_empty() {
             tracing::info!("No changes detected.");
-            return Ok(crate::IndexStats::default());
+            return Ok((crate::IndexStats::default(), PendingEmbeddings::default()));
         }
 
         tracing::info!(
@@ -212,6 +237,11 @@ impl RetrievalEngine {
         let mut known_vectors: HashMap<String, Vec<f32>> = HashMap::new();
         let embed_data_files = embed_data_files_enabled();
         let mut stats = crate::IndexStats::default();
+        // Grafta yeniden kurulan dosyalar ve bu dosyaların önce ya da sonra
+        // tanımladığı referans verilebilir adlar; referans kenarları yalnızca bu
+        // kapsam için yeniden hesaplanır.
+        let mut changed_file_ids: HashSet<String> = HashSet::new();
+        let mut affected_names: HashSet<String> = HashSet::new();
 
         let root_path = std::fs::canonicalize(project_root)
             .unwrap_or_else(|_| std::path::PathBuf::from(project_root));
@@ -262,7 +292,10 @@ impl RetrievalEngine {
                             error
                         )
                     })?;
-                self.graph.write().await.remove_file_nodes(&relative_path);
+                let mut graph = self.graph.write().await;
+                affected_names.extend(graph.reference_target_names(&relative_path));
+                graph.remove_file_nodes(&relative_path);
+                changed_file_ids.insert(relative_path);
                 continue;
             }
 
@@ -369,45 +402,51 @@ impl RetrievalEngine {
                     )
                 })?;
             let mut graph = self.graph.write().await;
+            affected_names.extend(graph.reference_target_names(&relative_path));
+            affected_names.extend(staged_graph.reference_target_names(&relative_path));
             graph.remove_file_nodes(&relative_path);
             graph.append_graph(&staged_graph);
+            changed_file_ids.insert(relative_path);
             stats.files_indexed += 1;
         }
 
         {
             let mut graph = self.graph.write().await;
-            let reference_edges = graph.rebuild_reference_edges();
+            let refreshed = graph.refresh_reference_edges(&changed_file_ids, &affected_names);
             tracing::info!(
-                edges = reference_edges,
-                "Rebuilt references after incremental update"
+                files = changed_file_ids.len(),
+                names = affected_names.len(),
+                sources = refreshed.sources,
+                edges = refreshed.edges,
+                "Refreshed references after incremental update"
             );
+            stats.nodes_created = graph.graph.node_count().saturating_sub(initial_node_count);
         }
 
-        // Remove duplicates from nodes_to_index (DFS visits multiple times?)
-        // `graph.neighbors` returns unique neighbor indices. But if multiple paths?
-        // AST is a Tree. No multi-parent.
+        Ok((
+            stats,
+            PendingEmbeddings {
+                nodes: nodes_to_index,
+                known_vectors,
+            },
+        ))
+    }
 
-        // Batch Index New Nodes
-        if !nodes_to_index.is_empty() {
-            tracing::info!(
-                count = nodes_to_index.len(),
-                "Incremental: indexing semantic nodes"
-            );
-            let counts = self
-                .index_nodes_in_bounded_batches(&nodes_to_index, &known_vectors)
-                .await?;
-            stats.embedded_chunks = counts.embedded;
-            stats.reused_chunks = counts.reused;
+    /// Artımlı güncellemenin ikinci aşaması: yeni düğümleri embed eder; metni
+    /// değişmeyen parçalar silinmeden önce okunan vektörlerini yeniden kullanır.
+    pub(crate) async fn embed_pending(
+        &self,
+        pending: &PendingEmbeddings,
+    ) -> Result<ChunkEmbeddingCounts> {
+        if pending.nodes.is_empty() {
+            return Ok(ChunkEmbeddingCounts::default());
         }
-
-        tracing::info!("Incremental update complete.");
-
-        stats.nodes_created = {
-            let graph = self.graph.read().await;
-            graph.graph.node_count().saturating_sub(initial_node_count)
-        };
-
-        Ok(stats)
+        tracing::info!(
+            count = pending.nodes.len(),
+            "Incremental: indexing semantic nodes"
+        );
+        self.index_nodes_in_bounded_batches(&pending.nodes, &pending.known_vectors)
+            .await
     }
 
     async fn index_nodes_in_bounded_batches(
