@@ -1537,3 +1537,93 @@ fn mcp_serves_the_active_generation_while_reindexing() -> Result<(), Box<dyn std
     let _ = child.kill();
     Ok(())
 }
+
+/// Gerçek yerel modelle MCP uçtan uca: ayarsız sunucu `index_now` ile semantik
+/// indeks kurar, `search_code` semantik skorlu sonuç döndürür. ~120 MB model
+/// indirir; `CCM_TEST_LOCAL_MODEL=1 cargo test -p ccm-mcp -- --ignored local_model`.
+#[test]
+#[ignore = "downloads the ~120 MB local model; set CCM_TEST_LOCAL_MODEL=1"]
+fn local_model_serves_semantic_search_over_mcp() -> Result<(), Box<dyn std::error::Error>> {
+    if std::env::var("CCM_TEST_LOCAL_MODEL").as_deref() != Ok("1") {
+        return Ok(());
+    }
+    let dir = tempdir()?;
+    let project_root = dir.path().join("project");
+    let isolated_home = dir.path().join("home");
+    fs::create_dir_all(&project_root)?;
+    fs::create_dir_all(&isolated_home)?;
+    fs::write(
+        project_root.join("billing.rs"),
+        "/// Computes the tax owed on an invoice.\npub fn compute_invoice_tax(amount: f64, rate: f64) -> f64 {\n    amount * rate\n}\n",
+    )?;
+    fs::write(
+        project_root.join("network.rs"),
+        "pub fn open_tcp_connection(host: &str, port: u16) -> std::io::Result<std::net::TcpStream> {\n    std::net::TcpStream::connect((host, port))\n}\n",
+    )?;
+    let model_dir = std::env::var_os("CCM_MODEL_DIR")
+        .map(std::path::PathBuf::from)
+        .or_else(|| {
+            std::env::var_os("HOME")
+                .map(|home| std::path::PathBuf::from(home).join(".ccm").join("models"))
+        })
+        .ok_or("HOME or CCM_MODEL_DIR is required for the model cache")?;
+
+    let mut child = Command::new(assert_cmd::cargo::cargo_bin!("ccm-mcp"))
+        .env("HOME", &isolated_home)
+        .env("CCM_MODEL_DIR", &model_dir)
+        .env_remove("CCM_DISABLE_EMBEDDER")
+        .env_remove("EMBEDDING_DISABLED")
+        .env_remove("CCM_EMBEDDING_FIXTURE")
+        .env_remove("EMBEDDING_PROVIDER")
+        .env_remove("EMBEDDING_HOST")
+        .env_remove("EMBEDDING_MODEL")
+        .env("CCM_MCP_DEBUG", "0")
+        .env("CCM_PROJECT_ROOT", &project_root)
+        .env("CCM_ALLOWED_ROOTS", &project_root)
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null())
+        .spawn()?;
+    let mut stdin = child.stdin.take().ok_or("stdin")?;
+    let mut reader = BufReader::new(child.stdout.take().ok_or("stdout")?);
+    send_request(
+        &mut stdin,
+        &mut reader,
+        json!({"jsonrpc":"2.0","id":0,"method":"initialize","params":{}}),
+    )?;
+    let indexed = send_request(
+        &mut stdin,
+        &mut reader,
+        json!({
+            "jsonrpc":"2.0","id":1,"method":"tools/call",
+            "params":{"name":"index_now","arguments":{
+                "project_path": project_root.to_string_lossy()
+            }}
+        }),
+    )?;
+    let index_text = tool_text(&indexed).to_string();
+    assert!(
+        index_text.contains("Chunks Embedded: 2"),
+        "index_now must embed both functions: {index_text}"
+    );
+    let searched = send_request(
+        &mut stdin,
+        &mut reader,
+        json!({
+            "jsonrpc":"2.0","id":2,"method":"tools/call",
+            "params":{"name":"search_code","arguments":{
+                "query":"where is the tax of an invoice calculated",
+                "project_path": project_root.to_string_lossy()
+            }}
+        }),
+    )?;
+    let search_text = tool_text(&searched).to_string();
+    let first = search_text
+        .split("\n## ")
+        .find(|block| block.contains("**Reason:**"))
+        .ok_or_else(|| format!("no results: {search_text}"))?;
+    assert!(first.contains("compute_invoice_tax"), "{search_text}");
+    assert!(!first.contains("semantic 0.00"), "{search_text}");
+    child.kill()?;
+    Ok(())
+}
