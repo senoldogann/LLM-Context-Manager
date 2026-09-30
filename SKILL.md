@@ -94,5 +94,5 @@ installed):
 }
 ```
 
-`npx @senoldogann/context-manager install` configures the MCP server for Claude
-Code, Codex, Cursor, Claude Desktop and Antigravity.
+`npx @senoldogann/context-manager install` (0.4.0 or later) configures the MCP
+server for Claude Code, Codex, Cursor, Claude Desktop and Antigravity.
