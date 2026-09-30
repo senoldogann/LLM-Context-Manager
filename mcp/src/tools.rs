@@ -625,11 +625,13 @@ pub(crate) fn schedule_semantic_upgrade(
     state: Arc<crate::server::ServerState>,
     project_path: std::sync::Arc<str>,
     db_path: String,
+    kind: crate::server::SemanticUpgradeKind,
 ) {
-    // Otomatik yenileme yükseltme bitene kadar ertelenir; aksi halde eksik
-    // vektör tablosunu görüp aynı embedding işini ikinci kez başlatır.
+    // Hızlı indeks yükseltmesi bitene kadar otomatik yenileme ertelenir; model
+    // değişikliği yükseltmesi graf yenilemelerini durdurmaz (bkz.
+    // `SemanticUpgradeKind`).
     let project_key = crate::server::project_key_for_path(&project_path);
-    state.begin_semantic_upgrade(&project_key);
+    state.begin_semantic_upgrade(&project_key, kind);
     // Detached worker: MCP çıkışında ölmeyen, kendi process grubunda koşan süreç.
     // Yalnızca iş tamamlandığında (süreç hâlâ yaşıyorsa) engine cache tazelenir.
     tokio::spawn(async move {
@@ -648,7 +650,7 @@ pub(crate) fn schedule_semantic_upgrade(
                 tracing::warn!(error = %error, "Background semantic upgrade failed");
             }
         }
-        refresh_state.end_semantic_upgrade(&project_key);
+        refresh_state.end_semantic_upgrade(&project_key, kind);
     });
 }
 
@@ -871,6 +873,7 @@ async fn run_index_project(
                     state.clone(),
                     project_path.to_string().into(),
                     db_path.clone(),
+                    crate::server::SemanticUpgradeKind::QuickIndex,
                 );
             }
 

@@ -447,8 +447,9 @@ async fn run_refresh_loop(
     // sonraki tur bu yüzden tam karşılaştırma yapar, kaybolan değişiklik kalmaz.
     let mut rescan_after_failure = false;
     loop {
-        // Bekleyen iş yoksa ya da iş yükseltme yüzünden ertelendiyse yeni sinyal
-        // beklenir; yükseltme bitince `end_semantic_upgrade` döngüyü uyandırır.
+        // Bekleyen iş yoksa ya da iş hızlı indeks yükseltmesi yüzünden
+        // ertelendiyse yeni sinyal beklenir; yükseltme bitince
+        // `end_semantic_upgrade` döngüyü uyandırır.
         if pending.is_empty() || waiting_for_upgrade {
             let Some(signal) = signals.recv().await else {
                 return;
@@ -479,10 +480,11 @@ async fn run_refresh_loop(
                 Err(_) => break,
             }
         }
-        // Hızlı indeksin semantik yükseltmesi sürerken `update_index` eksik
-        // vektör tablosunu onarmaya ya da tam yeniden indekslemeye girip
-        // yükseltmenin embedding işini ikinci kez yapar; yenileme ertelenir.
-        waiting_for_upgrade = server.semantic_upgrade_running(&project_key);
+        // Hızlı indeksin semantik yükseltmesi sürerken canlı yenileme değişen
+        // parçaları graf-yalnız generation'a embed eder ve yarım bir vektör
+        // tablosu doğururdu; yenileme ertelenir. Model değişikliği yükseltmesi
+        // yenilemeyi durdurmaz (canlı indeks o durumda vektör yazmaz).
+        waiting_for_upgrade = server.quick_index_upgrade_running(&project_key);
         let count = pending.len();
         if waiting_for_upgrade {
             publish_waiting_for_upgrade(&handle, count);
@@ -696,11 +698,11 @@ async fn refresh_once(
     // Döngünün yükseltme denetimi kilit beklenirken eskimiş olabilir: `index_now`
     // hızlı indeksi kilit altında bitirip yükseltmeyi kaydeder. Kilit bizdeyken
     // yeni yükseltme başlayamayacağı için bu denetim yarışı kapatır; aksi halde
-    // yenileme yükseltmenin kurduğu generation'ın yerine eskisini günceller.
-    if server.semantic_upgrade_running(project_key) {
+    // yenileme graf-yalnız generation'a yarım bir vektör tablosu yazar.
+    if server.quick_index_upgrade_running(project_key) {
         tracing::info!(
             project = %project_key,
-            "Auto-refresh deferred: a semantic upgrade started while waiting for the project lock"
+            "Auto-refresh deferred: a quick-index semantic upgrade started while waiting for the project lock"
         );
         return Ok(RefreshOutcome::Deferred);
     }

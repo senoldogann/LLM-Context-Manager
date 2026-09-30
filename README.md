@@ -259,7 +259,8 @@ and dimension produced its vectors, and vectors of two models are never mixed.
 After a change (including an upgrade from 0.3.x, whose Ollama-built index meets
 the new local default), the MCP server re-embeds the active index once in the
 background (the freshness line says `semantic index being rebuilt`; auto-refresh
-waits for it and `search_code` uses graph results until it finishes).
+keeps the graph fresh meanwhile and `search_code` uses graph results until it
+finishes).
 `ccm-cli index` / `index_project` re-embed on demand the same way.
 
 If the embedding source is unavailable (Ollama down, model download failed),

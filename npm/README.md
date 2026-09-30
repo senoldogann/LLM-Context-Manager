@@ -174,7 +174,7 @@ CCM_DOWNLOAD_ATTEMPTS=3
 - **Download:** ~124 MB on first use, or ahead of time with `npx @senoldogann/context-manager models pull`. Files are pinned to a Hugging Face revision, SHA-256 verified, and stored in `~/.ccm/models/` (`CCM_MODEL_DIR` moves it; `HF_ENDPOINT` selects a mirror). A mismatch or failed download is reported explicitly; the index then stays graph-only until the next run.
 - **Air-gapped:** copy a verified `~/.ccm/models` directory to the target machine; pre-placed files are used after checksum verification.
 - **Provider selection:** `EMBEDDING_PROVIDER=local|ollama|openai` wins. If it is unset but `EMBEDDING_HOST` or `EMBEDDING_MODEL` is set, the previous Ollama/OpenAI behavior is kept, so existing configs work unchanged. `CCM_DISABLE_EMBEDDER=1` turns semantic search off.
-- **Changing models** (including upgrading from 0.3.x with an Ollama-built index): the MCP server re-embeds the active index once in the background, and `index_project` / `ccm-cli index` do it on demand; vectors of different models are never mixed, and `search_code` uses graph results until the rebuild finishes.
+- **Changing models** (including upgrading from 0.3.x with an Ollama-built index): the MCP server re-embeds the active index once in the background while auto-refresh keeps the graph fresh, and `index_project` / `ccm-cli index` do it on demand; vectors of different models are never mixed, and `search_code` uses graph results until the rebuild finishes.
 - **Intel Macs (`x86_64-apple-darwin`):** no prebuilt ONNX Runtime exists for this target, so the built-in model is not included and Ollama remains the default.
 
 Advanced overrides:

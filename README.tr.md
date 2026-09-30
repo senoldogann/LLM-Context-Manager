@@ -251,8 +251,9 @@ halde yerel model seçilir. `CCM_DISABLE_EMBEDDER=1` semantik aramayı kapatır.
 revizyon ve boyutu kaydeder; iki modelin vektörleri asla karışmaz. Değişiklikten
 sonra (0.3.x'ten yükseltmede Ollama ile kurulmuş indeksin yeni yerel varsayılanla
 karşılaşması dahil) MCP sunucusu etkin indeksi arka planda bir kez yeniden embed
-eder (tazelik satırı `semantic index being rebuilt` der; otomatik yenileme onu
-bekler ve `search_code` o bitene kadar graf sonuçlarını kullanır). `ccm-cli index` /
+eder (tazelik satırı `semantic index being rebuilt` der; otomatik yenileme bu
+sırada grafı güncel tutar ve `search_code` o bitene kadar graf sonuçlarını
+kullanır). `ccm-cli index` /
 `index_project` aynı işi istendiğinde yapar.
 
 Embedding kaynağına ulaşılamazsa (Ollama kapalı, model indirilemedi) indeksleme

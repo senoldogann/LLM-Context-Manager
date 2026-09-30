@@ -68,13 +68,51 @@ pub struct ServerState {
     /// Proje başına otomatik yenileme durumu (anahtar: kanonik proje yolu).
     freshness:
         std::sync::Mutex<std::collections::HashMap<String, Arc<crate::freshness::FreshnessHandle>>>,
-    /// Süren semantik yükseltme sayısı, proje başına (anahtar: kanonik proje yolu).
-    /// Aynı projede üst üste hızlı indeks alınırsa yükseltmeler çakışır; sayaç
-    /// yenilemenin ancak sonuncusu bitince başlamasını sağlar.
-    semantic_upgrades: std::sync::Mutex<std::collections::HashMap<String, usize>>,
+    /// Süren semantik yükseltmelerin türe göre sayısı, proje başına (anahtar:
+    /// kanonik proje yolu). Aynı projede üst üste hızlı indeks alınırsa
+    /// yükseltmeler çakışır; sayaç ertelenen yenilemenin ancak sonuncusu bitince
+    /// başlamasını sağlar.
+    semantic_upgrades: std::sync::Mutex<std::collections::HashMap<String, SemanticUpgradeCounts>>,
     /// Embedding kimliği değiştiği için bu süreçte yeniden embed'i planlanmış
     /// projeler (anahtar: kanonik proje yolu); her proje süreç başına bir kez.
     reembeds: std::sync::Mutex<std::collections::HashSet<String>>,
+}
+
+/// Semantik yükseltmenin nedeni; otomatik yenilemenin onu bekleyip
+/// beklemeyeceğini belirler.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum SemanticUpgradeKind {
+    /// Hızlı (graf-yalnız) indeksin vektörleri kuruluyor. Canlı yenileme bu sürede
+    /// değişen parçaları graf-yalnız generation'a embed eder ve yarım bir vektör
+    /// tablosu doğururdu (arama yarım vektörleri kullanırdı); yenilemeler yükseltme
+    /// bitene kadar ertelenir.
+    QuickIndex,
+    /// Etkin indeksin vektörleri başka bir embedding modeline ait ve yeniden embed
+    /// ediliyor. Canlı indeks bu durumda vektör yazmaz, korunacak bir şey yoktur:
+    /// graf yenilemeleri sürer. Yeni generation etkinleşince yabancı aktivasyon
+    /// olarak yüklenir; tam karşılaştırma arada yapılan değişiklikleri yeni
+    /// kimlikle embed ederek yeniden uygular.
+    ModelChange,
+}
+
+/// Bir projede süren semantik yükseltmelerin türe göre sayısı.
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+struct SemanticUpgradeCounts {
+    quick_index: usize,
+    model_change: usize,
+}
+
+impl SemanticUpgradeCounts {
+    fn count_mut(&mut self, kind: SemanticUpgradeKind) -> &mut usize {
+        match kind {
+            SemanticUpgradeKind::QuickIndex => &mut self.quick_index,
+            SemanticUpgradeKind::ModelChange => &mut self.model_change,
+        }
+    }
+
+    fn total(&self) -> usize {
+        self.quick_index + self.model_change
+    }
 }
 
 #[derive(Clone)]
@@ -438,46 +476,47 @@ impl ServerState {
         }
     }
 
-    /// Semantik yükseltme başladı (hızlı indeks ya da embedding kimliği
-    /// değişikliği); otomatik yenileme ertelenir, tazelik satırı semantik indeksin
-    /// yeniden kurulduğunu söyler.
-    pub(crate) fn begin_semantic_upgrade(&self, project_key: &str) {
+    /// Semantik yükseltme başladı. Tazelik satırı semantik indeksin yeniden
+    /// kurulduğunu söyler; hızlı indeks yükseltmesinde otomatik yenileme ayrıca
+    /// ertelenir (bkz. `SemanticUpgradeKind`).
+    pub(crate) fn begin_semantic_upgrade(&self, project_key: &str, kind: SemanticUpgradeKind) {
         let mut upgrades = self.semantic_upgrades.lock().unwrap();
-        *upgrades.entry(project_key.to_string()).or_insert(0) += 1;
+        *upgrades
+            .entry(project_key.to_string())
+            .or_default()
+            .count_mut(kind) += 1;
         // Sayaç kilidi tutulurken yayınlanır: eşzamanlı bir bitişin yayını bu
         // durumu ezemez.
         self.publish_semantic_upgrade(project_key, true);
     }
 
-    /// Yükseltme bitti (başarılı ya da değil). Projede başka yükseltme kalmadıysa
-    /// ertelenen yenileme uyandırılır; çakışan bir yükseltme sürüyorsa ertelenme
+    /// Yükseltme bitti (başarılı ya da değil). Süren hızlı indeks yükseltmesi
+    /// kalmadıysa tam karşılaştırma istenir: ertelenen değişiklikler işlenir ve
+    /// yükseltmenin kurduğu generation (varsa) yüklenip arada yapılan
+    /// değişiklikler ona uygulanır. Hızlı indeks yükseltmesi sürüyorsa ertelenme
     /// onun bitişine kadar sürer.
-    pub(crate) fn end_semantic_upgrade(&self, project_key: &str) {
+    pub(crate) fn end_semantic_upgrade(&self, project_key: &str, kind: SemanticUpgradeKind) {
         let remaining = {
             let mut upgrades = self.semantic_upgrades.lock().unwrap();
-            let remaining = match upgrades.get_mut(project_key) {
-                Some(count) if *count > 1 => {
-                    *count -= 1;
-                    *count
-                }
-                Some(_) => {
-                    upgrades.remove(project_key);
-                    0
-                }
-                None => {
-                    tracing::warn!(
-                        project = %project_key,
-                        "Semantic upgrade ended without a registered start"
-                    );
-                    0
-                }
-            };
-            if remaining == 0 {
+            let counts = upgrades.entry(project_key.to_string()).or_default();
+            let count = counts.count_mut(kind);
+            if *count == 0 {
+                tracing::warn!(
+                    project = %project_key,
+                    kind = ?kind,
+                    "Semantic upgrade ended without a registered start"
+                );
+            } else {
+                *count -= 1;
+            }
+            let remaining = *counts;
+            if remaining.total() == 0 {
+                upgrades.remove(project_key);
                 self.publish_semantic_upgrade(project_key, false);
             }
             remaining
         };
-        if remaining == 0 {
+        if remaining.quick_index == 0 {
             self.request_refresh(project_key);
         }
     }
@@ -494,11 +533,12 @@ impl ServerState {
     /// Etkin indeksin vektörleri yapılandırılmış embedding modelinden farklı bir
     /// modelle kurulduysa hızlı indeksin ayrık semantik yükseltmesini başlatır:
     /// vektörler yapılandırılmış modelle bir kez yeniden üretilir ve yeni
-    /// generation etkinleşir; otomatik yenileme o sürede ertelenir. Proje başına
-    /// süreç ömründe bir kez denenir; yükseltme başarısız olursa neden tazelik
-    /// satırında kalır ve `index_project` onarır. Proje kilidi altında çağrılır:
-    /// yükseltme böylece aynı projede elle indekslemeyle ya da başka bir
-    /// yükseltmeyle aynı anda başlamaz.
+    /// generation etkinleşir. Graf yenilemeleri o sürede sürer (bkz.
+    /// `SemanticUpgradeKind::ModelChange`). Proje başına süreç ömründe bir kez
+    /// denenir; yükseltme başarısız olursa neden tazelik satırında kalır ve
+    /// `index_project` onarır. Proje kilidi altında çağrılır: yükseltme böylece
+    /// aynı projede elle indekslemeyle ya da başka bir yükseltmeyle aynı anda
+    /// başlamaz.
     pub(crate) fn schedule_reembed_once(
         self: &Arc<Self>,
         project_key: &str,
@@ -521,16 +561,19 @@ impl ServerState {
             self.clone(),
             project_key.into(),
             db_path.to_string_lossy().to_string(),
+            SemanticUpgradeKind::ModelChange,
         );
         Ok(())
     }
 
-    pub(crate) fn semantic_upgrade_running(&self, project_key: &str) -> bool {
+    /// Hızlı indeksin semantik yükseltmesi sürüyor mu? Otomatik yenileme yalnızca
+    /// bu sürede ertelenir.
+    pub(crate) fn quick_index_upgrade_running(&self, project_key: &str) -> bool {
         self.semantic_upgrades
             .lock()
             .unwrap()
             .get(project_key)
-            .is_some_and(|count| *count > 0)
+            .is_some_and(|counts| counts.quick_index > 0)
     }
 
     /// Projenin bekleyen yenilemesini en fazla `budget` kadar bekler; otomatik

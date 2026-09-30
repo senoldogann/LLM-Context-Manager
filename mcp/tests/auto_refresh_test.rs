@@ -419,7 +419,7 @@ fn embedding_model_change_rebuilds_the_semantic_index_in_the_background(
     // Model değişti: sunucu vektörleri kendiliğinden bir kez yeniden kurar.
     // Worker gecikmesi yükseltmeyi okumaların göreceği kadar uzatır.
     let mut env = embedding_env(&host, "ccm-test-embed-b");
-    env.push(("CCM_INTERNAL_INDEX_TEST_DELAY_MS", "3000"));
+    env.push(("CCM_INTERNAL_INDEX_TEST_DELAY_MS", "8000"));
     let mut session = McpSession::start(project.path(), &env)?;
     poll_find_nodes(
         &mut session,
@@ -428,12 +428,34 @@ fn embedding_model_change_rebuilds_the_semantic_index_in_the_background(
         |text| freshness_line(text).contains("semantic index being rebuilt in the background"),
     )?;
 
+    // Yeniden embed graf yenilemelerini durdurmaz: yükseltme sürerken yapılan
+    // değişiklik taze görünür.
+    fs::write(
+        project.path().join("added.rs"),
+        "fn during_rebuild_symbol() {}\n",
+    )?;
+    let during = poll_find_nodes(
+        &mut session,
+        "during_rebuild_symbol",
+        Duration::from_secs(20),
+        |text| {
+            found_node(text, "during_rebuild_symbol")
+                && freshness_line(text).contains("semantic index being rebuilt in the background")
+        },
+    )?;
+    let line = freshness_line(&during);
+    assert!(
+        line.starts_with("_Index: fresh · auto-refresh on · ")
+            && !line.contains("waiting for semantic upgrade"),
+        "unexpected freshness line during the re-embed: {during}"
+    );
+
     poll_find_nodes(
         &mut session,
-        "existing_symbol",
+        "during_rebuild_symbol",
         Duration::from_secs(60),
         |text| {
-            found_node(text, "existing_symbol")
+            found_node(text, "during_rebuild_symbol")
                 && freshness_line(text) == "_Index: fresh · auto-refresh on_"
         },
     )?;
@@ -441,6 +463,22 @@ fn embedding_model_change_rebuilds_the_semantic_index_in_the_background(
         recorded_embedding_model(project.path())?.as_deref(),
         Some("ccm-test-embed-b"),
         "the rebuilt generation records the configured model"
+    );
+    // Yeni generation yabancı aktivasyon olarak yüklendi; tam karşılaştırma
+    // yükseltme sırasında eklenen dosyayı yeni modelle embed etti.
+    let artifacts = ccm_core::resolve_index_artifacts(&project.path().to_string_lossy(), None)?;
+    let added_vectors = tokio::runtime::Runtime::new()?.block_on(async {
+        ccm_core::vector::store::LanceDbStore::new(
+            &artifacts.db_path.to_string_lossy(),
+            "code_vectors",
+        )
+        .await?
+        .vectors_for_file("./added.rs")
+        .await
+    })?;
+    assert!(
+        !added_vectors.is_empty(),
+        "the file added during the re-embed must have vectors in the new generation"
     );
     Ok(())
 }
