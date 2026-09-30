@@ -74,7 +74,7 @@ kirilir?" gibi sorulari tahminden sorgulanabilir gercege donusturur.
 ### Yüksek Performanslı Çekirdek
 - **Rust Tabanlı** - Hızlı indeksleme ve sorgulama
 - **Yerleşik Embedding** - Semantik arama kurulumsuz çalışır: sabitlenmiş, çok dilli ve kod üzerinde eğitilmiş bir embedding modeli ikilinin içinde çalışır (Ollama ve API anahtarı gerekmez)
-- **Toplu Embedding** - Uzunluğa göre sıralanmış batch'ler, tüm fiziksel çekirdekler
+- **Belirlenimci Embedding** - Tüm fiziksel çekirdeklerde çıkarım başına tek parça; bir parçanın vektörü komşularına bağlı olmaz (Ollama/OpenAI istekleri batch'lenir)
 - **LanceDB** - Düşük gecikmeli vektör depolama
 - **Tree-sitter** - Rust, Python, TypeScript, JavaScript, Go, Java, Kotlin, C#, C, C++, Ruby, PHP ve Swift için sağlam AST analizi
 
@@ -233,8 +233,11 @@ token'da kesilir) ONNX Runtime üzerinden, tüm fiziksel çekirdeklerle embed ed
 - **Ağsız kurulum:** bağlı bir makinede `ccm-cli models pull` çalıştırıp
   `~/.ccm/models` dizinini kopyalayın; önceden yerleştirilen dosyalar doğrulandıktan
   sonra kullanılır. `CCM_MODEL_DIR` model kökünü, `HF_ENDPOINT` aynayı değiştirir.
-- **Ayar:** `CCM_EMBED_THREADS` (varsayılan: fiziksel çekirdek sayısı),
-  `CCM_EMBED_BATCH_SIZE` (varsayılan 32; parçalar batch'lenmeden önce uzunluğa göre sıralanır).
+- **Ayar:** `CCM_EMBED_THREADS` (varsayılan: fiziksel çekirdek sayısı). Model
+  çıkarım başına tek parça embed eder: int8 aktivasyonları çağrı başına quantize
+  edildiğinden batch'leme bir parçanın vektörünü aynı çağrıdaki parçalara bağlı
+  kılardı. `CCM_EMBED_BATCH_SIZE` çağrı başına metin sayısını değiştirir
+  (varsayılan yerel modelde 1, Ollama/OpenAI isteklerinde 32).
 - **Intel Mac (`x86_64-apple-darwin`):** ONNX Runtime bu hedef için hazır ikili
   yayımlamadığından yerel model derlenmez; orada varsayılan Ollama'dır
   (`ccm-cli doctor` bunu bildirir).

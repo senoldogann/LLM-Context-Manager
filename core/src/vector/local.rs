@@ -6,7 +6,15 @@
 //! Çıkarım tokio çalışma iş parçacıklarını meşgul etmemek için
 //! `spawn_blocking` içinde, ONNX Runtime'ın kendi iş parçacığı havuzunda
 //! yapılır.
+//!
+//! Varsayılan olarak her ONNX çıkarımı tek metin alır. IBM'in int8 dosyası
+//! aktivasyonları çağrı başına, tüm batch tensörü üzerinden dinamik quantize
+//! eder: aynı çağrıdaki metinler (ve dolgu) birbirinin vektörünü değiştirir.
+//! Tek metinle vektör yalnızca metnin fonksiyonudur; parça yeniden kullanımı ve
+//! canlı indeks bu belirlenimciliğe dayanır. `CCM_EMBED_BATCH_SIZE` çıkarım
+//! batch'ini açıkça büyütür.
 
+use crate::vector::embedder::embed_batch_size_from_env;
 use crate::vector::local_model::{
     download_missing_files, model_dir, read_verified, LocalModelSpec, ModelSource,
     DEFAULT_LOCAL_MODEL,
@@ -19,13 +27,19 @@ use fastembed::{
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 
+/// `CCM_EMBED_BATCH_SIZE` verilmediğinde tek ONNX çıkarımındaki metin sayısı
+/// (bkz. modül belgesi).
+const DEFAULT_INFERENCE_BATCH: usize = 1;
+
 /// Yüklenmiş yerel embedding modeli.
 pub struct LocalEmbedder {
-    /// fastembed çıkarımı `&mut` ister; aynı anda tek batch çalışır, ONNX
-    /// Runtime o batch'i tüm iş parçacıklarına yayar.
+    /// fastembed çıkarımı `&mut` ister; aynı anda tek çıkarım çalışır, ONNX
+    /// Runtime onu tüm iş parçacıklarına yayar. Kilit çıkarım başına alınır.
     model: Mutex<TextEmbedding>,
     spec: &'static LocalModelSpec,
     threads: usize,
+    /// Tek ONNX çıkarımındaki en fazla metin sayısı.
+    inference_batch: usize,
     directory: PathBuf,
 }
 
@@ -46,10 +60,13 @@ async fn load(spec: &'static LocalModelSpec) -> Result<Arc<LocalEmbedder>> {
     let source = ModelSource::from_env(spec);
     download_missing_files(&spec.files(), &directory, &source).await?;
     let threads = embedding_threads()?;
-    tokio::task::spawn_blocking(move || LocalEmbedder::load(spec, directory, &source, threads))
-        .await
-        .map_err(|error| anyhow::anyhow!("Local embedding model loader task failed: {}", error))?
-        .map(Arc::new)
+    let inference_batch = embed_batch_size_from_env()?.unwrap_or(DEFAULT_INFERENCE_BATCH);
+    tokio::task::spawn_blocking(move || {
+        LocalEmbedder::load(spec, directory, &source, threads, inference_batch)
+    })
+    .await
+    .map_err(|error| anyhow::anyhow!("Local embedding model loader task failed: {}", error))?
+    .map(Arc::new)
 }
 
 /// ONNX Runtime iş parçacığı sayısı: `CCM_EMBED_THREADS` ya da fiziksel
@@ -79,6 +96,7 @@ impl LocalEmbedder {
         directory: PathBuf,
         source: &ModelSource,
         threads: usize,
+        inference_batch: usize,
     ) -> Result<Self> {
         let started = std::time::Instant::now();
         let read = |file| read_verified(&directory, file, source);
@@ -93,8 +111,8 @@ impl LocalEmbedder {
         )
         .with_pooling(Pooling::Cls)
         // IBM'in int8 dosyası aktivasyonları çalışma anında (dinamik) quantize
-        // eder; fastembed bu modda çağrı başına tek batch çalıştırır. Batch'leri
-        // vektör deposu kurar.
+        // eder; fastembed bu modda çağrıya verilen metinleri tek batch olarak
+        // çalıştırır. Çağrı başına metin sayısını `embed_blocking` belirler.
         .with_quantization(QuantizationMode::Dynamic);
         let options = InitOptionsUserDefined::new()
             .with_max_length(spec.max_tokens)
@@ -114,6 +132,7 @@ impl LocalEmbedder {
             revision = spec.revision,
             directory = %directory.display(),
             threads,
+            inference_batch,
             elapsed_ms = started.elapsed().as_millis() as u64,
             "Loaded local embedding model"
         );
@@ -121,11 +140,13 @@ impl LocalEmbedder {
             model: Mutex::new(embedding),
             spec,
             threads,
+            inference_batch,
             directory,
         })
     }
 
-    /// Metinleri giriş sırasıyla embed eder; çağrı tek batch olarak çalışır.
+    /// Metinleri giriş sırasıyla embed eder; her ONNX çıkarımı en fazla
+    /// `inference_batch` metin alır (varsayılan tek metin).
     pub async fn embed(self: Arc<Self>, texts: Vec<String>) -> Result<Vec<Vec<f32>>> {
         if texts.is_empty() {
             return Ok(Vec::new());
@@ -136,22 +157,35 @@ impl LocalEmbedder {
     }
 
     fn embed_blocking(&self, texts: &[String]) -> Result<Vec<Vec<f32>>> {
-        let mut model = self
-            .model
-            .lock()
-            .map_err(|_| anyhow::anyhow!("Local embedding model lock is poisoned"))?;
-        let vectors = model.embed(texts, None).map_err(|error| {
-            anyhow::anyhow!(
-                "Local embedding model failed on a batch of {} text(s): {}",
-                texts.len(),
-                error
-            )
-        })?;
-        if vectors.len() != texts.len() {
+        let mut vectors = Vec::with_capacity(texts.len());
+        for batch in texts.chunks(self.inference_batch) {
+            vectors.extend(self.run_inference(batch)?);
+        }
+        Ok(vectors)
+    }
+
+    /// Tek ONNX çıkarımı: `batch` tek tensör olarak çalışır. Kilit yalnızca bu
+    /// çıkarım süresince tutulur; eşzamanlı sorgu embedding'i uzun bir indeksleme
+    /// çağrısının bitmesini beklemez.
+    fn run_inference(&self, batch: &[String]) -> Result<Vec<Vec<f32>>> {
+        let vectors = {
+            let mut model = self
+                .model
+                .lock()
+                .map_err(|_| anyhow::anyhow!("Local embedding model lock is poisoned"))?;
+            model.embed(batch, None).map_err(|error| {
+                anyhow::anyhow!(
+                    "Local embedding model failed on a batch of {} text(s): {}",
+                    batch.len(),
+                    error
+                )
+            })?
+        };
+        if vectors.len() != batch.len() {
             anyhow::bail!(
                 "Local embedding model returned {} vectors for {} texts",
                 vectors.len(),
-                texts.len()
+                batch.len()
             );
         }
         if let Some(vector) = vectors.iter().find(|vector| vector.len() != self.spec.dim) {
@@ -168,11 +202,12 @@ impl LocalEmbedder {
     /// Tanılama çıktısı için kısa özet.
     pub fn describe(&self) -> String {
         format!(
-            "local model '{}' @ {} ({}-d, {} threads) from {}",
+            "local model '{}' @ {} ({}-d, {} threads, {} text(s) per inference) from {}",
             self.spec.repo,
             &self.spec.revision[..12],
             self.spec.dim,
             self.threads,
+            self.inference_batch,
             self.directory.display()
         )
     }
@@ -249,6 +284,47 @@ mod tests {
                 "each query must rank its own passage first"
             );
         }
+        Ok(())
+    }
+
+    /// Varsayılan ayarla (`CCM_EMBED_BATCH_SIZE` tanımsız) vektör yalnızca metnin
+    /// fonksiyonudur: aynı metin tek başına ve farklı uzunluktaki metinlerle aynı
+    /// çağrıda embed edildiğinde birebir aynı vektörü verir. Parça yeniden
+    /// kullanımı ve canlı indeks bu belirlenimciliğe dayanır.
+    #[tokio::test]
+    #[ignore = "downloads the ~120 MB local model; set CCM_TEST_LOCAL_MODEL=1"]
+    async fn local_model_vectors_do_not_depend_on_batch_mates() -> anyhow::Result<()> {
+        if !opted_in() {
+            return Ok(());
+        }
+        assert!(
+            std::env::var_os("CCM_EMBED_BATCH_SIZE").is_none(),
+            "this test checks the default inference batch; unset CCM_EMBED_BATCH_SIZE"
+        );
+        let embedder = shared_local_embedder().await?;
+        let target = "pub fn compute_invoice_tax(amount: f64, rate: f64) -> f64 { amount * rate }"
+            .to_string();
+        let texts = vec![
+            "fn noop() {}".to_string(),
+            target.clone(),
+            "/// Opens a TCP connection and retries with a fixed delay until the deadline passes.\n\
+             pub fn connect_with_retry(host: &str, port: u16, deadline: std::time::Instant) -> std::io::Result<std::net::TcpStream> {\n\
+                 loop {\n\
+                     match std::net::TcpStream::connect((host, port)) {\n\
+                         Ok(stream) => return Ok(stream),\n\
+                         Err(_) if std::time::Instant::now() < deadline => std::thread::sleep(std::time::Duration::from_millis(50)),\n\
+                         Err(error) => return Err(error),\n\
+                     }\n\
+                 }\n\
+             }"
+            .to_string(),
+        ];
+        let alone = embedder.clone().embed(vec![target]).await?;
+        let together = embedder.clone().embed(texts).await?;
+        assert_eq!(
+            alone[0], together[1],
+            "a chunk's vector must not depend on the texts embedded with it"
+        );
         Ok(())
     }
 

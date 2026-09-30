@@ -75,7 +75,7 @@ questions like "what breaks if I change this?" from guesses into queryable facts
 ### ⚡ High-Performance Core
 - **Rust-Powered** - Blazing fast indexing and queries
 - **Built-in Embeddings** - Semantic search works out of the box: a pinned multilingual, code-trained embedding model runs inside the binary (no Ollama, no API key)
-- **Batch Embedding** - Length-sorted batches on all physical cores
+- **Deterministic Embedding** - One chunk per inference call on all physical cores, so a chunk's vector never depends on its neighbors (Ollama/OpenAI requests are batched)
 - **LanceDB** - Millisecond-latency vector storage
 - **Tree-sitter** - Robust AST for Rust, Python, TypeScript, JavaScript, Go, Java, Kotlin, C#, C, C++, Ruby, PHP, and Swift
 
@@ -240,8 +240,11 @@ to 512 tokens) through ONNX Runtime, using all physical CPU cores.
 - **Offline / air-gapped:** run `ccm-cli models pull` on a connected machine and
   copy `~/.ccm/models` over; pre-placed files are used after checksum verification.
   `CCM_MODEL_DIR` moves the models root, `HF_ENDPOINT` selects a mirror.
-- **Tuning:** `CCM_EMBED_THREADS` (default: physical cores), `CCM_EMBED_BATCH_SIZE`
-  (default 32; chunks are length-sorted before batching).
+- **Tuning:** `CCM_EMBED_THREADS` (default: physical cores). The model embeds one
+  chunk per inference call: its int8 activations are quantized per call, so
+  batching would make a chunk's vector depend on the chunks embedded with it.
+  `CCM_EMBED_BATCH_SIZE` overrides the texts per call (default 1 for the local
+  model, 32 for Ollama/OpenAI requests).
 - **Intel Macs (`x86_64-apple-darwin`):** ONNX Runtime ships no prebuilt binary
   for this target, so the local model is not compiled in and Ollama stays the
   default there (`ccm-cli doctor` says so).
@@ -397,9 +400,9 @@ with deterministic fixture embeddings in [`eval.yml`](./.github/workflows/eval.y
 (serde, flask, express) with real Ollama embeddings. Hybrid scoring passes
 82.9% (29/35) vs 80.0% (28/35) semantic-only; `get_context`/`read_graph` are
 20/20. On `search_code` alone Recall@5 is 0.600 vs 0.533. The built-in local
-model (the default) matches that semantic-only Recall@5 (0.533) with a higher
-MRR (0.489 vs 0.352) and indexes 4–7× faster on CPU (12–19 ms vs ~81 ms per
-chunk on an Apple M4). Full numbers, failure ledger and reproduction steps:
+model (the default) reaches Recall@5 0.600 semantic-only and 0.667 hybrid (MRR
+0.419 and 0.497 vs 0.352 and 0.436 for mxbai) and indexes 3–4× faster on CPU
+(19–23 ms vs 68–81 ms per chunk on an Apple M4). Full numbers, failure ledger and reproduction steps:
 [`benchmarks/README.md`](./benchmarks/README.md).
 
 ---

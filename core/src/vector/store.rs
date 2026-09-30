@@ -1,6 +1,6 @@
 use crate::vector::embedder::{
-    embedder_disabled_by_env, fixture_path_from_env, Embedder, EmbeddingIdentity,
-    EmbeddingIdentityMismatch,
+    embed_batch_size_from_env, embedder_disabled_by_env, fixture_path_from_env, Embedder,
+    EmbeddingIdentity, EmbeddingIdentityMismatch,
 };
 use anyhow::{Context, Result};
 use arrow_array::{FixedSizeListArray, Float32Array, RecordBatch, StringArray};
@@ -156,6 +156,11 @@ fn namespace_for_uri(uri: &str) -> String {
         .map(|name| name.to_string_lossy().to_string())
         .unwrap_or_else(|| "default".to_string())
 }
+
+/// `CCM_EMBED_BATCH_SIZE` verilmediğinde embedder'a tek çağrıda verilen metin
+/// sayısı; uzak sağlayıcıda bir HTTP isteğidir. Yerel model aldığı metinleri
+/// kendi çıkarım batch'ine böler (varsayılan tek metin, bkz. `vector::local`).
+const DEFAULT_EMBED_BATCH_SIZE: usize = 32;
 
 /// Embed edilmiş, tabloya yazılmayı bekleyen parçalar (kimlik, metin, vektör).
 #[derive(Debug, Default)]
@@ -341,8 +346,8 @@ impl LanceDbStore {
     /// aynı sırada vektör döndürür. Boş girişte servis hiç çağrılmaz.
     ///
     /// Metinler uzunluğa göre sıralanıp batch'lenir: benzer uzunluktakiler aynı
-    /// batch'e düşer ve yerel modelde dolgu (padding) hesabı azalır. Sonuçlar
-    /// giriş sırasına geri yazılır.
+    /// batch'e düşer ve batch'i tek çıkarımda çalıştıran sağlayıcılarda dolgu
+    /// (padding) hesabı azalır. Sonuçlar giriş sırasına geri yazılır.
     async fn embed_in_batches(
         &self,
         texts: Vec<String>,
@@ -477,11 +482,7 @@ impl LanceDbStore {
         // 1. Generate Embeddings in batches for performance.
         // Fixture modunda vektörler NDJSON'dan alınır (eksik chunk hata üretir);
         // aksi halde embedder yoksa vektör indeksleme atlanır (mevcut davranış).
-        let batch_size: usize = std::env::var("CCM_EMBED_BATCH_SIZE")
-            .ok()
-            .and_then(|v| v.parse().ok())
-            .unwrap_or(32)
-            .max(1); // guard: chunks(0) panics at runtime
+        let batch_size = embed_batch_size_from_env()?.unwrap_or(DEFAULT_EMBED_BATCH_SIZE);
         let mut embeddings: Vec<Vec<f32>> = Vec::with_capacity(all_chunks.len());
         let counts = if let Some(fixture) = self.fixture.as_ref() {
             for chunk_id in &all_chunk_ids {

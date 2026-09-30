@@ -32,6 +32,33 @@ pub fn embedder_disabled_by_env() -> bool {
         .unwrap_or(false)
 }
 
+/// `CCM_EMBED_BATCH_SIZE`: tek embedding çağrısındaki en fazla metin sayısı
+/// (uzak sağlayıcıda bir HTTP isteği, yerel modelde bir ONNX çıkarımı).
+/// Tanımsız ya da boşsa `None`: sağlayıcının varsayılanı geçerlidir. Pozitif
+/// tam sayı olmayan değer açık bir hatadır.
+pub fn embed_batch_size_from_env() -> Result<Option<usize>> {
+    match std::env::var("CCM_EMBED_BATCH_SIZE") {
+        Ok(value) if value.trim().is_empty() => Ok(None),
+        Ok(value) => value
+            .trim()
+            .parse::<usize>()
+            .ok()
+            .filter(|size| *size > 0)
+            .map(Some)
+            .ok_or_else(|| {
+                anyhow::anyhow!(
+                    "CCM_EMBED_BATCH_SIZE must be a positive integer, got '{}'",
+                    value
+                )
+            }),
+        Err(std::env::VarError::NotPresent) => Ok(None),
+        Err(error) => Err(anyhow::anyhow!(
+            "CCM_EMBED_BATCH_SIZE is not valid: {}",
+            error
+        )),
+    }
+}
+
 /// `CCM_EMBEDDING_FIXTURE` ile verilen fixture yolu (boş değer tanımsız sayılır).
 pub fn fixture_path_from_env() -> Option<PathBuf> {
     std::env::var("CCM_EMBEDDING_FIXTURE")

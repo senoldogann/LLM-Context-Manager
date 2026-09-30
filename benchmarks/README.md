@@ -67,9 +67,10 @@ Default embedder since the local-embedder change:
 `ibm-granite/granite-embedding-97m-multilingual-r2` (IBM's int8 ONNX export,
 384-d, CLS pooling, 512-token inputs) run in-process by fastembed 7.1 / ONNX
 Runtime 1.28 on the CPU of an Apple M4 (10 cores: 4 performance + 6 efficiency),
-10 threads (physical cores). Same corpus, same 35 tasks, same code revision for
-every row; the mxbai row was re-run on this revision through Ollama and
-reproduced the recorded numbers exactly.
+10 threads (physical cores), one text per inference call (the shipped default;
+the batched rows set `CCM_EMBED_BATCH_SIZE=32`). Same corpus, same 35 tasks,
+same code revision for every row; the mxbai row was re-run on this revision
+through Ollama and reproduced the recorded numbers exactly.
 
 ### Search quality (search_code only, K=5)
 
@@ -77,13 +78,13 @@ reproduced the recorded numbers exactly.
 |---|---|---|---|---|
 | mxbai-embed-large (Ollama, 335M, 1024-d) | semantic-only | 8/15 | 0.533 | 0.352 |
 | | hybrid | 9/15 | 0.600 | 0.436 |
-| **granite-97m int8, batch 32 (default)** | semantic-only | 8/15 | 0.533 | **0.489** |
-| | hybrid | 8/15 | 0.533 | **0.489** |
-| granite-97m int8, `CCM_EMBED_BATCH_SIZE=1` | semantic-only | 9/15 | 0.600 | 0.419 |
+| **granite-97m int8, one text per call (default)** | semantic-only | **9/15** | **0.600** | 0.419 |
 | | hybrid | **10/15** | **0.667** | **0.497** |
+| granite-97m int8, `CCM_EMBED_BATCH_SIZE=32` | semantic-only | 8/15 | 0.533 | **0.489** |
+| | hybrid | 8/15 | 0.533 | 0.489 |
 
-Reports: [`results/local-granite-97m-int8/`](./results/local-granite-97m-int8/)
-(default) and [`results/local-granite-97m-int8-bs1/`](./results/local-granite-97m-int8-bs1/).
+Reports: [`results/local-granite-97m-int8-bs1/`](./results/local-granite-97m-int8-bs1/)
+(default) and [`results/local-granite-97m-int8-bs32/`](./results/local-granite-97m-int8-bs32/).
 `get_context` and `read_graph` do not depend on the embedder and match across
 rows, except `serde-graph-002`: its node id no longer exists in the graph built
 by the current parser ("Node not found in graph" for every embedder, so the
@@ -92,11 +93,11 @@ the v0.3.13 recording, not an embedding effect.
 
 ### Indexing speed (full index, same machine, back to back)
 
-| Repo | Chunks | mxbai via Ollama | local, batch 32 | local, batch 1 |
+| Repo | Chunks | mxbai via Ollama | local, one text per call (default) | local, batch 32 |
 |---|---|---|---|---|
-| flask | 2498 | 81.4 ms/chunk, 203.5 s | 12.2 ms/chunk, 33.8 s | 23.4 ms/chunk, 58.9 s |
-| express | 173 | 67.6 ms/chunk, 11.9 s | 17.1 ms/chunk, 3.1 s | 22.7 ms/chunk, 4.1 s |
-| serde | 4042 | 81.0 ms/chunk, 327.5 s | 19.1 ms/chunk, 77.3 s | 19.0 ms/chunk, 77.1 s |
+| flask | 2498 | 81.4 ms/chunk, 203.5 s | 23.4 ms/chunk, 58.9 s | 12.2 ms/chunk, 33.8 s |
+| express | 173 | 67.6 ms/chunk, 11.9 s | 22.7 ms/chunk, 4.1 s | 17.1 ms/chunk, 3.1 s |
+| serde | 4042 | 81.0 ms/chunk, 327.5 s | 19.0 ms/chunk, 77.1 s | 19.1 ms/chunk, 77.3 s |
 
 "ms/chunk" covers the embedding phase (including LanceDB writes); the time is
 the whole `ccm-cli index` run including parsing and the ~0.8 s model load. The
@@ -107,15 +108,18 @@ the load average moved between 30 and 12.
 
 ### What the local-model numbers say
 
-1. **Not worse than the mxbai baseline, 4–7× faster.** Semantic-only recall is
-   identical and MRR is higher (the first relevant hit ranks earlier); hybrid
-   loses one task at batch 32. Differences of one or two tasks out of 15 are
-   within noise for this pilot.
-2. **Batching changes int8 vectors.** IBM's int8 file quantizes activations
-   dynamically over the whole batch tensor, so a text's vector depends on its
-   batch-mates (cosine 0.95–0.97 to the same text embedded alone; the fp32 file
-   is batch-invariant). Embedding one text per call keeps vectors a pure
-   function of the text (what chunk reuse assumes) and scored best here.
+1. **Not worse than the mxbai baseline, 3–4× faster.** With the default (one
+   text per call) semantic-only and hybrid search each pass one more task than
+   mxbai, with higher MRR (the first relevant hit ranks earlier). Differences
+   of one or two tasks out of 15 are within noise for this pilot.
+2. **Batching changes int8 vectors, so the default is one text per call.**
+   IBM's int8 file quantizes activations dynamically over the whole batch
+   tensor, so a text's vector depends on its batch-mates (cosine 0.95–0.97 to
+   the same text embedded alone; the fp32 file is batch-invariant). One text
+   per inference call keeps vectors a pure function of the text (what chunk
+   reuse and the live index assume) and scored best here. `CCM_EMBED_BATCH_SIZE=32`
+   was up to 2× faster on flask and no faster on serde in these runs, at the
+   cost of that determinism (and, here, of recall).
 3. **int8 vs fp32:** single-text cosine to IBM's fp32 export is 0.946–0.977 on
    code snippets; the fp32 export reproduces the model card's similarity matrix
    to 0.002, the int8 one to 0.08 with the same ranking.
@@ -180,10 +184,10 @@ target/release/ccm-cli index --path benchmarks/corpus/serde
 
 # 3. Evaluate structural vs hybrid per repo (~2 min); CCM_BENCH_RESULTS keeps
 #    runs of different embedders apart
-CCM_BENCH_RESULTS=benchmarks/results/local-granite-97m-int8 benchmarks/scripts/run_benchmark.sh
+CCM_BENCH_RESULTS=benchmarks/results/local-granite-97m-int8-bs1 benchmarks/scripts/run_benchmark.sh
 
 # 4. Aggregate into the summary table (directory argument optional)
-python3 benchmarks/scripts/aggregate.py benchmarks/results/local-granite-97m-int8
+python3 benchmarks/scripts/aggregate.py benchmarks/results/local-granite-97m-int8-bs1
 ```
 
 Reports land in `benchmarks/results/<repo>.compare.json` (mxbai baseline) or the
