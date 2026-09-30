@@ -198,9 +198,29 @@ async fn live_incremental_updates_match_a_fresh_full_index() -> Result<()> {
     )?;
     assert_paths_step(&live, &root, "symbols deleted", &[util.clone(), service]).await?;
 
-    // Dosya silme: belirsizlik kalkar, çağrı kenarı geri gelir.
+    // Yarıda kalan uygulama: vektörler değiştikten sonra, graf değişmeden önce
+    // hata. Graf olduğu gibi kalmalıdır; yeni olay gelmeden yapılan sonraki tur
+    // dosyaları diskten yeniden kurar. Silinen dosyanın önceki adı (`compute`)
+    // belirsizliği kaldırır; çağıranın kenarı ancak bu ad hesaba katılırsa gelir.
+    let before_failure = live_signature(&live).await;
     std::fs::remove_file(&other)?;
-    assert_paths_step(&live, &root, "file deleted", &[other]).await?;
+    write(
+        "src/main.rs",
+        "mod util;\n\nfn main() {\n    let total = assist();\n    run(total);\n    run(total);\n}\n\nfn run(value: u32) {\n    assist();\n}\n",
+    )?;
+    std::env::set_var("CCM_INTERNAL_LIVE_TEST_FAIL_BEFORE_GRAPH_SWAP", "1");
+    let failed = live.apply_paths(&[other, main_rs.clone()]).await;
+    std::env::remove_var("CCM_INTERNAL_LIVE_TEST_FAIL_BEFORE_GRAPH_SWAP");
+    assert!(
+        failed.is_err(),
+        "the injected failure must surface: {failed:?}"
+    );
+    assert_eq!(
+        live_signature(&live).await,
+        before_failure,
+        "a failed apply must leave the graph unchanged"
+    );
+    assert_paths_step(&live, &root, "retry after a failed apply", &[]).await?;
 
     // Dosya yeniden adlandırma: struct yeni dosyadan bağlanır.
     let types = root.join("src/types.rs");

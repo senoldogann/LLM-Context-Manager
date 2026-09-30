@@ -10,8 +10,8 @@ use crate::parser::SupportedLanguage;
 use crate::policy::RetrievalPolicy;
 use crate::trajectory::{current_context, record_if_enabled, RetrievalEvent, RetrievalResultItem};
 use crate::vector::extractor::Extractor;
-use crate::vector::store::ChunkEmbeddingCounts;
 use crate::vector::store::LanceDbStore;
+use crate::vector::store::{ChunkEmbeddingCounts, EmbeddedChunks};
 use crate::{
     path_is_policy_excluded, register_issue, suggestion_for_issue, IndexIssue, IndexIssueReason,
 };
@@ -54,12 +54,61 @@ use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
-/// Artımlı güncellemede embedding bekleyen düğümler ve silinmeden önce okunan
-/// parça vektörleri (metin → vektör).
+/// Artımlı güncellemenin grafa ve vektör tablosuna dokunmadan hazırlanan kısmı.
 #[derive(Default)]
-pub(crate) struct PendingEmbeddings {
+pub(crate) struct PreparedChanges {
+    /// Grafta yeniden kurulacak dosyalar, işlenme sırasıyla.
+    files: Vec<PreparedFile>,
+    /// Embed edilecek yeni düğümler.
     nodes: Vec<CodeNode>,
+    /// Değişen dosyaların mevcut parça vektörleri (metin → vektör).
     known_vectors: HashMap<String, Vec<f32>>,
+    stats: crate::IndexStats,
+}
+
+/// Grafta yeniden kurulacak tek dosya; silinen dosyada yeni parça yoktur.
+struct PreparedFile {
+    file_id: String,
+    graph: Option<CodeGraph>,
+}
+
+/// Embed edilmiş, tabloya yazılmayı bekleyen parçalar ve sayıları.
+#[derive(Default)]
+pub(crate) struct EmbeddedNodes {
+    batches: Vec<EmbeddedChunks>,
+    pub(crate) counts: ChunkEmbeddingCounts,
+}
+
+/// Düğümleri embedding isteklerine böler: parti başına en fazla
+/// `CCM_INDEX_NODE_BATCH_SIZE` düğüm ve yaklaşık `CCM_INDEX_BATCH_BYTES` bayt.
+fn node_batches(nodes: &[CodeNode]) -> Vec<&[CodeNode]> {
+    let batch_size = std::env::var("CCM_INDEX_NODE_BATCH_SIZE")
+        .ok()
+        .and_then(|value| value.parse::<usize>().ok())
+        .unwrap_or(128)
+        .clamp(1, 4_096);
+    let batch_bytes = std::env::var("CCM_INDEX_BATCH_BYTES")
+        .ok()
+        .and_then(|value| value.parse::<usize>().ok())
+        .unwrap_or(4 * 1024 * 1024)
+        .clamp(64 * 1024, 64 * 1024 * 1024);
+    let mut batches = Vec::new();
+    let mut start = 0usize;
+    while start < nodes.len() {
+        let mut end = start;
+        let mut bytes = 0usize;
+        while end < nodes.len() && end - start < batch_size {
+            let node_bytes = nodes[end].content.len().saturating_add(nodes[end].id.len());
+            if end > start && bytes.saturating_add(node_bytes) > batch_bytes {
+                break;
+            }
+            bytes = bytes.saturating_add(node_bytes);
+            end += 1;
+        }
+        batches.push(&nodes[start..end]);
+        start = end;
+    }
+    batches
 }
 
 /// The main intelligence engine for speculative retrieval.
@@ -203,26 +252,30 @@ impl RetrievalEngine {
         project_root: &str,
         changed_files: &[PathBuf],
     ) -> Result<crate::IndexStats> {
-        let (mut stats, pending) = self.apply_file_changes(project_root, changed_files).await?;
-        let counts = self.embed_pending(&pending).await?;
+        let prepared = self
+            .prepare_file_changes(project_root, changed_files)
+            .await?;
+        let embedded = self.embed_prepared(&prepared).await?;
+        let counts = embedded.counts;
+        self.write_file_vectors(&prepared, embedded).await?;
+        let mut stats = self.swap_file_graphs(prepared).await;
         stats.embedded_chunks = counts.embedded;
         stats.reused_chunks = counts.reused;
         tracing::info!("Incremental update complete.");
         Ok(stats)
     }
 
-    /// Artımlı güncellemenin ilk aşaması: değişen dosyalar ayrıştırılır, graf ve
-    /// referans kenarları güncellenir, eski vektörler silinir. Yeni düğümlerin
-    /// embedding'i `embed_pending` ile ayrı yapılır; embedding servisi yokken graf
-    /// güncellemesi böylece korunabilir.
-    pub(crate) async fn apply_file_changes(
+    /// Artımlı güncellemenin hazırlığı: değişen dosyalar okunup ayrıştırılır ve
+    /// metni değişmeyen parçaların vektörleri okunur. Grafa ve vektör tablosuna
+    /// dokunmaz; burada çıkan bir hata hiçbir şeyi yarım bırakmaz.
+    pub(crate) async fn prepare_file_changes(
         &self,
         project_root: &str,
         changed_files: &[PathBuf],
-    ) -> Result<(crate::IndexStats, PendingEmbeddings)> {
+    ) -> Result<PreparedChanges> {
         if changed_files.is_empty() {
             tracing::info!("No changes detected.");
-            return Ok((crate::IndexStats::default(), PendingEmbeddings::default()));
+            return Ok(PreparedChanges::default());
         }
 
         tracing::info!(
@@ -231,26 +284,12 @@ impl RetrievalEngine {
         );
 
         let mut parser = CodeParser::new();
-        let mut nodes_to_index = Vec::new(); // Collect new nodes for vector DB
+        let mut prepared = PreparedChanges::default();
         let mut indexed_node_ids = HashSet::new();
-        // Silinmeden önce okunan parça vektörleri (metin → vektör).
-        let mut known_vectors: HashMap<String, Vec<f32>> = HashMap::new();
         let embed_data_files = embed_data_files_enabled();
-        let mut stats = crate::IndexStats::default();
-        // Grafta yeniden kurulan dosyalar ve bu dosyaların önce ya da sonra
-        // tanımladığı referans verilebilir adlar; referans kenarları yalnızca bu
-        // kapsam için yeniden hesaplanır.
-        let mut changed_file_ids: HashSet<String> = HashSet::new();
-        let mut affected_names: HashSet<String> = HashSet::new();
 
         let root_path = std::fs::canonicalize(project_root)
             .unwrap_or_else(|_| std::path::PathBuf::from(project_root));
-
-        // Snapshot node count before processing so we can report only NEW nodes.
-        let initial_node_count = {
-            let graph = self.graph.read().await;
-            graph.graph.node_count()
-        };
 
         for path in changed_files {
             // Canonicalize file path to ensure it matches root
@@ -274,28 +313,18 @@ impl RetrievalEngine {
                         &IndexIssueReason::SkippedByPolicy,
                     ),
                 };
-                register_issue(&mut stats, issue, true);
+                register_issue(&mut prepared.stats, issue, true);
                 continue;
             }
 
             tracing::debug!(path = %relative_path, "Processing file");
 
-            // Silinen dosya için yeni içerik hazırlanamayacağı için doğrudan kaldırılır.
+            // Silinen dosya için yeni içerik hazırlanamaz; düğümleri ve vektörleri kalkar.
             if !abs_path.exists() {
-                self.vector_store
-                    .delete_by_prefix(&relative_path)
-                    .await
-                    .map_err(|error| {
-                        anyhow::anyhow!(
-                            "Failed to delete vectors for removed file '{}': {}",
-                            relative_path,
-                            error
-                        )
-                    })?;
-                let mut graph = self.graph.write().await;
-                affected_names.extend(graph.reference_target_names(&relative_path));
-                graph.remove_file_nodes(&relative_path);
-                changed_file_ids.insert(relative_path);
+                prepared.files.push(PreparedFile {
+                    file_id: relative_path,
+                    graph: None,
+                });
                 continue;
             }
 
@@ -309,7 +338,7 @@ impl RetrievalEngine {
                         detail = %issue.detail,
                         "Skipping file during incremental indexing"
                     );
-                    register_issue(&mut stats, issue, false);
+                    register_issue(&mut prepared.stats, issue, false);
                     continue;
                 }
             };
@@ -346,7 +375,7 @@ impl RetrievalEngine {
                             detail = %issue.detail,
                             "Skipping file due to parse error"
                         );
-                        register_issue(&mut stats, issue, false);
+                        register_issue(&mut prepared.stats, issue, false);
                         continue;
                     }
                 };
@@ -361,7 +390,7 @@ impl RetrievalEngine {
                             &IndexIssueReason::ExtractError,
                         ),
                     };
-                    register_issue(&mut stats, issue, false);
+                    register_issue(&mut prepared.stats, issue, false);
                     continue;
                 }
             }
@@ -373,12 +402,12 @@ impl RetrievalEngine {
                 ) || (embed_data_files && matches!(node.node_type, NodeType::DataFile)))
                     && indexed_node_ids.insert(node.id.clone())
                 {
-                    nodes_to_index.push(node.clone());
+                    prepared.nodes.push(node.clone());
                 }
             }
 
             // Metni değişmeyen parçalar yeniden embed edilmesin diye mevcut
-            // vektörler silmeden önce alınır.
+            // vektörler okunur; satırlar ancak yazma aşamasında silinir.
             let existing_vectors = self
                 .vector_store
                 .vectors_for_file(&relative_path)
@@ -390,63 +419,101 @@ impl RetrievalEngine {
                         error
                     )
                 })?;
-            known_vectors.extend(existing_vectors);
+            prepared.known_vectors.extend(existing_vectors);
+            prepared.files.push(PreparedFile {
+                file_id: relative_path,
+                graph: Some(staged_graph),
+            });
+            prepared.stats.files_indexed += 1;
+        }
+
+        Ok(prepared)
+    }
+
+    /// Hazırlanan yeni düğümleri embed eder; metni değişmeyen parçalar okunan
+    /// vektörlerini yeniden kullanır. Tabloya yazmaz.
+    pub(crate) async fn embed_prepared(&self, prepared: &PreparedChanges) -> Result<EmbeddedNodes> {
+        let mut embedded = EmbeddedNodes::default();
+        if prepared.nodes.is_empty() {
+            return Ok(embedded);
+        }
+        tracing::info!(
+            count = prepared.nodes.len(),
+            "Incremental: embedding semantic nodes"
+        );
+        for batch in node_batches(&prepared.nodes) {
+            let ids = batch.iter().map(|node| node.id.clone()).collect();
+            let texts = batch.iter().map(build_embedding_text).collect();
+            let (chunks, counts) = self
+                .vector_store
+                .embed_chunks(ids, texts, &prepared.known_vectors)
+                .await?;
+            embedded.counts.embedded += counts.embedded;
+            embedded.counts.reused += counts.reused;
+            embedded.batches.push(chunks);
+        }
+        Ok(embedded)
+    }
+
+    /// Hazırlanan dosyaların eski vektör satırlarını siler ve embed edilmiş yeni
+    /// parçaları yazar. Graf değişmez; bir hata tabloyu yarım bırakabilir, bu
+    /// dosyaları yeniden uygulamak tabloyu onarır.
+    pub(crate) async fn write_file_vectors(
+        &self,
+        prepared: &PreparedChanges,
+        embedded: EmbeddedNodes,
+    ) -> Result<()> {
+        for file in &prepared.files {
             self.vector_store
-                .delete_by_prefix(&relative_path)
+                .delete_by_prefix(&file.file_id)
                 .await
                 .map_err(|error| {
                     anyhow::anyhow!(
                         "Failed to replace vectors for '{}': {}",
-                        relative_path,
+                        file.file_id,
                         error
                     )
                 })?;
-            let mut graph = self.graph.write().await;
-            affected_names.extend(graph.reference_target_names(&relative_path));
-            affected_names.extend(staged_graph.reference_target_names(&relative_path));
-            graph.remove_file_nodes(&relative_path);
-            graph.append_graph(&staged_graph);
-            changed_file_ids.insert(relative_path);
-            stats.files_indexed += 1;
         }
-
-        {
-            let mut graph = self.graph.write().await;
-            let refreshed = graph.refresh_reference_edges(&changed_file_ids, &affected_names);
-            tracing::info!(
-                files = changed_file_ids.len(),
-                names = affected_names.len(),
-                sources = refreshed.sources,
-                edges = refreshed.edges,
-                "Refreshed references after incremental update"
-            );
-            stats.nodes_created = graph.graph.node_count().saturating_sub(initial_node_count);
+        for chunks in embedded.batches {
+            self.vector_store.write_chunks(chunks).await?;
         }
-
-        Ok((
-            stats,
-            PendingEmbeddings {
-                nodes: nodes_to_index,
-                known_vectors,
-            },
-        ))
+        Ok(())
     }
 
-    /// Artımlı güncellemenin ikinci aşaması: yeni düğümleri embed eder; metni
-    /// değişmeyen parçalar silinmeden önce okunan vektörlerini yeniden kullanır.
-    pub(crate) async fn embed_pending(
-        &self,
-        pending: &PendingEmbeddings,
-    ) -> Result<ChunkEmbeddingCounts> {
-        if pending.nodes.is_empty() {
-            return Ok(ChunkEmbeddingCounts::default());
+    /// Hazırlanan dosyaları grafta tek bir yazma kilidi içinde değiştirir ve
+    /// referans kenarlarını yeniler. Bu adım hata vermez: graf ya bütünüyle
+    /// güncellenir ya da hiç değişmez, kenarlar her zaman grafla tutarlıdır.
+    pub(crate) async fn swap_file_graphs(&self, prepared: PreparedChanges) -> crate::IndexStats {
+        let PreparedChanges {
+            files, mut stats, ..
+        } = prepared;
+        let mut graph = self.graph.write().await;
+        let initial_node_count = graph.graph.node_count();
+        // Grafta yeniden kurulan dosyalar ve bu dosyaların önce ya da sonra
+        // tanımladığı referans verilebilir adlar; referans kenarları yalnızca bu
+        // kapsam için yeniden hesaplanır.
+        let mut changed_file_ids: HashSet<String> = HashSet::new();
+        let mut affected_names: HashSet<String> = HashSet::new();
+        for file in files {
+            affected_names.extend(graph.reference_target_names(&file.file_id));
+            graph.remove_file_nodes(&file.file_id);
+            if let Some(staged_graph) = &file.graph {
+                affected_names.extend(staged_graph.reference_target_names(&file.file_id));
+                graph.append_graph(staged_graph);
+            }
+            changed_file_ids.insert(file.file_id);
         }
+        let refreshed = graph.refresh_reference_edges(&changed_file_ids, &affected_names);
         tracing::info!(
-            count = pending.nodes.len(),
-            "Incremental: indexing semantic nodes"
+            files = changed_file_ids.len(),
+            names = affected_names.len(),
+            sources = refreshed.sources,
+            edges = refreshed.edges,
+            "Refreshed references after incremental update"
         );
-        self.index_nodes_in_bounded_batches(&pending.nodes, &pending.known_vectors)
-            .await
+        stats.nodes_created = graph.graph.node_count().saturating_sub(initial_node_count);
+        stats
     }
 
     async fn index_nodes_in_bounded_batches(
@@ -457,38 +524,11 @@ impl RetrievalEngine {
         if nodes.is_empty() {
             return Ok(ChunkEmbeddingCounts::default());
         }
-        let batch_size = std::env::var("CCM_INDEX_NODE_BATCH_SIZE")
-            .ok()
-            .and_then(|value| value.parse::<usize>().ok())
-            .unwrap_or(128)
-            .clamp(1, 4_096);
-        let batch_bytes = std::env::var("CCM_INDEX_BATCH_BYTES")
-            .ok()
-            .and_then(|value| value.parse::<usize>().ok())
-            .unwrap_or(4 * 1024 * 1024)
-            .clamp(64 * 1024, 64 * 1024 * 1024);
-        tracing::info!(
-            count = nodes.len(),
-            batch_size,
-            batch_bytes,
-            "Indexing nodes into vector store"
-        );
+        tracing::info!(count = nodes.len(), "Indexing nodes into vector store");
 
         let mut counts = ChunkEmbeddingCounts::default();
-        let mut start = 0usize;
-        let mut batch_index = 0usize;
-        while start < nodes.len() {
-            let mut end = start;
-            let mut bytes = 0usize;
-            while end < nodes.len() && end - start < batch_size {
-                let node_bytes = nodes[end].content.len().saturating_add(nodes[end].id.len());
-                if end > start && bytes.saturating_add(node_bytes) > batch_bytes {
-                    break;
-                }
-                bytes = bytes.saturating_add(node_bytes);
-                end += 1;
-            }
-            let batch = &nodes[start..end];
+        let mut indexed = 0usize;
+        for (batch_index, batch) in node_batches(nodes).into_iter().enumerate() {
             let ids = batch.iter().map(|node| node.id.clone()).collect();
             let texts = batch.iter().map(build_embedding_text).collect();
             let batch_counts = self
@@ -497,16 +537,15 @@ impl RetrievalEngine {
                 .await?;
             counts.embedded += batch_counts.embedded;
             counts.reused += batch_counts.reused;
-            if batch_index.is_multiple_of(20) || end == nodes.len() {
+            indexed += batch.len();
+            if batch_index.is_multiple_of(20) || indexed == nodes.len() {
                 tracing::info!(
                     batch = batch_index + 1,
-                    indexed = end,
+                    indexed,
                     total = nodes.len(),
                     "Vector indexing batch progress"
                 );
             }
-            start = end;
-            batch_index += 1;
         }
         Ok(counts)
     }

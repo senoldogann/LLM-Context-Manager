@@ -139,6 +139,14 @@ fn namespace_for_uri(uri: &str) -> String {
         .unwrap_or_else(|| "default".to_string())
 }
 
+/// Embed edilmiş, tabloya yazılmayı bekleyen parçalar (kimlik, metin, vektör).
+#[derive(Debug, Default)]
+pub(crate) struct EmbeddedChunks {
+    ids: Vec<String>,
+    texts: Vec<String>,
+    vectors: Vec<Vec<f32>>,
+}
+
 /// Bir yazma turunda yeni embed edilen ve mevcut vektörü yeniden kullanılan
 /// parça sayıları.
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
@@ -352,8 +360,22 @@ impl LanceDbStore {
         texts: Vec<String>,
         known_vectors: &HashMap<String, Vec<f32>>,
     ) -> Result<ChunkEmbeddingCounts> {
+        let (chunks, counts) = self.embed_chunks(ids, texts, known_vectors).await?;
+        self.write_chunks(chunks).await?;
+        Ok(counts)
+    }
+
+    /// Metinleri parçalara böler ve embed eder; tabloya yazmaz. Metni değişmemiş
+    /// parçalar `known_vectors`'taki vektörü yeniden kullanır. Embedder kapalıysa
+    /// (fixture yoksa) boş sonuç döner.
+    pub(crate) async fn embed_chunks(
+        &self,
+        ids: Vec<String>,
+        texts: Vec<String>,
+        known_vectors: &HashMap<String, Vec<f32>>,
+    ) -> Result<(EmbeddedChunks, ChunkEmbeddingCounts)> {
         if ids.is_empty() {
-            return Ok(ChunkEmbeddingCounts::default());
+            return Ok((EmbeddedChunks::default(), ChunkEmbeddingCounts::default()));
         }
 
         let max_chars: usize = std::env::var("CCM_MAX_CHUNK_CHARS")
@@ -404,7 +426,7 @@ impl LanceDbStore {
             }
         } else {
             if self.embedder_disabled {
-                return Ok(ChunkEmbeddingCounts::default());
+                return Ok((EmbeddedChunks::default(), ChunkEmbeddingCounts::default()));
             }
             // Metni değişmemiş parçalar mevcut vektörünü korur; embedding metnin
             // saf fonksiyonu olduğundan sonuç aynıdır ve servis çağrısı atlanır.
@@ -435,16 +457,33 @@ impl LanceDbStore {
             counts
         };
 
-        // Use all_chunks and all_chunk_ids for storage
-        let texts = all_chunks;
-        let ids = all_chunk_ids;
-
-        if embeddings.len() != ids.len() {
+        if embeddings.len() != all_chunk_ids.len() {
             return Err(anyhow::anyhow!(
                 "Embedding provider returned {} vectors for {} chunks",
                 embeddings.len(),
-                ids.len()
+                all_chunk_ids.len()
             ));
+        }
+        Ok((
+            EmbeddedChunks {
+                ids: all_chunk_ids,
+                texts: all_chunks,
+                vectors: embeddings,
+            },
+            counts,
+        ))
+    }
+
+    /// Embed edilmiş parçaları tabloya ekler; tablo yoksa oluşturur. Boş girdi
+    /// tabloya dokunmaz.
+    pub(crate) async fn write_chunks(&self, chunks: EmbeddedChunks) -> Result<()> {
+        let EmbeddedChunks {
+            ids,
+            texts,
+            vectors: embeddings,
+        } = chunks;
+        if ids.is_empty() {
+            return Ok(());
         }
 
         let dim = embeddings.first().map(|v| v.len()).unwrap_or(1536);
@@ -514,7 +553,7 @@ impl LanceDbStore {
         };
         self.table_cache.lock().unwrap().replace(table);
 
-        Ok(counts)
+        Ok(())
     }
 
     /// Performs semantic search and returns (id, text, distance).

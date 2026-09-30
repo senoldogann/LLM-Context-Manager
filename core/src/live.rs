@@ -5,17 +5,22 @@
 //! olarak yazar.
 //!
 //! Eşzamanlılık modeli:
-//! - Uygulama ve kalıcılaştırma, generation aktivasyonunun kilidi altında etkin
-//!   işaretçiyi denetler. Başka bir süreç (CLI, elle indeksleme) yeni generation
-//!   kurduysa bağlayıcı `Superseded` olur ve çağıran yeni generation'ı yükler.
-//! - Vektör tablosu yerinde ve aynı kilit altında değiştirilir; `update_index`
-//!   tabloyu aynı kilit altında kopyalar.
+//! - Ayrıştırma, mevcut vektörleri okuma ve embedding kilitsizdir. Yalnızca etkin
+//!   işaretçinin denetimi, vektör satırlarının silinip eklenmesi ve grafın
+//!   değiştirilmesi generation aktivasyonunun kilidi altında yapılır. Başka bir
+//!   süreç (CLI, elle indeksleme) yeni generation kurduysa hazırlanan iş atılır,
+//!   bağlayıcı `Superseded` olur ve çağıran yeni generation'ı yükler.
+//! - Vektör tablosu yerinde değiştirilir; `update_index` tabloyu aynı kilit
+//!   altında kopyalar.
+//! - Graf yalnızca tüm hata verebilen adımlardan sonra ve tek adımda değişir;
+//!   yarıda kalan bir uygulama grafı bozmaz, dosyaları sonraki turda yeniden
+//!   uygulanır.
 //! - Graf manifestten önce yazılır ve okuyucular manifesti graftan önce okur;
 //!   diskteki manifest graftan yeni olamaz, yeni graf değişiklikleri yeniden
 //!   uygulatır (idempotent). Kalıcılaştırma atlanırsa sonraki tam karşılaştırma
 //!   diski yakalar.
 
-use crate::engine::RetrievalEngine;
+use crate::engine::{EmbeddedNodes, RetrievalEngine};
 use crate::graph::CodeGraph;
 use crate::vector::store::LanceDbStore;
 use crate::{
@@ -27,7 +32,7 @@ use crate::{
     IndexStats,
 };
 use anyhow::Result;
-use std::collections::HashMap;
+use std::collections::{BTreeSet, HashMap};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use tokio::sync::{Mutex, RwLock};
@@ -67,6 +72,10 @@ struct LiveState {
     needs_rescan: bool,
     /// Etkin işaretçi başka generation'ı gösteriyor; bu bağlayıcı kullanılmaz.
     superseded: bool,
+    /// Graf ve vektör tablosu diskteki içerikle eşleşmeyebilecek dosyalar: vektör
+    /// yazımı yarıda kalan bir uygulamanın dosyaları ve okunamadığı için yeniden
+    /// denenecek dosyalar. Sonraki uygulama bunları diskten yeniden kurar.
+    dirty_files: BTreeSet<String>,
     /// Embedding servisine ulaşılamadığı için vektörü eksik kalan değişiklik
     /// varsa nedeni. Bağlayıcı yeniden yüklenene kadar gösterilir; eksik
     /// vektörler elle indekslemede onarılır.
@@ -168,6 +177,7 @@ impl LiveIndex {
                 persisted_version: 0,
                 needs_rescan: true,
                 superseded: false,
+                dirty_files: BTreeSet::new(),
                 semantic_unavailable: None,
             }),
             persist_gate: Mutex::new(()),
@@ -367,15 +377,20 @@ impl LiveIndex {
         })
     }
 
-    /// Farkı canlı engine'e uygular. Etkin işaretçi aktivasyon kilidi altında
-    /// denetlenir ve vektör tablosu bu kilit altında değiştirilir.
+    /// Farkı canlı engine'e uygular. Dosyalar kilitsiz hazırlanır (ayrıştırma,
+    /// mevcut vektörler, embedding); aktivasyon kilidi yalnızca işaretçi denetimi,
+    /// vektör satırlarının değiştirilmesi ve graf değişimi süresince tutulur.
+    /// Önceki yarım uygulamanın dosyaları farkta olmasa da yeniden uygulanır.
     async fn apply_delta(
         &self,
         state: &mut LiveState,
         delta: ManifestDelta,
         started_at: u64,
     ) -> Result<LiveRefresh> {
-        if delta.changed.is_empty() && delta.deleted.is_empty() {
+        let mut files: BTreeSet<String> = state.dirty_files.clone();
+        files.extend(delta.changed.iter().cloned());
+        files.extend(delta.deleted.iter().cloned());
+        if files.is_empty() {
             state.manifest = delta.next_manifest;
             state.needs_rescan = false;
             self.record_applied_at(started_at);
@@ -384,6 +399,32 @@ impl LiveIndex {
                 ..IndexStats::default()
             })));
         }
+
+        // Tur yarıda kalırsa sonraki tur tam karşılaştırma yapar.
+        state.needs_rescan = true;
+        let changed_files: Vec<PathBuf> = files
+            .iter()
+            .map(|file_id| file_id_to_path(&self.project_root, file_id))
+            .collect();
+        let project_root = self.project_root.to_string_lossy().to_string();
+        let prepared = self
+            .engine
+            .prepare_file_changes(&project_root, &changed_files)
+            .await?;
+        let embedded = match self.engine.embed_prepared(&prepared).await {
+            Ok(embedded) => embedded,
+            // Graf değişikliği yine uygulanır; yalnızca yeni düğümlerin vektörleri eksik kalır.
+            Err(error) if crate::vector::remote::is_embedder_unavailable(&error) => {
+                tracing::warn!(
+                    project = %self.project_root.display(),
+                    error = %error,
+                    "Embedding service unreachable during live refresh; graph changes are applied without vectors"
+                );
+                state.semantic_unavailable = Some(error.to_string());
+                EmbeddedNodes::default()
+            }
+            Err(error) => return Err(error),
+        };
 
         let artifact_parent = self.artifact_parent()?.to_path_buf();
         let lock_parent = artifact_parent.clone();
@@ -397,42 +438,22 @@ impl LiveIndex {
                 project = %self.project_root.display(),
                 live_generation = ?self.artifacts.generation_id,
                 active_generation = ?current,
-                "Another process activated a new index generation; dropping the live state"
+                "Another process activated a new index generation; discarding the prepared live changes"
             );
             state.superseded = true;
             return Ok(LiveRefresh::Superseded);
         }
 
-        // Uygulama yarıda kalırsa graf manifestin önüne geçmiş olabilir; sonraki
-        // tur tam karşılaştırmayla yeniden uygular.
-        state.needs_rescan = true;
-        let changed_files: Vec<PathBuf> = delta
-            .changed
-            .iter()
-            .chain(delta.deleted.iter())
-            .map(|file_id| file_id_to_path(&self.project_root, file_id))
-            .collect();
-        let project_root = self.project_root.to_string_lossy().to_string();
-        let (mut stats, pending) = self
-            .engine
-            .apply_file_changes(&project_root, &changed_files)
-            .await?;
-        match self.engine.embed_pending(&pending).await {
-            Ok(counts) => {
-                stats.embedded_chunks = counts.embedded;
-                stats.reused_chunks = counts.reused;
-            }
-            // Graf zaten güncellendi; yalnızca yeni düğümlerin vektörleri eksik kalır.
-            Err(error) if crate::vector::remote::is_embedder_unavailable(&error) => {
-                tracing::warn!(
-                    project = %self.project_root.display(),
-                    error = %error,
-                    "Embedding service unreachable during live refresh; graph changes were applied without vectors"
-                );
-                state.semantic_unavailable = Some(error.to_string());
-            }
-            Err(error) => return Err(error),
-        }
+        let file_count = files.len();
+        state.dirty_files = files;
+        let counts = embedded.counts;
+        self.engine.write_file_vectors(&prepared, embedded).await?;
+        fail_before_graph_swap_for_tests()?;
+        let mut stats = self.engine.swap_file_graphs(prepared).await;
+        stats.embedded_chunks = counts.embedded;
+        stats.reused_chunks = counts.reused;
+        // Okunamayan dosyaların eski düğümleri kaldı; sonraki tur onları yeniden dener.
+        state.dirty_files = stats.retry_files.iter().cloned().collect();
         state.manifest =
             restore_retry_files(&state.manifest, delta.next_manifest, &stats.retry_files);
         state.version += 1;
@@ -441,6 +462,7 @@ impl LiveIndex {
         self.record_applied_at(started_at);
         tracing::info!(
             project = %self.project_root.display(),
+            files = file_count,
             changed = delta.changed.len(),
             deleted = delta.deleted.len(),
             files_indexed = stats.files_indexed,
@@ -456,6 +478,19 @@ impl LiveIndex {
             .lock()
             .expect("live index timestamp lock poisoned") = Some(started_at);
     }
+}
+
+/// Test kancası: `CCM_INTERNAL_LIVE_TEST_FAIL_BEFORE_GRAPH_SWAP` tanımlıysa
+/// uygulama vektör satırları değiştikten sonra, graf değişmeden önce başarısız
+/// olur. Yarıda kalan bir uygulamanın grafı bozmadığını ve sonraki turun
+/// onardığını doğrulamak içindir.
+fn fail_before_graph_swap_for_tests() -> Result<()> {
+    if std::env::var_os("CCM_INTERNAL_LIVE_TEST_FAIL_BEFORE_GRAPH_SWAP").is_some() {
+        anyhow::bail!(
+            "Live refresh failed on purpose before the graph swap (CCM_INTERNAL_LIVE_TEST_FAIL_BEFORE_GRAPH_SWAP)"
+        );
+    }
+    Ok(())
 }
 
 /// Yollardan biri, değişince tüm dosya kümesini etkileyebilen bir ignore dosyası mı?
