@@ -27,9 +27,13 @@ impl std::fmt::Display for EmbedderUnavailable {
 
 impl std::error::Error for EmbedderUnavailable {}
 
-/// Hata zincirinde `EmbedderUnavailable` olup olmadığını bildirir.
+/// Hata zincirinde embedding kaynağının erişilemez olduğunu bildiren bir hata
+/// (servis kapalı ya da yerel model indirilemedi) olup olmadığını bildirir.
 pub fn is_embedder_unavailable(error: &anyhow::Error) -> bool {
-    error.chain().any(|cause| cause.is::<EmbedderUnavailable>())
+    error.chain().any(|cause| {
+        cause.is::<EmbedderUnavailable>()
+            || cause.is::<crate::vector::local_model::ModelDownloadFailed>()
+    })
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -62,7 +66,8 @@ impl RemoteEmbedder {
             .filter(|val| *val > 0)
             .unwrap_or(30);
         let timeout = Duration::from_secs(timeout_secs);
-        let client = build_http_client(timeout)?;
+        let client =
+            build_http_client(&|builder: reqwest::ClientBuilder| builder.timeout(timeout))?;
         let max_embed_chars: usize = env::var("CCM_MAX_EMBED_CHARS")
             .ok()
             .and_then(|val| val.parse::<usize>().ok())
@@ -484,10 +489,12 @@ fn panic_message(payload: &Box<dyn std::any::Any + Send>) -> String {
     }
 }
 
-fn build_http_client(timeout: Duration) -> Result<Client> {
-    match catch_unwind(AssertUnwindSafe(|| {
-        Client::builder().timeout(timeout).build()
-    })) {
+/// HTTP istemcisini kurar; sistem proxy ayarları okunurken hata ya da panik
+/// olursa proxy'siz yeniden dener. `configure` zaman aşımı gibi ayarları uygular.
+pub(crate) fn build_http_client(
+    configure: &dyn Fn(reqwest::ClientBuilder) -> reqwest::ClientBuilder,
+) -> Result<Client> {
+    match catch_unwind(AssertUnwindSafe(|| configure(Client::builder()).build())) {
         Ok(Ok(client)) => return Ok(client),
         Ok(Err(error)) => {
             tracing::warn!(
@@ -505,7 +512,7 @@ fn build_http_client(timeout: Duration) -> Result<Client> {
     }
 
     match catch_unwind(AssertUnwindSafe(|| {
-        Client::builder().timeout(timeout).no_proxy().build()
+        configure(Client::builder()).no_proxy().build()
     })) {
         Ok(Ok(client)) => Ok(client),
         Ok(Err(error)) => Err(anyhow::anyhow!(
@@ -618,6 +625,9 @@ mod tests {
 
     #[test]
     fn http_client_builder_succeeds_with_timeout() {
-        assert!(build_http_client(Duration::from_secs(5)).is_ok());
+        assert!(build_http_client(
+            &|builder: reqwest::ClientBuilder| builder.timeout(Duration::from_secs(5))
+        )
+        .is_ok());
     }
 }
