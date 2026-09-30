@@ -580,7 +580,8 @@ async fn build_index_generation(
                     detail = %issue.detail,
                     "Failed to index file"
                 );
-                register_issue(&mut stats, issue, false);
+                let permanent = is_permanent_issue(&issue.reason);
+                register_issue(&mut stats, issue, permanent);
             }
         }
     }
@@ -2417,6 +2418,16 @@ pub(crate) fn suggestion_for_issue(path: &str, reason: &IndexIssueReason) -> Opt
     }
 
     None
+}
+
+/// Aynı içerik her denemede aynı sonucu verir (çok büyük, ikili): dosya
+/// değişene kadar yeniden denenmez, atlanmış sayılır. G/Ç hataları ve geçersiz
+/// UTF-8 (yazımın ortasında okunan dosya) geçicidir, yeniden denenir.
+pub(crate) fn is_permanent_issue(reason: &IndexIssueReason) -> bool {
+    matches!(
+        reason,
+        IndexIssueReason::FileTooLarge | IndexIssueReason::BinaryFile
+    )
 }
 
 pub(crate) fn register_issue(stats: &mut IndexStats, issue: IndexIssue, skipped: bool) {

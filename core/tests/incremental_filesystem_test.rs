@@ -427,13 +427,14 @@ async fn full_rebuild_skips_oversized_supported_file_instead_of_aborting() -> Re
         stats.files_indexed, 1,
         "oversized dosya atlanmalı, main.rs indexlenmeli"
     );
-    assert_eq!(stats.files_failed, 1);
+    // Kalıcı durum: atlanmış sayılır ve yeniden denenmez.
+    assert_eq!(stats.files_failed, 0);
     assert!(
         stats
-            .failed_files
+            .skipped_files
             .iter()
             .any(|issue| issue.path.contains("generated_bundle.rs")),
-        "TooLarge dosyası uyarı olarak kaydedilmeli"
+        "TooLarge dosyası atlanan dosya olarak kaydedilmeli"
     );
 
     let artifacts = artifacts(project.path(), None)?;
@@ -1150,5 +1151,30 @@ async fn watch_filter_skips_ignored_outputs_and_index_artifacts() -> Result<()> 
         );
     }
 
+    Ok(())
+}
+
+#[tokio::test]
+async fn permanently_unreadable_file_is_not_retried_by_live_refresh() -> Result<()> {
+    let _env_guard = ENV_LOCK.lock().await;
+    std::env::set_var("CCM_DISABLE_EMBEDDER", "1");
+    let project = tempdir()?;
+    let root = std::fs::canonicalize(project.path())?;
+    std::fs::write(root.join("main.rs"), "fn alpha() {}\n")?;
+    ccm_core::index_directory(root.to_string_lossy().as_ref(), None).await?;
+    let live = ccm_core::live::LiveIndex::load(root.to_string_lossy().as_ref(), None, None).await?;
+
+    // İkili (NUL içeren) ilgili bir dosya hiçbir zaman indekslenemez.
+    std::fs::write(root.join("blob.rs"), b"fn beta() {}\0\0binary")?;
+    let first = live.apply_rescan().await?;
+    assert!(matches!(first, ccm_core::live::LiveRefresh::Applied(_)));
+    live.persist().await?;
+
+    // Değişiklik olmayan sonraki tur grafı ve manifesti yeniden yazmamalı.
+    live.apply_rescan().await?;
+    assert!(
+        matches!(live.persist().await?, ccm_core::live::LivePersist::UpToDate),
+        "a no-op rescan must not rewrite the graph for a permanently unreadable file"
+    );
     Ok(())
 }

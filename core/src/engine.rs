@@ -13,7 +13,8 @@ use crate::vector::extractor::Extractor;
 use crate::vector::store::LanceDbStore;
 use crate::vector::store::{ChunkEmbeddingCounts, EmbeddedChunks};
 use crate::{
-    path_is_policy_excluded, register_issue, suggestion_for_issue, IndexIssue, IndexIssueReason,
+    is_permanent_issue, path_is_policy_excluded, register_issue, suggestion_for_issue, IndexIssue,
+    IndexIssueReason,
 };
 use anyhow::Result;
 use petgraph::visit::EdgeRef;
@@ -332,13 +333,23 @@ impl RetrievalEngine {
                 Ok(content) => content,
                 Err(e) => {
                     let issue = classify_incremental_read_error(&relative_path, e);
+                    let permanent = is_permanent_issue(&issue.reason);
                     tracing::warn!(
                         path = %relative_path,
                         reason = %issue.reason.as_str(),
                         detail = %issue.detail,
+                        permanent,
                         "Skipping file during incremental indexing"
                     );
-                    register_issue(&mut prepared.stats, issue, false);
+                    register_issue(&mut prepared.stats, issue, permanent);
+                    if permanent {
+                        // Kalıcı durum: eski düğüm ve vektörler kalkar; dosya
+                        // değişene kadar yeniden denenmez.
+                        prepared.files.push(PreparedFile {
+                            file_id: relative_path,
+                            graph: None,
+                        });
+                    }
                     continue;
                 }
             };
