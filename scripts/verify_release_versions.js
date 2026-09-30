@@ -38,10 +38,19 @@ const npmPackage = JSON.parse(
 const npmLock = JSON.parse(
     fs.readFileSync(path.join(repositoryRoot, 'npm/package-lock.json'), 'utf8')
 );
+const serverManifest = JSON.parse(
+    fs.readFileSync(path.join(repositoryRoot, 'server.json'), 'utf8')
+);
+// MCP Registry manifesti sürümü git'te taşır; CI'da damgalanmaz, burada doğrulanır.
+if (!Array.isArray(serverManifest.packages) || serverManifest.packages.length === 0) {
+    throw new Error('server.json must list the npm package in packages[0]');
+}
 const versions = new Map(packageFiles.map((file) => [file, cargoVersion(file)]));
 versions.set('npm/package.json', npmPackage.version);
 versions.set('npm/package-lock.json', npmLock.version);
 versions.set('npm/package-lock.json:packages[""]', npmLock.packages[''].version);
+versions.set('server.json', serverManifest.version);
+versions.set('server.json:packages[0]', serverManifest.packages[0].version);
 versions.set('Cargo.lock:ccm-core', cargoLockVersion('ccm-core'));
 versions.set('Cargo.lock:ccm-cli', cargoLockVersion('ccm-cli'));
 versions.set('Cargo.lock:ccm-mcp', cargoLockVersion('ccm-mcp'));
