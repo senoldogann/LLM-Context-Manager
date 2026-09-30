@@ -110,164 +110,201 @@ impl CodeGraph {
     ///
     /// Definitions are extracted per file, but callers can be indexed before their
     /// targets. Rebuilding after all changed definitions are present makes reference
-    /// edges deterministic and repairs incoming edges after incremental updates.
+    /// edges deterministic. Every source is resolved with the same per-source rules
+    /// as [`CodeGraph::refresh_reference_edges`].
     pub fn rebuild_reference_edges(&mut self) -> usize {
-        self.graph.retain_edges(|graph, edge_idx| {
-            !matches!(graph[edge_idx], EdgeType::Calls | EdgeType::Imports)
-        });
+        let sources: Vec<NodeIndex> = self
+            .graph
+            .node_indices()
+            .filter(|idx| is_reference_source(&self.graph[*idx]))
+            .collect();
+        let references = self.resolve_references(&sources);
+        let count = references.len();
+        let all_sources = vec![true; self.graph.node_count()];
+        self.replace_reference_edges(&all_sources, references);
+        count
+    }
 
-        let mut symbols: std::collections::HashMap<String, Vec<NodeIndex>> =
-            std::collections::HashMap::new();
-        for idx in self.graph.node_indices() {
-            let node = &self.graph[idx];
-            if matches!(
-                node.node_type,
-                NodeType::Function
-                    | NodeType::Method
-                    | NodeType::Class
-                    | NodeType::Struct
-                    | NodeType::Module
-            ) && is_referenceable_symbol(&node.name)
-            {
-                symbols.entry(node.name.clone()).or_default().push(idx);
-            }
-        }
-        // Rust impl blokları tipin adını taşıyan Class düğümleridir; aynı adlı
-        // struct varken hedefi belirsizleştirip dosyalar arası kenarı
-        // engellerler. Tip referansı struct tanımına bağlanır.
-        for targets in symbols.values_mut() {
-            let has_struct = targets
-                .iter()
-                .any(|idx| self.graph[*idx].node_type == NodeType::Struct);
-            if has_struct {
-                targets.retain(|idx| !is_rust_impl_node(&self.graph[*idx]));
-            }
-        }
-
-        let source_indices: Vec<NodeIndex> = self
+    /// Recomputes reference edges only for the sources an incremental update can
+    /// affect and returns how many sources and edges were recomputed.
+    ///
+    /// Affected sources are the sources inside `changed_files` plus every other
+    /// source whose content mentions one of `affected_names` (the referenceable
+    /// names the changed files defined before or define after the update). Any
+    /// other source only mentions names whose target sets did not change, so its
+    /// edges stay exactly what a full [`CodeGraph::rebuild_reference_edges`] would
+    /// produce.
+    pub fn refresh_reference_edges(
+        &mut self,
+        changed_files: &HashSet<String>,
+        affected_names: &HashSet<String>,
+    ) -> ReferenceRefresh {
+        let sources: Vec<NodeIndex> = self
             .graph
             .node_indices()
             .filter(|idx| {
-                matches!(
-                    self.graph[*idx].node_type,
-                    NodeType::Function | NodeType::Method | NodeType::Variable | NodeType::Import
-                )
+                let node = &self.graph[*idx];
+                is_reference_source(node)
+                    && (changed_files.contains(graph_node_file_path(&node.id))
+                        || mentions_any_name(&node.content, affected_names))
             })
             .collect();
+        let references = self.resolve_references(&sources);
+        let refreshed = ReferenceRefresh {
+            sources: sources.len(),
+            edges: references.len(),
+        };
+        let mut stale_sources = vec![false; self.graph.node_count()];
+        for source in &sources {
+            stale_sources[source.index()] = true;
+        }
+        self.replace_reference_edges(&stale_sources, references);
+        refreshed
+    }
 
-        let mut references: HashSet<(NodeIndex, NodeIndex, EdgeType)> = HashSet::new();
-        for source_idx in source_indices {
-            let source = &self.graph[source_idx];
-            let source_file = graph_node_file_path(&source.id);
-            let source_name = source.name.clone();
-            let tokens = identifier_tokens(&source.content);
-            // Her sembol adının bu kaynak içeriğinde kaç kez geçtiğini önceden
-            // say; böylece döngü içinde borrow çakışması olmaz.
-            let mut occurrence_counts: std::collections::HashMap<&str, usize> =
-                std::collections::HashMap::new();
-            for (name, _) in &tokens {
-                *occurrence_counts.entry(name).or_insert(0) += 1;
-            }
-            // Kaynak düğümün kendi bildirim adı, doc-comment/string/yorum
-            // içeriğinde geçse bile gerçek bir çağrı değildir. Ad, gövdedeki
-            // gerçek çağrılardan ayrıştırılırken kendi adına eşit olan token'lar
-            // hedef seçimi için sayılmaz; sahte ters Calls kenarları böylece
-            // yalnızca bildirimde değil yorum/string varyantlarında da engellenir.
-            let source_declaration_token = if tokens
-                .iter()
-                .any(|(name, call_like)| *name == source_name && !call_like)
+    /// Dosyanın referans hedefi olabilen düğümlerinin adları. Artımlı güncelleme
+    /// bu adları dosya değişmeden önce ve sonra toplar; bu adlardan birini anan
+    /// kaynakların kenarları yeniden hesaplanır.
+    pub fn reference_target_names(&self, file_id: &str) -> HashSet<String> {
+        self.find_nodes_by_file(file_id)
+            .iter()
+            .map(|idx| &self.graph[*idx])
+            .filter(|node| {
+                is_reference_target_type(&node.node_type) && is_referenceable_symbol(&node.name)
+            })
+            .map(|node| node.name.clone())
+            .collect()
+    }
+
+    /// Verilen kaynakların referans kenarlarını tek kural kümesiyle çözer.
+    ///
+    /// Kaynak başına her (ad, çağrı biçimi) çifti bir kez çözülür; farklı adlar
+    /// farklı hedeflere, farklı kaynaklar farklı kenarlara gittiğinden sonuç
+    /// tekrarsızdır.
+    fn resolve_references(&self, sources: &[NodeIndex]) -> Vec<(NodeIndex, NodeIndex, EdgeType)> {
+        let mut symbols = SymbolTable::new(self);
+        let mut references = Vec::new();
+        for source_idx in sources {
+            self.resolve_source_references(*source_idx, &mut symbols, &mut references);
+        }
+        references
+    }
+
+    /// Tek bir kaynağın içeriğindeki tanımlayıcıları hedef sembollere çözer ve
+    /// kenarları `references`'a ekler.
+    fn resolve_source_references<'g>(
+        &'g self,
+        source_idx: NodeIndex,
+        symbols: &mut SymbolTable<'g>,
+        references: &mut Vec<(NodeIndex, NodeIndex, EdgeType)>,
+    ) {
+        let source = &self.graph[source_idx];
+        let source_file = graph_node_file_path(&source.id);
+        let source_name = source.name.as_str();
+        let mut tokens = identifier_tokens(&source.content);
+        // Kaynak düğümün kendi bildirim adı, doc-comment/string/yorum
+        // içeriğinde geçse bile gerçek bir çağrı değildir. Ad, gövdedeki
+        // gerçek çağrılardan ayrıştırılırken kendi adına eşit olan token'lar
+        // hedef seçimi için sayılmaz; sahte ters Calls kenarları böylece
+        // yalnızca bildirimde değil yorum/string varyantlarında da engellenir.
+        let declaration_token_present = tokens
+            .iter()
+            .any(|(name, call_like)| *name == source_name && !call_like);
+        // Kaynak düğümün kendi bildirim adı yalnızca kendi içeriğinde bir kez
+        // geçiyorsa (ör. `func startRecording() {`), bu bir çağrı değildir ve
+        // başka dosyadaki aynı isimli fonksiyonla sahte ters çağrı kenarı
+        // üretmemelidir.
+        let source_name_occurs_once = tokens
+            .iter()
+            .filter(|(name, _)| *name == source_name)
+            .count()
+            == 1;
+        tokens.sort_unstable();
+        tokens.dedup();
+
+        for (name, call_like) in tokens {
+            // Kendi bildirim adına eşit non-call token'lar (bildirim satırı,
+            // doc-comment, string, yorum) çağrı sayılmaz; call-like gerçek
+            // gövde çağrıları (ör. `recorder.startRecording()`) korunur.
+            if name == source_name
+                && ((declaration_token_present && !call_like) || source_name_occurs_once)
             {
-                Some(source_name.as_str())
-            } else {
-                None
+                continue;
+            }
+            let targets = symbols.targets(name);
+            // Kaynak düğümün kendisi adaylardan çıkarılır: aynı dosyada tek
+            // "eşleşme" yalnızca kaynağın kendisiyse (örn. kendi adıyla
+            // çağrılan üye), farklı dosyadaki gerçek hedef hiç bağlanmıyordu.
+            let same_file: Vec<NodeIndex> = targets
+                .in_file(source_file)
+                .filter(|target_idx| *target_idx != source_idx)
+                .collect();
+            let (resolved, ambiguous): (Vec<NodeIndex>, bool) = match same_file.len() {
+                0 => {
+                    let mut candidates =
+                        targets.all().filter(|target_idx| *target_idx != source_idx);
+                    match (candidates.next(), candidates.next()) {
+                        (Some(only), None) => (vec![only], false),
+                        _ => continue,
+                    }
+                }
+                1 => (same_file, false),
+                // Aynı dosyada aynı isimde birden çok hedef (overload,
+                // shadowing): hangisinin kastedildiği name-match ile
+                // bilinemez. Yanlış kenar üretmek yerine belirsiz kenar
+                // üret ve görünür kıl.
+                _ => (same_file, true),
             };
-            for (name, call_like) in &tokens {
-                let Some(targets) = symbols.get(*name) else {
-                    continue;
-                };
-                // Kendi bildirim adına eşit non-call token'lar (bildirim satırı,
-                // doc-comment, string, yorum) çağrı sayılmaz; call-like gerçek
-                // gövde çağrıları (ör. `recorder.startRecording()`) korunur.
-                if source_declaration_token == Some(*name) && !call_like {
-                    continue;
-                }
-                // Kaynak düğümün kendi bildirim adı yalnızca kendi içeriğinde
-                // geçiyorsa (ör. `func startRecording() {`), bu bir çağrı
-                // değildir ve başka dosyadaki aynı isimli fonksiyonla sahte
-                // ters çağrı kenarı üretmemelidir. Token sayısı 1 ise ve bu tek
-                // token bildirim adıysa atla.
-                if occurrence_counts.get(name) == Some(&1) && source_name == **name {
-                    continue;
-                }
-                // Kaynak düğümün kendisini adaylardan çıkar: aynı dosyada tek
-                // "eşleşme" yalnızca kaynağın kendisiyse (örn. kendi adıyla
-                // çağrılan üye), farklı dosyadaki gerçek hedef hiç bağlanmıyordu.
-                let candidates: Vec<_> = targets
-                    .iter()
-                    .copied()
-                    .filter(|target_idx| *target_idx != source_idx)
-                    .collect();
-                if candidates.is_empty() {
-                    continue;
-                }
-                let same_file_targets: Vec<_> = targets
-                    .iter()
-                    .copied()
-                    .filter(|target_idx| *target_idx != source_idx)
-                    .filter(|target_idx| {
-                        graph_node_file_path(&self.graph[*target_idx].id) == source_file
-                    })
-                    .collect();
-                let (resolved_targets, ambiguous): (Vec<_>, bool) = if same_file_targets.is_empty()
-                {
-                    if candidates.len() == 1 {
-                        (candidates.clone(), false)
-                    } else {
-                        continue;
-                    }
-                } else if same_file_targets.len() == 1 {
-                    (same_file_targets, false)
-                } else {
-                    // Aynı dosyada aynı isimde birden çok hedef (overload,
-                    // shadowing): hangisinin kastedildiği name-match ile
-                    // bilinemez. Yanlış kenar üretmek yerine belirsiz kenar
-                    // üret ve görünür kıl.
-                    (same_file_targets, true)
-                };
 
-                for target_idx in resolved_targets {
-                    if source_idx == target_idx {
-                        continue;
-                    }
-                    let target = &self.graph[target_idx];
-                    let edge_type = if *call_like {
-                        if ambiguous {
-                            EdgeType::CallAmbiguous
-                        } else {
-                            EdgeType::Calls
-                        }
-                    } else if matches!(
-                        target.node_type,
-                        NodeType::Class | NodeType::Struct | NodeType::Module
-                    ) {
-                        if ambiguous {
-                            EdgeType::ImportAmbiguous
-                        } else {
-                            EdgeType::Imports
-                        }
+            for target_idx in resolved {
+                let target = &self.graph[target_idx];
+                let edge_type = if call_like {
+                    if ambiguous {
+                        EdgeType::CallAmbiguous
                     } else {
-                        continue;
-                    };
-                    references.insert((source_idx, target_idx, edge_type));
-                }
+                        EdgeType::Calls
+                    }
+                } else if matches!(
+                    target.node_type,
+                    NodeType::Class | NodeType::Struct | NodeType::Module
+                ) {
+                    if ambiguous {
+                        EdgeType::ImportAmbiguous
+                    } else {
+                        EdgeType::Imports
+                    }
+                } else {
+                    continue;
+                };
+                references.push((source_idx, target_idx, edge_type));
             }
         }
+    }
 
-        let count = references.len();
-        for (source, target, edge_type) in references {
-            self.add_edge(source, target, edge_type);
+    /// `stale_sources` ile işaretli kaynakların referans kenarlarını `references`
+    /// ile değiştirir; diğer tüm kenarlar korunur.
+    ///
+    /// petgraph'ta tek tek `remove_edge` her silmede bağlı listeleri yürür; kenar
+    /// listesi bunun yerine tek geçişte yeniden kurulur. `references` tekrarsız
+    /// olduğu ve eski referans kenarları atıldığı için yinelenen kenar denetimi
+    /// gerekmez.
+    fn replace_reference_edges(
+        &mut self,
+        stale_sources: &[bool],
+        references: Vec<(NodeIndex, NodeIndex, EdgeType)>,
+    ) {
+        let kept: Vec<(NodeIndex, NodeIndex, EdgeType)> = self
+            .graph
+            .edge_references()
+            .filter(|edge| {
+                !(is_reference_edge(edge.weight()) && stale_sources[edge.source().index()])
+            })
+            .map(|edge| (edge.source(), edge.target(), edge.weight().clone()))
+            .collect();
+        self.graph.clear_edges();
+        for (source, target, edge_type) in kept.into_iter().chain(references) {
+            self.graph.add_edge(source, target, edge_type);
         }
-        count
     }
 
     /// Finds the node corresponding to a specific file path.
@@ -485,6 +522,14 @@ impl CodeGraph {
             std::fs::create_dir_all(parent)?;
         }
         let temp_path = path.with_extension(format!("json.{}.tmp", std::process::id()));
+        self.write_json_file(&temp_path)?;
+        std::fs::rename(temp_path, path)?;
+        Ok(())
+    }
+
+    /// Grafı verilen dosyaya yazar ve diske senkronlar; yazılan bayt sayısını
+    /// döndürür. Atomik değiştirme (geçici dosya + rename) çağırana aittir.
+    pub fn write_json_file(&self, path: &std::path::Path) -> anyhow::Result<u64> {
         #[cfg(unix)]
         let file = {
             use std::os::unix::fs::OpenOptionsExt;
@@ -493,17 +538,16 @@ impl CodeGraph {
                 .create(true)
                 .truncate(true)
                 .mode(0o600)
-                .open(&temp_path)?
+                .open(path)?
         };
         #[cfg(not(unix))]
-        let file = std::fs::File::create(&temp_path)?;
+        let file = std::fs::File::create(path)?;
         let mut writer = std::io::BufWriter::new(file);
         serde_json::to_writer(&mut writer, &self.graph)?;
         use std::io::Write;
         writer.flush()?;
         writer.get_ref().sync_all()?;
-        std::fs::rename(temp_path, path)?;
-        Ok(())
+        Ok(writer.get_ref().metadata()?.len())
     }
 
     /// Loads the graph from a JSON file.
@@ -588,19 +632,182 @@ impl CodeGraph {
             }
         }
 
-        // 3. Remove nodes using retain_nodes to avoid index swaps.
-        self.graph.retain_nodes(|g, idx| {
-            if to_remove.contains(&idx) {
-                let node = &g[idx];
-                self.id_index.remove(&node.id);
-                false
-            } else {
-                true
-            }
-        });
+        // 3. Büyükten küçüğe silinir: petgraph son düğümü silinen konuma taşır ve
+        // taşınan düğüm her zaman silinmeyecek bir düğümdür; kalan indeksler geçerli
+        // kalır ve dizinler tüm grafı yeniden kurmadan güncellenir.
+        let mut ordered: Vec<NodeIndex> = to_remove.into_iter().collect();
+        ordered.sort_unstable_by(|left, right| right.cmp(left));
+        for idx in ordered {
+            self.remove_indexed_node(idx);
+        }
+    }
 
-        // retain_nodes shifts indices! We MUST rebuild the index entirely.
-        self.rebuild_index();
+    /// Düğümü siler ve üç dizini günceller. `remove_node` son düğümü silinen
+    /// konuma taşıdığından yalnızca silinen ve taşınan düğümün girdileri değişir.
+    fn remove_indexed_node(&mut self, idx: NodeIndex) {
+        let last = NodeIndex::new(self.graph.node_count().saturating_sub(1));
+        let Some(removed) = self.graph.remove_node(idx) else {
+            return;
+        };
+        let CodeGraph {
+            graph,
+            id_index,
+            name_index,
+            file_nodes_index,
+        } = self;
+        if id_index.get(&removed.id) == Some(&idx) {
+            id_index.remove(&removed.id);
+        }
+        remove_from_bucket(name_index, &removed.name, idx);
+        remove_from_bucket(file_nodes_index, graph_node_file_path(&removed.id), idx);
+        if idx == last {
+            return;
+        }
+        let moved = &graph[idx];
+        if let Some(position) = id_index.get_mut(&moved.id) {
+            *position = idx;
+        }
+        replace_in_bucket(name_index, &moved.name, last, idx);
+        replace_in_bucket(file_nodes_index, graph_node_file_path(&moved.id), last, idx);
+    }
+}
+
+/// Artımlı referans yenilemesinin kapsamı.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ReferenceRefresh {
+    /// Kenarları yeniden hesaplanan kaynak düğüm sayısı.
+    pub sources: usize,
+    /// Bu kaynaklardan üretilen referans kenarı sayısı.
+    pub edges: usize,
+}
+
+/// Bir adın referans hedefleri; dosya yoluna göre sıralı tutulur, böylece
+/// kaynağın dosyasındaki hedefler ikili aramayla bulunur.
+struct SymbolTargets<'g> {
+    by_file: Vec<(&'g str, NodeIndex)>,
+}
+
+impl<'g> SymbolTargets<'g> {
+    fn all(&self) -> impl Iterator<Item = NodeIndex> + '_ {
+        self.by_file.iter().map(|(_, idx)| *idx)
+    }
+
+    fn in_file<'a>(&'a self, file: &'a str) -> impl Iterator<Item = NodeIndex> + 'a {
+        let start = self.by_file.partition_point(|(path, _)| *path < file);
+        self.by_file[start..]
+            .iter()
+            .take_while(move |(path, _)| *path == file)
+            .map(|(_, idx)| *idx)
+    }
+}
+
+/// Ad → hedef tablosu; her ad ilk kullanımda bir kez hesaplanır.
+struct SymbolTable<'g> {
+    graph: &'g CodeGraph,
+    entries: HashMap<&'g str, SymbolTargets<'g>>,
+}
+
+impl<'g> SymbolTable<'g> {
+    fn new(graph: &'g CodeGraph) -> Self {
+        Self {
+            graph,
+            entries: HashMap::new(),
+        }
+    }
+
+    fn targets(&mut self, name: &'g str) -> &SymbolTargets<'g> {
+        let graph = self.graph;
+        self.entries
+            .entry(name)
+            .or_insert_with(|| symbol_targets(graph, name))
+    }
+}
+
+/// Adın referans hedeflerini hesaplar. Rust impl blokları tipin adını taşıyan
+/// Class düğümleridir; aynı adlı struct varken hedefi belirsizleştirip dosyalar
+/// arası kenarı engellerler, bu yüzden o ad için elenirler ve tip referansı
+/// struct tanımına bağlanır. Kural ad başınadır.
+fn symbol_targets<'g>(graph: &'g CodeGraph, name: &str) -> SymbolTargets<'g> {
+    if !is_referenceable_symbol(name) {
+        return SymbolTargets {
+            by_file: Vec::new(),
+        };
+    }
+    let candidates: Vec<NodeIndex> = graph
+        .find_nodes_by_name(name)
+        .iter()
+        .copied()
+        .filter(|idx| is_reference_target_type(&graph.graph[*idx].node_type))
+        .collect();
+    let has_struct = candidates
+        .iter()
+        .any(|idx| graph.graph[*idx].node_type == NodeType::Struct);
+    let mut by_file: Vec<(&'g str, NodeIndex)> = candidates
+        .into_iter()
+        .filter(|idx| !(has_struct && is_rust_impl_node(&graph.graph[*idx])))
+        .map(|idx| (graph_node_file_path(&graph.graph[idx].id), idx))
+        .collect();
+    by_file.sort_unstable();
+    SymbolTargets { by_file }
+}
+
+/// Referans kenarı türleri; hepsi düğüm içeriğinden türetilir ve yeniden kurulumda
+/// birlikte atılır.
+fn is_reference_edge(edge: &EdgeType) -> bool {
+    matches!(
+        edge,
+        EdgeType::Calls | EdgeType::CallAmbiguous | EdgeType::Imports | EdgeType::ImportAmbiguous
+    )
+}
+
+/// İçeriği referans üreten düğümler.
+fn is_reference_source(node: &CodeNode) -> bool {
+    matches!(
+        node.node_type,
+        NodeType::Function | NodeType::Method | NodeType::Variable | NodeType::Import
+    )
+}
+
+/// Referans hedefi olabilen düğüm türleri.
+fn is_reference_target_type(node_type: &NodeType) -> bool {
+    matches!(
+        node_type,
+        NodeType::Function
+            | NodeType::Method
+            | NodeType::Class
+            | NodeType::Struct
+            | NodeType::Module
+    )
+}
+
+/// İçerik, adlardan birine birebir eşit bir tanımlayıcı içeriyor mu? Karar
+/// referans çözümüyle aynı tokenizer'a aittir.
+fn mentions_any_name(content: &str, names: &HashSet<String>) -> bool {
+    !names.is_empty()
+        && identifier_spans(content).any(|(start, end)| names.contains(&content[start..end]))
+}
+
+fn remove_from_bucket(index: &mut HashMap<String, Vec<NodeIndex>>, key: &str, idx: NodeIndex) {
+    let Some(bucket) = index.get_mut(key) else {
+        return;
+    };
+    bucket.retain(|existing| *existing != idx);
+    if bucket.is_empty() {
+        index.remove(key);
+    }
+}
+
+fn replace_in_bucket(
+    index: &mut HashMap<String, Vec<NodeIndex>>,
+    key: &str,
+    from: NodeIndex,
+    to: NodeIndex,
+) {
+    if let Some(slot) = index
+        .get_mut(key)
+        .and_then(|bucket| bucket.iter_mut().find(|existing| **existing == from))
+    {
+        *slot = to;
     }
 }
 
@@ -629,32 +836,40 @@ fn is_identifier_start(ch: char) -> bool {
     ch == '_' || ch == '$' || ch.is_alphabetic()
 }
 
-fn identifier_tokens(content: &str) -> Vec<(&str, bool)> {
-    let mut tokens = Vec::new();
+/// İçerikteki tanımlayıcıların bayt aralıkları. Referans çözümü ve etkilenen
+/// kaynak araması aynı tanımı kullanır.
+fn identifier_spans(content: &str) -> impl Iterator<Item = (usize, usize)> + '_ {
     let mut chars = content.char_indices().peekable();
-
-    while let Some((start, first)) = chars.next() {
-        if !is_identifier_start(first) {
-            continue;
-        }
-
-        let mut end = start + first.len_utf8();
-        while let Some(&(index, ch)) = chars.peek() {
-            if !is_identifier_start(ch) && !ch.is_numeric() {
-                break;
+    std::iter::from_fn(move || {
+        while let Some((start, first)) = chars.next() {
+            if !is_identifier_start(first) {
+                continue;
             }
-            chars.next();
-            end = index + ch.len_utf8();
+            let mut end = start + first.len_utf8();
+            while let Some(&(index, ch)) = chars.peek() {
+                if !is_identifier_start(ch) && !ch.is_numeric() {
+                    break;
+                }
+                chars.next();
+                end = index + ch.len_utf8();
+            }
+            return Some((start, end));
         }
+        None
+    })
+}
 
-        let call_like = content[end..]
-            .chars()
-            .find(|ch| !ch.is_whitespace())
-            .is_some_and(|ch| ch == '(');
-        tokens.push((&content[start..end], call_like));
-    }
-
-    tokens
+/// Tanımlayıcılar ve her birinin çağrı biçiminde (`ad(`) geçip geçmediği.
+fn identifier_tokens(content: &str) -> Vec<(&str, bool)> {
+    identifier_spans(content)
+        .map(|(start, end)| {
+            let call_like = content[end..]
+                .chars()
+                .find(|ch| !ch.is_whitespace())
+                .is_some_and(|ch| ch == '(');
+            (&content[start..end], call_like)
+        })
+        .collect()
 }
 
 /// "<path>:<kind>:<row>:<col>" formatındaki node ID'sini parçalarına ayırır.

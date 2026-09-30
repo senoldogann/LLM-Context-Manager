@@ -6,6 +6,7 @@ mod fs_utils;
 pub mod git;
 pub mod graph;
 pub mod hash;
+pub mod live;
 
 pub mod parser;
 
@@ -265,23 +266,51 @@ const EXCLUDED_SECRET_FILE_NAMES: &[&str] = &[
     "id_ed25519",
 ];
 
-fn build_project_walker(path: &Path, excluded_paths: &[PathBuf]) -> ignore::Walk {
-    use ignore::WalkBuilder;
-
-    let excluded_paths = with_canonical_variants(excluded_paths.to_vec());
-
-    WalkBuilder::new(path)
+/// Tam ve kapsamlı taramaların ortak ayarları: gitignore, `.ignore`,
+/// `.ccmignore` ve üst dizinlerin ignore dosyaları uygulanır.
+fn project_walk_builder(path: &Path) -> ignore::WalkBuilder {
+    let mut builder = ignore::WalkBuilder::new(path);
+    builder
         .hidden(false)
         .git_ignore(true)
         .git_exclude(true)
         .parents(true)
         .ignore(true)
-        .add_custom_ignore_filename(".ccmignore")
+        .add_custom_ignore_filename(".ccmignore");
+    builder
+}
+
+fn build_project_walker(path: &Path, excluded_paths: &[PathBuf]) -> ignore::Walk {
+    let excluded_paths = with_canonical_variants(excluded_paths.to_vec());
+    project_walk_builder(path)
         .filter_entry(move |entry| {
             should_traverse_entry(entry)
                 && !excluded_paths
                     .iter()
                     .any(|excluded| entry.path().starts_with(excluded))
+        })
+        .build()
+}
+
+/// Tam taramayla aynı kök ve kurallarla yürür ama yalnızca `scope` yollarının
+/// atalarına ve altlarına iner. Bir dosyanın dahil edilip edilmediği tam
+/// taramayla birebir aynıdır; yalnızca ziyaret edilen dizinler azalır.
+fn build_scoped_project_walker(
+    path: &Path,
+    excluded_paths: &[PathBuf],
+    scope: Vec<PathBuf>,
+) -> ignore::Walk {
+    let excluded_paths = with_canonical_variants(excluded_paths.to_vec());
+    project_walk_builder(path)
+        .filter_entry(move |entry| {
+            let entry_path = entry.path();
+            should_traverse_entry(entry)
+                && !excluded_paths
+                    .iter()
+                    .any(|excluded| entry_path.starts_with(excluded))
+                && scope
+                    .iter()
+                    .any(|target| target.starts_with(entry_path) || entry_path.starts_with(target))
         })
         .build()
 }
@@ -444,7 +473,7 @@ async fn build_index_generation(
                 }
 
                 let file_path = entry.path().to_path_buf();
-                let Some(file_id) = normalize_file_id_with_root(&project_root, &file_path) else {
+                let Some(file_id) = relative_file_id(&project_root, &file_path) else {
                     continue;
                 };
                 if is_internal_index_file(&file_id) {
@@ -625,19 +654,19 @@ async fn build_index_generation(
     }
 
     // Boş sonuç da kalıcılaştırılır; aksi halde önceki dolu graph diskte kalır.
+    // Manifest boş graf için de yazılır; artımlı indeksleme ona dayanır.
     let graph_path = artifact_parent.join("ccm_graph.json");
-    graph_arc
-        .read()
-        .await
-        .save_to_file(&graph_path.to_string_lossy())?;
-    info!(path = %graph_path.display(), "Graph saved to disk");
-
-    // Save manifest for incremental indexing (even if no nodes were created).
     let manifest_path = artifact_parent.join("ccm_manifest.json");
     manifest.schema_version = INDEX_SCHEMA_VERSION;
     manifest.indexed_commit = current_head_oid(&project_root);
     manifest.indexed_at = Some(snapshot_started_at);
-    save_manifest(&manifest_path, &manifest)?;
+    save_graph_with_manifest(
+        &*graph_arc.read().await,
+        &graph_path,
+        manifest,
+        &manifest_path,
+    )?;
+    info!(path = %graph_path.display(), "Graph saved to disk");
 
     Ok(stats)
 }
@@ -1072,13 +1101,6 @@ pub async fn update_index(path: &str, db_path: Option<&str>) -> Result<IndexStat
         }
     };
 
-    let embedder_disabled = std::env::var("CCM_DISABLE_EMBEDDER")
-        .or_else(|_| std::env::var("EMBEDDING_DISABLED"))
-        .map(|value| matches!(value.to_lowercase().as_str(), "1" | "true" | "yes"))
-        .unwrap_or(false);
-    let fixture_enabled = std::env::var("CCM_EMBEDDING_FIXTURE")
-        .ok()
-        .is_some_and(|value| !value.trim().is_empty());
     if !active.graph_path.exists() || !active.manifest_path.exists() || !active.db_path.is_dir() {
         info!(
             graph = %active.graph_path.display(),
@@ -1088,35 +1110,9 @@ pub async fn update_index(path: &str, db_path: Option<&str>) -> Result<IndexStat
         return index_directory(path, db_path).await;
     }
 
-    // Bozuk graph sessiz boş sonuca dönüşmez; kontrollü full rebuild ile onarılır.
-    let graph = match CodeGraph::from_file(&active.graph_path.to_string_lossy()) {
-        Ok(graph) => graph,
-        Err(error) => {
-            tracing::warn!(
-                path = %active.graph_path.display(),
-                error = %error,
-                "Existing graph is unreadable. Performing staged full re-index."
-            );
-            return index_directory(path, db_path).await;
-        }
-    };
-    let legacy_paths = graph.graph.node_weights().any(|node| {
-        if !matches!(
-            node.node_type,
-            crate::graph::NodeType::File | crate::graph::NodeType::DataFile
-        ) {
-            return false;
-        }
-        let name = node.name.as_str();
-        let is_abs = Path::new(name).is_absolute();
-        let has_prefix = name.starts_with("./");
-        is_abs || !has_prefix
-    });
-    if legacy_paths {
-        info!("Legacy index detected. Performing full re-index.");
-        return index_directory(path, db_path).await;
-    }
-
+    // Manifest graftan önce okunur: değişiklik yoksa graf hiç yüklenmez. Canlı
+    // yenileme grafı manifestten önce yazdığı için bu sıra, eşzamanlı bir yazımda
+    // manifestin graftan yeni görülmesini de önler.
     let manifest = load_manifest(&active.manifest_path);
     if manifest.schema_version != INDEX_SCHEMA_VERSION {
         info!(
@@ -1133,56 +1129,36 @@ pub async fn update_index(path: &str, db_path: Option<&str>) -> Result<IndexStat
         &manifest,
     )?;
     let (changed_rel, deleted_rel) = diff_manifest(&manifest, &new_manifest);
-
-    let semantic_nodes = semantic_node_count(&graph);
-    let vector_table_required = (fixture_enabled || !embedder_disabled) && semantic_nodes > 0;
-    let vector_table_path = active.db_path.join("code_vectors.lance");
-    let vector_health = if vector_table_required {
-        let fixture_namespace = fixture_namespace_for_db(&requested_db_path);
-        if vector_table_path.exists() {
-            match LanceDbStore::new_with_fixture_namespace(
-                &active.db_path.to_string_lossy(),
-                "code_vectors",
-                Some(&fixture_namespace),
-            )
-            .await
-            {
-                Ok(store) => store
-                    .validate_table()
-                    .await
-                    .map(|rows| rows >= semantic_nodes),
-                Err(error) => Err(error),
-            }
-        } else {
-            Ok(false)
+    let unchanged = changed_rel.is_empty() && deleted_rel.is_empty();
+    if unchanged {
+        if let Some(counts) = recorded_semantic_nodes(&manifest, &active.graph_path) {
+            let health =
+                vector_index_health(&active, &requested_db_path, embedded_node_count(counts)).await;
+            return finish_unchanged_index(path, db_path, health).await;
         }
-    } else {
-        Ok(true)
-    };
+    }
 
-    if changed_rel.is_empty() && deleted_rel.is_empty() {
-        // Değişiklik yokken bile embedding erişilemezliği yüzünden graph-only
-        // kalmış generation'ı onarmak gerekir; aksi halde semantic katman sessizce
-        // eksik kalır ve `index_project` sahte "up to date" döner.
-        if vector_table_required && !matches!(vector_health, Ok(true)) {
+    // Bozuk graph sessiz boş sonuca dönüşmez; kontrollü full rebuild ile onarılır.
+    let graph = match CodeGraph::from_file(&active.graph_path.to_string_lossy()) {
+        Ok(graph) => graph,
+        Err(error) => {
             tracing::warn!(
-                vector_table = %vector_table_path.display(),
-                error = ?vector_health.err(),
-                "Vector index is incomplete or corrupt. Repairing semantics from the active graph."
+                path = %active.graph_path.display(),
+                error = %error,
+                "Existing graph is unreadable. Performing staged full re-index."
             );
-            return match upgrade_active_index_semantics(path, db_path).await {
-                // Graf zaten güncel; yalnızca semantik katman hâlâ beklemede.
-                Err(error) if crate::vector::remote::is_embedder_unavailable(&error) => {
-                    Ok(IndexStats {
-                        semantic_unavailable: Some(error.to_string()),
-                        ..IndexStats::default()
-                    })
-                }
-                result => result,
-            };
+            return index_directory(path, db_path).await;
         }
-        info!("No changes detected.");
-        return Ok(IndexStats::default());
+    };
+    if graph_uses_legacy_paths(&graph) {
+        info!("Legacy index detected. Performing full re-index.");
+        return index_directory(path, db_path).await;
+    }
+
+    let health =
+        vector_index_health(&active, &requested_db_path, semantic_node_count(&graph)).await;
+    if unchanged {
+        return finish_unchanged_index(path, db_path, health).await;
     }
 
     let changed_files: Vec<PathBuf> = changed_rel
@@ -1190,7 +1166,6 @@ pub async fn update_index(path: &str, db_path: Option<&str>) -> Result<IndexStat
         .chain(deleted_rel.iter())
         .map(|rel| file_id_to_path(&project_root, rel))
         .collect();
-    let mut committed_manifest = new_manifest;
 
     let changed_files: Vec<PathBuf> = changed_files
         .into_iter()
@@ -1210,9 +1185,9 @@ pub async fn update_index(path: &str, db_path: Option<&str>) -> Result<IndexStat
     // Değişen dosyalarla birlikte bozuk vektör tablosu varsa incremental yol yeni
     // node'ları eklerse de eski node vektörleri eksik kalır. Bu durumda tam yeniden
     // indeksleme hem parse hem embedding'i tek geçişte doğru biçimde tamamlar.
-    if vector_table_required && !matches!(vector_health, Ok(true)) {
+    if health.repair_needed() {
         tracing::warn!(
-            vector_table = %vector_table_path.display(),
+            vector_table = %health.table_path.display(),
             "Vector index incomplete with pending source changes; performing full re-index."
         );
         return index_directory(path, db_path).await;
@@ -1228,7 +1203,20 @@ pub async fn update_index(path: &str, db_path: Option<&str>) -> Result<IndexStat
     let staged_manifest_path = staging_root.join("ccm_manifest.json");
 
     let staged_result: Result<IndexStats> = async {
-        copy_directory(&active.db_path, &staged_db_path)?;
+        {
+            // MCP'nin canlı yenilemesi etkin vektör tablosunu yerinde ve aynı kilit
+            // altında değiştirir; kopya bu yüzden tutarlı bir tablo sürümü görür.
+            let _activation_lock = ActivationLock::acquire(artifact_parent)?;
+            let current = read_current_pointer_value(artifact_parent)?;
+            if current != active.generation_id {
+                anyhow::bail!(
+                    "Index changed concurrently while an update was starting (expected {:?}, found {:?}); retry the update",
+                    active.generation_id,
+                    current
+                );
+            }
+            copy_directory(&active.db_path, &staged_db_path)?;
+        }
         // Graf bu fonksiyonun başında aktif generation'dan zaten yüklendi; JSON'u
         // kopyalayıp yeniden ayrıştırmak büyük repolarda ~0,25 sn sürer. Graf ve
         // manifest aşağıda staging'e yeniden yazılır.
@@ -1244,32 +1232,14 @@ pub async fn update_index(path: &str, db_path: Option<&str>) -> Result<IndexStat
 
         info!("Starting incremental indexing for {}", path);
         let stats = engine.incremental_index_paths(path, &changed_files).await?;
+        let committed_manifest = restore_retry_files(&manifest, new_manifest, &stats.retry_files);
 
-        // Hazırlanamayan dosyaların eski fingerprint'i korunur; sonraki koşu yeniden dener.
-        if !stats.retry_files.is_empty() {
-            committed_manifest.indexed_commit = manifest.indexed_commit.clone();
-            // Racy pencereyi korumak için indexed_at'ı da eski değerle geri eski dosyaların
-            // tekrar denemesi sırasında yeniden hash'lenmesini sağlar.
-            committed_manifest.indexed_at = manifest.indexed_at;
-            for path in &stats.retry_files {
-                match manifest.files.get(path) {
-                    Some(previous) => {
-                        committed_manifest
-                            .files
-                            .insert(path.clone(), previous.clone());
-                    }
-                    None => {
-                        committed_manifest.files.remove(path);
-                    }
-                }
-            }
-        }
-
-        graph_arc
-            .read()
-            .await
-            .save_to_file(&staged_graph_path.to_string_lossy())?;
-        save_manifest(&staged_manifest_path, &committed_manifest)?;
+        save_graph_with_manifest(
+            &*graph_arc.read().await,
+            &staged_graph_path,
+            committed_manifest,
+            &staged_manifest_path,
+        )?;
         Ok(stats)
     }
     .await;
@@ -1297,6 +1267,138 @@ pub async fn update_index(path: &str, db_path: Option<&str>) -> Result<IndexStat
         return Err(error);
     }
     Ok(stats)
+}
+
+/// Graf eski sürümlerin dosya yolu biçimini (mutlak ya da `./` öneksiz) taşıyor
+/// mu? Böyle bir indeks artımlı güncellenemez; tam yeniden indeksle taşınır.
+fn graph_uses_legacy_paths(graph: &CodeGraph) -> bool {
+    graph.graph.node_weights().any(|node| {
+        if !matches!(
+            node.node_type,
+            crate::graph::NodeType::File | crate::graph::NodeType::DataFile
+        ) {
+            return false;
+        }
+        let name = node.name.as_str();
+        Path::new(name).is_absolute() || !name.starts_with("./")
+    })
+}
+
+/// Etkin generation'ın vektör tablosunun durumu.
+struct VectorHealth {
+    /// Embedding açık ve embed edilecek düğüm varsa tablo gereklidir.
+    required: bool,
+    /// Tablo okunabiliyor ve en az embed edilecek düğüm kadar satır içeriyor mu.
+    complete: Result<bool>,
+    table_path: PathBuf,
+}
+
+impl VectorHealth {
+    fn repair_needed(&self) -> bool {
+        self.required && !matches!(self.complete, Ok(true))
+    }
+}
+
+async fn vector_index_health(
+    active: &IndexArtifactPaths,
+    requested_db_path: &Path,
+    semantic_nodes: usize,
+) -> VectorHealth {
+    let embedder_disabled = std::env::var("CCM_DISABLE_EMBEDDER")
+        .or_else(|_| std::env::var("EMBEDDING_DISABLED"))
+        .map(|value| matches!(value.to_lowercase().as_str(), "1" | "true" | "yes"))
+        .unwrap_or(false);
+    let fixture_enabled = std::env::var("CCM_EMBEDDING_FIXTURE")
+        .ok()
+        .is_some_and(|value| !value.trim().is_empty());
+    let required = (fixture_enabled || !embedder_disabled) && semantic_nodes > 0;
+    let table_path = active.db_path.join("code_vectors.lance");
+    let complete = if !required {
+        Ok(true)
+    } else if !table_path.exists() {
+        Ok(false)
+    } else {
+        match LanceDbStore::new_with_fixture_namespace(
+            &active.db_path.to_string_lossy(),
+            "code_vectors",
+            Some(&fixture_namespace_for_db(requested_db_path)),
+        )
+        .await
+        {
+            Ok(store) => store
+                .validate_table()
+                .await
+                .map(|rows| rows >= semantic_nodes),
+            Err(error) => Err(error),
+        }
+    };
+    VectorHealth {
+        required,
+        complete,
+        table_path,
+    }
+}
+
+/// Kaynak değişikliği yokken `update_index`'in sonucu: yalnızca eksik ya da bozuk
+/// vektör tablosu onarılır.
+async fn finish_unchanged_index(
+    path: &str,
+    db_path: Option<&str>,
+    health: VectorHealth,
+) -> Result<IndexStats> {
+    // Değişiklik yokken bile embedding erişilemezliği yüzünden graph-only
+    // kalmış generation'ı onarmak gerekir; aksi halde semantic katman sessizce
+    // eksik kalır ve `index_project` sahte "up to date" döner.
+    if health.repair_needed() {
+        tracing::warn!(
+            vector_table = %health.table_path.display(),
+            error = ?health.complete.err(),
+            "Vector index is incomplete or corrupt. Repairing semantics from the active graph."
+        );
+        return match upgrade_active_index_semantics(path, db_path).await {
+            // Graf zaten güncel; yalnızca semantik katman hâlâ beklemede.
+            Err(error) if crate::vector::remote::is_embedder_unavailable(&error) => {
+                Ok(IndexStats {
+                    semantic_unavailable: Some(error.to_string()),
+                    ..IndexStats::default()
+                })
+            }
+            result => result,
+        };
+    }
+    tracing::info!("No changes detected.");
+    Ok(IndexStats::default())
+}
+
+/// Hazırlanamayan dosyaların (okuma/ayrıştırma hatası) önceki parmak izini geri
+/// koyar; sonraki koşu onları yeniden dener. Böyle dosya varsa `indexed_at` ve
+/// commit de eski değerlerine döner, racy pencere korunur ve eski dosyalar yeniden
+/// hash'lenir.
+fn restore_retry_files(
+    previous: &IndexManifest,
+    next: IndexManifest,
+    retry_files: &[String],
+) -> IndexManifest {
+    if retry_files.is_empty() {
+        return next;
+    }
+    let mut files = next.files;
+    for path in retry_files {
+        match previous.files.get(path) {
+            Some(fingerprint) => {
+                files.insert(path.clone(), fingerprint.clone());
+            }
+            None => {
+                files.remove(path);
+            }
+        }
+    }
+    IndexManifest {
+        indexed_commit: previous.indexed_commit.clone(),
+        indexed_at: previous.indexed_at,
+        files,
+        ..next
+    }
 }
 
 /// Aktif grafiği kullanarak eksik/eksik-semantik vektör tablosunu arka planda
@@ -1329,13 +1431,6 @@ pub async fn upgrade_active_index_semantics(
         );
     }
 
-    let graph = CodeGraph::from_file(&active.graph_path.to_string_lossy())?;
-    let semantic_nodes = semantic_node_count(&graph);
-    if semantic_nodes == 0 {
-        info!("No semantic nodes; semantic upgrade has nothing to do");
-        return Ok(IndexStats::default());
-    }
-
     let activation_generation = read_current_pointer_value(artifact_parent)?;
     let generation_id = new_generation_id();
     let generations_root = artifact_parent.join(GENERATIONS_DIRECTORY);
@@ -1343,13 +1438,24 @@ pub async fn upgrade_active_index_semantics(
     let staging_root = generations_root.join(format!("{}.staging", generation_id));
     std::fs::create_dir_all(&staging_root)?;
     let staged_db_path = staging_root.join("ccm_db");
+    let staged_graph_path = staging_root.join("ccm_graph.json");
 
     // Active generation'dan graph + manifest'i taşı; vektör staging'de sıfırdan kurulur.
-    std::fs::copy(&active.graph_path, staging_root.join("ccm_graph.json"))?;
+    // MCP canlı yenilemesi etkin generation'a önce grafı sonra manifesti yazar;
+    // manifest önce kopyalanınca kopyalanan manifest graftan yeni olamaz. Vektörler
+    // kopyalanan graftan üretilir, böylece staging grafıyla birebir eşleşir.
     std::fs::copy(
         &active.manifest_path,
         staging_root.join("ccm_manifest.json"),
     )?;
+    std::fs::copy(&active.graph_path, &staged_graph_path)?;
+    let graph = CodeGraph::from_file(&staged_graph_path.to_string_lossy())?;
+    let semantic_nodes = semantic_node_count(&graph);
+    if semantic_nodes == 0 {
+        std::fs::remove_dir_all(&staging_root)?;
+        info!("No semantic nodes; semantic upgrade has nothing to do");
+        return Ok(IndexStats::default());
+    }
 
     let fixture_namespace = fixture_namespace_for_db(&requested_db_path);
     let store = LanceDbStore::new_with_fixture_namespace(
@@ -1384,22 +1490,43 @@ pub async fn upgrade_active_index_semantics(
 }
 
 pub fn semantic_node_count(graph: &CodeGraph) -> usize {
-    let embed_data_files = std::env::var("CCM_EMBED_DATA_FILES")
-        .map(|value| matches!(value.to_lowercase().as_str(), "1" | "true" | "yes"))
-        .unwrap_or(false);
+    embedded_node_count(semantic_node_counts(graph))
+}
+
+/// Grafın embedding'e giren düğüm türlerini sayar.
+fn semantic_node_counts(graph: &CodeGraph) -> SemanticNodeCounts {
     graph
         .graph
         .node_weights()
-        .filter(|node| {
-            matches!(
-                node.node_type,
+        .fold(SemanticNodeCounts::default(), |counts, node| {
+            match node.node_type {
                 crate::graph::NodeType::Function
-                    | crate::graph::NodeType::Method
-                    | crate::graph::NodeType::Class
-                    | crate::graph::NodeType::Struct
-            ) || (embed_data_files && matches!(node.node_type, crate::graph::NodeType::DataFile))
+                | crate::graph::NodeType::Method
+                | crate::graph::NodeType::Class
+                | crate::graph::NodeType::Struct => SemanticNodeCounts {
+                    symbols: counts.symbols + 1,
+                    ..counts
+                },
+                crate::graph::NodeType::DataFile => SemanticNodeCounts {
+                    data_files: counts.data_files + 1,
+                    ..counts
+                },
+                _ => counts,
+            }
         })
-        .count()
+}
+
+/// Vektör tablosunda bulunması gereken düğüm sayısı; veri dosyaları yalnızca
+/// `CCM_EMBED_DATA_FILES` açıkken sayılır.
+fn embedded_node_count(counts: SemanticNodeCounts) -> usize {
+    let embed_data_files = std::env::var("CCM_EMBED_DATA_FILES")
+        .map(|value| matches!(value.to_lowercase().as_str(), "1" | "true" | "yes"))
+        .unwrap_or(false);
+    if embed_data_files {
+        counts.symbols + counts.data_files
+    } else {
+        counts.symbols
+    }
 }
 
 fn new_generation_id() -> String {
@@ -1580,7 +1707,7 @@ fn populate_graph_for_file(
     Ok(())
 }
 
-#[derive(Debug, Default, Serialize, Deserialize)]
+#[derive(Debug, Default, Clone, Serialize, Deserialize)]
 struct IndexManifest {
     #[serde(default)]
     schema_version: u32,
@@ -1590,7 +1717,26 @@ struct IndexManifest {
     /// ve MCP tazelik satırındaki indeks yaşı bu değere dayanır.
     #[serde(default)]
     indexed_at: Option<u64>,
+    /// Manifestle birlikte yazılan grafın embedding düğümü sayıları; değişiklik
+    /// yokken vektör sağlığı grafı yüklemeden denetlenir. Eski manifestlerde yok.
+    #[serde(default)]
+    semantic_nodes: Option<SemanticNodeCounts>,
+    /// Manifestle birlikte yazılan graf dosyasının bayt uzunluğu. Diskteki graf
+    /// bu uzunlukta değilse (bozulma, eski manifest) graf yüklenip doğrulanır.
+    #[serde(default)]
+    graph_bytes: Option<u64>,
     files: HashMap<String, FileFingerprint>,
+}
+
+/// Embedding'e giren düğüm sayıları. Veri dosyaları yalnızca
+/// `CCM_EMBED_DATA_FILES` açıkken embed edildiği için ayrı tutulur; ortam
+/// değişkeni okunduğu anda uygulanır.
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+struct SemanticNodeCounts {
+    /// Function, Method, Class ve Struct düğümleri.
+    symbols: usize,
+    /// DataFile düğümleri.
+    data_files: usize,
 }
 
 /// Kaba zaman çözünürlüklü dosya sistemlerinde (FAT: 2 sn) aynı pencerede
@@ -1656,6 +1802,13 @@ pub(crate) fn normalize_file_id_with_root(root: &Path, path: &Path) -> Option<St
         root.join(path)
     };
     let abs = std::fs::canonicalize(&abs).unwrap_or(abs);
+    relative_file_id(root, &abs)
+}
+
+/// Kanonik kök altındaki kanonik yoldan dosya kimliği (`./göreli/yol`) üretir.
+/// Proje tarayıcısı kanonik kökten başlar ve sembolik bağları izlemez; verdiği
+/// yollar zaten kanoniktir, bu yüzden dosya başına `canonicalize` gerekmez.
+fn relative_file_id(root: &Path, abs: &Path) -> Option<String> {
     let rel = abs.strip_prefix(root).ok()?;
     let mut rel_str = rel.to_string_lossy().to_string();
     if rel_str.is_empty() {
@@ -1769,20 +1922,106 @@ fn fingerprint_reusing_previous(
     fingerprint_for_path(path)
 }
 
+/// Manifesti okur; okunamazsa boş manifest döner ve şema sürümü 0 tam yeniden
+/// indekslemeyi tetikler.
 fn load_manifest(path: &Path) -> IndexManifest {
-    if let Ok(file) = std::fs::File::open(path) {
-        if let Ok(manifest) = serde_json::from_reader(file) {
-            return manifest;
+    match read_manifest(path) {
+        Ok(manifest) => manifest,
+        Err(error) => {
+            tracing::warn!(
+                path = %path.display(),
+                error = %error,
+                "Index manifest is unreadable; the index is treated as outdated"
+            );
+            IndexManifest::default()
         }
     }
-    IndexManifest::default()
+}
+
+/// Manifesti tek seferde okuyup ayrıştırır. `serde_json::from_reader` okuyucuyu
+/// tamponlamaz; dosyadan bayt bayt okumak büyük manifestlerde yüzlerce
+/// milisaniyelik sistem çağrısı demektir.
+fn read_manifest(path: &Path) -> Result<IndexManifest> {
+    let bytes = std::fs::read(path).map_err(|error| {
+        anyhow::anyhow!(
+            "Index manifest '{}' could not be read: {}",
+            path.display(),
+            error
+        )
+    })?;
+    serde_json::from_slice(&bytes).map_err(|error| {
+        anyhow::anyhow!(
+            "Index manifest '{}' could not be parsed: {}",
+            path.display(),
+            error
+        )
+    })
+}
+
+/// Grafı ve ona ait manifesti yazar; manifest grafın düğüm sayılarını ve bayt
+/// uzunluğunu taşır. Graf önce yazılır: okuyucular manifesti graftan önce
+/// okuduğu için eşzamanlı bir okuma manifesti graftan yeni göremez (graf yeniyse
+/// değişiklikler yeniden uygulanır, bu idempotenttir).
+fn save_graph_with_manifest(
+    graph: &CodeGraph,
+    graph_path: &Path,
+    manifest: IndexManifest,
+    manifest_path: &Path,
+) -> Result<()> {
+    graph.save_to_file(&graph_path.to_string_lossy())?;
+    let graph_bytes = std::fs::metadata(graph_path)
+        .map_err(|error| {
+            anyhow::anyhow!(
+                "Saved graph '{}' could not be inspected: {}",
+                graph_path.display(),
+                error
+            )
+        })?
+        .len();
+    let manifest = IndexManifest {
+        semantic_nodes: Some(semantic_node_counts(graph)),
+        graph_bytes: Some(graph_bytes),
+        ..manifest
+    };
+    save_manifest(manifest_path, &manifest)
+}
+
+/// Manifestin kaydettiği graf olgularını, diskteki graf dosyası manifestle
+/// birlikte yazılan dosyaysa döndürür (uzunluk eşleşmesi). Eski manifestlerde ya
+/// da uzunluk farkında (bozulma, yarım kalan eşzamanlı yazım) `None` döner ve
+/// çağıran grafı yükleyip doğrular.
+fn recorded_semantic_nodes(
+    manifest: &IndexManifest,
+    graph_path: &Path,
+) -> Option<SemanticNodeCounts> {
+    let recorded_bytes = manifest.graph_bytes?;
+    let actual_bytes = std::fs::metadata(graph_path).ok()?.len();
+    if recorded_bytes == actual_bytes {
+        manifest.semantic_nodes
+    } else {
+        None
+    }
 }
 
 fn save_manifest(path: &Path, manifest: &IndexManifest) -> Result<()> {
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent)?;
     }
-    let temp_path = path.with_extension(format!("json.{}.tmp", std::process::id()));
+    let temp_path = artifact_temp_path(path);
+    write_manifest_file(&temp_path, manifest)?;
+    std::fs::rename(&temp_path, path)?;
+    Ok(())
+}
+
+/// Artefaktın atomik yazımda kullanılan geçici dosya yolu
+/// (`<ad>.json.<pid>.tmp`; `is_index_artifact_temp_name` bu deseni tanır).
+fn artifact_temp_path(path: &Path) -> PathBuf {
+    path.with_extension(format!("json.{}.tmp", std::process::id()))
+}
+
+/// Manifesti verilen dosyaya yazar ve diske senkronlar; atomik değiştirme
+/// çağırana aittir.
+fn write_manifest_file(path: &Path, manifest: &IndexManifest) -> Result<()> {
     #[cfg(unix)]
     let file = {
         use std::os::unix::fs::OpenOptionsExt;
@@ -1791,16 +2030,15 @@ fn save_manifest(path: &Path, manifest: &IndexManifest) -> Result<()> {
             .create(true)
             .truncate(true)
             .mode(0o600)
-            .open(&temp_path)?
+            .open(path)?
     };
     #[cfg(not(unix))]
-    let file = std::fs::File::create(&temp_path)?;
+    let file = std::fs::File::create(path)?;
     let mut writer = std::io::BufWriter::new(file);
     serde_json::to_writer_pretty(&mut writer, manifest)?;
     use std::io::Write;
     writer.flush()?;
     writer.get_ref().sync_all()?;
-    std::fs::rename(&temp_path, path)?;
     Ok(())
 }
 
@@ -1812,18 +2050,45 @@ fn build_manifest(
     // Zaman damgası tarama başlamadan alınır; tarama sırasında değişen
     // dosyalar bir sonraki koşuda racy pencereye düşer ve yeniden hash'lenir.
     let indexed_at = unix_now_secs();
-    let reuse_before_sec = previous
-        .indexed_at
-        .map(|value| value.saturating_sub(RACY_WINDOW_SECS))
-        .unwrap_or(0);
-    let mut manifest = IndexManifest {
+    let files = fingerprint_walk(
+        build_project_walker(project_root, excluded_paths),
+        project_root,
+        previous,
+    )?;
+    Ok(IndexManifest {
         schema_version: INDEX_SCHEMA_VERSION,
         indexed_commit: current_head_oid(project_root),
         indexed_at: Some(indexed_at),
-        files: HashMap::new(),
-    };
-    let walker = build_project_walker(project_root, excluded_paths);
+        semantic_nodes: None,
+        graph_bytes: None,
+        files,
+    })
+}
 
+/// Manifestin yalnızca `scope` yollarına düşen dosyalarını tam taramanın
+/// kurallarıyla tarar (bkz. `build_scoped_project_walker`).
+fn scan_manifest_scope(
+    project_root: &Path,
+    excluded_paths: &[PathBuf],
+    previous: &IndexManifest,
+    scope: &[PathBuf],
+) -> Result<HashMap<String, FileFingerprint>> {
+    fingerprint_walk(
+        build_scoped_project_walker(project_root, excluded_paths, scope.to_vec()),
+        project_root,
+        previous,
+    )
+}
+
+/// Tarayıcının verdiği indekslenebilir dosyaların parmak izleri. Stat bilgisi
+/// önceki manifestle aynı ve racy pencerenin dışındaysa hash yeniden kullanılır.
+fn fingerprint_walk(
+    walker: ignore::Walk,
+    project_root: &Path,
+    previous: &IndexManifest,
+) -> Result<HashMap<String, FileFingerprint>> {
+    let reuse_before_sec = racy_reuse_boundary(previous);
+    let mut files = HashMap::new();
     for result in walker {
         let entry = result.map_err(|error| {
             anyhow::anyhow!(
@@ -1838,7 +2103,7 @@ fn build_manifest(
         }
 
         let file_path = entry.path();
-        let Some(file_id) = normalize_file_id_with_root(project_root, file_path) else {
+        let Some(file_id) = relative_file_id(project_root, file_path) else {
             continue;
         };
         if is_internal_index_file(&file_id) {
@@ -1857,10 +2122,50 @@ fn build_manifest(
                         error
                     )
                 })?;
-        manifest.files.insert(file_id, fingerprint);
+        files.insert(file_id, fingerprint);
     }
+    Ok(files)
+}
 
-    Ok(manifest)
+/// Stat önbelleğinin güvendiği mtime sınırı: bundan önce değişmiş ve stat bilgisi
+/// aynı kalmış dosyanın hash'i yeniden kullanılır. Manifestteki her parmak izi ya
+/// bu sınırdan güvenli ya da `indexed_at`'ten sonra hesaplanmıştır. Zaman
+/// damgasız eski manifestte 0 döner; her dosya yeniden hash'lenir.
+fn racy_reuse_boundary(previous: &IndexManifest) -> u64 {
+    previous
+        .indexed_at
+        .map(|value| value.saturating_sub(RACY_WINDOW_SECS))
+        .unwrap_or(0)
+}
+
+/// Kapsamlı taramayı manifestin aynı kapsamdaki eski girdileriyle karşılaştırır;
+/// `diff_manifest` kuralının kapsamla sınırlı hâli.
+fn diff_manifest_scope(
+    previous: &IndexManifest,
+    scope_ids: &[String],
+    scanned: &HashMap<String, FileFingerprint>,
+) -> (Vec<String>, Vec<String>) {
+    let changed = scanned
+        .iter()
+        .filter(|(file_id, fingerprint)| previous.files.get(*file_id) != Some(*fingerprint))
+        .map(|(file_id, _)| file_id.clone())
+        .collect();
+    let deleted = previous
+        .files
+        .keys()
+        .filter(|file_id| file_id_in_scope(file_id, scope_ids) && !scanned.contains_key(*file_id))
+        .cloned()
+        .collect();
+    (changed, deleted)
+}
+
+/// Dosya kimliği kapsam kimliklerinden birine eşit ya da onun altında mı?
+fn file_id_in_scope(file_id: &str, scope_ids: &[String]) -> bool {
+    scope_ids.iter().any(|scope| {
+        file_id
+            .strip_prefix(scope.as_str())
+            .is_some_and(|rest| rest.is_empty() || rest.starts_with('/'))
+    })
 }
 
 fn diff_manifest(
@@ -2151,6 +2456,8 @@ mod policy_tests {
             schema_version: 2,
             indexed_commit: Some("old".to_string()),
             indexed_at: None,
+            semantic_nodes: None,
+            graph_bytes: None,
             files: HashMap::from([(
                 "./src/lib.rs".to_string(),
                 FileFingerprint {
@@ -2165,6 +2472,8 @@ mod policy_tests {
             schema_version: 2,
             indexed_commit: Some("new".to_string()),
             indexed_at: None,
+            semantic_nodes: None,
+            graph_bytes: None,
             files: HashMap::from([(
                 "./src/lib.rs".to_string(),
                 FileFingerprint {

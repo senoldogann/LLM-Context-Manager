@@ -19,6 +19,25 @@ struct McpSession {
 
 impl McpSession {
     fn start(project: &Path, extra_env: &[(&str, &str)]) -> Result<Self, Box<dyn Error>> {
+        Self::spawn(project, extra_env, Stdio::null())
+    }
+
+    /// Sunucunun log'unu (`RUST_LOG=info`) verilen dosyaya yazdırarak başlatır.
+    fn start_logged(
+        project: &Path,
+        extra_env: &[(&str, &str)],
+        log_path: &Path,
+    ) -> Result<Self, Box<dyn Error>> {
+        let mut env = extra_env.to_vec();
+        env.push(("RUST_LOG", "info"));
+        Self::spawn(project, &env, Stdio::from(fs::File::create(log_path)?))
+    }
+
+    fn spawn(
+        project: &Path,
+        extra_env: &[(&str, &str)],
+        stderr: Stdio,
+    ) -> Result<Self, Box<dyn Error>> {
         let mut command = Command::new(assert_cmd::cargo::cargo_bin!("ccm-mcp"));
         command
             .env("CCM_DISABLE_EMBEDDER", "1")
@@ -27,7 +46,7 @@ impl McpSession {
             .env("CCM_ALLOWED_ROOTS", project)
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
-            .stderr(Stdio::null());
+            .stderr(stderr);
         for (key, value) in extra_env {
             command.env(key, value);
         }
@@ -103,26 +122,77 @@ fn poll_find_nodes(
     }
 }
 
-/// Etkin generation işaretçisi `previous` değerinden farklı olana kadar bekler ve
-/// değişikliğin görüldüğü anı (yenilemenin yeni generation'ı aktive ettiği an)
-/// döndürür.
-fn wait_for_pointer_change(
-    pointer: &Path,
-    previous: &str,
+/// Etkin generation dizini (`data/.ccm-generations/<işaretçi>`).
+fn active_generation_dir(project: &Path) -> Result<std::path::PathBuf, Box<dyn Error>> {
+    let generation = fs::read_to_string(project.join("data/ccm_current"))?;
+    Ok(project
+        .join("data/.ccm-generations")
+        .join(generation.trim()))
+}
+
+/// Etkin generation'ın diskteki manifesti `file_id`'yi içerene (canlı yenileme
+/// kalıcılaştırılana) kadar bekler.
+fn wait_for_persisted_file(
+    project: &Path,
+    file_id: &str,
     deadline: Duration,
-) -> Result<Instant, Box<dyn Error>> {
+) -> Result<(), Box<dyn Error>> {
     let started = Instant::now();
     loop {
-        if fs::read_to_string(pointer)? != previous {
-            return Ok(Instant::now());
+        let manifest_path = active_generation_dir(project)?.join("ccm_manifest.json");
+        let manifest: Value = serde_json::from_slice(&fs::read(&manifest_path)?)?;
+        if manifest["files"].get(file_id).is_some() {
+            return Ok(());
         }
         if started.elapsed() > deadline {
-            return Err(
-                format!("active generation pointer did not change within {deadline:?}").into(),
-            );
+            return Err(format!("'{file_id}' was not persisted within {deadline:?}").into());
         }
-        std::thread::sleep(Duration::from_millis(20));
+        std::thread::sleep(Duration::from_millis(50));
     }
+}
+
+/// Dizini alt dizinleriyle birlikte kopyalar.
+fn copy_dir(source: &Path, destination: &Path) -> Result<(), Box<dyn Error>> {
+    fs::create_dir_all(destination)?;
+    for entry in fs::read_dir(source)? {
+        let entry = entry?;
+        let target = destination.join(entry.file_name());
+        if entry.file_type()?.is_dir() {
+            copy_dir(&entry.path(), &target)?;
+        } else {
+            fs::copy(entry.path(), target)?;
+        }
+    }
+    Ok(())
+}
+
+/// Etkin işaretçiyi verilen generation'a atomik olarak çevirir; başka bir sürecin
+/// generation kurmasını taklit eder. Geçici dosya indeksin kendi adlandırmasını
+/// izler, izleyici onu yok sayar.
+fn activate_generation(project: &Path, generation: &str) -> Result<(), Box<dyn Error>> {
+    let data = project.join("data");
+    let temp = data.join(format!("ccm_current.{generation}.tmp"));
+    fs::write(&temp, generation)?;
+    fs::rename(&temp, data.join("ccm_current"))?;
+    Ok(())
+}
+
+/// `ccm-cli index` ile aynı yolu (`update_index`) ayrı bir süreçte çalıştırır:
+/// sunucunun dahili worker modu CLI komutuyla aynı çekirdek fonksiyonu çağırır.
+fn run_update_index_process(project: &Path) -> Result<Value, Box<dyn Error>> {
+    let output = Command::new(assert_cmd::cargo::cargo_bin!("ccm-mcp"))
+        .arg("--ccm-internal-index-worker")
+        .arg(project)
+        .arg(project.join("data/ccm_db"))
+        .env("CCM_INTERNAL_INDEX_WORKER", "1")
+        .env("CCM_DISABLE_EMBEDDER", "1")
+        .stdin(Stdio::null())
+        .stderr(Stdio::null())
+        .output()?;
+    if !output.status.success() {
+        return Err(format!("update_index process failed: {}", output.status).into());
+    }
+    Ok(serde_json::from_slice(&output.stdout)?)
 }
 
 #[test]
@@ -173,11 +243,11 @@ fn slow_refresh_returns_stale_result_within_budget() -> Result<(), Box<dyn Error
     fs::write(project.path().join("main.rs"), "fn existing_symbol() {}\n")?;
     let mut session = McpSession::start(
         project.path(),
-        &[("CCM_INTERNAL_INDEX_TEST_DELAY_MS", "5000")],
+        &[("CCM_INTERNAL_REFRESH_TEST_DELAY_MS", "5000")],
     )?;
     session.call_tool("index_now", json!({ "project_path": project.path() }))?;
 
-    // index_now sonrası başlangıç yakalaması da 5 sn sürer; kaydedilen değişiklik beklemede kalır.
+    // index_now sonrası başlangıç yakalaması 5 sn sürer; kaydedilen değişiklik beklemede kalır.
     fs::write(project.path().join("added.rs"), "fn pending_symbol() {}\n")?;
     std::thread::sleep(Duration::from_millis(500));
     let started = Instant::now();
@@ -235,9 +305,11 @@ fn ignored_and_artifact_writes_do_not_mark_index_stale() -> Result<(), Box<dyn E
     fs::create_dir(project.path().join(".git"))?;
     fs::write(project.path().join(".gitignore"), "generated/\n")?;
     fs::write(project.path().join("main.rs"), "fn existing_symbol() {}\n")?;
+    // Her yenileme turu 3 sn sürer; indeksin kendi yazımları ikinci bir tur
+    // tetiklerse okumalar bu süre boyunca `refresh running` görür.
     let mut session = McpSession::start(
         project.path(),
-        &[("CCM_INTERNAL_INDEX_TEST_DELAY_MS", "3000")],
+        &[("CCM_INTERNAL_REFRESH_TEST_DELAY_MS", "3000")],
     )?;
     session.call_tool("index_now", json!({ "project_path": project.path() }))?;
     poll_find_nodes(
@@ -247,29 +319,20 @@ fn ignored_and_artifact_writes_do_not_mark_index_stale() -> Result<(), Box<dyn E
         |text| text.starts_with("_Index: fresh"),
     )?;
 
-    // Gerçek değişiklik yeni bir generation yazar ve etkin işaretçiyi değiştirir.
-    // Yenileme aktivasyondan sonra saniyenin küçük bir kesrinde biter; indeksin kendi
-    // dosyaları (işaretçinin geçici dosyası) ikinci bir tur tetiklerse bu tur (testte
-    // 3 sn'lik worker gecikmesi kadar) `fresh` satırını aktivasyondan çok sonraya iter.
-    let pointer = project.path().join("data/ccm_current");
-    let generation_before = fs::read_to_string(&pointer)?;
+    // Gerçek değişiklik canlı engine'e uygulanır, ardından graf ve manifest etkin
+    // generation dizinine (geçici dosya + rename ile) yazılır. Bu yazımlar yeni bir
+    // tur tetiklememelidir.
     fs::write(
         project.path().join("added.rs"),
         "fn real_change_symbol() {}\n",
     )?;
-    let activated_at =
-        wait_for_pointer_change(&pointer, &generation_before, Duration::from_secs(15))?;
     poll_find_nodes(
         &mut session,
         "real_change_symbol",
         Duration::from_secs(15),
         |text| found_node(text, "real_change_symbol") && text.starts_with("_Index: fresh"),
     )?;
-    assert!(
-        activated_at.elapsed() < Duration::from_secs(2),
-        "a second refresh round ran after the generation was activated: fresh only after {:?}",
-        activated_at.elapsed()
-    );
+    wait_for_persisted_file(project.path(), "./added.rs", Duration::from_secs(15))?;
     std::thread::sleep(Duration::from_millis(800));
     let started = Instant::now();
     let after_refresh = session.call_tool("find_nodes", json!({ "query": "existing_symbol" }))?;
@@ -515,5 +578,275 @@ fn removed_index_is_not_rebuilt_by_auto_refresh() -> Result<(), Box<dyn Error>> 
         error.to_string().contains("Project index is missing"),
         "unexpected read error: {error}"
     );
+    Ok(())
+}
+
+#[test]
+fn live_refresh_does_not_wait_for_the_index_worker() -> Result<(), Box<dyn Error>> {
+    let project = tempdir()?;
+    fs::write(project.path().join("main.rs"), "fn existing_symbol() {}\n")?;
+    // Worker süreci 8 sn gecikir: elle indeksleme bunu öder, otomatik yenileme ödememelidir.
+    let mut session = McpSession::start(
+        project.path(),
+        &[("CCM_INTERNAL_INDEX_TEST_DELAY_MS", "8000")],
+    )?;
+    session.call_tool("index_now", json!({ "project_path": project.path() }))?;
+    poll_find_nodes(
+        &mut session,
+        "existing_symbol",
+        Duration::from_secs(10),
+        |text| text.starts_with("_Index: fresh"),
+    )?;
+
+    let saved_at = Instant::now();
+    fs::write(project.path().join("added.rs"), "fn live_symbol() {}\n")?;
+    poll_find_nodes(
+        &mut session,
+        "live_symbol",
+        Duration::from_secs(10),
+        |text| found_node(text, "live_symbol") && text.starts_with("_Index: fresh"),
+    )?;
+    assert!(
+        saved_at.elapsed() < Duration::from_secs(4),
+        "the refresh took {:?}; a worker process (8 s delay) must not be involved",
+        saved_at.elapsed()
+    );
+    Ok(())
+}
+
+#[test]
+fn live_refresh_is_persisted_and_a_skipped_write_is_reconciled() -> Result<(), Box<dyn Error>> {
+    let project = tempdir()?;
+    fs::write(project.path().join("main.rs"), "fn existing_symbol() {}\n")?;
+    let mut writer = McpSession::start(project.path(), &[])?;
+    writer.call_tool("index_now", json!({ "project_path": project.path() }))?;
+    poll_find_nodes(
+        &mut writer,
+        "existing_symbol",
+        Duration::from_secs(10),
+        |text| text.starts_with("_Index: fresh"),
+    )?;
+    let generation = active_generation_dir(project.path())?;
+    let graph_before = fs::read(generation.join("ccm_graph.json"))?;
+    let manifest_before = fs::read(generation.join("ccm_manifest.json"))?;
+
+    fs::write(
+        project.path().join("added.rs"),
+        "fn persisted_symbol() {}\n",
+    )?;
+    poll_find_nodes(
+        &mut writer,
+        "persisted_symbol",
+        Duration::from_secs(10),
+        |text| found_node(text, "persisted_symbol") && text.starts_with("_Index: fresh"),
+    )?;
+    wait_for_persisted_file(project.path(), "./added.rs", Duration::from_secs(10))?;
+    drop(writer);
+    assert_eq!(
+        active_generation_dir(project.path())?,
+        generation,
+        "the live refresh must persist into the active generation"
+    );
+
+    // Otomatik yenilemesi kapalı yeni süreç değişikliği yalnızca diskten görebilir.
+    let mut reader = McpSession::start(project.path(), &[("CCM_AUTO_REFRESH", "0")])?;
+    let text = reader.call_tool("find_nodes", json!({ "query": "persisted_symbol" }))?;
+    assert!(
+        found_node(&text, "persisted_symbol"),
+        "a new server must read the persisted change: {text}"
+    );
+    drop(reader);
+
+    // Kalıcılaştırma hiç olmamış gibi eski graf ve manifest geri konur; yeni
+    // sunucunun başlangıç karşılaştırması farkı yakalar.
+    fs::write(generation.join("ccm_graph.json"), &graph_before)?;
+    fs::write(generation.join("ccm_manifest.json"), &manifest_before)?;
+    let mut recovered = McpSession::start(project.path(), &[])?;
+    poll_find_nodes(
+        &mut recovered,
+        "persisted_symbol",
+        Duration::from_secs(10),
+        |text| found_node(text, "persisted_symbol") && text.starts_with("_Index: fresh"),
+    )?;
+    Ok(())
+}
+
+#[test]
+fn generation_installed_by_another_process_is_picked_up() -> Result<(), Box<dyn Error>> {
+    let project = tempdir()?;
+    let logs = tempdir()?;
+    let log_path = logs.path().join("mcp.log");
+    fs::write(project.path().join("main.rs"), "fn existing_symbol() {}\n")?;
+    // Her tur canlı indeksi yükledikten sonra 5 sn bekler; CLI'ın `update_index`'i
+    // yeni generation'ı tam bu aralıkta, yükleme ile uygulama arasında kurar.
+    let mut session = McpSession::start_logged(
+        project.path(),
+        &[("CCM_INTERNAL_REFRESH_TEST_DELAY_MS", "5000")],
+        &log_path,
+    )?;
+    session.call_tool("index_now", json!({ "project_path": project.path() }))?;
+    poll_find_nodes(
+        &mut session,
+        "existing_symbol",
+        Duration::from_secs(20),
+        |text| text.starts_with("_Index: fresh"),
+    )?;
+    let generation_before = active_generation_dir(project.path())?;
+
+    fs::write(project.path().join("cli.rs"), "fn cli_symbol() {}\n")?;
+    poll_find_nodes(
+        &mut session,
+        "existing_symbol",
+        Duration::from_secs(10),
+        |text| text.contains("refresh running"),
+    )?;
+    let stats = run_update_index_process(project.path())?;
+    assert_eq!(
+        stats["files_indexed"], 1,
+        "update_index must index the change: {stats}"
+    );
+    let generation_after = active_generation_dir(project.path())?;
+    assert_ne!(
+        generation_after, generation_before,
+        "update_index must install a new generation"
+    );
+
+    let text = poll_find_nodes(
+        &mut session,
+        "cli_symbol",
+        Duration::from_secs(30),
+        |text| found_node(text, "cli_symbol") && text.starts_with("_Index: fresh"),
+    )?;
+    assert!(!text.contains("last refresh failed"), "{text}");
+    let log = fs::read_to_string(&log_path)?;
+    assert!(
+        log.contains("discarding the prepared live changes"),
+        "the refresh must reach the superseded path, log:\n{log}"
+    );
+
+    // Canlı yenileme yeni generation üzerinde sürer ve onun dizinine yazar.
+    fs::write(
+        project.path().join("after.rs"),
+        "fn after_cli_symbol() {}\n",
+    )?;
+    poll_find_nodes(
+        &mut session,
+        "after_cli_symbol",
+        Duration::from_secs(30),
+        |text| found_node(text, "after_cli_symbol") && text.starts_with("_Index: fresh"),
+    )?;
+    wait_for_persisted_file(project.path(), "./after.rs", Duration::from_secs(10))?;
+    assert_eq!(active_generation_dir(project.path())?, generation_after);
+    Ok(())
+}
+
+#[test]
+fn generation_activated_by_another_process_is_not_reported_fresh() -> Result<(), Box<dyn Error>> {
+    let project = tempdir()?;
+    fs::write(project.path().join("main.rs"), "fn existing_symbol() {}\n")?;
+    let mut session = McpSession::start(project.path(), &[])?;
+    session.call_tool("index_now", json!({ "project_path": project.path() }))?;
+    poll_find_nodes(
+        &mut session,
+        "existing_symbol",
+        Duration::from_secs(10),
+        |text| text.starts_with("_Index: fresh"),
+    )?;
+
+    // Başka bir süreç, canlı değişiklikten önceki bir anlık görüntüden generation
+    // kurar (ör. takılıp geç biten bir semantik yükseltme); o generation'da
+    // değişiklik yoktur.
+    let snapshot = "99999.stale-snapshot";
+    let generation = active_generation_dir(project.path())?;
+    copy_dir(&generation, &generation.with_file_name(snapshot))?;
+    fs::write(project.path().join("late.rs"), "fn late_symbol() {}\n")?;
+    poll_find_nodes(
+        &mut session,
+        "late_symbol",
+        Duration::from_secs(10),
+        |text| found_node(text, "late_symbol") && text.starts_with("_Index: fresh"),
+    )?;
+    wait_for_persisted_file(project.path(), "./late.rs", Duration::from_secs(10))?;
+    activate_generation(project.path(), snapshot)?;
+
+    let text = session.call_tool("find_nodes", json!({ "query": "late_symbol" }))?;
+    assert!(
+        found_node(&text, "late_symbol") || !text.starts_with("_Index: fresh"),
+        "a generation without the live change must not be reported fresh: {text}"
+    );
+    poll_find_nodes(
+        &mut session,
+        "late_symbol",
+        Duration::from_secs(10),
+        |text| found_node(text, "late_symbol") && text.starts_with("_Index: fresh"),
+    )?;
+    Ok(())
+}
+
+#[test]
+fn index_with_an_old_schema_is_migrated_before_live_refreshes() -> Result<(), Box<dyn Error>> {
+    let project = tempdir()?;
+    fs::write(project.path().join("main.rs"), "fn existing_symbol() {}\n")?;
+    run_update_index_process(project.path())?;
+    let generation = active_generation_dir(project.path())?;
+    let manifest_path = generation.join("ccm_manifest.json");
+    let mut manifest: Value = serde_json::from_slice(&fs::read(&manifest_path)?)?;
+    manifest["schema_version"] = json!(3);
+    fs::write(&manifest_path, serde_json::to_vec(&manifest)?)?;
+
+    // Eski şemalı indeks canlı güncellenmez: okumalar onu kullanır, otomatik
+    // yenileme `update_index` ile tam yeniden indeksleyip yeni generation kurar.
+    let mut session = McpSession::start(project.path(), &[])?;
+    fs::write(project.path().join("added.rs"), "fn migrated_symbol() {}\n")?;
+    poll_find_nodes(
+        &mut session,
+        "migrated_symbol",
+        Duration::from_secs(30),
+        |text| found_node(text, "migrated_symbol") && text.starts_with("_Index: fresh"),
+    )?;
+    let migrated = active_generation_dir(project.path())?;
+    assert_ne!(
+        migrated, generation,
+        "the migration must be a full re-index into a new generation, not a live stamp"
+    );
+    let manifest: Value = serde_json::from_slice(&fs::read(migrated.join("ccm_manifest.json"))?)?;
+    assert_eq!(manifest["schema_version"], 4);
+    Ok(())
+}
+
+#[cfg(unix)]
+#[test]
+fn persist_failure_is_reported_in_the_freshness_line() -> Result<(), Box<dyn Error>> {
+    use std::os::unix::fs::PermissionsExt;
+
+    let project = tempdir()?;
+    fs::write(project.path().join("main.rs"), "fn existing_symbol() {}\n")?;
+    let mut session = McpSession::start(project.path(), &[])?;
+    session.call_tool("index_now", json!({ "project_path": project.path() }))?;
+    poll_find_nodes(
+        &mut session,
+        "existing_symbol",
+        Duration::from_secs(10),
+        |text| text.starts_with("_Index: fresh"),
+    )?;
+
+    // Generation dizini yazılamaz: değişiklik bellekte uygulanır ama diske
+    // yazılamaz; hata log'da kalmamalı, tazelik satırında görünmelidir.
+    let generation = active_generation_dir(project.path())?;
+    fs::set_permissions(&generation, fs::Permissions::from_mode(0o500))?;
+    fs::write(project.path().join("added.rs"), "fn unsaved_symbol() {}\n")?;
+    let reported = poll_find_nodes(
+        &mut session,
+        "unsaved_symbol",
+        Duration::from_secs(10),
+        |text| text.contains("index could not be saved"),
+    );
+    fs::set_permissions(&generation, fs::Permissions::from_mode(0o700))?;
+    let text = reported?;
+    assert!(
+        text.starts_with("_Index: stale · last refresh failed: index could not be saved"),
+        "unexpected freshness line: {text}"
+    );
+    assert!(found_node(&text, "unsaved_symbol"), "{text}");
     Ok(())
 }

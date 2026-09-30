@@ -910,6 +910,126 @@ async fn update_index_embeds_only_changed_chunks() -> Result<()> {
 }
 
 #[tokio::test]
+async fn live_index_refuses_indexes_that_need_a_migration() -> Result<()> {
+    use ccm_core::graph::{CodeNode, NodeType};
+    use ccm_core::live::{IndexMigrationRequired, LiveIndex};
+
+    let _env_guard = ENV_LOCK.lock().await;
+    std::env::set_var("CCM_DISABLE_EMBEDDER", "1");
+    let project = tempdir()?;
+    std::fs::write(project.path().join("main.rs"), "fn alpha() {}\n")?;
+    let project_path = project.path().to_string_lossy().to_string();
+    ccm_core::index_directory(&project_path, None).await?;
+    let active = artifacts(project.path(), None)?;
+
+    // Eski şema: canlı yükleme reddeder; `update_index` bunu tam yeniden
+    // indeksle taşır, canlı yol ise güncel şemaya damgalamamalıdır.
+    let manifest_text = std::fs::read_to_string(&active.manifest_path)?;
+    let mut old_schema: serde_json::Value = serde_json::from_str(&manifest_text)?;
+    old_schema["schema_version"] = serde_json::json!(3);
+    std::fs::write(&active.manifest_path, serde_json::to_vec(&old_schema)?)?;
+    let error = LiveIndex::load(&project_path, None, None)
+        .await
+        .err()
+        .expect("an index with an old schema must be refused");
+    assert_eq!(
+        error.downcast_ref::<IndexMigrationRequired>(),
+        Some(&IndexMigrationRequired::SchemaChanged {
+            found: 3,
+            expected: ccm_core::INDEX_SCHEMA_VERSION,
+        })
+    );
+
+    // Eski dosya yolu biçimi (`./` öneksiz): aynı karar.
+    std::fs::write(&active.manifest_path, &manifest_text)?;
+    let mut legacy = CodeGraph::new();
+    legacy.add_node(CodeNode {
+        id: "main.rs".to_string(),
+        node_type: NodeType::File,
+        name: "main.rs".to_string(),
+        content: "".into(),
+        start_line: 1,
+        end_line: 1,
+    });
+    legacy.save_to_file(&active.graph_path.to_string_lossy())?;
+    let error = LiveIndex::load(&project_path, None, None)
+        .await
+        .err()
+        .expect("an index with legacy file paths must be refused");
+    assert_eq!(
+        error.downcast_ref::<IndexMigrationRequired>(),
+        Some(&IndexMigrationRequired::LegacyPaths)
+    );
+    Ok(())
+}
+
+#[tokio::test]
+async fn live_refresh_reuses_vectors_in_the_active_table() -> Result<()> {
+    let _env_guard = ENV_LOCK.lock().await;
+    struct EnvRestore;
+    impl Drop for EnvRestore {
+        fn drop(&mut self) {
+            std::env::remove_var("EMBEDDING_HOST");
+            std::env::remove_var("EMBEDDING_MODEL");
+            std::env::set_var("CCM_DISABLE_EMBEDDER", "1");
+        }
+    }
+    let _restore = EnvRestore;
+    let (host, embedded_inputs) = start_counting_embed_server()?;
+    std::env::remove_var("CCM_DISABLE_EMBEDDER");
+    std::env::set_var("EMBEDDING_HOST", &host);
+    std::env::set_var("EMBEDDING_MODEL", "ccm-test-embed");
+
+    let project = tempdir()?;
+    let root = std::fs::canonicalize(project.path())?;
+    let file = root.join("lib.rs");
+    std::fs::write(
+        &file,
+        "fn alpha() { let a = 1; }\nfn beta() { let b = 2; }\nfn gamma() { let c = 3; }\n",
+    )?;
+    let project_path = root.to_string_lossy().to_string();
+    ccm_core::update_index(&project_path, None).await?;
+    let active = artifacts(&root, None)?;
+    let live = ccm_core::live::LiveIndex::load(&project_path, None, None).await?;
+    live.apply_rescan().await?;
+    let before_edit = embedded_inputs.load(std::sync::atomic::Ordering::SeqCst);
+
+    // Canlı yenileme etkin generation'ın tablosunu yerinde günceller: yalnızca
+    // değişen parça embed edilir, diğerleri silinmeden önce okunan vektörünü korur.
+    std::fs::write(
+        &file,
+        "fn alpha() { let a = 1; }\nfn beta() { let b = 2; }\nfn gamma() { let c = 30; }\n",
+    )?;
+    let ccm_core::live::LiveRefresh::Applied(stats) =
+        live.apply_paths(std::slice::from_ref(&file)).await?
+    else {
+        panic!("live refresh must apply to the active generation");
+    };
+    assert_eq!(stats.embedded_chunks, 1, "only gamma changed");
+    assert_eq!(stats.reused_chunks, 2, "alpha and beta keep their vectors");
+    assert_eq!(
+        embedded_inputs.load(std::sync::atomic::Ordering::SeqCst) - before_edit,
+        1
+    );
+    assert_eq!(
+        artifacts(&root, None)?,
+        active,
+        "a live refresh must not install a generation"
+    );
+    let store = ccm_core::vector::store::LanceDbStore::new(
+        active.db_path.to_string_lossy().as_ref(),
+        "code_vectors",
+    )
+    .await?;
+    assert_eq!(
+        store.validate_table().await?,
+        3,
+        "no duplicate or missing rows"
+    );
+    Ok(())
+}
+
+#[tokio::test]
 async fn watch_filter_skips_ignored_outputs_and_index_artifacts() -> Result<()> {
     let _env_guard = ENV_LOCK.lock().await;
     std::env::set_var("CCM_DISABLE_EMBEDDER", "1");
