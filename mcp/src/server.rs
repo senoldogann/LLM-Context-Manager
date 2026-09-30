@@ -409,7 +409,7 @@ impl ServerState {
     /// Elle indeksleme sonrası otomatik yenilemeden durum doğrulaması ister.
     pub(crate) fn request_refresh(&self, project_key: &str) {
         if let Some(handle) = self.freshness_handle(project_key) {
-            crate::freshness::request_rescan(&handle);
+            crate::freshness::request_rescan(&handle, project_key);
         }
     }
 

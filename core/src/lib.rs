@@ -156,7 +156,9 @@ pub fn init() {
 
 // Re-export ContextSuggestion for external use
 pub use crate::engine::ContextSuggestion;
-pub use watch_filter::{build_watch_filter, is_watch_relevant_path, WatchFilter};
+pub use watch_filter::{
+    build_watch_filter, is_watch_relevant_dir, is_watch_relevant_path, WatchFilter,
+};
 
 /// Run a semantic search query against the index.
 /// Returns a list of context suggestions.
@@ -1850,6 +1852,16 @@ pub fn is_index_relevant_file(project_root: &Path, path: &Path) -> bool {
         Some(ext) => !EXCLUDED_FILE_EXTENSIONS.contains(&ext.as_str()),
         None => true,
     }
+}
+
+/// Proje köküne göre göreli dizin, tam taramanın indiği bir dizin mi? Tarayıcı
+/// dışlanan dizin adlarına ve indeks hazırlama dizinlerine inmez (bkz.
+/// `should_traverse_entry`); yolun hiçbir bileşeni bunlardan biri olmamalı.
+fn is_index_relevant_dir(relative: &Path) -> bool {
+    relative.components().all(|component| {
+        let name = component.as_os_str().to_string_lossy();
+        !EXCLUDED_DIRECTORY_NAMES.contains(&name.as_ref()) && !is_index_staging_dir_name(&name)
+    })
 }
 
 fn file_id_to_path(project_root: &Path, file_id: &str) -> PathBuf {

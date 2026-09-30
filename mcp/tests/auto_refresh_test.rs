@@ -254,6 +254,46 @@ fn atomic_rename_save_is_picked_up() -> Result<(), Box<dyn Error>> {
 }
 
 #[test]
+fn moved_directory_is_picked_up_and_removed() -> Result<(), Box<dyn Error>> {
+    let project = tempdir()?;
+    let outside = tempdir()?;
+    fs::write(project.path().join("main.rs"), "fn existing_symbol() {}\n")?;
+    let mut session = McpSession::start(project.path(), &[])?;
+    session.call_tool("index_now", json!({ "project_path": project.path() }))?;
+    poll_find_nodes(
+        &mut session,
+        "existing_symbol",
+        Duration::from_secs(15),
+        |text| text.starts_with("_Index: fresh"),
+    )?;
+
+    // Dizin adı dışlanan bir dosya uzantısına benzer (`assets.png`); tarayıcı
+    // yine de içine iner. Dizin içeriğiyle taşındığında izleyici yalnızca dizin
+    // için olay üretir, dosya uzantısı süzgeci olayı düşürmemelidir.
+    let staged = outside.path().join("assets.png");
+    fs::create_dir(&staged)?;
+    fs::write(staged.join("moved.rs"), "fn moved_in_symbol() {}\n")?;
+    let inside = project.path().join("assets.png");
+    fs::rename(&staged, &inside)?;
+    poll_find_nodes(
+        &mut session,
+        "moved_in_symbol",
+        Duration::from_secs(15),
+        |text| found_node(text, "moved_in_symbol") && text.starts_with("_Index: fresh"),
+    )?;
+
+    // Dizin projeden dışarı taşınınca altındaki dosyalar indeksten düşer.
+    fs::rename(&inside, &staged)?;
+    poll_find_nodes(
+        &mut session,
+        "moved_in_symbol",
+        Duration::from_secs(15),
+        |text| !found_node(text, "moved_in_symbol") && text.starts_with("_Index: fresh"),
+    )?;
+    Ok(())
+}
+
+#[test]
 fn bulk_change_coalesces_and_settles() -> Result<(), Box<dyn Error>> {
     let project = tempdir()?;
     fs::write(project.path().join("main.rs"), "fn existing_symbol() {}\n")?;

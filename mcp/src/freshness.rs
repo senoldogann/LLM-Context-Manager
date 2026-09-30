@@ -166,13 +166,16 @@ pub(crate) struct FreshnessHandle {
 /// bekler ya da bayat raporlanır. İşaret ve sinyal durum kilidi altında birlikte
 /// verilir; yenileme döngüsü tur sonu yayınını aynı kilitte yaptığı için bu
 /// istek o yayında kaybolmaz. Watcher'ı olmayan handle'da yapılacak iş yoktur.
-pub(crate) fn request_rescan(handle: &FreshnessHandle) {
+pub(crate) fn request_rescan(handle: &FreshnessHandle, project_key: &str) {
     let Some(signals) = &handle.signals else {
         return;
     };
     handle.state.send_modify(|freshness| {
         if signals.send(RefreshSignal::Rescan).is_err() {
-            tracing::warn!("Refresh loop is not running; rescan request was dropped");
+            tracing::warn!(
+                project = %project_key,
+                "Refresh loop is not running; rescan request was dropped"
+            );
             return;
         }
         freshness.pending_paths = freshness.pending_paths.max(1);
@@ -309,13 +312,75 @@ fn signals_for_event(
         Ok(event) if event.need_rescan() => vec![RefreshSignal::Rescan],
         // Erişim olayları içerik değiştirmez; yazmalar ayrıca Modify olarak gelir.
         Ok(event) if matches!(event.kind, notify::EventKind::Access(_)) => Vec::new(),
-        Ok(event) => event
-            .paths
-            .into_iter()
-            .filter(|path| ccm_core::is_watch_relevant_path(filter, path))
-            .map(RefreshSignal::Changed)
-            .collect(),
+        Ok(event) => {
+            let kind = event.kind;
+            event
+                .paths
+                .into_iter()
+                .filter_map(|path| signal_for_path(filter, &kind, path))
+                .collect()
+        }
         Err(error) => vec![RefreshSignal::WatchError(error.to_string())],
+    }
+}
+
+/// Olay yolunun türü: olay türünden ya da diskteki durumdan çıkarılır.
+enum EventPath {
+    /// Olay türü dizin diyor ya da yol şu an bir dizin.
+    Directory,
+    /// Dosya; silinmişse olay türü dosya olduğunu söylüyor.
+    File,
+    /// Yol artık yok ve olay türü (ör. yeniden adlandırma) türünü söylemiyor:
+    /// taşınıp giden bir dizin de olabilir.
+    Vanished,
+}
+
+fn classify_event_path(kind: &notify::EventKind, path: &Path) -> EventPath {
+    use notify::event::{CreateKind, RemoveKind};
+    use notify::EventKind;
+    if matches!(
+        kind,
+        EventKind::Create(CreateKind::Folder) | EventKind::Remove(RemoveKind::Folder)
+    ) {
+        return EventPath::Directory;
+    }
+    match std::fs::symlink_metadata(path) {
+        Ok(metadata) if metadata.is_dir() => EventPath::Directory,
+        Ok(_) => EventPath::File,
+        Err(_)
+            if matches!(
+                kind,
+                EventKind::Create(CreateKind::File) | EventKind::Remove(RemoveKind::File)
+            ) =>
+        {
+            EventPath::File
+        }
+        Err(_) => EventPath::Vanished,
+    }
+}
+
+/// Tek bir olay yolunun sinyali. Dizinin oluşması, silinmesi ya da taşınması
+/// altındaki dosyalar için ayrı olay üretmeyebilir (içeriğiyle taşınan dizin
+/// yalnızca kendisi için olay üretir); bu yüzden dizin olayları tam
+/// karşılaştırma ister ve dizinlere dosya uzantısı süzgeci uygulanmaz. Türü
+/// bilinmeyen kaybolmuş yol, dizin olarak ilgiliyse hedefli taramaya girer:
+/// tarama o yolun altındaki bütün indekslenmiş dosyaları düşürür, kaybolan bir
+/// ikili dosya içinse bir şey yapmaz (tam karşılaştırmaya gerek kalmaz).
+fn signal_for_path(
+    filter: &ccm_core::WatchFilter,
+    kind: &notify::EventKind,
+    path: PathBuf,
+) -> Option<RefreshSignal> {
+    match classify_event_path(kind, &path) {
+        EventPath::Directory => {
+            ccm_core::is_watch_relevant_dir(filter, &path).then_some(RefreshSignal::Rescan)
+        }
+        EventPath::File => {
+            ccm_core::is_watch_relevant_path(filter, &path).then_some(RefreshSignal::Changed(path))
+        }
+        EventPath::Vanished => (ccm_core::is_watch_relevant_path(filter, &path)
+            || ccm_core::is_watch_relevant_dir(filter, &path))
+        .then_some(RefreshSignal::Changed(path)),
     }
 }
 
@@ -473,7 +538,7 @@ fn spawn_persist(
                     generation = ?live.generation_id(),
                     "Live index was not persisted: another process activated a new generation; scheduling a full comparison"
                 );
-                request_rescan(&handle);
+                request_rescan(&handle, &project_key);
             }
             Err(error) => {
                 tracing::warn!(

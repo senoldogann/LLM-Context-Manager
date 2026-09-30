@@ -1072,6 +1072,42 @@ async fn watch_filter_skips_ignored_outputs_and_index_artifacts() -> Result<()> 
         );
     }
 
+    // Dizin olayları tam karşılaştırma ister; dosya uzantısı süzgeci dizinlere
+    // uygulanmaz (tarayıcı `assets.png/` gibi dizinlere de iner). Dışlanan dizin
+    // adları, araç durumu ve ignore kuralları dizinlere de uygulanır.
+    std::fs::create_dir_all(root.join("assets.png"))?;
+    assert!(
+        !ccm_core::is_watch_relevant_path(&filter, &root.join("assets.png")),
+        "the file filter rejects names with excluded extensions"
+    );
+    for relevant_dir in ["src", "src/nested", "assets.png", "removed_dir"] {
+        assert!(
+            ccm_core::is_watch_relevant_dir(&filter, &root.join(relevant_dir)),
+            "{relevant_dir}/ should trigger a full comparison"
+        );
+    }
+    let ignored_dirs = [
+        root.join("generated"),
+        root.join("fixtures"),
+        root.join("target"),
+        root.join("node_modules/pkg"),
+        root.join(".git"),
+        root.join(".ccm"),
+        root.join("data/ccm_learn"),
+        root.join("data/.ccm-generations/next"),
+        root.join("data/.ccm-rebuild-4242"),
+        active.db_path.clone(),
+        root.clone(),
+        std::path::PathBuf::from("/outside/project"),
+    ];
+    for path in ignored_dirs {
+        assert!(
+            !ccm_core::is_watch_relevant_dir(&filter, &path),
+            "{}/ should not trigger a refresh",
+            path.display()
+        );
+    }
+
     // Senaryo 2: Git olmayan projede .gitignore yok sayılır; generated/out.rs RELEVANT olmalı.
     let project2 = tempdir()?;
     let root2 = std::fs::canonicalize(project2.path())?;
@@ -1083,6 +1119,10 @@ async fn watch_filter_skips_ignored_outputs_and_index_artifacts() -> Result<()> 
     assert!(
         ccm_core::is_watch_relevant_path(&filter2, &root2.join("generated/out.rs")),
         "non-git project ignores .gitignore, so generated/out.rs should be relevant"
+    );
+    assert!(
+        ccm_core::is_watch_relevant_dir(&filter2, &root2.join("generated")),
+        "non-git project ignores .gitignore, so generated/ should be relevant"
     );
 
     // Git olmayan projede `.git/info/exclude` yoktur (git deposunda indeks oraya
