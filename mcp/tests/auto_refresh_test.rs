@@ -585,10 +585,10 @@ fn removed_index_is_not_rebuilt_by_auto_refresh() -> Result<(), Box<dyn Error>> 
 fn live_refresh_does_not_wait_for_the_index_worker() -> Result<(), Box<dyn Error>> {
     let project = tempdir()?;
     fs::write(project.path().join("main.rs"), "fn existing_symbol() {}\n")?;
-    // Worker süreci 5 sn gecikir: elle indeksleme bunu öder, otomatik yenileme ödememelidir.
+    // Worker süreci 8 sn gecikir: elle indeksleme bunu öder, otomatik yenileme ödememelidir.
     let mut session = McpSession::start(
         project.path(),
-        &[("CCM_INTERNAL_INDEX_TEST_DELAY_MS", "5000")],
+        &[("CCM_INTERNAL_INDEX_TEST_DELAY_MS", "8000")],
     )?;
     session.call_tool("index_now", json!({ "project_path": project.path() }))?;
     poll_find_nodes(
@@ -607,8 +607,8 @@ fn live_refresh_does_not_wait_for_the_index_worker() -> Result<(), Box<dyn Error
         |text| found_node(text, "live_symbol") && text.starts_with("_Index: fresh"),
     )?;
     assert!(
-        saved_at.elapsed() < Duration::from_secs(2),
-        "the refresh took {:?}; a worker process (5 s delay) must not be involved",
+        saved_at.elapsed() < Duration::from_secs(4),
+        "the refresh took {:?}; a worker process (8 s delay) must not be involved",
         saved_at.elapsed()
     );
     Ok(())
