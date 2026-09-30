@@ -46,6 +46,9 @@ pub struct ServerState {
     pub engines: RwLock<EngineCache>,
     index_locks:
         std::sync::Mutex<std::collections::HashMap<String, std::sync::Arc<tokio::sync::Mutex<()>>>>,
+    /// Proje başına engine yükleme kapısı: aynı projenin eşzamanlı soğuk
+    /// okumaları grafı bir kez yükler. Kayıt sayısı izinli projelerle sınırlıdır.
+    engine_loads: std::sync::Mutex<std::collections::HashMap<String, Arc<tokio::sync::Mutex<()>>>>,
     pub(crate) index_jobs: std::sync::Mutex<std::collections::HashMap<String, IndexJob>>,
     pub(crate) next_index_job_id: std::sync::atomic::AtomicU64,
     default_project_root: Option<PathBuf>,
@@ -342,6 +345,7 @@ impl ServerState {
             default_engine: RwLock::new(default_engine),
             engines: RwLock::new(EngineCache::new(cache_size)),
             index_locks: std::sync::Mutex::new(std::collections::HashMap::new()),
+            engine_loads: std::sync::Mutex::new(std::collections::HashMap::new()),
             index_jobs: std::sync::Mutex::new(std::collections::HashMap::new()),
             next_index_job_id: std::sync::atomic::AtomicU64::new(1),
             default_project_root,
@@ -645,6 +649,14 @@ impl ServerState {
             ));
         }
 
+        // Eşzamanlı soğuk okumalar yüklemeyi paylaşır: kapıyı ilk alan yükler,
+        // bekleyenler kapıdan sonra önbellekten okur (yeni generation için tam
+        // karşılaştırmayı yalnızca yükleyen ister).
+        let load_gate = self.engine_load_gate(cache_key);
+        let _loading = load_gate.lock().await;
+        if let Some(engine) = self.engines.write().await.get(&engine_cache_key) {
+            return Ok((engine, EngineLoad::Cached));
+        }
         let engine = self.load_project_engine(cache_key).await?;
         // İşaretçi yükleme sırasında ilerlemiş olabilir; anahtar yüklenen
         // generation'dan alınır.
@@ -670,6 +682,26 @@ impl ServerState {
             .await
             .insert(&cache_key, engine_cache_key, engine);
         Ok(())
+    }
+
+    fn engine_load_gate(&self, project_key: &str) -> Arc<tokio::sync::Mutex<()>> {
+        self.engine_loads
+            .lock()
+            .unwrap()
+            .entry(project_key.to_string())
+            .or_insert_with(|| Arc::new(tokio::sync::Mutex::new(())))
+            .clone()
+    }
+
+    /// İstekteki `project_path` yoksa etkin varsayılan kökü döndürür; kök de
+    /// yoksa `None` (ev dizini deposu).
+    fn resolve_project_path(&self, project_path: Option<&str>) -> Option<String> {
+        match project_path {
+            Some(path) => Some(path.to_string()),
+            None => self
+                .effective_project_root()
+                .map(|root| root.to_string_lossy().to_string()),
+        }
     }
 
     /// Projenin etkin generation'ını canlı indeks olarak yükler. Canlı
@@ -1348,6 +1380,10 @@ async fn run_tool(
         };
     }
 
+    // Varsayılan kök istek başına bir kez çözülür: istemci kökleri arada değişse
+    // de tazelik satırı ve yanıt aynı projeyi anlatır.
+    let resolved_path = state.resolve_project_path(project_path);
+    let project_path = resolved_path.as_deref();
     let project_key = state.project_key(project_path);
     // İlk yükleme izin listesini ve indeksin varlığını doğrular; watcher yalnızca
     // izinli ve indeksi olan projelerde başlar.

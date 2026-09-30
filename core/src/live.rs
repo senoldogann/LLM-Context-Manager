@@ -172,24 +172,32 @@ impl LiveIndex {
         })?;
         let requested_db_path = resolve_requested_db_path(&project_root, db_path)?;
         let artifacts = resolve_index_artifacts(project_path, db_path)?;
-        let manifest = read_manifest(&artifacts.manifest_path)?;
-        if manifest.schema_version != INDEX_SCHEMA_VERSION {
-            return Err(anyhow::Error::new(IndexMigrationRequired::SchemaChanged {
-                found: manifest.schema_version,
-                expected: INDEX_SCHEMA_VERSION,
-            }));
-        }
+        // Manifest ve graf ayrıştırması büyük projelerde saniyeler sürer; async
+        // runtime iş parçacığını bloklamamak için ayrı iş parçacığında yapılır.
+        let manifest_path = artifacts.manifest_path.clone();
         let graph_path = artifacts.graph_path.to_string_lossy().to_string();
-        let graph = CodeGraph::load_from_file(&graph_path).map_err(|error| {
-            anyhow::anyhow!(
-                "Project graph '{}' could not be loaded: {}. Run index_project to rebuild it.",
-                graph_path,
-                error
-            )
-        })?;
-        if graph_uses_legacy_paths(&graph) {
-            return Err(anyhow::Error::new(IndexMigrationRequired::LegacyPaths));
-        }
+        let (manifest, graph) = tokio::task::spawn_blocking(move || {
+            let manifest = read_manifest(&manifest_path)?;
+            if manifest.schema_version != INDEX_SCHEMA_VERSION {
+                return Err(anyhow::Error::new(IndexMigrationRequired::SchemaChanged {
+                    found: manifest.schema_version,
+                    expected: INDEX_SCHEMA_VERSION,
+                }));
+            }
+            let graph = CodeGraph::load_from_file(&graph_path).map_err(|error| {
+                anyhow::anyhow!(
+                    "Project graph '{}' could not be loaded: {}. Run index_project to rebuild it.",
+                    graph_path,
+                    error
+                )
+            })?;
+            if graph_uses_legacy_paths(&graph) {
+                return Err(anyhow::Error::new(IndexMigrationRequired::LegacyPaths));
+            }
+            Ok::<(IndexManifest, CodeGraph), anyhow::Error>((manifest, graph))
+        })
+        .await
+        .map_err(|error| anyhow::anyhow!("Live index load task failed: {}", error))??;
         tracing::info!(
             project = %project_root.display(),
             generation = ?artifacts.generation_id,
