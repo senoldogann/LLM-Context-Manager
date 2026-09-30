@@ -910,6 +910,72 @@ async fn update_index_embeds_only_changed_chunks() -> Result<()> {
 }
 
 #[tokio::test]
+async fn live_refresh_reuses_vectors_in_the_active_table() -> Result<()> {
+    let _env_guard = ENV_LOCK.lock().await;
+    struct EnvRestore;
+    impl Drop for EnvRestore {
+        fn drop(&mut self) {
+            std::env::remove_var("EMBEDDING_HOST");
+            std::env::remove_var("EMBEDDING_MODEL");
+            std::env::set_var("CCM_DISABLE_EMBEDDER", "1");
+        }
+    }
+    let _restore = EnvRestore;
+    let (host, embedded_inputs) = start_counting_embed_server()?;
+    std::env::remove_var("CCM_DISABLE_EMBEDDER");
+    std::env::set_var("EMBEDDING_HOST", &host);
+    std::env::set_var("EMBEDDING_MODEL", "ccm-test-embed");
+
+    let project = tempdir()?;
+    let root = std::fs::canonicalize(project.path())?;
+    let file = root.join("lib.rs");
+    std::fs::write(
+        &file,
+        "fn alpha() { let a = 1; }\nfn beta() { let b = 2; }\nfn gamma() { let c = 3; }\n",
+    )?;
+    let project_path = root.to_string_lossy().to_string();
+    ccm_core::update_index(&project_path, None).await?;
+    let active = artifacts(&root, None)?;
+    let live = ccm_core::live::LiveIndex::load(&project_path, None, None).await?;
+    live.apply_rescan().await?;
+    let before_edit = embedded_inputs.load(std::sync::atomic::Ordering::SeqCst);
+
+    // Canlı yenileme etkin generation'ın tablosunu yerinde günceller: yalnızca
+    // değişen parça embed edilir, diğerleri silinmeden önce okunan vektörünü korur.
+    std::fs::write(
+        &file,
+        "fn alpha() { let a = 1; }\nfn beta() { let b = 2; }\nfn gamma() { let c = 30; }\n",
+    )?;
+    let ccm_core::live::LiveRefresh::Applied(stats) =
+        live.apply_paths(std::slice::from_ref(&file)).await?
+    else {
+        panic!("live refresh must apply to the active generation");
+    };
+    assert_eq!(stats.embedded_chunks, 1, "only gamma changed");
+    assert_eq!(stats.reused_chunks, 2, "alpha and beta keep their vectors");
+    assert_eq!(
+        embedded_inputs.load(std::sync::atomic::Ordering::SeqCst) - before_edit,
+        1
+    );
+    assert_eq!(
+        artifacts(&root, None)?,
+        active,
+        "a live refresh must not install a generation"
+    );
+    let store = ccm_core::vector::store::LanceDbStore::new(
+        active.db_path.to_string_lossy().as_ref(),
+        "code_vectors",
+    )
+    .await?;
+    assert_eq!(
+        store.validate_table().await?,
+        3,
+        "no duplicate or missing rows"
+    );
+    Ok(())
+}
+
+#[tokio::test]
 async fn watch_filter_skips_ignored_outputs_and_index_artifacts() -> Result<()> {
     let _env_guard = ENV_LOCK.lock().await;
     std::env::set_var("CCM_DISABLE_EMBEDDER", "1");
