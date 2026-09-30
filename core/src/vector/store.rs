@@ -238,6 +238,12 @@ impl LanceDbStore {
         self
     }
 
+    /// Tablodaki vektörler yapılandırılmış embedder'la karıştırılamıyorsa nedeni;
+    /// arama ve yazma bu durumda reddedilir.
+    pub fn identity_mismatch(&self) -> Option<&EmbeddingIdentityMismatch> {
+        self.identity_mismatch.as_ref()
+    }
+
     /// Embedder'ı ilk kullanımda başlatır. Fixture modunda veya disabled
     /// ortamda gereksiz `.env` yüklemesi/API anahtarı araması yapılmaz.
     async fn embedder(&self) -> Result<Arc<Embedder>> {

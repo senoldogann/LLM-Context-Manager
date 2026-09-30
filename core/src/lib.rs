@@ -1595,6 +1595,20 @@ pub fn semantic_node_count(graph: &CodeGraph) -> usize {
     embedded_node_count(semantic_node_counts(graph))
 }
 
+/// İndeksin vektörleri (`recorded` kimliğiyle kurulmuş) `source` ile
+/// karıştırılamıyorsa uyuşmazlığı döndürür. Embed edilecek düğümü olmayan
+/// grafın vektörü de yoktur; uyuşmazlık aranmaz.
+pub fn index_embedding_mismatch(
+    source: &EmbeddingSource,
+    recorded: Option<&EmbeddingIdentity>,
+    graph: &CodeGraph,
+) -> Option<EmbeddingIdentityMismatch> {
+    if semantic_node_count(graph) == 0 {
+        return None;
+    }
+    source.mismatch_with(recorded)
+}
+
 /// Grafın embedding'e giren düğüm türlerini sayar.
 fn semantic_node_counts(graph: &CodeGraph) -> SemanticNodeCounts {
     graph

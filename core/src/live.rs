@@ -29,12 +29,13 @@ use crate::graph::CodeGraph;
 use crate::vector::embedder::{EmbeddingIdentity, EmbeddingIdentityMismatch, EmbeddingSource};
 use crate::vector::store::LanceDbStore;
 use crate::{
-    artifact_temp_path, build_manifest, diff_manifest, diff_manifest_scope, embedded_node_count,
-    file_id_to_path, fixture_namespace_for_db, graph_uses_legacy_paths, index_artifact_paths,
-    read_current_pointer_value, read_manifest, relative_file_id, replace_file_atomically,
-    resolve_index_artifacts, resolve_requested_db_path, restore_retry_files, scan_manifest_scope,
-    semantic_node_counts, sync_directory, unix_now_secs, write_manifest_file, ActivationLock,
-    FileFingerprint, IndexArtifactPaths, IndexManifest, IndexStats, INDEX_SCHEMA_VERSION,
+    artifact_temp_path, build_manifest, diff_manifest, diff_manifest_scope, file_id_to_path,
+    fixture_namespace_for_db, graph_uses_legacy_paths, index_artifact_paths,
+    index_embedding_mismatch, read_current_pointer_value, read_manifest, relative_file_id,
+    replace_file_atomically, resolve_index_artifacts, resolve_requested_db_path,
+    restore_retry_files, scan_manifest_scope, semantic_node_counts, sync_directory, unix_now_secs,
+    write_manifest_file, ActivationLock, FileFingerprint, IndexArtifactPaths, IndexManifest,
+    IndexStats, INDEX_SCHEMA_VERSION,
 };
 use anyhow::Result;
 use std::collections::{BTreeSet, HashMap};
@@ -227,10 +228,9 @@ impl LiveIndex {
                 None
             }
         };
-        let identity_mismatch = source
-            .as_ref()
-            .and_then(|source| source.mismatch_with(manifest.embedding.as_ref()))
-            .filter(|_| embedded_node_count(semantic_node_counts(&graph)) > 0);
+        let identity_mismatch = source.as_ref().and_then(|source| {
+            index_embedding_mismatch(source, manifest.embedding.as_ref(), &graph)
+        });
         if let Some(mismatch) = &identity_mismatch {
             tracing::warn!(
                 project = %project_root.display(),

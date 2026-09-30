@@ -1,3 +1,6 @@
+mod common;
+
+use common::{index_with_model, start_embed_server};
 use serde_json::json;
 use std::fs;
 use std::io::{BufRead, BufReader, Write};
@@ -1535,6 +1538,76 @@ fn mcp_serves_the_active_generation_while_reindexing() -> Result<(), Box<dyn std
     assert!(tool_text(&retrieval).contains("stable_symbol (Score:"));
 
     let _ = child.kill();
+    Ok(())
+}
+
+/// Kök dizinsiz sunucu (proje kökü yok, depo `CCM_DB_PATH` ile verilir) başka
+/// bir embedding modeliyle kurulmuş vektörleri sorgu vektörüyle karşılaştırmaz:
+/// arama graf sonuçlarına döner ve neden sonucun başındaki satırda görünür.
+#[test]
+fn rootless_engine_reports_vectors_of_another_embedding_model(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let dir = tempdir()?;
+    let project = dir.path().join("project");
+    let home = dir.path().join("home");
+    fs::create_dir_all(&project)?;
+    fs::create_dir_all(&home)?;
+    fs::write(project.join("main.rs"), "fn existing_symbol() {}\n")?;
+    let host = start_embed_server(&[])?;
+    index_with_model(&project, &host, "ccm-test-embed-a")?;
+    let artifacts = ccm_core::resolve_index_artifacts(&project.to_string_lossy(), None)?;
+
+    // Başlatma dizini ev dizini olduğundan örtük kök de seçilmez.
+    let mut child = Command::new(assert_cmd::cargo::cargo_bin!("ccm-mcp"))
+        .current_dir(&home)
+        .env("HOME", &home)
+        .env_remove("CCM_PROJECT_ROOT")
+        .env_remove("CCM_ALLOWED_ROOTS")
+        .env("CCM_REQUIRE_ALLOWED_ROOTS", "0")
+        .env("CCM_DB_PATH", &artifacts.db_path)
+        .env("CCM_MCP_DEBUG", "0")
+        .env("CCM_DISABLE_EMBEDDER", "0")
+        .env_remove("EMBEDDING_DISABLED")
+        .env_remove("CCM_EMBEDDING_FIXTURE")
+        .env("EMBEDDING_PROVIDER", "ollama")
+        .env("EMBEDDING_HOST", &host)
+        .env("EMBEDDING_MODEL", "ccm-test-embed-b")
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null())
+        .spawn()?;
+    let mut stdin = child.stdin.take().ok_or("stdin")?;
+    let mut reader = BufReader::new(child.stdout.take().ok_or("stdout")?);
+    send_request(
+        &mut stdin,
+        &mut reader,
+        json!({"jsonrpc":"2.0","id":0,"method":"initialize","params":{}}),
+    )?;
+    let searched = send_request(
+        &mut stdin,
+        &mut reader,
+        json!({
+            "jsonrpc":"2.0","id":1,"method":"tools/call",
+            "params":{"name":"search_code","arguments":{"query":"existing_symbol"}}
+        }),
+    )?;
+    child.kill()?;
+    child.wait()?;
+
+    assert!(tool_succeeded(&searched), "{searched}");
+    let text = tool_text(&searched);
+    assert!(
+        text.lines().next().is_some_and(|line| {
+            line.contains("semantic search unavailable")
+                && line.contains("ccm-test-embed-a")
+                && line.contains("ccm-test-embed-b")
+        }),
+        "the reason must lead the result: {text}"
+    );
+    assert!(
+        text.contains("existing_symbol"),
+        "search falls back to graph results: {text}"
+    );
     Ok(())
 }
 

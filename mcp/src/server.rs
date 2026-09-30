@@ -16,7 +16,7 @@ use crate::tools;
 use ccm_core::engine::RetrievalEngine;
 use ccm_core::graph::CodeGraph;
 use ccm_core::live::{IndexMigrationRequired, LiveIndex};
-use ccm_core::vector::embedder::EmbeddingIdentityMismatch;
+use ccm_core::vector::embedder::{EmbeddingIdentityMismatch, EmbeddingSource};
 use ccm_core::vector::store::LanceDbStore;
 
 const LATEST_PROTOCOL_VERSION: &str = "2025-11-25";
@@ -846,7 +846,10 @@ async fn load_migration_engine(
             error
         )
     })?;
-    let store = LanceDbStore::new(&artifacts.db_path.to_string_lossy(), "code_vectors").await?;
+    let identity_mismatch = engine_embedding_mismatch(&artifacts.manifest_path, &graph)?;
+    let store = LanceDbStore::new(&artifacts.db_path.to_string_lossy(), "code_vectors")
+        .await?
+        .with_identity_mismatch(identity_mismatch);
     let indexed_at = ccm_core::read_index_timestamp(&artifacts.manifest_path)?;
     Ok(CachedEngine {
         engine: Arc::new(RetrievalEngine::new_with_active_policy(
@@ -860,6 +863,35 @@ async fn load_migration_engine(
             indexed_at,
         },
     })
+}
+
+/// Canlı indeks dışındaki engine'lerin (kök dizinsiz depo, taşınacak indeks)
+/// vektörleri yapılandırılmış embedding kaynağıyla karıştırılamıyorsa
+/// uyuşmazlığı: arama sorgu vektörünü başka bir modelin tablosuyla (boyut hatası
+/// ya da yanlış komşular) karşılaştırmak yerine açık bir nedenle graf
+/// sonuçlarına döner. Kaynak çözülemezse canlı indeksteki gibi uyarı yazılır ve
+/// denetim atlanır; aynı hata embedder kurulurken yüzeye çıkar.
+fn engine_embedding_mismatch(
+    manifest_path: &Path,
+    graph: &CodeGraph,
+) -> Result<Option<EmbeddingIdentityMismatch>> {
+    let source = match EmbeddingSource::from_env() {
+        Ok(source) => source,
+        Err(error) => {
+            tracing::warn!(
+                manifest = %manifest_path.display(),
+                error = %error,
+                "Embedding configuration could not be resolved; the index embedding identity is not checked"
+            );
+            return Ok(None);
+        }
+    };
+    let recorded = ccm_core::read_index_embedding(manifest_path)?;
+    Ok(ccm_core::index_embedding_mismatch(
+        &source,
+        recorded.as_ref(),
+        graph,
+    ))
 }
 
 /// Etkin generation'ın veritabanı, graf ve manifest artefaktlarının üçü de diskte mi?
@@ -915,7 +947,11 @@ async fn load_rootless_engine(db_path: &Path) -> Result<Arc<RetrievalEngine>> {
     } else {
         CodeGraph::new()
     };
-    let store = LanceDbStore::new(&db_path.to_string_lossy(), "code_vectors").await?;
+    let identity_mismatch =
+        engine_embedding_mismatch(&artifact_parent.join("ccm_manifest.json"), &graph)?;
+    let store = LanceDbStore::new(&db_path.to_string_lossy(), "code_vectors")
+        .await?
+        .with_identity_mismatch(identity_mismatch);
     let policy_path = artifact_parent.join("ccm_learn/policies.json");
     Ok(Arc::new(RetrievalEngine::new_with_active_policy(
         Arc::new(RwLock::new(graph)),
@@ -1492,7 +1528,22 @@ async fn run_tool(
                 ccm_core::unix_now_secs(),
             ),
         ),
-        None => result,
+        // Kök dizinsiz depo otomatik yenilenmez ve tazelik satırı almaz; vektörleri
+        // başka bir modelle kurulduysa neden yine de sonuçta görünür.
+        None => match engine.vector_store.identity_mismatch() {
+            Some(mismatch) => crate::freshness::with_freshness_line(
+                result,
+                &crate::freshness::format_freshness_line(
+                    &crate::freshness::ProjectFreshness {
+                        semantic_unavailable: Some(mismatch.to_string()),
+                        ..crate::freshness::disabled_freshness()
+                    },
+                    None,
+                    ccm_core::unix_now_secs(),
+                ),
+            ),
+            None => result,
+        },
     })
 }
 
