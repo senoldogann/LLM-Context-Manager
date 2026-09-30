@@ -1,126 +1,14 @@
+mod common;
+
+use common::{found_node, poll_find_nodes, run_update_index_process, McpSession};
 use serde_json::{json, Value};
 use std::error::Error;
 use std::fs;
-use std::io::{BufRead, BufReader, Write};
 use std::path::Path;
-use std::process::{Child, ChildStdin, ChildStdout, Command, Stdio};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tempfile::tempdir;
-
-/// Gerçek `ccm-mcp` sürecini stdio üzerinden süren test bağlayıcısı.
-struct McpSession {
-    child: Child,
-    stdin: ChildStdin,
-    reader: BufReader<ChildStdout>,
-    next_id: u64,
-}
-
-impl McpSession {
-    fn start(project: &Path, extra_env: &[(&str, &str)]) -> Result<Self, Box<dyn Error>> {
-        Self::spawn(project, extra_env, Stdio::null())
-    }
-
-    /// Sunucunun log'unu (`RUST_LOG=info`) verilen dosyaya yazdırarak başlatır.
-    fn start_logged(
-        project: &Path,
-        extra_env: &[(&str, &str)],
-        log_path: &Path,
-    ) -> Result<Self, Box<dyn Error>> {
-        let mut env = extra_env.to_vec();
-        env.push(("RUST_LOG", "info"));
-        Self::spawn(project, &env, Stdio::from(fs::File::create(log_path)?))
-    }
-
-    fn spawn(
-        project: &Path,
-        extra_env: &[(&str, &str)],
-        stderr: Stdio,
-    ) -> Result<Self, Box<dyn Error>> {
-        let mut command = Command::new(assert_cmd::cargo::cargo_bin!("ccm-mcp"));
-        command
-            .env("CCM_DISABLE_EMBEDDER", "1")
-            .env("CCM_MCP_DEBUG", "0")
-            .env("CCM_PROJECT_ROOT", project)
-            .env("CCM_ALLOWED_ROOTS", project)
-            .stdin(Stdio::piped())
-            .stdout(Stdio::piped())
-            .stderr(stderr);
-        for (key, value) in extra_env {
-            command.env(key, value);
-        }
-        let mut child = command.spawn()?;
-        let stdin = child.stdin.take().ok_or("child stdin missing")?;
-        let reader = BufReader::new(child.stdout.take().ok_or("child stdout missing")?);
-        let mut session = Self {
-            child,
-            stdin,
-            reader,
-            next_id: 0,
-        };
-        session.request("initialize", json!({}))?;
-        Ok(session)
-    }
-
-    fn request(&mut self, method: &str, params: Value) -> Result<Value, Box<dyn Error>> {
-        self.next_id += 1;
-        let message =
-            json!({"jsonrpc": "2.0", "id": self.next_id, "method": method, "params": params});
-        writeln!(self.stdin, "{}", message)?;
-        self.stdin.flush()?;
-        let mut line = String::new();
-        self.reader.read_line(&mut line)?;
-        Ok(serde_json::from_str(&line)?)
-    }
-
-    fn call_tool(&mut self, name: &str, arguments: Value) -> Result<String, Box<dyn Error>> {
-        let response = self.request("tools/call", json!({"name": name, "arguments": arguments}))?;
-        if let Some(error) = response.get("error") {
-            return Err(format!("{name} returned a JSON-RPC error: {error}").into());
-        }
-        Ok(response["result"]["content"][0]["text"]
-            .as_str()
-            .unwrap_or_default()
-            .to_string())
-    }
-}
-
-impl Drop for McpSession {
-    fn drop(&mut self) {
-        let _ = self.child.kill();
-        let _ = self.child.wait();
-    }
-}
-
-/// `find_nodes` çıktısında sembolün sonuç başlığı olarak bulunup bulunmadığı.
-/// "No graph nodes found for query: 'x'" mesajı da sembolü içerdiği için başlık
-/// biçimi (`<sembol> (Score:`) aranır.
-fn found_node(text: &str, symbol: &str) -> bool {
-    text.contains(&format!("{symbol} (Score:"))
-}
-
-/// Koşul sağlanana kadar `find_nodes` çağırır; süre dolarsa son çıktıyla hata döner.
-fn poll_find_nodes(
-    session: &mut McpSession,
-    query: &str,
-    deadline: Duration,
-    accept: impl Fn(&str) -> bool,
-) -> Result<String, Box<dyn Error>> {
-    let started = Instant::now();
-    loop {
-        let text = session.call_tool("find_nodes", json!({ "query": query }))?;
-        if accept(&text) {
-            return Ok(text);
-        }
-        if started.elapsed() > deadline {
-            return Err(
-                format!("condition not met within {deadline:?}; last output: {text}").into(),
-            );
-        }
-        std::thread::sleep(Duration::from_millis(200));
-    }
-}
 
 /// Etkin generation dizini (`data/.ccm-generations/<işaretçi>`).
 fn active_generation_dir(project: &Path) -> Result<std::path::PathBuf, Box<dyn Error>> {
@@ -175,24 +63,6 @@ fn activate_generation(project: &Path, generation: &str) -> Result<(), Box<dyn E
     fs::write(&temp, generation)?;
     fs::rename(&temp, data.join("ccm_current"))?;
     Ok(())
-}
-
-/// `ccm-cli index` ile aynı yolu (`update_index`) ayrı bir süreçte çalıştırır:
-/// sunucunun dahili worker modu CLI komutuyla aynı çekirdek fonksiyonu çağırır.
-fn run_update_index_process(project: &Path) -> Result<Value, Box<dyn Error>> {
-    let output = Command::new(assert_cmd::cargo::cargo_bin!("ccm-mcp"))
-        .arg("--ccm-internal-index-worker")
-        .arg(project)
-        .arg(project.join("data/ccm_db"))
-        .env("CCM_INTERNAL_INDEX_WORKER", "1")
-        .env("CCM_DISABLE_EMBEDDER", "1")
-        .stdin(Stdio::null())
-        .stderr(Stdio::null())
-        .output()?;
-    if !output.status.success() {
-        return Err(format!("update_index process failed: {}", output.status).into());
-    }
-    Ok(serde_json::from_slice(&output.stdout)?)
 }
 
 #[test]
