@@ -36,6 +36,12 @@ pub fn is_embedder_unavailable(error: &anyhow::Error) -> bool {
     })
 }
 
+/// `EMBEDDING_HOST` tanımsızken kullanılan yerel Ollama adresi.
+pub const DEFAULT_OLLAMA_HOST: &str = "http://127.0.0.1:11434";
+
+/// `EMBEDDING_MODEL` tanımsızken uzak sağlayıcının modeli.
+pub const DEFAULT_REMOTE_MODEL: &str = "mxbai-embed-large";
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Provider {
     OpenAI,
@@ -85,21 +91,9 @@ impl RemoteEmbedder {
         })
     }
 
-    pub fn from_env() -> Result<Self> {
-        load_user_env_file()?;
-
-        let base_url =
-            env::var("EMBEDDING_HOST").unwrap_or_else(|_| "http://127.0.0.1:11434".to_string());
-
-        // Default model: nomic-embed-text is robust and standard for local RAG
-        let model = env::var("EMBEDDING_MODEL").unwrap_or_else(|_| "mxbai-embed-large".to_string());
-
-        // Detect provider: If explicit, use it. If base_url looks like Ollama, use it.
-        // OTHERWISE DEFAULT TO OLLAMA (Local First approach).
-        let provider_str = env::var("EMBEDDING_PROVIDER")
-            .unwrap_or_default()
-            .to_lowercase();
-        let provider = resolve_provider(&provider_str, &base_url);
+    /// Seçilmiş sağlayıcı için embedder kurar: hedef adres doğrulanır ve API
+    /// anahtarı ortamdan çözülür. Sağlayıcı seçimi `vector::embedder`'dadır.
+    pub fn configured(provider: Provider, base_url: String, model: String) -> Result<Self> {
         validate_embedding_host(&base_url)?;
         let api_key = resolve_api_key(&provider)?;
         tracing::info!(
@@ -438,7 +432,7 @@ fn validate_embedding_host(base_url: &str) -> Result<()> {
     ))
 }
 
-fn resolve_provider(provider_str: &str, base_url: &str) -> Provider {
+pub(crate) fn resolve_provider(provider_str: &str, base_url: &str) -> Provider {
     // OpenAI-uyumlu /embeddings sözleşmesi kullanan sağlayıcılar tek kod
     // yolundan geçer: OpenAI, Azure OpenAI, HuggingFace TEI, Voyage, Jina,
     // LM Studio, llama.cpp server, LocalAI vb. Açıkça ollama belirtilmedikçe
@@ -472,7 +466,7 @@ fn resolve_api_key(provider: &Provider) -> Result<String> {
     }
 }
 
-fn provider_label(provider: &Provider) -> &'static str {
+pub fn provider_label(provider: &Provider) -> &'static str {
     match provider {
         Provider::OpenAI => "openai",
         Provider::Ollama => "ollama",

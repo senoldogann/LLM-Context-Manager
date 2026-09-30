@@ -1,4 +1,6 @@
-use crate::vector::remote::RemoteEmbedder;
+use crate::vector::embedder::{
+    embedder_disabled_by_env, fixture_path_from_env, Embedder, EmbeddingIdentity,
+};
 use anyhow::{Context, Result};
 use arrow_array::{FixedSizeListArray, Float32Array, RecordBatch, StringArray};
 use arrow_schema::{DataType, Field, Schema};
@@ -16,6 +18,8 @@ pub struct EmbeddingFixture {
     pub docs: HashMap<String, Vec<f32>>,
     pub queries: HashMap<String, Vec<f32>>,
     pub dim: usize,
+    /// Meta satırındaki üretim yöntemi (`method`); indeks kimliğinde model adıdır.
+    pub method: Option<String>,
 }
 
 impl EmbeddingFixture {
@@ -35,6 +39,9 @@ impl EmbeddingFixture {
             if kind == "meta" {
                 if let Some(dim) = value.get("dim").and_then(|d| d.as_u64()) {
                     fixture.dim = dim as usize;
+                }
+                if let Some(method) = value.get("method").and_then(|m| m.as_str()) {
+                    fixture.method = Some(method.to_string());
                 }
                 continue;
             }
@@ -74,6 +81,16 @@ impl EmbeddingFixture {
         Ok(fixture)
     }
 
+    /// Fixture vektörlerinin indeks kimliği.
+    pub fn identity(&self) -> EmbeddingIdentity {
+        EmbeddingIdentity {
+            provider: "fixture".to_string(),
+            model: self.method.clone().unwrap_or_else(|| "fixture".to_string()),
+            revision: None,
+            dim: self.dim,
+        }
+    }
+
     pub fn doc_vector(&self, ns: &str, chunk_id: &str) -> Result<Vec<f32>> {
         self.docs
             .get(&format!("{}|{}", ns, chunk_id))
@@ -103,7 +120,7 @@ fn fixture_cache() -> &'static Mutex<HashMap<PathBuf, Arc<EmbeddingFixture>>> {
     CACHE.get_or_init(|| Mutex::new(HashMap::new()))
 }
 
-fn load_fixture_cached(path: &Path) -> Result<Arc<EmbeddingFixture>> {
+pub(crate) fn load_fixture_cached(path: &Path) -> Result<Arc<EmbeddingFixture>> {
     let cache = fixture_cache();
     if let Some(cached) = cache.lock().unwrap().get(path) {
         return Ok(Arc::clone(cached));
@@ -158,7 +175,7 @@ pub struct ChunkEmbeddingCounts {
 pub struct LanceDbStore {
     conn: Connection,
     table_name: String,
-    embedder: Mutex<Option<Arc<RemoteEmbedder>>>,
+    embedder: tokio::sync::OnceCell<Arc<Embedder>>,
     embedder_disabled: bool,
     fixture: Option<Arc<EmbeddingFixture>>,
     fixture_ns: String,
@@ -177,21 +194,17 @@ impl LanceDbStore {
     ) -> Result<Self> {
         let conn = connect(uri).execute().await?;
 
-        let embedder_disabled = std::env::var("CCM_DISABLE_EMBEDDER")
-            .or_else(|_| std::env::var("EMBEDDING_DISABLED"))
-            .map(|v| matches!(v.to_lowercase().as_str(), "1" | "true" | "yes"))
-            .unwrap_or(false);
+        let embedder_disabled = embedder_disabled_by_env();
 
-        let fixture = match std::env::var("CCM_EMBEDDING_FIXTURE").ok() {
-            Some(path) if !path.trim().is_empty() => {
-                let fixture_path = PathBuf::from(path);
+        let fixture = match fixture_path_from_env() {
+            Some(fixture_path) => {
                 tracing::info!(
                     path = %fixture_path.display(),
                     "Embedding fixture modu etkin"
                 );
                 Some(load_fixture_cached(&fixture_path)?)
             }
-            _ => None,
+            None => None,
         };
         let fixture_ns = fixture_namespace
             .map(str::to_string)
@@ -200,7 +213,7 @@ impl LanceDbStore {
         Ok(Self {
             conn,
             table_name: table_name.to_string(),
-            embedder: Mutex::new(None),
+            embedder: tokio::sync::OnceCell::new(),
             embedder_disabled,
             fixture,
             fixture_ns,
@@ -210,21 +223,16 @@ impl LanceDbStore {
 
     /// Embedder'ı ilk kullanımda başlatır. Fixture modunda veya disabled
     /// ortamda gereksiz `.env` yüklemesi/API anahtarı araması yapılmaz.
-    fn embedder(&self) -> Result<Arc<RemoteEmbedder>> {
+    async fn embedder(&self) -> Result<Arc<Embedder>> {
         if self.embedder_disabled {
             anyhow::bail!(
                 "Embedder not initialized (disabled via environment). Semantic search is disabled."
             );
         }
-        let mut guard = self.embedder.lock().unwrap();
-        if let Some(embedder) = guard.as_ref() {
-            return Ok(Arc::clone(embedder));
-        }
-        let embedder = Arc::new(RemoteEmbedder::from_env().context(
-            "Embedder not initialized. Configure EMBEDDING_PROVIDER/EMBEDDING_HOST/EMBEDDING_MODEL and EMBEDDING_API_KEY (or OPENAI_API_KEY), or disable semantic search with CCM_DISABLE_EMBEDDER=1.",
-        )?);
-        guard.replace(Arc::clone(&embedder));
-        Ok(embedder)
+        self.embedder
+            .get_or_try_init(|| async { Embedder::from_env().await.map(Arc::new) })
+            .await
+            .map(Arc::clone)
     }
 
     /// Açık LanceDB tablosunu önbellekten döndürür; yoksa açar ve önbelleğe alır.
@@ -293,6 +301,10 @@ impl LanceDbStore {
 
     /// Metinleri sınırlı eşzamanlılıkla batch'ler hâlinde embed eder ve girişle
     /// aynı sırada vektör döndürür. Boş girişte servis hiç çağrılmaz.
+    ///
+    /// Metinler uzunluğa göre sıralanıp batch'lenir: benzer uzunluktakiler aynı
+    /// batch'e düşer ve yerel modelde dolgu (padding) hesabı azalır. Sonuçlar
+    /// giriş sırasına geri yazılır.
     async fn embed_in_batches(
         &self,
         texts: Vec<String>,
@@ -301,7 +313,9 @@ impl LanceDbStore {
         if texts.is_empty() {
             return Ok(Vec::new());
         }
-        let embedder = self.embedder()?;
+        let embedder = self.embedder().await?;
+        let mut order: Vec<usize> = (0..texts.len()).collect();
+        order.sort_by_key(|&index| texts[index].len());
         let total_batches = texts.len().div_ceil(batch_size);
         // Sınırlı eşzamanlılık: Ollama varsayılan olarak tek model işçisiyle
         // (`num_parallel=1`) istekleri sıraya alır; eşzamanlı istekler seri
@@ -314,27 +328,36 @@ impl LanceDbStore {
             .and_then(|value| value.parse().ok())
             .unwrap_or(1)
             .clamp(1, 8);
-        let mut collected: Vec<Option<Vec<Vec<f32>>>> = vec![None; total_batches];
+        let mut embeddings: Vec<Option<Vec<f32>>> = vec![None; texts.len()];
         // Batch future'ları önce toplanır: akış, `texts`'i ödünç alan bir closure
         // yerine sahipli future'ları taşır. Aksi halde gelecek, `tokio::spawn`
         // edilen görevlerde (MCP canlı yenilemesi) gereken `Send` sınırını
         // derleyicinin genelleştiremediği bir tür içerir.
-        let batch_futures: Vec<_> = texts
+        let batch_futures: Vec<_> = order
             .chunks(batch_size)
             .enumerate()
-            .map(|(batch_idx, batch)| {
-                let batch_texts: Vec<String> = batch.to_vec();
+            .map(|(batch_idx, indices)| {
+                let indices: Vec<usize> = indices.to_vec();
+                let batch_texts: Vec<String> =
+                    indices.iter().map(|&index| texts[index].clone()).collect();
                 let embedder = Arc::clone(&embedder);
                 async move {
                     let result = embedder.embed(batch_texts).await;
-                    (batch_idx, result)
+                    (batch_idx, indices, result)
                 }
             })
             .collect();
         let mut stream = futures::stream::iter(batch_futures).buffer_unordered(concurrency);
         let mut completed = 0usize;
-        while let Some((batch_idx, result)) = stream.next().await {
+        while let Some((batch_idx, indices, result)) = stream.next().await {
             let batch_embeddings = result?;
+            if batch_embeddings.len() != indices.len() {
+                anyhow::bail!(
+                    "Embedding provider returned {} vectors for a batch of {} texts",
+                    batch_embeddings.len(),
+                    indices.len()
+                );
+            }
             completed += 1;
             if batch_idx % 20 == 0 || completed == total_batches {
                 tracing::info!(
@@ -344,13 +367,16 @@ impl LanceDbStore {
                     "Embedding batch progress"
                 );
             }
-            collected[batch_idx] = Some(batch_embeddings);
+            for (index, vector) in indices.into_iter().zip(batch_embeddings) {
+                embeddings[index] = Some(vector);
+            }
         }
-        let mut embeddings = Vec::with_capacity(texts.len());
-        for batch in collected {
-            embeddings.extend(batch.expect("embedding batch"));
-        }
-        Ok(embeddings)
+        embeddings
+            .into_iter()
+            .map(|vector| {
+                vector.ok_or_else(|| anyhow::anyhow!("Embedding batch result is missing"))
+            })
+            .collect()
     }
 
     /// Embeds texts and inserts them into the LanceDB table.
@@ -588,7 +614,7 @@ impl LanceDbStore {
         let query_embedding = if let Some(fixture) = self.fixture.as_ref() {
             fixture.query_vector(&self.fixture_ns, query)?
         } else {
-            let embedder = self.embedder()?;
+            let embedder = self.embedder().await?;
             let query_vecs = embedder.embed(vec![query.to_string()]).await?;
             match query_vecs.into_iter().next() {
                 Some(vec) if !vec.is_empty() => vec,

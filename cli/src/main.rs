@@ -76,6 +76,17 @@ enum Commands {
         #[arg(long)]
         json: bool,
     },
+    /// Manage the built-in local embedding model
+    Models {
+        #[command(subcommand)]
+        command: ModelsCommand,
+    },
+}
+
+#[derive(Parser, Debug)]
+enum ModelsCommand {
+    /// Download (if missing) and verify the built-in local embedding model files
+    Pull,
 }
 
 #[derive(Parser, Debug)]
@@ -467,27 +478,165 @@ async fn main() -> anyhow::Result<()> {
             }
         },
         Commands::Doctor { path, json } => run_doctor(&path, json).await?,
+        Commands::Models { command } => match command {
+            ModelsCommand::Pull => pull_local_model().await?,
+        },
     }
 
     Ok(())
 }
 
-/// Yapılandırılmış embedding servisine tek bir küçük istek gönderir.
+/// Yerleşik yerel modelin eksik dosyalarını indirir ve hepsini sabitlenmiş
+/// SHA-256 değerleriyle doğrular.
+async fn pull_local_model() -> anyhow::Result<()> {
+    use ccm_core::vector::local_model::{
+        model_dir, pull_model_files, FileOutcome, ModelSource, DEFAULT_LOCAL_MODEL,
+    };
+    let spec = DEFAULT_LOCAL_MODEL;
+    let directory = model_dir(&spec)?;
+    println!(
+        "Local embedding model: {} @ {} ({})",
+        spec.repo,
+        spec.revision,
+        human_size(spec.total_bytes())
+    );
+    println!("Directory: {}", directory.display());
+    if !ccm_core::vector::embedder::LOCAL_EMBEDDER_AVAILABLE {
+        println!(
+            "Note: this platform (x86_64-apple-darwin) cannot run the local embedder; the files are only verified here."
+        );
+    }
+    let outcomes =
+        pull_model_files(&spec.files(), &directory, &ModelSource::from_env(&spec)).await?;
+    for (file, outcome) in &outcomes {
+        let label = match outcome {
+            FileOutcome::AlreadyPresent => "present",
+            FileOutcome::Downloaded => "downloaded",
+        };
+        println!("  {:<10} {} ({})", label, file.path, human_size(file.size));
+    }
+    println!(
+        "All {} files match their pinned SHA-256 checksums.",
+        outcomes.len()
+    );
+    Ok(())
+}
+
+/// Bayt sayısını ondalık MB/KB olarak biçimlendirir.
+fn human_size(bytes: u64) -> String {
+    if bytes >= 1_000_000 {
+        format!("{:.1} MB", bytes as f64 / 1_000_000.0)
+    } else {
+        format!("{:.1} KB", bytes as f64 / 1_000.0)
+    }
+}
+
+/// Yapılandırılmış embedder'a tek bir küçük embedding isteği gönderir.
 async fn probe_embedder() -> anyhow::Result<String> {
-    let embedder = ccm_core::vector::remote::RemoteEmbedder::from_env()?;
+    let embedder = ccm_core::vector::embedder::Embedder::from_env().await?;
     let vectors = embedder.embed(vec!["ccm doctor probe".to_string()]).await?;
     let dimension = vectors.first().map(Vec::len).unwrap_or(0);
     if dimension == 0 {
-        anyhow::bail!(
-            "{} returned an empty embedding vector",
-            embedder.endpoint_summary()
-        );
+        anyhow::bail!("{} returned an empty embedding vector", embedder.describe());
     }
-    Ok(format!(
-        "{} (dimension {})",
-        embedder.endpoint_summary(),
-        dimension
-    ))
+    Ok(format!("{} (dimension {})", embedder.describe(), dimension))
+}
+
+/// Embedding kontrolü. Yerel modelin dosyaları eksikse doktor indirme yapmaz;
+/// durumu ve yapılacak işi bildirir. Dosyalar tamsa model yüklenip denenir.
+async fn embedding_check() -> serde_json::Value {
+    use ccm_core::vector::embedder::{configured_provider, ProviderChoice};
+    let platform_note = (!ccm_core::vector::embedder::LOCAL_EMBEDDER_AVAILABLE).then_some(
+        "the built-in local embedder is not available on x86_64-apple-darwin (no prebuilt ONNX Runtime); Ollama is the default on this platform",
+    );
+    let choice = match configured_provider() {
+        Ok((choice, _)) => choice,
+        Err(error) => return serde_json::json!({"ok": false, "error": format!("{error:#}")}),
+    };
+    if choice == ProviderChoice::Local {
+        return local_model_check().await;
+    }
+    match probe_embedder().await {
+        Ok(endpoint) => {
+            serde_json::json!({"ok": true, "endpoint": endpoint, "note": platform_note})
+        }
+        Err(error) => {
+            serde_json::json!({"ok": false, "error": format!("{error:#}"), "note": platform_note})
+        }
+    }
+}
+
+/// Yerel modelin dosya durumu (ağ kullanılmaz) ve dosyalar tamsa bir deneme
+/// embedding'i.
+async fn local_model_check() -> serde_json::Value {
+    use ccm_core::vector::local_model::{inspect_model, model_dir, FileState, DEFAULT_LOCAL_MODEL};
+    let spec = DEFAULT_LOCAL_MODEL;
+    let mut check = serde_json::json!({
+        "provider": "local",
+        "model": spec.repo,
+        "revision": spec.revision,
+        "dimension": spec.dim,
+        "download_bytes": spec.total_bytes(),
+    });
+    let directory = match model_dir(&spec) {
+        Ok(directory) => directory,
+        Err(error) => {
+            check["ok"] = false.into();
+            check["error"] = format!("{error:#}").into();
+            return check;
+        }
+    };
+    check["directory"] = directory.to_string_lossy().to_string().into();
+    let states = match inspect_model(&spec, &directory) {
+        Ok(states) => states,
+        Err(error) => {
+            check["ok"] = false.into();
+            check["error"] = format!("{error:#}").into();
+            return check;
+        }
+    };
+    let missing: Vec<&str> = states
+        .iter()
+        .filter(|(_, state)| *state == FileState::Missing)
+        .map(|(file, _)| file.path)
+        .collect();
+    let mismatched: Vec<String> = states
+        .iter()
+        .filter_map(|(file, state)| match state {
+            FileState::Mismatch { detail } => Some(format!("{}: {}", file.path, detail)),
+            _ => None,
+        })
+        .collect();
+    if !mismatched.is_empty() {
+        check["ok"] = false.into();
+        check["error"] = format!(
+            "model files do not match their pinned checksums ({}); delete them and run `ccm-cli models pull`",
+            mismatched.join("; ")
+        )
+        .into();
+        return check;
+    }
+    if !missing.is_empty() {
+        check["ok"] = false.into();
+        check["missing"] = missing.into();
+        check["error"] = format!(
+            "the local embedding model is not downloaded yet ({}); the first index downloads it, or run `ccm-cli models pull`",
+            human_size(spec.total_bytes())
+        )
+        .into();
+        return check;
+    }
+    match probe_embedder().await {
+        Ok(endpoint) => {
+            check["ok"] = true.into();
+            check["endpoint"] = endpoint.into();
+        }
+        Err(error) => {
+            check["ok"] = false.into();
+            check["error"] = format!("{error:#}").into();
+        }
+    }
+    check
 }
 
 async fn run_doctor(path: &std::path::Path, json: bool) -> anyhow::Result<()> {
@@ -527,10 +676,7 @@ async fn run_doctor(path: &std::path::Path, json: bool) -> anyhow::Result<()> {
         .ok()
         .map(ccm_core::semantic_node_count)
         .unwrap_or(0);
-    let embedder_disabled = std::env::var("CCM_DISABLE_EMBEDDER")
-        .or_else(|_| std::env::var("EMBEDDING_DISABLED"))
-        .map(|value| matches!(value.to_lowercase().as_str(), "1" | "true" | "yes"))
-        .unwrap_or(false);
+    let embedder_disabled = ccm_core::vector::embedder::embedder_disabled_by_env();
     let vector_table_path = db_path.join("code_vectors.lance");
     let vector_result = if !db_path.is_dir() {
         Err("vector database directory is missing".to_string())
@@ -565,10 +711,7 @@ async fn run_doctor(path: &std::path::Path, json: bool) -> anyhow::Result<()> {
     let embedding_check = if embedder_disabled {
         serde_json::json!({"ok": true, "disabled": true})
     } else {
-        match probe_embedder().await {
-            Ok(endpoint) => serde_json::json!({"ok": true, "endpoint": endpoint}),
-            Err(error) => serde_json::json!({"ok": false, "error": format!("{error:#}")}),
-        }
+        embedding_check().await
     };
     let vector_error = vector_result.as_ref().err().cloned();
     let vector_rows = vector_result.as_ref().ok().copied().flatten();
@@ -621,7 +764,14 @@ async fn run_doctor(path: &std::path::Path, json: bool) -> anyhow::Result<()> {
         let checks = output["checks"].as_object().context("checks object")?;
         for (name, check) in checks {
             let ok = check.get("ok").and_then(|v| v.as_bool()).unwrap_or(false);
-            println!("{} {}", if ok { "✓" } else { "✗" }, name);
+            let detail = check
+                .get("error")
+                .and_then(|value| value.as_str())
+                .or_else(|| check.get("endpoint").and_then(|value| value.as_str()));
+            match detail {
+                Some(detail) => println!("{} {}: {}", if ok { "✓" } else { "✗" }, name, detail),
+                None => println!("{} {}", if ok { "✓" } else { "✗" }, name),
+            }
         }
     }
 
