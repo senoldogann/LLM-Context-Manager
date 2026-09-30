@@ -396,7 +396,10 @@ with deterministic fixture embeddings in [`eval.yml`](./.github/workflows/eval.y
 **External benchmark (v0.3.13):** 35 hand-verified golden tasks on real repos
 (serde, flask, express) with real Ollama embeddings. Hybrid scoring passes
 82.9% (29/35) vs 80.0% (28/35) semantic-only; `get_context`/`read_graph` are
-20/20. On `search_code` alone Recall@5 is 0.600 vs 0.533. Full numbers, failure ledger and reproduction steps:
+20/20. On `search_code` alone Recall@5 is 0.600 vs 0.533. The built-in local
+model (the default) matches that semantic-only Recall@5 (0.533) with a higher
+MRR (0.489 vs 0.352) and indexes 4–7× faster on CPU (12–19 ms vs ~81 ms per
+chunk on an Apple M4). Full numbers, failure ledger and reproduction steps:
 [`benchmarks/README.md`](./benchmarks/README.md).
 
 ---

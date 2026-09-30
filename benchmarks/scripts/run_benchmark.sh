@@ -5,19 +5,21 @@
 #   benchmarks/scripts/run_benchmark.sh
 #
 # Env:
-#   CCM_CLI      - path to the ccm-cli binary (default: target/release/ccm-cli)
-#   CCM_NO_EMBED - set to 1 to skip search_code tasks (embedder not required)
+#   CCM_CLI           - path to the ccm-cli binary (default: target/release/ccm-cli)
+#   CCM_NO_EMBED      - set to 1 to skip search_code tasks (embedder not required)
+#   CCM_BENCH_RESULTS - report directory (default: benchmarks/results)
 #
 # Prereqs:
 #   - benchmarks/corpus/<name> cloned (run benchmarks/scripts/fetch_corpus.sh)
 #   - repos indexed (eval builds the index automatically if missing)
-#   - embedding provider reachable (default: Ollama at 127.0.0.1:11434 with
-#     mxbai-embed-large) unless CCM_NO_EMBED=1
+#   - the configured embedder available (default: the built-in local model;
+#     EMBEDDING_PROVIDER=ollama for the recorded mxbai-embed-large baseline)
+#     unless CCM_NO_EMBED=1
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 CLI="${CCM_CLI:-$ROOT/target/release/ccm-cli}"
-RESULTS="$ROOT/benchmarks/results"
+RESULTS="${CCM_BENCH_RESULTS:-$ROOT/benchmarks/results}"
 mkdir -p "$RESULTS"
 
 if [[ ! -x "$CLI" ]]; then
