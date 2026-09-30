@@ -14,6 +14,7 @@ use crate::tools;
 
 use ccm_core::engine::RetrievalEngine;
 use ccm_core::graph::CodeGraph;
+use ccm_core::live::LiveIndex;
 use ccm_core::vector::store::LanceDbStore;
 
 const LATEST_PROTOCOL_VERSION: &str = "2025-11-25";
@@ -72,12 +73,29 @@ fn engine_cache_size() -> usize {
 use lru::LruCache;
 use std::num::NonZeroUsize;
 
-/// Önbellekteki engine ve ait olduğu generation'ın indeksleme zamanı.
+/// Önbellekteki engine ve (proje indekslerinde) onu yerinde güncelleyen canlı
+/// indeks.
 #[derive(Clone)]
 pub struct CachedEngine {
     pub engine: Arc<RetrievalEngine>,
-    /// Aktif generation manifestindeki indeksleme zamanı (unix saniye).
-    pub indexed_at: Option<u64>,
+    /// Etkin generation'a bağlı canlı indeks; kök dizinsiz varsayılan depoda yok.
+    pub live: Option<Arc<LiveIndex>>,
+}
+
+impl CachedEngine {
+    fn from_live(live: LiveIndex) -> Self {
+        let live = Arc::new(live);
+        Self {
+            engine: live.engine(),
+            live: Some(live),
+        }
+    }
+
+    /// İndeksin diski en son yansıttığı an (unix saniye). Canlı indeksten
+    /// okunur; her uygulanan yenilemeyle birlikte ilerler.
+    pub fn indexed_at(&self) -> Option<u64> {
+        self.live.as_ref().and_then(|live| live.indexed_at())
+    }
 }
 
 pub struct EngineCache {
@@ -481,10 +499,7 @@ impl ServerState {
                         .read()
                         .await
                         .clone()
-                        .map(|engine| CachedEngine {
-                            engine,
-                            indexed_at: None,
-                        })
+                        .map(|engine| CachedEngine { engine, live: None })
                         .ok_or_else(|| {
                             anyhow::anyhow!(
                                 "No project root is available. Pass 'project_path' or set CCM_PROJECT_ROOT."
@@ -522,8 +537,6 @@ impl ServerState {
         }
 
         tracing::info!(path = %cache_key, "Loading context for project");
-        let db_path = artifacts.db_path.to_string_lossy().to_string();
-        let graph_path = artifacts.graph_path.to_string_lossy().to_string();
 
         // Uzun full index retrieval çağrısının içinde çalıştırılmaz.
         if !index_artifacts_exist(&artifacts) {
@@ -540,34 +553,10 @@ impl ServerState {
             ));
         }
 
-        let graph = CodeGraph::load_from_file(&graph_path).map_err(|error| {
-            anyhow::anyhow!(
-                "Project graph '{}' could not be loaded: {}. Run index_project to rebuild it.",
-                graph_path,
-                error
-            )
-        })?;
-        tracing::info!(
-            path = %cache_key,
-            nodes = graph.graph.node_count(),
-            "Loaded graph for project"
-        );
-
-        let store = LanceDbStore::new(&db_path, "code_vectors").await?;
-        let requested_db_path = self.project_db_path(&cache_key)?;
-        let policy_path = requested_db_path
-            .parent()
-            .map(|parent| parent.join("ccm_learn/policies.json"));
-        let indexed_at = ccm_core::read_index_timestamp(&artifacts.manifest_path)?;
-        let engine = CachedEngine {
-            engine: Arc::new(RetrievalEngine::new_with_active_policy(
-                Arc::new(RwLock::new(graph)),
-                store,
-                policy_path.as_deref(),
-            )),
-            indexed_at,
-        };
-
+        let engine = self.load_project_engine(&cache_key).await?;
+        // İşaretçi yükleme sırasında ilerlemiş olabilir; anahtar yüklenen
+        // generation'dan alınır.
+        let engine_cache_key = project_engine_cache_key(&cache_key, &engine);
         let mut engines = self.engines.write().await;
         if let Some(existing) = engines.get(&engine_cache_key) {
             return Ok(existing);
@@ -579,33 +568,37 @@ impl ServerState {
         // get_engine ile aynı normalize key kullanılır ki cache tutarlı kalsın.
         let canonical_path = canonicalize_project_path(Path::new(project_path));
         let cache_key = canonical_path.to_string_lossy().to_string();
-        let artifacts = self.project_artifacts(&cache_key)?;
-        let db_path = artifacts.db_path.to_string_lossy().to_string();
-        let graph = CodeGraph::load_from_file(&artifacts.graph_path.to_string_lossy())?;
-        let store = LanceDbStore::new(&db_path, "code_vectors").await?;
-        let requested_db_path = self.project_db_path(&cache_key)?;
-        let policy_path = requested_db_path
-            .parent()
-            .map(|parent| parent.join("ccm_learn/policies.json"));
-        let engine = CachedEngine {
-            engine: Arc::new(RetrievalEngine::new_with_active_policy(
-                Arc::new(RwLock::new(graph)),
-                store,
-                policy_path.as_deref(),
-            )),
-            indexed_at: ccm_core::read_index_timestamp(&artifacts.manifest_path)?,
-        };
-
-        let engine_cache_key = format!(
-            "{}#{}",
-            cache_key,
-            artifacts.generation_id.as_deref().unwrap_or("legacy")
-        );
+        let engine = self.load_project_engine(&cache_key).await?;
+        let engine_cache_key = project_engine_cache_key(&cache_key, &engine);
         self.engines
             .write()
             .await
             .insert(&cache_key, engine_cache_key, engine);
         Ok(())
+    }
+
+    /// Otomatik yenilemenin uyguladığı canlı indeks: etkin generation'ın
+    /// önbellekteki engine'i (işaretçi değiştiyse yeni generation yüklenir).
+    pub(crate) async fn live_index(&self, project_key: &str) -> Result<Arc<LiveIndex>> {
+        self.get_engine(Some(project_key))
+            .await?
+            .live
+            .ok_or_else(|| anyhow::anyhow!("Project '{}' has no live index", project_key))
+    }
+
+    /// Projenin etkin generation'ını canlı indeks olarak yükler.
+    async fn load_project_engine(&self, cache_key: &str) -> Result<CachedEngine> {
+        let requested_db_path = self.project_db_path(cache_key)?;
+        let policy_path = requested_db_path
+            .parent()
+            .map(|parent| parent.join("ccm_learn/policies.json"));
+        let live = LiveIndex::load(
+            cache_key,
+            Some(requested_db_path.to_string_lossy().as_ref()),
+            policy_path.as_deref(),
+        )
+        .await?;
+        Ok(CachedEngine::from_live(live))
     }
 
     fn is_path_allowed(&self, path: &str) -> bool {
@@ -634,6 +627,17 @@ impl ServerState {
             .iter()
             .any(|root| candidate.starts_with(root))
     }
+}
+
+/// Engine önbelleği anahtarı: proje ve yüklenen generation (düz yerleşimde
+/// `legacy`).
+fn project_engine_cache_key(project_key: &str, engine: &CachedEngine) -> String {
+    let generation = engine
+        .live
+        .as_ref()
+        .and_then(|live| live.generation_id())
+        .unwrap_or("legacy");
+    format!("{}#{}", project_key, generation)
 }
 
 /// Etkin generation'ın veritabanı, graf ve manifest artefaktlarının üçü de diskte mi?
@@ -1210,7 +1214,7 @@ async fn handle_call_tool_inner(
             result,
             &crate::freshness::format_freshness_line(
                 &freshness,
-                loaded.indexed_at,
+                loaded.indexed_at(),
                 ccm_core::unix_now_secs(),
             ),
         ),

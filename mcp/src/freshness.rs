@@ -5,6 +5,7 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::Duration;
 
+use ccm_core::live::LiveRefresh;
 use tokio::sync::{mpsc, watch};
 
 use crate::protocol::{ToolResult, ToolResultContent};
@@ -268,7 +269,6 @@ pub(crate) fn start_auto_refresh(
     tokio::spawn(run_refresh_loop(
         server,
         project_key,
-        db_path,
         handle.clone(),
         signals_rx,
     ));
@@ -329,12 +329,12 @@ fn log_signal(project_key: &str, signal: &RefreshSignal) {
     }
 }
 
-/// Proje başına tek yenileme görevi: olayları debounce eder, worker'ı sırayla
-/// çalıştırır ve durumu yayınlar. Kuyruk boşalmadan durum "taze" yayınlanmaz.
+/// Proje başına tek yenileme görevi: olayları debounce eder, değişiklikleri
+/// canlı engine'e sırayla uygular ve durumu yayınlar; ardından diske yazımı arka
+/// planda başlatır. Kuyruk boşalmadan durum "taze" yayınlanmaz.
 async fn run_refresh_loop(
     server: Arc<ServerState>,
     project_key: String,
-    db_path: PathBuf,
     handle: Arc<FreshnessHandle>,
     mut signals: mpsc::UnboundedReceiver<RefreshSignal>,
 ) {
@@ -388,10 +388,11 @@ async fn run_refresh_loop(
             freshness.refresh_in_flight = true;
             freshness.waiting_for_upgrade = false;
         });
-        let outcome = match refresh_with_retries(&server, &project_key, &db_path).await {
-            Ok(RefreshOutcome::Refreshed(stats)) => Ok(*stats),
-            // Kilit beklenirken yükseltme kaydolmuş: worker çalışmadığı için bekleyen
-            // değişiklikler korunur ve yükseltme bitince tek turda işlenir.
+        let request = refresh_request(&pending, &root);
+        let outcome = match refresh_with_retries(&server, &project_key, &request).await {
+            Ok(RefreshOutcome::Refreshed { stats, live }) => Ok((stats, live)),
+            // Kilit beklenirken yükseltme kaydolmuş: hiçbir şey uygulanmadığı için
+            // bekleyen değişiklikler korunur ve yükseltme bitince tek turda işlenir.
             Ok(RefreshOutcome::Deferred) => {
                 waiting_for_upgrade = true;
                 publish_waiting_for_upgrade(&handle, count);
@@ -410,7 +411,7 @@ async fn run_refresh_loop(
             freshness.pending_paths = queued;
             freshness.refresh_in_flight = queued > 0;
             match &outcome {
-                Ok(stats) => {
+                Ok((stats, _)) => {
                     freshness.last_error = None;
                     freshness.semantic_unavailable = stats.semantic_unavailable.clone();
                 }
@@ -419,7 +420,49 @@ async fn run_refresh_loop(
                 }
             }
         });
+        // Taze durum yayınlandıktan sonra diske yazılır; okumalar yazımı beklemez.
+        if let Ok((_, live)) = outcome {
+            spawn_persist(live, project_key.clone());
+        }
     }
+}
+
+/// Bir yenileme turunda uygulanacak iş.
+enum RefreshRequest {
+    /// Watcher'ın bildirdiği değişmiş yollar.
+    Paths(Vec<PathBuf>),
+    /// Tam karşılaştırma: başlangıç yakalaması, olay kaybı ya da elle indeksleme sonrası.
+    Rescan,
+}
+
+/// Bekleyen kümeden turun işini üretir; proje kökü tam karşılaştırma işaretidir.
+fn refresh_request(pending: &HashSet<PathBuf>, root: &Path) -> RefreshRequest {
+    if pending.contains(root) {
+        RefreshRequest::Rescan
+    } else {
+        RefreshRequest::Paths(pending.iter().cloned().collect())
+    }
+}
+
+/// Canlı indeksi arka planda etkin generation'a yazar. Yazım atlanırsa ya da
+/// başarısız olursa disk geride kalır; sonraki tam karşılaştırma onu yakalar.
+fn spawn_persist(live: Arc<ccm_core::live::LiveIndex>, project_key: String) {
+    tokio::spawn(async move {
+        match live.persist().await {
+            Ok(ccm_core::live::LivePersist::Persisted)
+            | Ok(ccm_core::live::LivePersist::UpToDate) => {}
+            Ok(ccm_core::live::LivePersist::Superseded) => tracing::info!(
+                project = %project_key,
+                generation = ?live.generation_id(),
+                "Live index was not persisted: another process activated a new generation"
+            ),
+            Err(error) => tracing::warn!(
+                project = %project_key,
+                error = %error,
+                "Live index could not be persisted; the next full comparison reconciles the index on disk"
+            ),
+        }
+    });
 }
 
 /// Bekleyen değişiklikler semantik yükseltme bitene kadar ertelendiğinde durumu
@@ -449,24 +492,27 @@ impl std::error::Error for IndexRemovedError {}
 
 /// Tek bir yenileme turunun sonucu.
 enum RefreshOutcome {
-    /// Worker çalıştı; istatistikleri tazelik durumuna yansıtılır.
-    Refreshed(Box<ccm_core::IndexStats>),
+    /// Değişiklikler canlı engine'e uygulandı; istatistikleri tazelik durumuna
+    /// yansıtılır, canlı indeks ardından diske yazılır.
+    Refreshed {
+        stats: Box<ccm_core::IndexStats>,
+        live: Arc<ccm_core::live::LiveIndex>,
+    },
     /// Proje kilidi beklenirken hızlı indeksin semantik yükseltmesi kaydoldu;
-    /// worker çalıştırılmadı.
+    /// hiçbir şey uygulanmadı.
     Deferred,
 }
 
-/// Worker'ı en fazla üç kez çalıştırır; başarısız denemeleri uyarı olarak
-/// log'lar ve 1 sn / 2 sn bekler. Son hata olduğu gibi döner.
+/// Yenilemeyi en fazla üç kez dener; başarısız denemeleri uyarı olarak log'lar
+/// ve 1 sn / 2 sn bekler. Son hata olduğu gibi döner.
 async fn refresh_with_retries(
     server: &Arc<ServerState>,
     project_key: &str,
-    db_path: &Path,
+    request: &RefreshRequest,
 ) -> anyhow::Result<RefreshOutcome> {
-    let db_path = db_path.to_string_lossy().to_string();
     let mut attempt = 1;
     loop {
-        match refresh_once(server, project_key, &db_path).await {
+        match refresh_once(server, project_key, request).await {
             Ok(outcome) => return Ok(outcome),
             Err(error) if error.is::<IndexRemovedError>() => {
                 tracing::warn!(
@@ -501,25 +547,28 @@ async fn refresh_with_retries(
     }
 }
 
-/// Proje kilidi altında tek artımlı güncelleme çalıştırır ve yeni generation'ı
-/// önbelleğe alır (generation değişmediyse `get_engine` önbellekten döner).
-/// Semantik yükseltme sürüyorsa worker'ı çalıştırmadan `Deferred` döner.
+/// Proje kilidi altında değişiklikleri önbellekteki canlı engine'e süreç içinde
+/// uygular; worker süreci ve generation kopyası kullanılmaz. Başka bir süreç
+/// yeni generation kurduysa o generation yüklenip tam karşılaştırılır: eski canlı
+/// durumun uyguladığı ama yeni generation'da olmayan değişiklikler böylece
+/// yakalanır. Semantik yükseltme sürüyorsa hiçbir şey uygulamadan `Deferred`
+/// döner.
 async fn refresh_once(
     server: &Arc<ServerState>,
     project_key: &str,
-    db_path: &str,
+    request: &RefreshRequest,
 ) -> anyhow::Result<RefreshOutcome> {
     let lock = server.project_index_lock(project_key);
     let _guard = lock.lock().await;
-    // Etkin indeks silinmişse `update_index` tüm projeyi (embedding dahil) yeniden
-    // kurardı; otomatik yenileme yalnızca var olan indeksi günceller.
+    // Etkin indeks silinmişse otomatik yenileme onu yeniden kurmaz; yalnızca var
+    // olan indeksi günceller.
     if !server.project_index_exists(project_key)? {
         return Err(anyhow::Error::new(IndexRemovedError));
     }
     // Döngünün yükseltme denetimi kilit beklenirken eskimiş olabilir: `index_now`
     // hızlı indeksi kilit altında bitirip yükseltmeyi kaydeder. Kilit bizdeyken
     // yeni yükseltme başlayamayacağı için bu denetim yarışı kapatır; aksi halde
-    // worker yükseltmeyle eşzamanlı çalışıp embedding işini ikiye katlar.
+    // yenileme yükseltmenin kurduğu generation'ın yerine eskisini günceller.
     if server.semantic_upgrade_running(project_key) {
         tracing::info!(
             project = %project_key,
@@ -527,14 +576,55 @@ async fn refresh_once(
         );
         return Ok(RefreshOutcome::Deferred);
     }
-    let stats = crate::tools::run_index_worker_process(
-        project_key,
-        db_path,
-        crate::tools::IndexModeArg::Full,
-    )
-    .await?;
-    server.get_engine(Some(project_key)).await?;
-    Ok(RefreshOutcome::Refreshed(Box::new(stats)))
+    apply_test_delay().await?;
+    let live = server.live_index(project_key).await?;
+    match apply_request(&live, request).await? {
+        LiveRefresh::Applied(stats) => Ok(RefreshOutcome::Refreshed { stats, live }),
+        LiveRefresh::Superseded => {
+            tracing::info!(
+                project = %project_key,
+                generation = ?live.generation_id(),
+                "Another process activated a new index generation; reloading it for a full comparison"
+            );
+            let reloaded = server.live_index(project_key).await?;
+            match reloaded.apply_rescan().await? {
+                LiveRefresh::Applied(stats) => Ok(RefreshOutcome::Refreshed {
+                    stats,
+                    live: reloaded,
+                }),
+                LiveRefresh::Superseded => anyhow::bail!(
+                    "The index generation changed again while it was being reloaded; retrying the refresh"
+                ),
+            }
+        }
+    }
+}
+
+async fn apply_request(
+    live: &ccm_core::live::LiveIndex,
+    request: &RefreshRequest,
+) -> anyhow::Result<LiveRefresh> {
+    match request {
+        RefreshRequest::Paths(paths) => live.apply_paths(paths).await,
+        RefreshRequest::Rescan => live.apply_rescan().await,
+    }
+}
+
+/// Yavaş bir yenilemeyi taklit eden test kancası
+/// (`CCM_INTERNAL_REFRESH_TEST_DELAY_MS`); proje kilidi tutulurken bekler.
+async fn apply_test_delay() -> anyhow::Result<()> {
+    let Ok(delay) = std::env::var("CCM_INTERNAL_REFRESH_TEST_DELAY_MS") else {
+        return Ok(());
+    };
+    let delay_ms = delay.parse::<u64>().map_err(|error| {
+        anyhow::anyhow!(
+            "CCM_INTERNAL_REFRESH_TEST_DELAY_MS must be an integer, got '{}': {}",
+            delay,
+            error
+        )
+    })?;
+    tokio::time::sleep(Duration::from_millis(delay_ms)).await;
+    Ok(())
 }
 
 /// Süren yenilemenin bitmesini en fazla `budget` kadar bekler; süre dolarsa o
