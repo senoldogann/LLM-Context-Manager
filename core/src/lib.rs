@@ -740,21 +740,54 @@ fn install_staged_generation(
 
 struct ActivationLock {
     path: PathBuf,
+    /// Kilidi oluşturan dizinin kimliği (aygıt, inode); Drop ve kalp atışı yalnızca
+    /// bu dizine dokunur, bayat sayılıp başkasınca yeniden alınmış kilide değil.
+    identity: Option<(u64, u64)>,
+    /// Kilit tutuldukça dizinin mtime'ını tazeleyen iş parçacığı ve durdurma ucu.
+    heartbeat: Option<(std::sync::mpsc::Sender<()>, std::thread::JoinHandle<()>)>,
 }
+
+/// Etkinleştirme kilidinin zamanlamaları.
+struct LockTiming {
+    /// Tutulan kilidin mtime'ının tazelenme aralığı.
+    heartbeat: std::time::Duration,
+    /// Bu süre boyunca tazelenmeyen kilit sahibi ölmüş sayılır ve kırılır.
+    stale_after: std::time::Duration,
+    /// Kilit için en uzun bekleme.
+    wait_limit: std::time::Duration,
+}
+
+const ACTIVATION_LOCK_TIMING: LockTiming = LockTiming {
+    heartbeat: std::time::Duration::from_secs(60),
+    stale_after: std::time::Duration::from_secs(600),
+    wait_limit: std::time::Duration::from_secs(60),
+};
 
 impl ActivationLock {
     fn acquire(artifact_parent: &Path) -> Result<Self> {
+        Self::acquire_with(artifact_parent, &ACTIVATION_LOCK_TIMING)
+    }
+
+    fn acquire_with(artifact_parent: &Path, timing: &LockTiming) -> Result<Self> {
         let path = artifact_parent.join(ACTIVATION_LOCK_DIRECTORY);
         let started = std::time::Instant::now();
         loop {
             match std::fs::create_dir(&path) {
-                Ok(()) => return Ok(Self { path }),
+                Ok(()) => {
+                    let identity = lock_identity(&path);
+                    let heartbeat = start_lock_heartbeat(&path, identity, timing.heartbeat)?;
+                    return Ok(Self {
+                        path,
+                        identity,
+                        heartbeat: Some(heartbeat),
+                    });
+                }
                 Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => {
-                    if lock_is_stale(&path) {
+                    if lock_is_stale(&path, timing.stale_after) {
                         let _ = std::fs::remove_dir(&path);
                         continue;
                     }
-                    if started.elapsed() >= std::time::Duration::from_secs(60) {
+                    if started.elapsed() >= timing.wait_limit {
                         anyhow::bail!(
                             "Timed out waiting for index activation lock '{}'",
                             path.display()
@@ -776,18 +809,85 @@ impl ActivationLock {
 
 impl Drop for ActivationLock {
     fn drop(&mut self) {
+        // Önce kalp atışı durur: kilit silindikten sonra dizine dokunmamalı.
+        if let Some((stop, thread)) = self.heartbeat.take() {
+            drop(stop);
+            if thread.join().is_err() {
+                tracing::warn!(path = %self.path.display(), "Activation lock heartbeat thread panicked");
+            }
+        }
+        if lock_identity(&self.path) != self.identity {
+            tracing::warn!(
+                path = %self.path.display(),
+                "Index activation lock was taken over by another process; leaving it in place"
+            );
+            return;
+        }
         if let Err(error) = std::fs::remove_dir(&self.path) {
             tracing::warn!(path = %self.path.display(), error = %error, "Index activation lock could not be removed");
         }
     }
 }
 
-fn lock_is_stale(path: &Path) -> bool {
+/// Kilit dizininin kimliği (aygıt, inode); yoksa ya da platform desteklemiyorsa `None`.
+fn lock_identity(path: &Path) -> Option<(u64, u64)> {
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::MetadataExt;
+        std::fs::metadata(path)
+            .ok()
+            .map(|metadata| (metadata.dev(), metadata.ino()))
+    }
+    #[cfg(not(unix))]
+    {
+        let _ = path;
+        None
+    }
+}
+
+/// Kilit tutuldukça dizinin mtime'ını `interval` aralıkla tazeleyen iş
+/// parçacığını başlatır; uzun bir etkinleştirme (tablo kopyası, yazım) sürerken
+/// kilit bayat sayılıp kırılmaz. Durdurma ucu bırakılınca iş parçacığı biter.
+fn start_lock_heartbeat(
+    path: &Path,
+    identity: Option<(u64, u64)>,
+    interval: std::time::Duration,
+) -> Result<(std::sync::mpsc::Sender<()>, std::thread::JoinHandle<()>)> {
+    let (stop, stopped) = std::sync::mpsc::channel::<()>();
+    let lock_path = path.to_path_buf();
+    let thread = std::thread::Builder::new()
+        .name("ccm-activation-lock-heartbeat".to_string())
+        .spawn(move || {
+            while let Err(std::sync::mpsc::RecvTimeoutError::Timeout) =
+                stopped.recv_timeout(interval)
+            {
+                if lock_identity(&lock_path) != identity {
+                    tracing::warn!(path = %lock_path.display(), "Activation lock disappeared or changed owner; heartbeat stopped");
+                    return;
+                }
+                let touched = std::fs::File::open(&lock_path)
+                    .and_then(|dir| dir.set_modified(std::time::SystemTime::now()));
+                if let Err(error) = touched {
+                    tracing::warn!(path = %lock_path.display(), error = %error, "Activation lock heartbeat could not refresh the lock");
+                }
+            }
+        })
+        .map_err(|error| {
+            anyhow::anyhow!(
+                "Activation lock heartbeat for '{}' could not start: {}",
+                path.display(),
+                error
+            )
+        })?;
+    Ok((stop, thread))
+}
+
+fn lock_is_stale(path: &Path, stale_after: std::time::Duration) -> bool {
     std::fs::metadata(path)
         .and_then(|metadata| metadata.modified())
         .ok()
         .and_then(|modified| modified.elapsed().ok())
-        .is_some_and(|age| age >= std::time::Duration::from_secs(600))
+        .is_some_and(|age| age >= stale_after)
 }
 
 fn read_current_pointer_value(artifact_parent: &Path) -> Result<Option<String>> {
@@ -2557,5 +2657,42 @@ mod policy_tests {
         );
         assert!(staged.exists());
         assert!(!generations.join("candidate").exists());
+    }
+}
+
+#[cfg(test)]
+mod activation_lock_tests {
+    use super::{lock_is_stale, ActivationLock, LockTiming, ACTIVATION_LOCK_DIRECTORY};
+    use std::time::Duration;
+
+    #[test]
+    fn heartbeat_keeps_a_long_held_lock_from_going_stale() -> anyhow::Result<()> {
+        let parent = tempfile::tempdir()?;
+        let timing = LockTiming {
+            heartbeat: Duration::from_millis(50),
+            stale_after: Duration::from_millis(400),
+            wait_limit: Duration::from_secs(5),
+        };
+        let lock = ActivationLock::acquire_with(parent.path(), &timing)?;
+        let path = parent.path().join(ACTIVATION_LOCK_DIRECTORY);
+        // Tutma süresi bayatlık eşiğinin katlarıdır; kalp atışı kilidi taze tutar.
+        std::thread::sleep(Duration::from_millis(1_300));
+        assert!(
+            !lock_is_stale(&path, timing.stale_after),
+            "a held lock must not be judged stale"
+        );
+        drop(lock);
+        assert!(!path.exists(), "dropping the lock removes it");
+
+        // Başkası tarafından yeniden alınan kilit, eski sahibin Drop'unda silinmez.
+        let stale = ActivationLock::acquire_with(parent.path(), &timing)?;
+        std::fs::remove_dir(&path)?;
+        std::fs::create_dir(&path)?;
+        drop(stale);
+        assert!(
+            path.exists(),
+            "a lock owned by someone else must be left in place"
+        );
+        Ok(())
     }
 }
