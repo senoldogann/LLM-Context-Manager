@@ -452,9 +452,9 @@ fn refresh_request(pending: &HashSet<PathBuf>, root: &Path) -> RefreshRequest {
     }
 }
 
-/// Canlı indeksi arka planda etkin generation'a yazar. Yazım atlanırsa ya da
-/// başarısız olursa disk geride kalır; sonraki tam karşılaştırma onu yakalar.
-/// Başka bir süreç yeni
+/// Canlı indeksi arka planda etkin generation'a yazar. Yazım hatası tazelik
+/// satırına düşer (bellekteki indeks güncel, diskteki geride kalır; sonraki
+/// başarılı yazım ya da tam karşılaştırma onu yakalar). Başka bir süreç yeni
 /// generation kurduysa canlı durum bırakılır ve yeni generation için tam
 /// karşılaştırma istenir: o generation bu durumun uyguladığı değişiklikleri
 /// içermeyebilir.
@@ -475,11 +475,17 @@ fn spawn_persist(
                 );
                 request_rescan(&handle);
             }
-            Err(error) => tracing::warn!(
-                project = %project_key,
-                error = %error,
-                "Live index could not be persisted; the next full comparison reconciles the index on disk"
-            ),
+            Err(error) => {
+                tracing::warn!(
+                    project = %project_key,
+                    error = %error,
+                    "Live index could not be persisted; the next full comparison reconciles the index on disk"
+                );
+                let summary = summarize_error(&format!("index could not be saved: {}", error));
+                handle
+                    .state
+                    .send_modify(|freshness| freshness.last_error = Some(summary));
+            }
         }
     });
 }

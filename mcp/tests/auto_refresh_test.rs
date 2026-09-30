@@ -813,3 +813,40 @@ fn index_with_an_old_schema_is_migrated_before_live_refreshes() -> Result<(), Bo
     assert_eq!(manifest["schema_version"], 4);
     Ok(())
 }
+
+#[cfg(unix)]
+#[test]
+fn persist_failure_is_reported_in_the_freshness_line() -> Result<(), Box<dyn Error>> {
+    use std::os::unix::fs::PermissionsExt;
+
+    let project = tempdir()?;
+    fs::write(project.path().join("main.rs"), "fn existing_symbol() {}\n")?;
+    let mut session = McpSession::start(project.path(), &[])?;
+    session.call_tool("index_now", json!({ "project_path": project.path() }))?;
+    poll_find_nodes(
+        &mut session,
+        "existing_symbol",
+        Duration::from_secs(10),
+        |text| text.starts_with("_Index: fresh"),
+    )?;
+
+    // Generation dizini yazılamaz: değişiklik bellekte uygulanır ama diske
+    // yazılamaz; hata log'da kalmamalı, tazelik satırında görünmelidir.
+    let generation = active_generation_dir(project.path())?;
+    fs::set_permissions(&generation, fs::Permissions::from_mode(0o500))?;
+    fs::write(project.path().join("added.rs"), "fn unsaved_symbol() {}\n")?;
+    let reported = poll_find_nodes(
+        &mut session,
+        "unsaved_symbol",
+        Duration::from_secs(10),
+        |text| text.contains("index could not be saved"),
+    );
+    fs::set_permissions(&generation, fs::Permissions::from_mode(0o700))?;
+    let text = reported?;
+    assert!(
+        text.starts_with("_Index: stale · last refresh failed: index could not be saved"),
+        "unexpected freshness line: {text}"
+    );
+    assert!(found_node(&text, "unsaved_symbol"), "{text}");
+    Ok(())
+}
