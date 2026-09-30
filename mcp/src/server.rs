@@ -14,7 +14,7 @@ use crate::tools;
 
 use ccm_core::engine::RetrievalEngine;
 use ccm_core::graph::CodeGraph;
-use ccm_core::live::LiveIndex;
+use ccm_core::live::{IndexMigrationRequired, LiveIndex};
 use ccm_core::vector::store::LanceDbStore;
 
 const LATEST_PROTOCOL_VERSION: &str = "2025-11-25";
@@ -73,28 +73,56 @@ fn engine_cache_size() -> usize {
 use lru::LruCache;
 use std::num::NonZeroUsize;
 
-/// Önbellekteki engine ve (proje indekslerinde) onu yerinde güncelleyen canlı
-/// indeks.
+/// Önbellekteki engine ve otomatik yenilemenin onu nasıl güncellediği.
 #[derive(Clone)]
 pub struct CachedEngine {
     pub engine: Arc<RetrievalEngine>,
-    /// Etkin generation'a bağlı canlı indeks; kök dizinsiz varsayılan depoda yok.
-    pub live: Option<Arc<LiveIndex>>,
+    pub source: EngineSource,
+}
+
+/// Engine'in kaynağı.
+#[derive(Clone)]
+pub enum EngineSource {
+    /// Etkin generation'a bağlı canlı indeks; yenilemeler yerinde uygulanır.
+    Live(Arc<LiveIndex>),
+    /// Canlı güncellenemeyen (eski şema ya da dosya yolu biçimi) indeks. Okumalar
+    /// onu olduğu gibi kullanır; otomatik yenileme onu önce worker'ın
+    /// `update_index`'iyle taşır, ardından yeni generation canlı yüklenir.
+    NeedsMigration {
+        reason: IndexMigrationRequired,
+        generation_id: Option<String>,
+        indexed_at: Option<u64>,
+    },
+    /// Kök dizinsiz varsayılan depo; otomatik yenilemesi yoktur.
+    Rootless,
 }
 
 impl CachedEngine {
-    fn from_live(live: LiveIndex) -> Self {
+    fn live(live: LiveIndex) -> Self {
         let live = Arc::new(live);
         Self {
             engine: live.engine(),
-            live: Some(live),
+            source: EngineSource::Live(live),
         }
     }
 
-    /// İndeksin diski en son yansıttığı an (unix saniye). Canlı indeksten
-    /// okunur; her uygulanan yenilemeyle birlikte ilerler.
+    /// İndeksin diski en son yansıttığı an (unix saniye). Canlı indekste her
+    /// uygulanan yenilemeyle birlikte ilerler.
     pub fn indexed_at(&self) -> Option<u64> {
-        self.live.as_ref().and_then(|live| live.indexed_at())
+        match &self.source {
+            EngineSource::Live(live) => live.indexed_at(),
+            EngineSource::NeedsMigration { indexed_at, .. } => *indexed_at,
+            EngineSource::Rootless => None,
+        }
+    }
+
+    /// Engine'in yüklendiği generation; düz (eski) yerleşimde `None`.
+    fn generation_id(&self) -> Option<&str> {
+        match &self.source {
+            EngineSource::Live(live) => live.generation_id(),
+            EngineSource::NeedsMigration { generation_id, .. } => generation_id.as_deref(),
+            EngineSource::Rootless => None,
+        }
     }
 }
 
@@ -499,7 +527,10 @@ impl ServerState {
                         .read()
                         .await
                         .clone()
-                        .map(|engine| CachedEngine { engine, live: None })
+                        .map(|engine| CachedEngine {
+                            engine,
+                            source: EngineSource::Rootless,
+                        })
                         .ok_or_else(|| {
                             anyhow::anyhow!(
                                 "No project root is available. Pass 'project_path' or set CCM_PROJECT_ROOT."
@@ -577,28 +608,35 @@ impl ServerState {
         Ok(())
     }
 
-    /// Otomatik yenilemenin uyguladığı canlı indeks: etkin generation'ın
-    /// önbellekteki engine'i (işaretçi değiştiyse yeni generation yüklenir).
-    pub(crate) async fn live_index(&self, project_key: &str) -> Result<Arc<LiveIndex>> {
-        self.get_engine(Some(project_key))
-            .await?
-            .live
-            .ok_or_else(|| anyhow::anyhow!("Project '{}' has no live index", project_key))
+    /// Otomatik yenilemenin kullandığı engine: etkin generation'ın önbellekteki
+    /// engine'i (işaretçi değiştiyse yeni generation yüklenir).
+    pub(crate) async fn refresh_engine(&self, project_key: &str) -> Result<CachedEngine> {
+        self.get_engine(Some(project_key)).await
     }
 
-    /// Projenin etkin generation'ını canlı indeks olarak yükler.
+    /// Projenin etkin generation'ını canlı indeks olarak yükler. Canlı
+    /// güncellenemeyen (taşınması gereken) indeks okumalar için olduğu gibi
+    /// yüklenir; otomatik yenileme onu worker'la taşır.
     async fn load_project_engine(&self, cache_key: &str) -> Result<CachedEngine> {
         let requested_db_path = self.project_db_path(cache_key)?;
+        let db_path = requested_db_path.to_string_lossy().to_string();
         let policy_path = requested_db_path
             .parent()
             .map(|parent| parent.join("ccm_learn/policies.json"));
-        let live = LiveIndex::load(
-            cache_key,
-            Some(requested_db_path.to_string_lossy().as_ref()),
-            policy_path.as_deref(),
-        )
-        .await?;
-        Ok(CachedEngine::from_live(live))
+        match LiveIndex::load(cache_key, Some(&db_path), policy_path.as_deref()).await {
+            Ok(live) => Ok(CachedEngine::live(live)),
+            Err(error) => match error.downcast::<IndexMigrationRequired>() {
+                Ok(reason) => {
+                    tracing::info!(
+                        project = %cache_key,
+                        reason = %reason,
+                        "Index cannot be refreshed live until a full re-index migrates it; serving it read-only"
+                    );
+                    load_migration_engine(cache_key, &db_path, policy_path.as_deref(), reason).await
+                }
+                Err(error) => Err(error),
+            },
+        }
     }
 
     fn is_path_allowed(&self, path: &str) -> bool {
@@ -632,12 +670,44 @@ impl ServerState {
 /// Engine önbelleği anahtarı: proje ve yüklenen generation (düz yerleşimde
 /// `legacy`).
 fn project_engine_cache_key(project_key: &str, engine: &CachedEngine) -> String {
-    let generation = engine
-        .live
-        .as_ref()
-        .and_then(|live| live.generation_id())
-        .unwrap_or("legacy");
-    format!("{}#{}", project_key, generation)
+    format!(
+        "{}#{}",
+        project_key,
+        engine.generation_id().unwrap_or("legacy")
+    )
+}
+
+/// Canlı yüklenemeyen indeksin okumalar için engine'i: graf ve vektör tablosu
+/// olduğu gibi okunur, indeks taşınana kadar güncellenmez.
+async fn load_migration_engine(
+    project_key: &str,
+    db_path: &str,
+    policy_path: Option<&Path>,
+    reason: IndexMigrationRequired,
+) -> Result<CachedEngine> {
+    let artifacts = ccm_core::resolve_index_artifacts(project_key, Some(db_path))?;
+    let graph_path = artifacts.graph_path.to_string_lossy().to_string();
+    let graph = CodeGraph::load_from_file(&graph_path).map_err(|error| {
+        anyhow::anyhow!(
+            "Project graph '{}' could not be loaded: {}. Run index_project to rebuild it.",
+            graph_path,
+            error
+        )
+    })?;
+    let store = LanceDbStore::new(&artifacts.db_path.to_string_lossy(), "code_vectors").await?;
+    let indexed_at = ccm_core::read_index_timestamp(&artifacts.manifest_path)?;
+    Ok(CachedEngine {
+        engine: Arc::new(RetrievalEngine::new_with_active_policy(
+            Arc::new(RwLock::new(graph)),
+            store,
+            policy_path,
+        )),
+        source: EngineSource::NeedsMigration {
+            reason,
+            generation_id: artifacts.generation_id,
+            indexed_at,
+        },
+    })
 }
 
 /// Etkin generation'ın veritabanı, graf ve manifest artefaktlarının üçü de diskte mi?

@@ -679,3 +679,34 @@ fn generation_installed_by_another_process_is_picked_up() -> Result<(), Box<dyn 
     assert_eq!(active_generation_dir(project.path())?, generation_after);
     Ok(())
 }
+
+#[test]
+fn index_with_an_old_schema_is_migrated_before_live_refreshes() -> Result<(), Box<dyn Error>> {
+    let project = tempdir()?;
+    fs::write(project.path().join("main.rs"), "fn existing_symbol() {}\n")?;
+    run_update_index_process(project.path())?;
+    let generation = active_generation_dir(project.path())?;
+    let manifest_path = generation.join("ccm_manifest.json");
+    let mut manifest: Value = serde_json::from_slice(&fs::read(&manifest_path)?)?;
+    manifest["schema_version"] = json!(3);
+    fs::write(&manifest_path, serde_json::to_vec(&manifest)?)?;
+
+    // Eski şemalı indeks canlı güncellenmez: okumalar onu kullanır, otomatik
+    // yenileme `update_index` ile tam yeniden indeksleyip yeni generation kurar.
+    let mut session = McpSession::start(project.path(), &[])?;
+    fs::write(project.path().join("added.rs"), "fn migrated_symbol() {}\n")?;
+    poll_find_nodes(
+        &mut session,
+        "migrated_symbol",
+        Duration::from_secs(30),
+        |text| found_node(text, "migrated_symbol") && text.starts_with("_Index: fresh"),
+    )?;
+    let migrated = active_generation_dir(project.path())?;
+    assert_ne!(
+        migrated, generation,
+        "the migration must be a full re-index into a new generation, not a live stamp"
+    );
+    let manifest: Value = serde_json::from_slice(&fs::read(migrated.join("ccm_manifest.json"))?)?;
+    assert_eq!(manifest["schema_version"], 4);
+    Ok(())
+}

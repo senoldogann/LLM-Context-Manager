@@ -910,6 +910,60 @@ async fn update_index_embeds_only_changed_chunks() -> Result<()> {
 }
 
 #[tokio::test]
+async fn live_index_refuses_indexes_that_need_a_migration() -> Result<()> {
+    use ccm_core::graph::{CodeNode, NodeType};
+    use ccm_core::live::{IndexMigrationRequired, LiveIndex};
+
+    let _env_guard = ENV_LOCK.lock().await;
+    std::env::set_var("CCM_DISABLE_EMBEDDER", "1");
+    let project = tempdir()?;
+    std::fs::write(project.path().join("main.rs"), "fn alpha() {}\n")?;
+    let project_path = project.path().to_string_lossy().to_string();
+    ccm_core::index_directory(&project_path, None).await?;
+    let active = artifacts(project.path(), None)?;
+
+    // Eski şema: canlı yükleme reddeder; `update_index` bunu tam yeniden
+    // indeksle taşır, canlı yol ise güncel şemaya damgalamamalıdır.
+    let manifest_text = std::fs::read_to_string(&active.manifest_path)?;
+    let mut old_schema: serde_json::Value = serde_json::from_str(&manifest_text)?;
+    old_schema["schema_version"] = serde_json::json!(3);
+    std::fs::write(&active.manifest_path, serde_json::to_vec(&old_schema)?)?;
+    let error = LiveIndex::load(&project_path, None, None)
+        .await
+        .err()
+        .expect("an index with an old schema must be refused");
+    assert_eq!(
+        error.downcast_ref::<IndexMigrationRequired>(),
+        Some(&IndexMigrationRequired::SchemaChanged {
+            found: 3,
+            expected: ccm_core::INDEX_SCHEMA_VERSION,
+        })
+    );
+
+    // Eski dosya yolu biçimi (`./` öneksiz): aynı karar.
+    std::fs::write(&active.manifest_path, &manifest_text)?;
+    let mut legacy = CodeGraph::new();
+    legacy.add_node(CodeNode {
+        id: "main.rs".to_string(),
+        node_type: NodeType::File,
+        name: "main.rs".to_string(),
+        content: "".into(),
+        start_line: 1,
+        end_line: 1,
+    });
+    legacy.save_to_file(&active.graph_path.to_string_lossy())?;
+    let error = LiveIndex::load(&project_path, None, None)
+        .await
+        .err()
+        .expect("an index with legacy file paths must be refused");
+    assert_eq!(
+        error.downcast_ref::<IndexMigrationRequired>(),
+        Some(&IndexMigrationRequired::LegacyPaths)
+    );
+    Ok(())
+}
+
+#[tokio::test]
 async fn live_refresh_reuses_vectors_in_the_active_table() -> Result<()> {
     let _env_guard = ENV_LOCK.lock().await;
     struct EnvRestore;

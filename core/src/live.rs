@@ -25,11 +25,11 @@ use crate::graph::CodeGraph;
 use crate::vector::store::LanceDbStore;
 use crate::{
     artifact_temp_path, build_manifest, diff_manifest, diff_manifest_scope, file_id_to_path,
-    fixture_namespace_for_db, index_artifact_paths, read_current_pointer_value, read_manifest,
-    relative_file_id, replace_file_atomically, resolve_index_artifacts, resolve_requested_db_path,
-    restore_retry_files, scan_manifest_scope, semantic_node_counts, sync_directory, unix_now_secs,
-    write_manifest_file, ActivationLock, FileFingerprint, IndexArtifactPaths, IndexManifest,
-    IndexStats,
+    fixture_namespace_for_db, graph_uses_legacy_paths, index_artifact_paths,
+    read_current_pointer_value, read_manifest, relative_file_id, replace_file_atomically,
+    resolve_index_artifacts, resolve_requested_db_path, restore_retry_files, scan_manifest_scope,
+    semantic_node_counts, sync_directory, unix_now_secs, write_manifest_file, ActivationLock,
+    FileFingerprint, IndexArtifactPaths, IndexManifest, IndexStats, INDEX_SCHEMA_VERSION,
 };
 use anyhow::Result;
 use std::collections::{BTreeSet, HashMap};
@@ -46,6 +46,34 @@ const IGNORE_RULE_FILES: [&str; 3] = [".gitignore", ".ignore", ".ccmignore"];
 /// tüm yollarla karşılaştırır; toplu değişikliklerde (ör. `git checkout`) tek bir
 /// tam yürüyüş daha ucuzdur.
 const MAX_TARGETED_PATHS: usize = 128;
+
+/// Canlı yüklenemeyen, önce `update_index`'in tam yeniden indeksiyle taşınması
+/// gereken etkin indeks. `update_index` bu durumlarda aynı kararla yeniden
+/// indeksler; canlı yol onları sessizce güncel şemaya damgalamaz.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum IndexMigrationRequired {
+    /// Manifest başka bir şema sürümüyle yazılmış.
+    SchemaChanged { found: u32, expected: u32 },
+    /// Graf eski biçimde (mutlak ya da `./` öneksiz) dosya yolları taşıyor.
+    LegacyPaths,
+}
+
+impl std::fmt::Display for IndexMigrationRequired {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::SchemaChanged { found, expected } => write!(
+                formatter,
+                "Index schema {} differs from the current schema {}; a full re-index migrates it",
+                found, expected
+            ),
+            Self::LegacyPaths => {
+                formatter.write_str("Index uses legacy file paths; a full re-index migrates it")
+            }
+        }
+    }
+}
+
+impl std::error::Error for IndexMigrationRequired {}
 
 /// Bir projenin etkin generation'ına bağlı canlı indeks.
 pub struct LiveIndex {
@@ -145,6 +173,12 @@ impl LiveIndex {
         let requested_db_path = resolve_requested_db_path(&project_root, db_path)?;
         let artifacts = resolve_index_artifacts(project_path, db_path)?;
         let manifest = read_manifest(&artifacts.manifest_path)?;
+        if manifest.schema_version != INDEX_SCHEMA_VERSION {
+            return Err(anyhow::Error::new(IndexMigrationRequired::SchemaChanged {
+                found: manifest.schema_version,
+                expected: INDEX_SCHEMA_VERSION,
+            }));
+        }
         let graph_path = artifacts.graph_path.to_string_lossy().to_string();
         let graph = CodeGraph::load_from_file(&graph_path).map_err(|error| {
             anyhow::anyhow!(
@@ -153,6 +187,9 @@ impl LiveIndex {
                 error
             )
         })?;
+        if graph_uses_legacy_paths(&graph) {
+            return Err(anyhow::Error::new(IndexMigrationRequired::LegacyPaths));
+        }
         tracing::info!(
             project = %project_root.display(),
             generation = ?artifacts.generation_id,

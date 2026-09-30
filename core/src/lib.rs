@@ -1150,19 +1150,7 @@ pub async fn update_index(path: &str, db_path: Option<&str>) -> Result<IndexStat
             return index_directory(path, db_path).await;
         }
     };
-    let legacy_paths = graph.graph.node_weights().any(|node| {
-        if !matches!(
-            node.node_type,
-            crate::graph::NodeType::File | crate::graph::NodeType::DataFile
-        ) {
-            return false;
-        }
-        let name = node.name.as_str();
-        let is_abs = Path::new(name).is_absolute();
-        let has_prefix = name.starts_with("./");
-        is_abs || !has_prefix
-    });
-    if legacy_paths {
+    if graph_uses_legacy_paths(&graph) {
         info!("Legacy index detected. Performing full re-index.");
         return index_directory(path, db_path).await;
     }
@@ -1279,6 +1267,21 @@ pub async fn update_index(path: &str, db_path: Option<&str>) -> Result<IndexStat
         return Err(error);
     }
     Ok(stats)
+}
+
+/// Graf eski sürümlerin dosya yolu biçimini (mutlak ya da `./` öneksiz) taşıyor
+/// mu? Böyle bir indeks artımlı güncellenemez; tam yeniden indeksle taşınır.
+fn graph_uses_legacy_paths(graph: &CodeGraph) -> bool {
+    graph.graph.node_weights().any(|node| {
+        if !matches!(
+            node.node_type,
+            crate::graph::NodeType::File | crate::graph::NodeType::DataFile
+        ) {
+            return false;
+        }
+        let name = node.name.as_str();
+        Path::new(name).is_absolute() || !name.starts_with("./")
+    })
 }
 
 /// Etkin generation'ın vektör tablosunun durumu.

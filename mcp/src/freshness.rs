@@ -9,7 +9,7 @@ use ccm_core::live::LiveRefresh;
 use tokio::sync::{mpsc, watch};
 
 use crate::protocol::{ToolResult, ToolResultContent};
-use crate::server::ServerState;
+use crate::server::{EngineSource, ServerState};
 
 /// Değişiklik olaylarının birleştirildiği sessizlik süresi.
 const DEBOUNCE: Duration = Duration::from_millis(300);
@@ -577,7 +577,15 @@ async fn refresh_once(
         return Ok(RefreshOutcome::Deferred);
     }
     apply_test_delay().await?;
-    let live = server.live_index(project_key).await?;
+    let live = match server.refresh_engine(project_key).await?.source {
+        EngineSource::Live(live) => live,
+        EngineSource::NeedsMigration { reason, .. } => {
+            return migrate_with_worker(server, project_key, &reason).await;
+        }
+        EngineSource::Rootless => {
+            anyhow::bail!("Project '{}' has no index to refresh", project_key)
+        }
+    };
     match apply_request(&live, request).await? {
         LiveRefresh::Applied(stats) => Ok(RefreshOutcome::Refreshed { stats, live }),
         LiveRefresh::Superseded => {
@@ -586,7 +594,15 @@ async fn refresh_once(
                 generation = ?live.generation_id(),
                 "Another process activated a new index generation; reloading it for a full comparison"
             );
-            let reloaded = server.live_index(project_key).await?;
+            let reloaded = match server.refresh_engine(project_key).await?.source {
+                EngineSource::Live(reloaded) => reloaded,
+                EngineSource::NeedsMigration { reason, .. } => {
+                    return migrate_with_worker(server, project_key, &reason).await;
+                }
+                EngineSource::Rootless => {
+                    anyhow::bail!("Project '{}' has no index to refresh", project_key)
+                }
+            };
             match reloaded.apply_rescan().await? {
                 LiveRefresh::Applied(stats) => Ok(RefreshOutcome::Refreshed {
                     stats,
@@ -596,6 +612,41 @@ async fn refresh_once(
                     "The index generation changed again while it was being reloaded; retrying the refresh"
                 ),
             }
+        }
+    }
+}
+
+/// Canlı güncellenemeyen indeksi (eski şema ya da dosya yolu biçimi) worker'ın
+/// `update_index`'iyle taşır; o, `ccm-cli index` gibi tam yeniden indeksleyip yeni
+/// generation kurar. Ardından yeni generation canlı yüklenir.
+async fn migrate_with_worker(
+    server: &Arc<ServerState>,
+    project_key: &str,
+    reason: &ccm_core::live::IndexMigrationRequired,
+) -> anyhow::Result<RefreshOutcome> {
+    tracing::info!(
+        project = %project_key,
+        reason = %reason,
+        "Auto-refresh migrates the index with the index worker before refreshing it live"
+    );
+    let db_path = server.project_db_path(project_key)?;
+    let stats = crate::tools::run_index_worker_process(
+        project_key,
+        &db_path.to_string_lossy(),
+        crate::tools::IndexModeArg::Full,
+    )
+    .await?;
+    match server.refresh_engine(project_key).await?.source {
+        EngineSource::Live(live) => Ok(RefreshOutcome::Refreshed {
+            stats: Box::new(stats),
+            live,
+        }),
+        EngineSource::NeedsMigration { reason, .. } => anyhow::bail!(
+            "The index still needs a migration after a full update ({}); run index_project",
+            reason
+        ),
+        EngineSource::Rootless => {
+            anyhow::bail!("Project '{}' has no index to refresh", project_key)
         }
     }
 }
