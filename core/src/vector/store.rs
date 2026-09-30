@@ -556,6 +556,24 @@ impl LanceDbStore {
         Ok(())
     }
 
+    /// Önbellekteki tablo tanıtıcısını diskteki en son sürüme taşır. Tanıtıcı
+    /// lancedb'nin varsayılan tembel tutarlılığıyla açılır: silme önbellekteki
+    /// sürüm üzerinde çalışır ve başka bir sürecin sonradan eklediği satırlar
+    /// silinmeden kalır. Paylaşılan tabloyu değiştirmeden önce çağrılır; tablo
+    /// henüz açılmadıysa sonraki açılış zaten en son sürümü okur.
+    pub async fn checkout_latest(&self) -> Result<()> {
+        let cached = self.table_cache.lock().unwrap().as_ref().map(Arc::clone);
+        match cached {
+            Some(table) => table.checkout_latest().await.with_context(|| {
+                format!(
+                    "vector table '{}' could not be refreshed to its latest version",
+                    self.table_name
+                )
+            }),
+            None => Ok(()),
+        }
+    }
+
     /// Performs semantic search and returns (id, text, distance).
     pub async fn search(&self, query: &str, limit: usize) -> Result<Vec<(String, String, f32)>> {
         // Vektör tablosu hiç üretilmemişse (quick/legacy generation) embed

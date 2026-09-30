@@ -10,8 +10,8 @@
 //!   değiştirilmesi generation aktivasyonunun kilidi altında yapılır. Başka bir
 //!   süreç (CLI, elle indeksleme) yeni generation kurduysa hazırlanan iş atılır,
 //!   bağlayıcı `Superseded` olur ve çağıran yeni generation'ı yükler.
-//! - Vektör tablosu yerinde değiştirilir; `update_index` tabloyu aynı kilit
-//!   altında kopyalar.
+//! - Vektör tablosu yerinde değiştirilir; silmeden önce tablo en son sürüme
+//!   alınır ve `update_index` tabloyu aynı kilit altında kopyalar.
 //! - Graf yalnızca tüm hata verebilen adımlardan sonra ve tek adımda değişir;
 //!   yarıda kalan bir uygulama grafı bozmaz, dosyaları sonraki turda yeniden
 //!   uygulanır.
@@ -444,6 +444,9 @@ impl LiveIndex {
             return Ok(LiveRefresh::Superseded);
         }
 
+        // Başka bir süreç tabloya yazmış olabilir; silme önbellekteki eski sürümde
+        // çalışırsa onun eklediği satırlar kalır ve parçalar çoğalır.
+        self.engine.vector_store.checkout_latest().await?;
         let file_count = files.len();
         state.dirty_files = files;
         let counts = embedded.counts;

@@ -196,3 +196,50 @@ async fn delete_by_prefix_without_table_returns_ok() -> Result<()> {
 
     Ok(())
 }
+
+#[tokio::test]
+async fn delete_after_checkout_latest_removes_rows_another_process_appended() -> Result<()> {
+    setup_test_env();
+
+    let dir = tempdir()?;
+    let db_path = dir.path().to_string_lossy().to_string();
+    let conn = connect(&db_path).execute().await?;
+    conn.create_table(
+        "code_vectors",
+        vec![build_test_batch(
+            vec!["./src/a.rs:func:1:0".to_string()],
+            vec!["a1".to_string()],
+        )?],
+    )
+    .execute()
+    .await?;
+
+    // Bu süreç tabloyu açıp önbelleğe alır (lancedb'nin varsayılan tembel tutarlılığı).
+    let store = LanceDbStore::new(&db_path, "code_vectors").await?;
+    assert_eq!(store.validate_table().await?, 1);
+
+    // Başka bir süreç aynı dosyanın yeni satırlarını ekler.
+    let other_process = connect(&db_path).execute().await?;
+    other_process
+        .open_table("code_vectors")
+        .execute()
+        .await?
+        .add(vec![build_test_batch(
+            vec![
+                "./src/a.rs:func:1:0".to_string(),
+                "./src/b.rs:func:1:0".to_string(),
+            ],
+            vec!["a1 updated".to_string(), "b1".to_string()],
+        )?])
+        .execute()
+        .await?;
+
+    // Silme en son sürümde çalışmazsa diğer sürecin eklediği `a.rs` satırı kalır
+    // ve dosyanın parçaları çoğalır.
+    store.checkout_latest().await?;
+    store.delete_by_prefix("./src/a.rs").await?;
+
+    let remaining_ids = collect_ids(&conn, "code_vectors").await?;
+    assert_eq!(remaining_ids, vec!["./src/b.rs:func:1:0"]);
+    Ok(())
+}
