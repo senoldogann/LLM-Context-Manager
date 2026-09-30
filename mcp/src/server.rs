@@ -674,27 +674,36 @@ impl ServerState {
 
     /// Projenin etkin generation'ını canlı indeks olarak yükler. Canlı
     /// güncellenemeyen (taşınması gereken) indeks okumalar için olduğu gibi
-    /// yüklenir; otomatik yenileme onu worker'la taşır.
-    async fn load_project_engine(&self, cache_key: &str) -> Result<CachedEngine> {
-        let requested_db_path = self.project_db_path(cache_key)?;
-        let db_path = requested_db_path.to_string_lossy().to_string();
-        let policy_path = requested_db_path
-            .parent()
-            .map(|parent| parent.join("ccm_learn/policies.json"));
-        match LiveIndex::load(cache_key, Some(&db_path), policy_path.as_deref()).await {
-            Ok(live) => Ok(CachedEngine::live(live)),
-            Err(error) => match error.downcast::<IndexMigrationRequired>() {
-                Ok(reason) => {
-                    tracing::info!(
-                        project = %cache_key,
-                        reason = %reason,
-                        "Index cannot be refreshed live until a full re-index migrates it; serving it read-only"
-                    );
-                    load_migration_engine(cache_key, &db_path, policy_path.as_deref(), reason).await
-                }
-                Err(error) => Err(error),
-            },
-        }
+    /// yüklenir; otomatik yenileme onu worker'la taşır. Gelecek kutulanır:
+    /// LanceDB'nin iç içe gelecek türleri, bu yolu bekleyen istek görevlerinin
+    /// `Send` denetimini derleyicinin özyineleme sınırının ötesine taşır.
+    fn load_project_engine<'a>(
+        &'a self,
+        cache_key: &'a str,
+    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<CachedEngine>> + Send + 'a>>
+    {
+        Box::pin(async move {
+            let requested_db_path = self.project_db_path(cache_key)?;
+            let db_path = requested_db_path.to_string_lossy().to_string();
+            let policy_path = requested_db_path
+                .parent()
+                .map(|parent| parent.join("ccm_learn/policies.json"));
+            match LiveIndex::load(cache_key, Some(&db_path), policy_path.as_deref()).await {
+                Ok(live) => Ok(CachedEngine::live(live)),
+                Err(error) => match error.downcast::<IndexMigrationRequired>() {
+                    Ok(reason) => {
+                        tracing::info!(
+                            project = %cache_key,
+                            reason = %reason,
+                            "Index cannot be refreshed live until a full re-index migrates it; serving it read-only"
+                        );
+                        load_migration_engine(cache_key, &db_path, policy_path.as_deref(), reason)
+                            .await
+                    }
+                    Err(error) => Err(error),
+                },
+            }
+        })
     }
 
     fn is_path_allowed(&self, path: &str) -> bool {

@@ -451,89 +451,38 @@ pub async fn index_project(
         .map(normalize_index_mode)
         .transpose()?
         .unwrap_or_default();
+    let job_key = index_job_key(project_path);
 
-    let canonical_path = std::fs::canonicalize(project_path)
-        .unwrap_or_else(|_| std::path::PathBuf::from(project_path));
-    let job_key = canonical_path.to_string_lossy().to_string();
-
-    const MAX_INDEX_JOBS: usize = 64;
-    // Denetim ve kayıt tek kilit altında yapılır: eşzamanlı iki çağrı aynı
-    // projede iki iş başlatmaz; ikincisi süren işi görür.
-    let (sender, mut receiver, job_id) = {
-        let mut jobs = state.index_jobs.lock().unwrap();
-        if let Some(existing) = jobs.get(&job_key) {
-            let finished = existing.receiver.borrow().clone();
+    let job = match claim_index_job(&state, project_path, &job_key, mode) {
+        IndexJobClaim::Existing(job) => {
+            let finished = job.receiver.borrow().clone();
             return Ok(match finished {
                 Some(result) => {
-                    jobs.remove(&job_key);
+                    state.remove_index_job_if_id(&job_key, job.id);
                     result
                 }
                 None => index_in_progress_result(project_path),
             });
         }
-        if jobs.len() >= MAX_INDEX_JOBS {
-            return Ok(index_task_failed_result(
-                project_path,
-                "too many index jobs are awaiting completion or result polling; poll existing jobs and retry",
-            ));
-        }
-        let (sender, receiver) = tokio::sync::watch::channel(None);
-        let job_id = state
-            .next_index_job_id
-            .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-        jobs.insert(
-            job_key.clone(),
-            crate::server::IndexJob {
-                id: job_id,
-                receiver: receiver.clone(),
-            },
-        );
-        (sender, receiver, job_id)
+        IndexJobClaim::Started(job) => job,
+        IndexJobClaim::Rejected(result) => return Ok(result),
     };
-
-    tracing::info!(path = %project_path, "Starting manual index");
-
-    let job_state = state.clone();
-    let job_path = project_path.to_string();
-    let background_job_key = job_key.clone();
-    tokio::spawn(async move {
-        let worker_state = job_state.clone();
-        let worker_path = job_path.clone();
-        let worker =
-            tokio::spawn(async move { run_index_project(worker_state, &worker_path, mode).await });
-        let result = match worker.await {
-            Ok(result) => result,
-            Err(error) => index_task_failed_result(&job_path, &error.to_string()),
-        };
-        let _ = sender.send(Some(result));
-        job_state.release_index_lock(&background_job_key);
-        tokio::time::sleep(index_result_retention()).await;
-        job_state.remove_index_job_if_id(&background_job_key, job_id);
-    });
 
     let timeout_ms = std::env::var("CCM_INDEX_RESPONSE_TIMEOUT_MS").ok();
     let timeout_secs = std::env::var("CCM_INDEX_RESPONSE_TIMEOUT_SECS").ok();
     let wait_duration = index_response_timeout(timeout_ms.as_deref(), timeout_secs.as_deref());
-
-    match tokio::time::timeout(wait_duration, receiver.changed()).await {
-        Ok(Ok(())) => {
-            if let Some(result) = receiver.borrow().clone() {
-                state.index_jobs.lock().unwrap().remove(&job_key);
-                return Ok(result);
-            }
-        }
-        Ok(Err(error)) => {
-            state.index_jobs.lock().unwrap().remove(&job_key);
-            return Ok(index_task_failed_result(project_path, &error.to_string()));
-        }
-        Err(_) => {}
+    match tokio::time::timeout(wait_duration, wait_for_index_job(&state, &job_key, job)).await {
+        Ok(result) => Ok(result),
+        Err(_) => Ok(index_started_result(project_path)),
     }
-
-    Ok(index_started_result(project_path))
 }
 
 /// Tool: index_now
-/// Eşzamanlı indexleme: tamamlanana kadar bekler ve nihai istatistiği döndürür.
+/// İndekslemeyi arka plan işi olarak başlatır (ya da projede süren işe katılır)
+/// ve sonucunu bekler. İş isteğe bağlı değildir: istek iptal edilirse yalnızca
+/// bekleme durur; indeksleme (worker, etkinleştirme ve kilit bırakma) tamamlanır
+/// ve sonucu sonraki `index_now`/`index_project` çağrısına kalır. Worker'ı yarıda
+/// öldürmek etkinleştirme kilidini ve staging kopyasını geride bırakırdı.
 pub async fn index_now(state: Arc<crate::server::ServerState>, args: &Value) -> Result<ToolResult> {
     let project_path = args
         .get("project_path")
@@ -545,71 +494,125 @@ pub async fn index_now(state: Arc<crate::server::ServerState>, args: &Value) -> 
         .map(normalize_index_mode)
         .transpose()?
         .unwrap_or_default();
+    let job_key = index_job_key(project_path);
 
-    let canonical_path = std::fs::canonicalize(project_path)
-        .unwrap_or_else(|_| std::path::PathBuf::from(project_path));
-    let job_key = canonical_path.to_string_lossy().to_string();
-
-    // Aynı projede devam eden iş varsa sonucu bekleyip döndür; aksi halde
-    // eşzamanlı çalıştırmaya başla.
-    let existing = state.index_jobs.lock().unwrap().get(&job_key).cloned();
-    if let Some(job) = existing {
-        let mut receiver = job.receiver;
-        loop {
-            {
-                let borrowed = receiver.borrow();
-                if let Some(result) = borrowed.as_ref() {
-                    state.index_jobs.lock().unwrap().remove(&job_key);
-                    return Ok(result.clone());
-                }
-            }
-            if receiver.changed().await.is_err() {
-                return Ok(index_task_failed_result(
-                    project_path,
-                    "index job completed without a result",
-                ));
-            }
+    match claim_index_job(&state, project_path, &job_key, mode) {
+        IndexJobClaim::Existing(job) | IndexJobClaim::Started(job) => {
+            Ok(wait_for_index_job(&state, &job_key, job).await)
         }
+        IndexJobClaim::Rejected(result) => Ok(result),
     }
+}
 
-    let lock = state.project_index_lock(project_path);
-    let _guard = lock.lock().await;
-    let db_path = match state.project_db_path(project_path) {
-        Ok(path) => path.to_string_lossy().to_string(),
-        Err(error) => {
-            return Ok(index_task_failed_result(
-                project_path,
-                &format!("project path could not be resolved safely: {}", error),
-            ));
-        }
-    };
+/// İş haritasının anahtarı: projenin kanonik yolu.
+fn index_job_key(project_path: &str) -> String {
+    std::fs::canonicalize(project_path)
+        .unwrap_or_else(|_| std::path::PathBuf::from(project_path))
+        .to_string_lossy()
+        .to_string()
+}
 
-    match run_index_worker_process(project_path, &db_path, mode).await {
-        Ok(stats) => {
-            if let Err(error) = state.refresh_project_engine(project_path).await {
-                return Ok(index_task_failed_result(
-                    project_path,
-                    &format!("indexing completed but engine refresh failed: {}", error),
-                ));
-            }
-            let project_key = crate::server::project_key_for_path(project_path);
-            state.ensure_auto_refresh(&project_key);
-            state.request_refresh(&project_key);
-            if mode == IndexModeArg::Quick {
-                schedule_semantic_upgrade(state, project_path.to_string().into(), db_path.clone());
-            }
-            Ok(ToolResult {
-                content: vec![ToolResultContent {
-                    content_type: "text".to_string(),
-                    text: format_index_stats_result(stats, mode),
-                }],
-                is_error: None,
-            })
-        }
-        Err(error) => Ok(index_task_failed_result(
+/// Projede indeksleme işi talebinin sonucu.
+enum IndexJobClaim {
+    /// Projede iş zaten var: sürüyor ya da sonucu alınmayı bekliyor.
+    Existing(crate::server::IndexJob),
+    /// Yeni iş kaydedildi ve başlatıldı.
+    Started(crate::server::IndexJob),
+    /// Sonucu alınmamış iş sınırı dolu.
+    Rejected(ToolResult),
+}
+
+/// Projede süren işi döndürür ya da yeni iş kaydedip başlatır. Denetim ve kayıt
+/// tek kilit altında yapılır: eşzamanlı iki çağrı aynı projede iki iş başlatmaz.
+fn claim_index_job(
+    state: &Arc<crate::server::ServerState>,
+    project_path: &str,
+    job_key: &str,
+    mode: IndexModeArg,
+) -> IndexJobClaim {
+    const MAX_INDEX_JOBS: usize = 64;
+    let mut jobs = state.index_jobs.lock().unwrap();
+    if let Some(existing) = jobs.get(job_key) {
+        return IndexJobClaim::Existing(existing.clone());
+    }
+    if jobs.len() >= MAX_INDEX_JOBS {
+        return IndexJobClaim::Rejected(index_task_failed_result(
             project_path,
-            &format!("indexing failed: {}", error),
-        )),
+            "too many index jobs are awaiting completion or result polling; poll existing jobs and retry",
+        ));
+    }
+    let (sender, receiver) = tokio::sync::watch::channel(None);
+    let job = crate::server::IndexJob {
+        id: state
+            .next_index_job_id
+            .fetch_add(1, std::sync::atomic::Ordering::Relaxed),
+        receiver,
+    };
+    jobs.insert(job_key.to_string(), job.clone());
+    drop(jobs);
+
+    tracing::info!(path = %project_path, job = job.id, "Starting manual index");
+    spawn_index_job(
+        state.clone(),
+        project_path.to_string(),
+        job_key.to_string(),
+        job.id,
+        mode,
+        sender,
+    );
+    IndexJobClaim::Started(job)
+}
+
+/// İndeksleme işini isteklerden bağımsız bir görevde çalıştırır. Sonuç, iş
+/// haritasındaki alıcı sayesinde saklanır; bekleyen yoksa (ör. istek iptal
+/// edildiyse) bir sonraki çağrı alır. Saklama süresi dolunca kayıt silinir.
+fn spawn_index_job(
+    state: Arc<crate::server::ServerState>,
+    project_path: String,
+    job_key: String,
+    job_id: u64,
+    mode: IndexModeArg,
+    sender: tokio::sync::watch::Sender<Option<ToolResult>>,
+) {
+    tokio::spawn(async move {
+        let worker_state = state.clone();
+        let worker_path = project_path.clone();
+        let worker =
+            tokio::spawn(async move { run_index_project(worker_state, &worker_path, mode).await });
+        let result = match worker.await {
+            Ok(result) => result,
+            Err(error) => index_task_failed_result(&project_path, &error.to_string()),
+        };
+        if sender.send(Some(result)).is_err() {
+            tracing::warn!(
+                path = %project_path,
+                job = job_id,
+                "Index job finished after its record was removed; the result was dropped"
+            );
+        }
+        state.release_index_lock(&job_key);
+        tokio::time::sleep(index_result_retention()).await;
+        state.remove_index_job_if_id(&job_key, job_id);
+    });
+}
+
+/// İşin sonucunu bekler ve sonucu alan çağrı olarak kaydı siler. Bekleyen
+/// isteğin iptali yalnızca bu beklemeyi bırakır; iş sürer.
+async fn wait_for_index_job(
+    state: &crate::server::ServerState,
+    job_key: &str,
+    job: crate::server::IndexJob,
+) -> ToolResult {
+    let mut receiver = job.receiver;
+    loop {
+        let finished = receiver.borrow_and_update().clone();
+        if let Some(result) = finished {
+            state.remove_index_job_if_id(job_key, job.id);
+            return result;
+        }
+        if receiver.changed().await.is_err() {
+            return index_task_failed_result(job_key, "index job completed without a result");
+        }
     }
 }
 

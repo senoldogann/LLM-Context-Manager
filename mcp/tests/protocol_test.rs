@@ -9,6 +9,7 @@ use common::{
 };
 use serde_json::json;
 use std::fs;
+use std::path::Path;
 use std::time::{Duration, Instant};
 use tempfile::tempdir;
 
@@ -110,8 +111,8 @@ fn cancelled_tool_call_gets_no_response_and_the_server_keeps_serving() -> TestRe
     let ping = session.request("ping", json!({}))?;
     assert_eq!(ping["result"], json!({}), "{ping}");
 
-    // Aynı projedeki ikinci index_now proje kilidini bekler: iptal edilen çağrı
-    // sürseydi önce o biter ve yanıtı bundan önce gelirdi.
+    // İptal yalnızca beklemeyi durdurur: indeksleme işi sürer ve aynı projedeki
+    // sonraki index_now o işe katılıp sonucunu alır.
     let retry = session.send_request("tools/call", index_now)?;
     let retry_response = session.wait_for_response(retry, READ_TIMEOUT)?;
     let retry_text = tool_text("index_now", &retry_response)?;
@@ -119,6 +120,96 @@ fn cancelled_tool_call_gets_no_response_and_the_server_keeps_serving() -> TestRe
         retry_text.contains("Project index refreshed successfully"),
         "{retry_text}"
     );
+    assert_no_late_response(&mut session, cancelled)?;
+    Ok(())
+}
+
+#[test]
+fn cancelled_index_now_finishes_indexing_and_the_next_call_joins_it() -> TestResult<()> {
+    const FILES: usize = 800;
+    let project = tempdir()?;
+    fs::create_dir_all(project.path().join("src"))?;
+    for index in 0..FILES {
+        fs::write(
+            project.path().join(format!("src/module_{index}.rs")),
+            format!("pub fn indexed_function_{index}() -> usize {{ {index} }}\n"),
+        )?;
+    }
+    let mut session = McpSession::start(project.path(), &[("CCM_AUTO_REFRESH", "0")])?;
+    let index_now = json!({"name": "index_now", "arguments": {"project_path": project.path()}});
+
+    // İstemci (ör. SDK zaman aşımı) worker dosyaları işlerken iptal eder: tam
+    // indeksin staging dizini kurulmuş, generation henüz etkinleşmemiştir.
+    let cancelled = session.send_request("tools/call", index_now.clone())?;
+    let generations = project.path().join("data/.ccm-generations");
+    let deadline = Instant::now() + Duration::from_secs(60);
+    while staging_dirs(&generations)?.is_empty() {
+        assert!(
+            Instant::now() < deadline,
+            "the index worker never created its staging generation"
+        );
+        std::thread::sleep(Duration::from_millis(10));
+    }
+    session.notify(
+        "notifications/cancelled",
+        json!({"requestId": cancelled, "reason": "client timeout"}),
+    )?;
+
+    // Sonraki çağrı süren işe katılır; kilit beklemesi (60 sn) yaşanmaz.
+    let started = Instant::now();
+    let joined = session.call_tool("index_now", index_now["arguments"].clone())?;
+    let waited = started.elapsed();
+    assert!(
+        joined.contains("Project index refreshed successfully"),
+        "{joined}"
+    );
+    assert!(
+        joined.contains(&format!("Files Indexed: {FILES}")),
+        "the index must be complete: {joined}"
+    );
+    assert!(
+        waited < Duration::from_secs(45),
+        "the follow-up index_now waited {waited:?}"
+    );
+    assert_no_late_response(&mut session, cancelled)?;
+
+    assert!(
+        !project.path().join("data/.ccm-activation.lock").exists(),
+        "the activation lock was left behind"
+    );
+    assert_eq!(
+        staging_dirs(&generations)?,
+        Vec::<String>::new(),
+        "staging copies were left behind"
+    );
+    let last_symbol = format!("indexed_function_{}", FILES - 1);
+    let found = session.call_tool("find_nodes", json!({ "query": last_symbol }))?;
+    assert!(found_node(&found, &last_symbol), "{found}");
+    Ok(())
+}
+
+/// Generation dizinindeki bitmemiş (`.staging`) kopyalar.
+fn staging_dirs(generations: &Path) -> TestResult<Vec<String>> {
+    if !generations.exists() {
+        return Ok(Vec::new());
+    }
+    let mut names = Vec::new();
+    for entry in fs::read_dir(generations)? {
+        let name = entry?.file_name().to_string_lossy().to_string();
+        if name.ends_with(".staging") {
+            names.push(name);
+        }
+    }
+    Ok(names)
+}
+
+/// İptal edilen isteğe hiç yanıt gelmediğini doğrular. İptal edilmemiş bir
+/// bekleyici iş bitince diğeriyle aynı anda uyanırdı; kısa bekleme ve ardından
+/// gelen ping, onun yanıtının da okunmuş olmasını sağlar.
+fn assert_no_late_response(session: &mut McpSession, cancelled: u64) -> TestResult<()> {
+    std::thread::sleep(Duration::from_millis(500));
+    let ping = session.request("ping", json!({}))?;
+    assert_eq!(ping["result"], json!({}), "{ping}");
     assert!(
         !session.has_received(cancelled),
         "a cancelled request must not be answered"
