@@ -1,126 +1,14 @@
+mod common;
+
+use common::{found_node, poll_find_nodes, run_update_index_process, McpSession};
 use serde_json::{json, Value};
 use std::error::Error;
 use std::fs;
-use std::io::{BufRead, BufReader, Write};
 use std::path::Path;
-use std::process::{Child, ChildStdin, ChildStdout, Command, Stdio};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tempfile::tempdir;
-
-/// Gerçek `ccm-mcp` sürecini stdio üzerinden süren test bağlayıcısı.
-struct McpSession {
-    child: Child,
-    stdin: ChildStdin,
-    reader: BufReader<ChildStdout>,
-    next_id: u64,
-}
-
-impl McpSession {
-    fn start(project: &Path, extra_env: &[(&str, &str)]) -> Result<Self, Box<dyn Error>> {
-        Self::spawn(project, extra_env, Stdio::null())
-    }
-
-    /// Sunucunun log'unu (`RUST_LOG=info`) verilen dosyaya yazdırarak başlatır.
-    fn start_logged(
-        project: &Path,
-        extra_env: &[(&str, &str)],
-        log_path: &Path,
-    ) -> Result<Self, Box<dyn Error>> {
-        let mut env = extra_env.to_vec();
-        env.push(("RUST_LOG", "info"));
-        Self::spawn(project, &env, Stdio::from(fs::File::create(log_path)?))
-    }
-
-    fn spawn(
-        project: &Path,
-        extra_env: &[(&str, &str)],
-        stderr: Stdio,
-    ) -> Result<Self, Box<dyn Error>> {
-        let mut command = Command::new(assert_cmd::cargo::cargo_bin!("ccm-mcp"));
-        command
-            .env("CCM_DISABLE_EMBEDDER", "1")
-            .env("CCM_MCP_DEBUG", "0")
-            .env("CCM_PROJECT_ROOT", project)
-            .env("CCM_ALLOWED_ROOTS", project)
-            .stdin(Stdio::piped())
-            .stdout(Stdio::piped())
-            .stderr(stderr);
-        for (key, value) in extra_env {
-            command.env(key, value);
-        }
-        let mut child = command.spawn()?;
-        let stdin = child.stdin.take().ok_or("child stdin missing")?;
-        let reader = BufReader::new(child.stdout.take().ok_or("child stdout missing")?);
-        let mut session = Self {
-            child,
-            stdin,
-            reader,
-            next_id: 0,
-        };
-        session.request("initialize", json!({}))?;
-        Ok(session)
-    }
-
-    fn request(&mut self, method: &str, params: Value) -> Result<Value, Box<dyn Error>> {
-        self.next_id += 1;
-        let message =
-            json!({"jsonrpc": "2.0", "id": self.next_id, "method": method, "params": params});
-        writeln!(self.stdin, "{}", message)?;
-        self.stdin.flush()?;
-        let mut line = String::new();
-        self.reader.read_line(&mut line)?;
-        Ok(serde_json::from_str(&line)?)
-    }
-
-    fn call_tool(&mut self, name: &str, arguments: Value) -> Result<String, Box<dyn Error>> {
-        let response = self.request("tools/call", json!({"name": name, "arguments": arguments}))?;
-        if let Some(error) = response.get("error") {
-            return Err(format!("{name} returned a JSON-RPC error: {error}").into());
-        }
-        Ok(response["result"]["content"][0]["text"]
-            .as_str()
-            .unwrap_or_default()
-            .to_string())
-    }
-}
-
-impl Drop for McpSession {
-    fn drop(&mut self) {
-        let _ = self.child.kill();
-        let _ = self.child.wait();
-    }
-}
-
-/// `find_nodes` çıktısında sembolün sonuç başlığı olarak bulunup bulunmadığı.
-/// "No graph nodes found for query: 'x'" mesajı da sembolü içerdiği için başlık
-/// biçimi (`<sembol> (Score:`) aranır.
-fn found_node(text: &str, symbol: &str) -> bool {
-    text.contains(&format!("{symbol} (Score:"))
-}
-
-/// Koşul sağlanana kadar `find_nodes` çağırır; süre dolarsa son çıktıyla hata döner.
-fn poll_find_nodes(
-    session: &mut McpSession,
-    query: &str,
-    deadline: Duration,
-    accept: impl Fn(&str) -> bool,
-) -> Result<String, Box<dyn Error>> {
-    let started = Instant::now();
-    loop {
-        let text = session.call_tool("find_nodes", json!({ "query": query }))?;
-        if accept(&text) {
-            return Ok(text);
-        }
-        if started.elapsed() > deadline {
-            return Err(
-                format!("condition not met within {deadline:?}; last output: {text}").into(),
-            );
-        }
-        std::thread::sleep(Duration::from_millis(200));
-    }
-}
 
 /// Etkin generation dizini (`data/.ccm-generations/<işaretçi>`).
 fn active_generation_dir(project: &Path) -> Result<std::path::PathBuf, Box<dyn Error>> {
@@ -175,24 +63,6 @@ fn activate_generation(project: &Path, generation: &str) -> Result<(), Box<dyn E
     fs::write(&temp, generation)?;
     fs::rename(&temp, data.join("ccm_current"))?;
     Ok(())
-}
-
-/// `ccm-cli index` ile aynı yolu (`update_index`) ayrı bir süreçte çalıştırır:
-/// sunucunun dahili worker modu CLI komutuyla aynı çekirdek fonksiyonu çağırır.
-fn run_update_index_process(project: &Path) -> Result<Value, Box<dyn Error>> {
-    let output = Command::new(assert_cmd::cargo::cargo_bin!("ccm-mcp"))
-        .arg("--ccm-internal-index-worker")
-        .arg(project)
-        .arg(project.join("data/ccm_db"))
-        .env("CCM_INTERNAL_INDEX_WORKER", "1")
-        .env("CCM_DISABLE_EMBEDDER", "1")
-        .stdin(Stdio::null())
-        .stderr(Stdio::null())
-        .output()?;
-    if !output.status.success() {
-        return Err(format!("update_index process failed: {}", output.status).into());
-    }
-    Ok(serde_json::from_slice(&output.stdout)?)
 }
 
 #[test]
@@ -380,6 +250,46 @@ fn atomic_rename_save_is_picked_up() -> Result<(), Box<dyn Error>> {
         !found_node(&old, "before_save"),
         "old symbol must be gone: {old}"
     );
+    Ok(())
+}
+
+#[test]
+fn moved_directory_is_picked_up_and_removed() -> Result<(), Box<dyn Error>> {
+    let project = tempdir()?;
+    let outside = tempdir()?;
+    fs::write(project.path().join("main.rs"), "fn existing_symbol() {}\n")?;
+    let mut session = McpSession::start(project.path(), &[])?;
+    session.call_tool("index_now", json!({ "project_path": project.path() }))?;
+    poll_find_nodes(
+        &mut session,
+        "existing_symbol",
+        Duration::from_secs(15),
+        |text| text.starts_with("_Index: fresh"),
+    )?;
+
+    // Dizin adı dışlanan bir dosya uzantısına benzer (`assets.png`); tarayıcı
+    // yine de içine iner. Dizin içeriğiyle taşındığında izleyici yalnızca dizin
+    // için olay üretir, dosya uzantısı süzgeci olayı düşürmemelidir.
+    let staged = outside.path().join("assets.png");
+    fs::create_dir(&staged)?;
+    fs::write(staged.join("moved.rs"), "fn moved_in_symbol() {}\n")?;
+    let inside = project.path().join("assets.png");
+    fs::rename(&staged, &inside)?;
+    poll_find_nodes(
+        &mut session,
+        "moved_in_symbol",
+        Duration::from_secs(15),
+        |text| found_node(text, "moved_in_symbol") && text.starts_with("_Index: fresh"),
+    )?;
+
+    // Dizin projeden dışarı taşınınca altındaki dosyalar indeksten düşer.
+    fs::rename(&inside, &staged)?;
+    poll_find_nodes(
+        &mut session,
+        "moved_in_symbol",
+        Duration::from_secs(15),
+        |text| !found_node(text, "moved_in_symbol") && text.starts_with("_Index: fresh"),
+    )?;
     Ok(())
 }
 
@@ -848,5 +758,46 @@ fn persist_failure_is_reported_in_the_freshness_line() -> Result<(), Box<dyn Err
         "unexpected freshness line: {text}"
     );
     assert!(found_node(&text, "unsaved_symbol"), "{text}");
+    Ok(())
+}
+
+#[test]
+fn changes_from_a_failed_round_are_recovered_by_the_next_round() -> Result<(), Box<dyn Error>> {
+    let project = tempdir()?;
+    fs::write(project.path().join("main.rs"), "fn existing_symbol() {}\n")?;
+    // İlk hedefli tur üç denemede de tarama hatası alır (tam karşılaştırmalar etkilenmez).
+    let mut session = McpSession::start(
+        project.path(),
+        &[("CCM_INTERNAL_REFRESH_TEST_FAIL_TARGETED", "3")],
+    )?;
+    session.call_tool("index_now", json!({ "project_path": project.path() }))?;
+    poll_find_nodes(
+        &mut session,
+        "existing_symbol",
+        Duration::from_secs(15),
+        |text| text.starts_with("_Index: fresh"),
+    )?;
+
+    fs::write(project.path().join("lost.rs"), "fn lost_symbol() {}\n")?;
+    poll_find_nodes(
+        &mut session,
+        "existing_symbol",
+        Duration::from_secs(20),
+        |text| text.contains("last refresh failed"),
+    )?;
+
+    // Sonraki olay tam karşılaştırma başlatır; başarısız turun değişikliği de uygulanır.
+    fs::write(project.path().join("later.rs"), "fn later_symbol() {}\n")?;
+    poll_find_nodes(
+        &mut session,
+        "later_symbol",
+        Duration::from_secs(20),
+        |text| found_node(text, "later_symbol") && text.starts_with("_Index: fresh"),
+    )?;
+    let lost = session.call_tool("find_nodes", json!({ "query": "lost_symbol" }))?;
+    assert!(
+        found_node(&lost, "lost_symbol"),
+        "the change from the failed round must not be lost: {lost}"
+    );
     Ok(())
 }

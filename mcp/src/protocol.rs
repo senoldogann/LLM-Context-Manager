@@ -68,9 +68,23 @@ pub struct ResourcesCapability {
 #[derive(Debug, Serialize)]
 pub struct ToolDefinition {
     pub name: String,
+    /// İstemci arayüzlerinde gösterilen okunur ad.
+    pub title: String,
     pub description: Option<String>,
     #[serde(rename = "inputSchema")]
     pub input_schema: Value,
+    pub annotations: ToolAnnotations,
+}
+
+/// Aracın davranış ipuçları. İstemciler (ör. otomatik onay arayüzleri) salt
+/// okunur araçları değiştiren araçlardan bu alanlarla ayırır.
+#[derive(Debug, Clone, Copy, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ToolAnnotations {
+    pub read_only_hint: bool,
+    pub destructive_hint: bool,
+    pub idempotent_hint: bool,
+    pub open_world_hint: bool,
 }
 
 /// MCP Tool Call Result
@@ -96,6 +110,18 @@ pub fn create_success_response(id: Option<Value>, result: Value) -> JsonRpcRespo
         id,
         result: Some(result),
         error: None,
+    }
+}
+
+/// Araç yürütme hatası: JSON-RPC hatası yerine `isError: true` sonucu olarak
+/// döner; istemci mesajı modele gösterir.
+pub fn tool_error_result(text: String) -> ToolResult {
+    ToolResult {
+        content: vec![ToolResultContent {
+            content_type: "text".to_string(),
+            text,
+        }],
+        is_error: Some(true),
     }
 }
 

@@ -135,27 +135,24 @@ fn is_artifact_temp_file(filter: &WatchFilter, path: &Path) -> bool {
             .is_some_and(|parent| filter.artifact_parents.iter().any(|dir| dir == parent))
 }
 
-/// Olay yolunun indeksi değiştirebilecek bir proje dosyası olup olmadığını
-/// bildirir. İndeksin kendi yazdığı yollar (artefaktlar, artefakt dizinindeki
-/// geçici dosyalar, `ccm_learn` verisi) ilgisizdir; aksi halde her yenileme kendi
-/// olayını okuyup ikinci bir tur çalıştırır. Silinmiş yollar için de çalışır
-/// (dosya içeriği okunmaz; yalnızca dizin ayrımı için `is_dir` sorulur).
-pub fn is_watch_relevant_path(filter: &WatchFilter, path: &Path) -> bool {
-    let Ok(relative) = path.strip_prefix(&filter.root) else {
-        return false;
-    };
+/// Yol proje kökünün altında ve indeksin kendi yazdığı ya da araç durumuna ait
+/// bir yol değilse köke göre göreli yolu döndürür. İndeksin kendi yazdığı yollar
+/// (artefaktlar, artefakt dizinindeki geçici dosyalar, `ccm_learn` verisi)
+/// ilgisizdir; aksi halde her yenileme kendi olayını okuyup ikinci bir tur çalıştırır.
+fn project_relative_path<'a>(filter: &WatchFilter, path: &'a Path) -> Option<&'a Path> {
+    let relative = path.strip_prefix(&filter.root).ok()?;
     if relative.as_os_str().is_empty() {
-        return false;
+        return None;
     }
     if filter
         .excluded
         .iter()
         .any(|excluded| path.starts_with(excluded))
     {
-        return false;
+        return None;
     }
     if is_artifact_temp_file(filter, path) {
-        return false;
+        return None;
     }
     let tool_state = relative.components().any(|component| {
         let name = component.as_os_str().to_string_lossy();
@@ -164,11 +161,37 @@ pub fn is_watch_relevant_path(filter: &WatchFilter, path: &Path) -> bool {
             || name == crate::LEARN_DIRECTORY
             || crate::is_index_staging_dir_name(&name)
     });
-    if tool_state || !crate::is_index_relevant_file(&filter.root, path) {
+    (!tool_state).then_some(relative)
+}
+
+/// Olay yolunun indeksi değiştirebilecek bir proje dosyası olup olmadığını
+/// bildirir. Silinmiş yollar için de çalışır (dosya içeriği okunmaz; yalnızca
+/// dizin ayrımı için `is_dir` sorulur).
+pub fn is_watch_relevant_path(filter: &WatchFilter, path: &Path) -> bool {
+    let Some(relative) = project_relative_path(filter, path) else {
+        return false;
+    };
+    if !crate::is_index_relevant_file(&filter.root, path) {
         return false;
     }
     !filter
         .ignore
         .matched_path_or_any_parents(relative, path.is_dir())
         .is_ignore()
+}
+
+/// Olay yolunun, tam taramanın indiği bir proje dizini olup olmadığını
+/// bildirir. Dosya süzgecinden farkı: dosya uzantısı ve gizli dosya adı
+/// kuralları dizinlere uygulanmaz (tarayıcı `assets.png/` gibi dizinlere de
+/// iner); dışlanan dizin adları, araç durumu ve ignore kuralları aynen
+/// uygulanır. Silinmiş ya da taşınmış dizinler için de çalışır.
+pub fn is_watch_relevant_dir(filter: &WatchFilter, path: &Path) -> bool {
+    let Some(relative) = project_relative_path(filter, path) else {
+        return false;
+    };
+    crate::is_index_relevant_dir(relative)
+        && !filter
+            .ignore
+            .matched_path_or_any_parents(relative, true)
+            .is_ignore()
 }

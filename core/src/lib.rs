@@ -27,12 +27,15 @@ use rayon::prelude::*;
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::UNIX_EPOCH;
 
 pub const INDEX_SCHEMA_VERSION: u32 = 4;
 const GENERATIONS_DIRECTORY: &str = ".ccm-generations";
 const CURRENT_GENERATION_FILE: &str = "ccm_current";
 const ACTIVATION_LOCK_DIRECTORY: &str = ".ccm-activation.lock";
+/// Kilit dizininin içinde sahip belirtecini tutan dosyanın adı.
+const ACTIVATION_LOCK_OWNER_FILE: &str = "owner";
 /// Öğrenme verisinin dizin adı: trajectory günlüğü (`data/ccm_learn/experiences.jsonl`)
 /// ve politika deposu (`<db dizini>/ccm_learn/policies.json`) burada tutulur. Araç
 /// durumudur; indeksin girdisi değildir.
@@ -156,7 +159,9 @@ pub fn init() {
 
 // Re-export ContextSuggestion for external use
 pub use crate::engine::ContextSuggestion;
-pub use watch_filter::{build_watch_filter, is_watch_relevant_path, WatchFilter};
+pub use watch_filter::{
+    build_watch_filter, is_watch_relevant_dir, is_watch_relevant_path, WatchFilter,
+};
 
 /// Run a semantic search query against the index.
 /// Returns a list of context suggestions.
@@ -578,7 +583,8 @@ async fn build_index_generation(
                     detail = %issue.detail,
                     "Failed to index file"
                 );
-                register_issue(&mut stats, issue, false);
+                let permanent = is_permanent_issue(&issue.reason);
+                register_issue(&mut stats, issue, permanent);
             }
         }
     }
@@ -737,21 +743,64 @@ fn install_staged_generation(
 
 struct ActivationLock {
     path: PathBuf,
+    /// Kilidi alırken kilit dizinine yazılan sahip belirteci. Drop ve kalp atışı
+    /// yalnızca dizindeki belirteç bununla aynıysa kilide dokunur; bayat sayılıp
+    /// başkasınca yeniden alınmış kilitte başka bir belirteç bulunur. Sahiplik
+    /// dosya sisteminin dizin kimliğine (inode) bağlı değildir: silinip hemen
+    /// yeniden oluşturulan bir dizin çoğu Linux dosya sisteminde aynı inode'u alır.
+    token: String,
+    /// Kilit tutuldukça dizinin mtime'ını tazeleyen iş parçacığı ve durdurma ucu.
+    heartbeat: Option<(std::sync::mpsc::Sender<()>, std::thread::JoinHandle<()>)>,
 }
+
+/// Kilit dizinindeki sahip belirtecinin bizimkiyle karşılaştırılması.
+enum LockOwnership {
+    /// Belirteç bizimki: kilit hâlâ bizde.
+    Held,
+    /// Belirteç dosyası yok (dizin silinmiş ya da yeni sahibi belirtecini henüz
+    /// yazmamış) ya da başka bir sahibin belirtecini taşıyor.
+    Lost { found_token: Option<String> },
+}
+
+/// Etkinleştirme kilidinin zamanlamaları.
+struct LockTiming {
+    /// Tutulan kilidin mtime'ının tazelenme aralığı.
+    heartbeat: std::time::Duration,
+    /// Bu süre boyunca tazelenmeyen kilit sahibi ölmüş sayılır ve kırılır.
+    stale_after: std::time::Duration,
+    /// Kilit için en uzun bekleme.
+    wait_limit: std::time::Duration,
+}
+
+const ACTIVATION_LOCK_TIMING: LockTiming = LockTiming {
+    heartbeat: std::time::Duration::from_secs(60),
+    stale_after: std::time::Duration::from_secs(600),
+    wait_limit: std::time::Duration::from_secs(60),
+};
 
 impl ActivationLock {
     fn acquire(artifact_parent: &Path) -> Result<Self> {
+        Self::acquire_with(artifact_parent, &ACTIVATION_LOCK_TIMING)
+    }
+
+    fn acquire_with(artifact_parent: &Path, timing: &LockTiming) -> Result<Self> {
         let path = artifact_parent.join(ACTIVATION_LOCK_DIRECTORY);
         let started = std::time::Instant::now();
         loop {
             match std::fs::create_dir(&path) {
-                Ok(()) => return Ok(Self { path }),
+                Ok(()) => return Self::claim_created_directory(path, timing.heartbeat),
                 Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => {
-                    if lock_is_stale(&path) {
-                        let _ = std::fs::remove_dir(&path);
+                    if lock_is_stale(&path, timing.stale_after) {
+                        remove_lock_directory(&path).map_err(|remove_error| {
+                            anyhow::anyhow!(
+                                "Stale index activation lock '{}' could not be removed: {}",
+                                path.display(),
+                                remove_error
+                            )
+                        })?;
                         continue;
                     }
-                    if started.elapsed() >= std::time::Duration::from_secs(60) {
+                    if started.elapsed() >= timing.wait_limit {
                         anyhow::bail!(
                             "Timed out waiting for index activation lock '{}'",
                             path.display()
@@ -769,22 +818,176 @@ impl ActivationLock {
             }
         }
     }
+
+    /// `create_dir` ile az önce oluşturulan kilit dizinini sahiplenir: sahip
+    /// belirtecini yazar, ardından kalp atışını başlatır. Belirteç yazılamazsa dizin
+    /// bırakılır; aksi halde bayatlayana kadar diğer süreçleri bekletirdi.
+    fn claim_created_directory(path: PathBuf, heartbeat: std::time::Duration) -> Result<Self> {
+        let token = new_lock_token();
+        if let Err(error) = std::fs::write(path.join(ACTIVATION_LOCK_OWNER_FILE), &token) {
+            if let Err(cleanup_error) = remove_lock_directory(&path) {
+                tracing::warn!(path = %path.display(), error = %cleanup_error, "Index activation lock could not be removed after its owner token failed to be written");
+            }
+            return Err(anyhow::anyhow!(
+                "Index activation lock '{}' owner token could not be written: {}",
+                path.display(),
+                error
+            ));
+        }
+        let mut lock = Self {
+            path,
+            token,
+            heartbeat: None,
+        };
+        // Kalp atışı başlamazsa `lock` düşer ve Drop kilidi bırakır.
+        lock.heartbeat = Some(start_lock_heartbeat(&lock.path, &lock.token, heartbeat)?);
+        Ok(lock)
+    }
 }
 
 impl Drop for ActivationLock {
     fn drop(&mut self) {
-        if let Err(error) = std::fs::remove_dir(&self.path) {
-            tracing::warn!(path = %self.path.display(), error = %error, "Index activation lock could not be removed");
+        // Önce kalp atışı durur: kilit silindikten sonra dizine dokunmamalı.
+        if let Some((stop, thread)) = self.heartbeat.take() {
+            drop(stop);
+            if thread.join().is_err() {
+                tracing::warn!(path = %self.path.display(), "Activation lock heartbeat thread panicked");
+            }
+        }
+        // Dizin yalnızca belirteç bizimse silinir; başkasının kilidi yerinde kalır.
+        match check_lock_ownership(&self.path, &self.token) {
+            Ok(LockOwnership::Held) => {
+                if let Err(error) = remove_lock_directory(&self.path) {
+                    tracing::warn!(path = %self.path.display(), error = %error, "Index activation lock could not be removed");
+                }
+            }
+            Ok(LockOwnership::Lost { found_token }) => {
+                tracing::warn!(
+                    path = %self.path.display(),
+                    own_token = %self.token,
+                    found_token = ?found_token,
+                    "Index activation lock is no longer held by this owner; leaving it in place"
+                );
+            }
+            Err(error) => {
+                tracing::warn!(
+                    path = %self.path.display(),
+                    own_token = %self.token,
+                    error = %error,
+                    "Index activation lock owner could not be verified; leaving it in place"
+                );
+            }
         }
     }
 }
 
-fn lock_is_stale(path: &Path) -> bool {
+/// Kilit sahibini ayırt eden benzersiz belirteç: nesil kimliği (süreç kimliği ve
+/// nanosaniye damgası) ile süreç içi artan bir sayaç. Sayaç, saat çözünürlüğü kaba
+/// olsa bile aynı süreçte art arda alınan iki kilidin belirtecini farklı kılar.
+fn new_lock_token() -> String {
+    static COUNTER: AtomicU64 = AtomicU64::new(0);
+    format!(
+        "{}.{}",
+        new_generation_id(),
+        COUNTER.fetch_add(1, Ordering::Relaxed)
+    )
+}
+
+/// Kilit dizinindeki sahip belirtecini `token` ile karşılaştırır. Dizin ya da
+/// belirteç dosyası yoksa kilit kaybedilmiş sayılır; okuma hatası ise sahipliği
+/// doğrulayamadığımız anlamına gelir ve çağırana iletilir.
+fn check_lock_ownership(path: &Path, token: &str) -> std::io::Result<LockOwnership> {
+    match std::fs::read_to_string(path.join(ACTIVATION_LOCK_OWNER_FILE)) {
+        Ok(found) if found == token => Ok(LockOwnership::Held),
+        Ok(found) => Ok(LockOwnership::Lost {
+            found_token: Some(found),
+        }),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+            Ok(LockOwnership::Lost { found_token: None })
+        }
+        Err(error) => Err(error),
+    }
+}
+
+/// Kilit dizinini siler: önce içindeki sahip belirteci dosyası, sonra dizinin
+/// kendisi. Başka bir süreç bunları bu sırada zaten sildiyse hata sayılmaz.
+fn remove_lock_directory(path: &Path) -> std::io::Result<()> {
+    ignore_not_found(std::fs::remove_file(path.join(ACTIVATION_LOCK_OWNER_FILE)))?;
+    ignore_not_found(std::fs::remove_dir(path))
+}
+
+/// `NotFound` hatasını başarı sayar (silinecek şey zaten yok); diğer hatalar
+/// olduğu gibi iletilir.
+fn ignore_not_found(result: std::io::Result<()>) -> std::io::Result<()> {
+    match result {
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
+        other => other,
+    }
+}
+
+/// Kilit tutuldukça dizinin mtime'ını `interval` aralıkla tazeleyen iş
+/// parçacığını başlatır; uzun bir etkinleştirme (tablo kopyası, yazım) sürerken
+/// kilit bayat sayılıp kırılmaz. Yalnızca dizindeki sahip belirteci `token` ile
+/// aynıyken dokunur; kilit kaybedilmişse iş parçacığı kendiliğinden biter. Durdurma
+/// ucu bırakılınca da biter.
+fn start_lock_heartbeat(
+    path: &Path,
+    token: &str,
+    interval: std::time::Duration,
+) -> Result<(std::sync::mpsc::Sender<()>, std::thread::JoinHandle<()>)> {
+    let (stop, stopped) = std::sync::mpsc::channel::<()>();
+    let lock_path = path.to_path_buf();
+    let lock_token = token.to_string();
+    let thread = std::thread::Builder::new()
+        .name("ccm-activation-lock-heartbeat".to_string())
+        .spawn(move || {
+            while let Err(std::sync::mpsc::RecvTimeoutError::Timeout) =
+                stopped.recv_timeout(interval)
+            {
+                match check_lock_ownership(&lock_path, &lock_token) {
+                    Ok(LockOwnership::Held) => {}
+                    Ok(LockOwnership::Lost { found_token }) => {
+                        tracing::warn!(
+                            path = %lock_path.display(),
+                            own_token = %lock_token,
+                            found_token = ?found_token,
+                            "Activation lock disappeared or changed owner; heartbeat stopped"
+                        );
+                        return;
+                    }
+                    Err(error) => {
+                        tracing::warn!(
+                            path = %lock_path.display(),
+                            own_token = %lock_token,
+                            error = %error,
+                            "Activation lock owner could not be verified; heartbeat skipped this refresh"
+                        );
+                        continue;
+                    }
+                }
+                let touched = std::fs::File::open(&lock_path)
+                    .and_then(|dir| dir.set_modified(std::time::SystemTime::now()));
+                if let Err(error) = touched {
+                    tracing::warn!(path = %lock_path.display(), error = %error, "Activation lock heartbeat could not refresh the lock");
+                }
+            }
+        })
+        .map_err(|error| {
+            anyhow::anyhow!(
+                "Activation lock heartbeat for '{}' could not start: {}",
+                path.display(),
+                error
+            )
+        })?;
+    Ok((stop, thread))
+}
+
+fn lock_is_stale(path: &Path, stale_after: std::time::Duration) -> bool {
     std::fs::metadata(path)
         .and_then(|metadata| metadata.modified())
         .ok()
         .and_then(|modified| modified.elapsed().ok())
-        .is_some_and(|age| age >= std::time::Duration::from_secs(600))
+        .is_some_and(|age| age >= stale_after)
 }
 
 fn read_current_pointer_value(artifact_parent: &Path) -> Result<Option<String>> {
@@ -1852,6 +2055,16 @@ pub fn is_index_relevant_file(project_root: &Path, path: &Path) -> bool {
     }
 }
 
+/// Proje köküne göre göreli dizin, tam taramanın indiği bir dizin mi? Tarayıcı
+/// dışlanan dizin adlarına ve indeks hazırlama dizinlerine inmez (bkz.
+/// `should_traverse_entry`); yolun hiçbir bileşeni bunlardan biri olmamalı.
+fn is_index_relevant_dir(relative: &Path) -> bool {
+    relative.components().all(|component| {
+        let name = component.as_os_str().to_string_lossy();
+        !EXCLUDED_DIRECTORY_NAMES.contains(&name.as_ref()) && !is_index_staging_dir_name(&name)
+    })
+}
+
 fn file_id_to_path(project_root: &Path, file_id: &str) -> PathBuf {
     let rel = file_id.trim_start_matches("./");
     project_root.join(rel)
@@ -2407,6 +2620,16 @@ pub(crate) fn suggestion_for_issue(path: &str, reason: &IndexIssueReason) -> Opt
     None
 }
 
+/// Aynı içerik her denemede aynı sonucu verir (çok büyük, ikili): dosya
+/// değişene kadar yeniden denenmez, atlanmış sayılır. G/Ç hataları ve geçersiz
+/// UTF-8 (yazımın ortasında okunan dosya) geçicidir, yeniden denenir.
+pub(crate) fn is_permanent_issue(reason: &IndexIssueReason) -> bool {
+    matches!(
+        reason,
+        IndexIssueReason::FileTooLarge | IndexIssueReason::BinaryFile
+    )
+}
+
 pub(crate) fn register_issue(stats: &mut IndexStats, issue: IndexIssue, skipped: bool) {
     let reason_key = issue.reason.as_str().to_string();
     *stats.reason_counts.entry(reason_key).or_insert(0) += 1;
@@ -2534,5 +2757,113 @@ mod policy_tests {
         );
         assert!(staged.exists());
         assert!(!generations.join("candidate").exists());
+    }
+}
+
+#[cfg(test)]
+mod activation_lock_tests {
+    use super::{
+        lock_is_stale, remove_lock_directory, ActivationLock, LockTiming,
+        ACTIVATION_LOCK_DIRECTORY, ACTIVATION_LOCK_OWNER_FILE,
+    };
+    use std::path::Path;
+    use std::time::{Duration, SystemTime};
+
+    fn fast_timing() -> LockTiming {
+        LockTiming {
+            heartbeat: Duration::from_millis(50),
+            stale_after: Duration::from_millis(400),
+            wait_limit: Duration::from_secs(5),
+        }
+    }
+
+    /// Kilit dizininin mtime'ını bayatlık eşiğinin çok ötesine geri alır.
+    fn backdate(path: &Path) -> anyhow::Result<()> {
+        let long_ago = SystemTime::now() - Duration::from_secs(3_600);
+        std::fs::File::open(path)?.set_modified(long_ago)?;
+        Ok(())
+    }
+
+    #[test]
+    fn heartbeat_keeps_a_long_held_lock_from_going_stale() -> anyhow::Result<()> {
+        let parent = tempfile::tempdir()?;
+        let timing = fast_timing();
+        let lock = ActivationLock::acquire_with(parent.path(), &timing)?;
+        let path = parent.path().join(ACTIVATION_LOCK_DIRECTORY);
+        // Tutma süresi bayatlık eşiğinin katlarıdır; kalp atışı kilidi taze tutar.
+        std::thread::sleep(Duration::from_millis(1_300));
+        assert!(
+            !lock_is_stale(&path, timing.stale_after),
+            "a held lock must not be judged stale"
+        );
+        drop(lock);
+        assert!(!path.exists(), "dropping the lock removes it");
+
+        // Başkası kilidi bayat sayıp kırar ve yeniden alır: aynı yolda yeni bir dizin ve
+        // başka bir sahip belirteci. Linux'ta silinip hemen oluşturulan dizin çoğu kez
+        // eski inode'u alır; sahiplik yalnızca belirteçle ayırt edilir.
+        let old_holder = ActivationLock::acquire_with(parent.path(), &timing)?;
+        remove_lock_directory(&path)?;
+        std::fs::create_dir(&path)?;
+        std::fs::write(path.join(ACTIVATION_LOCK_OWNER_FILE), "another-holder")?;
+        // Eski sahibin kalp atışı yabancı kilidi görüp durur. Devam eden bir dokunuş
+        // olsa bile mtime sonradan geri alınır; bundan sonraki her dokunuş kilidi tazeler.
+        std::thread::sleep(Duration::from_millis(150));
+        backdate(&path)?;
+        std::thread::sleep(Duration::from_millis(150));
+        assert!(
+            lock_is_stale(&path, timing.stale_after),
+            "the heartbeat must not refresh a lock owned by someone else"
+        );
+        drop(old_holder);
+        assert!(
+            path.exists(),
+            "a lock owned by someone else must be left in place"
+        );
+        assert_eq!(
+            std::fs::read_to_string(path.join(ACTIVATION_LOCK_OWNER_FILE))?,
+            "another-holder",
+            "the other owner's token must be untouched"
+        );
+
+        // Yeni sahibin dizini oluşturup belirtecini henüz yazmadığı aralıkta da eski
+        // sahip dizine dokunmaz: eksik belirteç "bizim değil" demektir.
+        remove_lock_directory(&path)?;
+        let old_holder = ActivationLock::acquire_with(parent.path(), &timing)?;
+        remove_lock_directory(&path)?;
+        std::fs::create_dir(&path)?;
+        drop(old_holder);
+        assert!(
+            path.exists(),
+            "a lock directory without our token must be left in place"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn stale_lock_of_a_dead_holder_is_recovered() -> anyhow::Result<()> {
+        let parent = tempfile::tempdir()?;
+        let timing = fast_timing();
+        let path = parent.path().join(ACTIVATION_LOCK_DIRECTORY);
+
+        // Belirtecini yazıp ölen sahip: dizinde sahip dosyası var.
+        std::fs::create_dir(&path)?;
+        std::fs::write(path.join(ACTIVATION_LOCK_OWNER_FILE), "dead-holder")?;
+        backdate(&path)?;
+        drop(ActivationLock::acquire_with(parent.path(), &timing)?);
+        assert!(
+            !path.exists(),
+            "a stale lock with an owner token must be broken and then released"
+        );
+
+        // Belirtecini yazmadan ölen sahip: dizin boş kalır, bayatlık yine kurtarır.
+        std::fs::create_dir(&path)?;
+        backdate(&path)?;
+        drop(ActivationLock::acquire_with(parent.path(), &timing)?);
+        assert!(
+            !path.exists(),
+            "a stale lock without an owner token must be broken and then released"
+        );
+        Ok(())
     }
 }

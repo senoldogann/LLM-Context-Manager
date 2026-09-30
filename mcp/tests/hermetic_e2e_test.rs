@@ -24,9 +24,10 @@ fn text_of(resp: &Value) -> String {
         .to_string()
 }
 
+/// Adım ne JSON-RPC hatası ne de araç yürütme hatası (`isError: true`) döndürmeli.
 fn assert_no_error(resp: &Value, step: &str) {
     assert!(
-        resp.get("error").is_none(),
+        resp.get("error").is_none() && resp["result"]["isError"] != true,
         "STEP {} returned an error: {}",
         step,
         resp
