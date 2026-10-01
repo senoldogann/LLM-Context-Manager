@@ -52,10 +52,15 @@ güncel tutar:
   olarak etkinleştirilir; başarısız ya da yarıda kesilen bir çalıştırma önceki
   grafı hizmette bırakır.
 
-**Sınırlar, baştan.** Çağrı kenarları tür analiziyle değil isimle çözülür: bir
-çağrı önce aynı dosyadaki tanıma, yoksa başka yerdeki tek tanıma bağlanır. Aynı
-dosyadaki birden çok tanım belirsiz olarak işaretlenmiş kenarlar üretir; birden
-çok başka dosyada tanımlı bir isim hiç kenar üretmez. Bunun tür bilen bir araçla
+**Sınırlar, baştan.** Python dosyalarında çağrılar sözdizimi ağacından okunur
+ve dosyanın importları (`import`, `from … import`, göreli importlar, paket
+yeniden dışa aktarımları), `self`/`cls`/`super()` ve sınıf adlarıyla çözülür;
+türü bilinmeyen bir alıcıdaki çağrı en çok beş aynı adlı tanıma *olası* çağrı
+olarak raporlanır, projeden çıkan importlar kenar üretmez. Diğer 12 dilde çağrı
+kenarları hâlâ isimle çözülür: bir çağrı önce aynı dosyadaki tanıma, yoksa başka
+yerdeki tek tanıma bağlanır; aynı dosyadaki birden çok tanım belirsiz olarak
+işaretlenmiş kenarlar üretir, birden çok başka dosyada tanımlı bir isim hiç
+kenar üretmez. Bunun tür bilen bir araçla
 ne sıklıkla örtüştüğü henüz ölçülmedi. Başka MCP sunucuları da kod grafı kurup
 otomatik yeniler; CCM bu ölçülene kadar onlardan daha taze ya da daha doğru
 olduğunu iddia etmez ([`benchmarks/`](./benchmarks/README.md)).

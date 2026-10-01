@@ -51,10 +51,15 @@ edit:
 - **Never half-built:** each index is built as a new generation and activated
   atomically; a failed or interrupted run leaves the previous graph serving.
 
-**Limits, stated up front.** Call edges are resolved by name, not by type
-analysis: a call binds to a definition in the same file first, otherwise to the
-only definition elsewhere. Several same-file definitions produce edges marked
-ambiguous; a name defined in several other files produces no edge. How often
+**Limits, stated up front.** In Python files, calls are read from the syntax
+tree and resolved through the file's imports (`import`, `from … import`,
+relative imports, package re-exports), `self`/`cls`/`super()` and class names;
+a call on a receiver whose type is unknown is reported as a *possible* call to
+at most five same-named definitions, and imports that leave the project produce
+no edge. In the other 12 languages call edges are still resolved by name: a
+call binds to a definition in the same file first, otherwise to the only
+definition elsewhere; several same-file definitions produce edges marked
+ambiguous, and a name defined in several other files produces no edge. How often
 this matches a type-aware tool has not been measured yet. Other MCP servers
 also build code graphs and refresh them automatically; CCM makes no claim of
 being fresher or more accurate than them until that is measured
