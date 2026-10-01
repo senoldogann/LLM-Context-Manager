@@ -617,6 +617,10 @@ mod tests {
         // Ortam değişkenleri süreç genelinde paylaşılır; diğer testlerle yarışmamak
         // için ENV_LOCK altında değiştirilir.
         let _guard = ENV_LOCK.lock().unwrap();
+        // Aynı süreçteki başka bir test operatörün `~/.ccm/.env`'sini yüklemiş
+        // olabilir; onay değişkeni bu test boyunca açıkça yönetilir ve geri konur.
+        let previous_consent = std::env::var("CCM_ALLOW_REMOTE_EMBEDDING").ok();
+        std::env::remove_var("CCM_ALLOW_REMOTE_EMBEDDING");
         assert!(validate_embedding_host("http://127.0.0.1:11434", &Provider::Ollama).is_ok());
         assert!(validate_embedding_host("http://localhost:8080", &Provider::Ollama).is_ok());
         assert!(
@@ -638,7 +642,10 @@ mod tests {
         // Açık onay ile dış hedef kabul edilir.
         std::env::set_var("CCM_ALLOW_REMOTE_EMBEDDING", "1");
         assert!(validate_embedding_host("https://example.com/v1", &Provider::OpenAI).is_ok());
-        std::env::remove_var("CCM_ALLOW_REMOTE_EMBEDDING");
+        match previous_consent {
+            Some(value) => std::env::set_var("CCM_ALLOW_REMOTE_EMBEDDING", value),
+            None => std::env::remove_var("CCM_ALLOW_REMOTE_EMBEDDING"),
+        }
     }
 
     #[test]
