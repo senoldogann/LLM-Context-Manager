@@ -6,15 +6,20 @@
 
 English | [Turkce](./README.tr.md)
 
-> **🧠 The Codebase Graph Backbone for AI Agents**
+> **A code graph for AI coding agents that updates the moment you save, and says so when it is behind.**
 
-> Bridge the gap between your codebase and your AI editor. CCM transforms static source code into a dynamic, queryable Knowledge Graph, enabling AI agents to navigate, understand, and reason about your project with surgical precision.
+> CCM parses your project with tree-sitter (13 languages), keeps a call and
+> import graph plus an optional semantic index on disk, and serves them to
+> agents such as Claude Code, Codex and Cursor through 10 MCP tools. On Django
+> 5.1 (6,670 files) a saved change shows up in graph results after a median of
+> about 0.6 s ([measurement](https://github.com/senoldogann/LLM-Context-Manager/pull/5):
+> release build, embedder off). Query responses start with the index state
+> (`fresh`, or `stale · N changed files pending`), and a failed re-index never
+> replaces the last good graph.
 
-> **Current release: v0.3.13.** An external benchmark on real repositories
-> (serde, flask, express) with 35 hand-verified golden tasks, honest
-> Recall@K/MRR/latency metrics, and hybrid scoring at 82.9% vs 80.0%
-> semantic-only — plus the v0.3.12 durable background semantic upgrade and
-> the 180/180 offline semantic gate.
+> **Status, v0.3.13:** search quality has a 35-task pilot benchmark; whether the
+> graph saves agents time or tokens is not measured yet. What is and is not
+> measured: [`benchmarks/`](./benchmarks/README.md).
 
 [![Rust](https://img.shields.io/badge/Built%20With-Rust-orange.svg?style=flat-square&logo=rust)](https://www.rust-lang.org/)
 [![MCP Ready](https://img.shields.io/badge/MCP-Compatible-blue.svg?style=flat-square&logo=google-cloud)](https://modelcontextprotocol.io/)
@@ -26,42 +31,27 @@ English | [Turkce](./README.tr.md)
 
 ## Why CCM?
 
-Modern AI coding assistants (Claude, Cursor, Windsurf) are powerful but suffer from **blindness**:
+Coding agents find code well with grep. What grep does not give them is
+structure: who calls a function, what a change can break, which calls connect
+two places. CCM answers those as graph queries (`find_usages`,
+`impact_of_change`, `trace_call_chain`) and keeps the graph current while you
+edit:
 
-| Problem | Impact |
-|---------|--------|
-| **Context Limits** | Can't "see" your entire 100,000-line project |
-| **Hallucination** | Guesses dependencies without structure |
-| **Lost Context** | Vector search finds *similar words*, not *connected logic* |
+- **Fresh after a save:** a file watcher applies changes to the index the MCP
+  server already holds in memory (median ~0.6 s on Django 5.1, graph only).
+- **Says when it is behind:** query responses start with the index state, so an
+  agent can tell a fresh answer from one that predates your last edits.
+- **Never half-built:** each index is built as a new generation and activated
+  atomically; a failed or interrupted run leaves the previous graph serving.
 
-CCM turns raw code into a queryable graph so agents answer *connected logic*
-questions instead of guessing from similar words.
-
-### The "Agent-First" Difference
-
-Unlike tools that dump raw code, CCM injects **AI-Optimized Context**:
-
-- **Logical Reasoning** - Explains *why* code was retrieved
-- **Relational Edges** - Maps how files talk to each other
-- **Confidence Scores** - Shows certainty in results
-
-### CCM vs. Alternatives
-
-Many AI-context tools stop at *semantic search*: they embed files and return
-chunks that merely look similar. CCM layers a real dependency graph on top.
-
-| Capability | CCM | Semantic-only RAG (Cline, Continue.dev, Aider-style) |
-|------------|-----|-------------------------------------------------------|
-| Semantic search | Yes | Yes |
-| Call graph: "who calls X?" | Yes (`find_usages`) | Best-effort symbol grep only |
-| Impact analysis: blast radius of a change | Yes (`impact_of_change`) | No |
-| BFS call-chain traversal between two nodes | Yes (`trace_call_chain`) | No |
-| Cross-file dependency edges from AST | Yes (tree-sitter, 13 languages) | No |
-| Cursor-level context (`file:line`) | Yes (`get_context`) | Varies |
-
-**The one-line pitch:** *"Don't just search your codebase - map it."* CCM gives
-your agent the dependency graph, not just similar-looking text. That turns
-questions like "what breaks if I change this?" from guesses into queryable facts.
+**Limits, stated up front.** Call edges are resolved by name, not by type
+analysis: a call binds to a definition in the same file first, otherwise to the
+only definition elsewhere. Several same-file definitions produce edges marked
+ambiguous; a name defined in several other files produces no edge. How often
+this matches a type-aware tool has not been measured yet. Other MCP servers
+also build code graphs and refresh them automatically; CCM makes no claim of
+being fresher or more accurate than them until that is measured
+([`benchmarks/`](./benchmarks/README.md)).
 
 ---
 
@@ -70,7 +60,7 @@ questions like "what breaks if I change this?" from guesses into queryable facts
 ### 🧠 Connected Intelligence (Graph Navigator)
 - **Two-Pass Indexing** - Links function definitions to call sites
 - **Incremental Refresh** - Re-indexes only added, modified, renamed, or deleted files after the first run
-- **Deep Traversal** - Ask "Who calls this?" and get accurate answers
+- **Deep Traversal** - Ask "Who calls this?" and get the callers the graph knows (name-resolved, see limits above)
 
 ### ⚡ High-Performance Core
 - **Rust-Powered** - Single-binary CLI and MCP server; index and query timings
@@ -407,11 +397,13 @@ ccm-cli eval --tasks eval/golden_tasks.v3.ccm.json --compare
 If the evaluation index is missing, CCM bootstraps it automatically before scoring.
 Semantic `search_code` tasks still require a configured embedder.
 
-**Latest Recorded Results:** The offline synthetic semantic gate passes
-**180/180 tasks (100%)** as of v0.3.12, and CI now enforces it with
-`--min-pass-rate 100` (no regression); structural-only gate is 50/50 100%. The
-gate runs [`eval/fixtures/golden_tasks.synthetic.json`](./eval/fixtures/golden_tasks.synthetic.json)
-with deterministic fixture embeddings in [`eval.yml`](./.github/workflows/eval.yml).
+**Regression gate (not a quality measure):** CI runs a synthetic task set,
+[`eval/fixtures/golden_tasks.synthetic.json`](./eval/fixtures/golden_tasks.synthetic.json),
+with deterministic fixture embeddings in [`eval.yml`](./.github/workflows/eval.yml)
+and fails on any drop (`--min-pass-rate 100`). It guards against regressions;
+it says nothing about retrieval quality on real code. The external benchmark
+below is a 35-task pilot; its `get_context`/`read_graph` tasks are cursor and
+neighbourhood lookups, not agent tasks.
 
 **External benchmark (v0.3.13):** 35 hand-verified golden tasks on real repos
 (serde, flask, express) with real Ollama embeddings. Hybrid scoring passes

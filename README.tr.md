@@ -6,15 +6,20 @@
 
 [English](./README.md) | Turkce
 
-> **🧠 Otonom Yapay Zeka Ajanlari Icin Norel Omurga**
+> **Yapay zekâ kodlama ajanları için, kaydettiğiniz anda güncellenen ve geride kaldığında bunu söyleyen bir kod grafı.**
 
-> CCM, kod tabanınız ile yapay zeka editörünüz arasındaki boşluğu kapatır. Statik kaynak kodu dinamik ve sorgulanabilir bir bilgi grafına dönüştürür; böylece ajanlar projenizi daha doğru gezebilir, anlayabilir ve akıl yürütebilir.
+> CCM projenizi tree-sitter ile (13 dil) ayrıştırır, diskte bir çağrı ve import
+> grafı ile isteğe bağlı bir anlamsal indeks tutar ve bunları Claude Code, Codex
+> ve Cursor gibi ajanlara 10 MCP aracıyla sunar. Django 5.1'de (6.670 dosya)
+> kaydedilen bir değişiklik graf sonuçlarında medyan yaklaşık 0,6 sn sonra
+> görünür ([ölçüm](https://github.com/senoldogann/LLM-Context-Manager/pull/5):
+> release derleme, embedder kapalı). Sorgu yanıtları indeksin durumuyla başlar
+> (`fresh` ya da `stale · N changed files pending`) ve başarısız bir yeniden
+> indeksleme son sağlam grafın yerini asla almaz.
 
-> **Güncel sürüm: v0.3.13.** Gerçek repolar üzerinde dış benchmark (serde,
-> flask, express) — 35 elle doğrulanmış golden task, dürüst
-> Recall@K/MRR/latency metrikleri ve semantic-only %80.0'a karşı %82.9 hybrid
-> skoru; ayrıca v0.3.12'nin dayanıklı arka plan semantic upgrade'i ve 180/180
-> offline semantic gate'i.
+> **Durum, v0.3.13:** arama kalitesi için 35 görevlik bir pilot benchmark var;
+> grafın ajanlara zaman ya da token kazandırıp kazandırmadığı henüz ölçülmedi.
+> Neyin ölçülüp neyin ölçülmediği: [`benchmarks/`](./benchmarks/README.md).
 
 [![Rust](https://img.shields.io/badge/Built%20With-Rust-orange.svg?style=flat-square&logo=rust)](https://www.rust-lang.org/)
 [![MCP Ready](https://img.shields.io/badge/MCP-Compatible-blue.svg?style=flat-square&logo=google-cloud)](https://modelcontextprotocol.io/)
@@ -26,41 +31,27 @@
 
 ## Neden CCM?
 
-Modern yapay zeka kod asistanlari guclu olsa da ciddi bir **baglam korlugu** yasar:
+Kodlama ajanları grep ile kodu iyi bulur. Grep'in onlara vermediği şey yapıdır:
+bir fonksiyonu kimin çağırdığı, bir değişikliğin neyi bozabileceği, iki yeri
+hangi çağrıların bağladığı. CCM bunları graf sorgusu olarak cevaplar
+(`find_usages`, `impact_of_change`, `trace_call_chain`) ve siz düzenlerken grafı
+güncel tutar:
 
-| Problem | Etki |
-|---------|------|
-| **Baglam Limiti** | 100.000 satirlik projeyi butun olarak goremez |
-| **Halusinasyon** | Yapilari tam bilmeden bagimlilik tahmin eder |
-| **Baglam Kaybi** | Vektor arama baglantili mantigi degil, benzer kelimeleri bulur |
+- **Kayıttan sonra taze:** bir dosya izleyicisi değişiklikleri MCP sunucusunun
+  bellekte tuttuğu indekse uygular (Django 5.1'de medyan ~0,6 sn, yalnız graf).
+- **Geride kaldığında söyler:** sorgu yanıtları indeksin durumuyla başlar; ajan
+  taze bir cevabı son düzenlemelerinizden önceki bir cevaptan ayırt edebilir.
+- **Asla yarım değil:** her indeks yeni bir generation olarak kurulur ve atomik
+  olarak etkinleştirilir; başarısız ya da yarıda kesilen bir çalıştırma önceki
+  grafı hizmette bırakır.
 
-CCM, yapay zekayi yalnizca bir *metin tahminleyici* olmaktan cikarip daha cok bir **kidemli yazilim mimarina** yaklastirir.
-
-### Ajan Oncelikli Fark
-
-CCM, ham kod yiginlari vermek yerine **AI-Optimized Context** uretir:
-
-- **Mantiksal Akil Yurutme** - Icerigin neden getirildigini aciklar
-- **Iliskisel Kenarlar** - Dosyalarin ve sembollerin nasil baglandigini gosterir
-- **Guven Skorlari** - Sonuclarin ne kadar guvenli oldugunu belirtir
-
-### CCM ve Alternatifler
-
-Cogu AI-baglam araci *semantik aramada* durur: dosyalari gomup yalnizca benzer
-gorunen parcalari dondurur. CCM bunun ustune gercek bir bagimlilik grafi koyar.
-
-| Yetenek | CCM | Yalnizca semantik RAG (Cline, Continue.dev, Aider tarzi) |
-|---------|-----|----------------------------------------------------------|
-| Semantik arama | Var | Var |
-| Cagri grafi: "bunu kim cagiriyor?" | Var (`find_usages`) | Yalnizca sembol grep |
-| Etki analizi: degisikligin patlama yaricapi | Var (`impact_of_change`) | Yok |
-| Iki dugum arasi BFS cagri zinciri | Var (`trace_call_chain`) | Yok |
-| AST'den dosyalar arasi bagimlilik kenarlari | Var (tree-sitter, 13 dil) | Yok |
-| Imlec seviyesinde baglam (`dosya:satir`) | Var (`get_context`) | Degisken |
-
-**Tek cumlelik pitch:** *"Kod tabanini sadece arama, haritalandir."* CCM ajana
-benzer gorunen metin degil, bagimlilik grafini verir. "Bunu degistirirsem ne
-kirilir?" gibi sorulari tahminden sorgulanabilir gercege donusturur.
+**Sınırlar, baştan.** Çağrı kenarları tür analiziyle değil isimle çözülür: bir
+çağrı önce aynı dosyadaki tanıma, yoksa başka yerdeki tek tanıma bağlanır. Aynı
+dosyadaki birden çok tanım belirsiz olarak işaretlenmiş kenarlar üretir; birden
+çok başka dosyada tanımlı bir isim hiç kenar üretmez. Bunun tür bilen bir araçla
+ne sıklıkla örtüştüğü henüz ölçülmedi. Başka MCP sunucuları da kod grafı kurup
+otomatik yeniler; CCM bu ölçülene kadar onlardan daha taze ya da daha doğru
+olduğunu iddia etmez ([`benchmarks/`](./benchmarks/README.md)).
 
 ---
 
@@ -69,7 +60,7 @@ kirilir?" gibi sorulari tahminden sorgulanabilir gercege donusturur.
 ### Bağlı Zeka (Graph Navigator)
 - **İki Aşamalı İndeksleme** - Fonksiyon tanımlarını çağrı noktalarına bağlar
 - **Artırmalı Güncelleme** - İlk çalışmadan sonra yalnızca eklenen, değişen, yeniden adlandırılan veya silinen dosyaları işler
-- **Derin Gezinti** - "Bunu kim çağırıyor?" gibi sorulara daha doğru cevap verir
+- **Derin Gezinti** - "Bunu kim çağırıyor?" sorusuna grafın bildiği çağıranlarla cevap verir (isimle çözülür, yukarıdaki sınırlara bakın)
 
 ### Yüksek Performanslı Çekirdek
 - **Rust Tabanlı** - Hızlı indeksleme ve sorgulama

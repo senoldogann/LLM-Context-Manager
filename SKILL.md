@@ -11,7 +11,8 @@ license: MIT
 
 > Transform any codebase into a queryable knowledge graph for AI agents.
 > CCM combines Tree-sitter AST parsing, LanceDB vector search, and Petgraph graph traversal
-> into 10 MCP tools that give agents surgical codebase intelligence.
+> into 10 MCP tools for structural questions: callers, call chains and the impact of a change.
+> Responses start with the index state; treat `stale` answers as possibly outdated.
 
 ## When to Activate
 
@@ -146,7 +147,7 @@ CCM supports 4 distinct operational modes depending on your task. Each has a ter
 
 ---
 
-### Mode 3: Graph Traversal (Surgical Dependency Analysis)
+### Mode 3: Graph Traversal (Dependency Analysis)
 **When:** You have a known node_id and need to drill into its callers, callees, or connections.
 
 ```

@@ -1,14 +1,12 @@
 # @senoldogann/context-manager
 
-> 🧠 The Neural Backbone for Autonomous AI Agents
+> A code graph for AI coding agents that updates the moment you save, and says so when it is behind.
 
-**Node.js wrapper for Cognitive Codebase Matrix (CCM)** - Enables AI agents to understand and navigate your codebase with surgical precision.
-
-**v0.3.13** adds an external benchmark on real repositories (serde, flask,
-express) with 35 hand-verified golden tasks and honest Recall@K/MRR/latency
-metrics — hybrid scoring at 82.9% vs 80.0% semantic-only. **v0.3.12** made the
-background semantic upgrade durable (it completes even if the MCP server is
-closed mid-upgrade) and raised the offline semantic gate to 180/180.
+**Node.js wrapper for Cognitive Codebase Matrix (CCM)**: installs the `ccm-cli`
+and `ccm-mcp` binaries and registers the MCP server with Claude Code, Codex,
+Cursor, Claude Desktop and Antigravity. What CCM does, what is measured and what
+is not: the [main README](https://github.com/senoldogann/LLM-Context-Manager#readme)
+and the [benchmarks](https://github.com/senoldogann/LLM-Context-Manager/blob/main/benchmarks/README.md).
 
 [![npm](https://img.shields.io/npm/v/@senoldogann/context-manager?color=orange)](https://www.npmjs.com/package/@senoldogann/context-manager)
 [![MCP](https://img.shields.io/badge/MCP-Compatible-blue)](https://modelcontextprotocol.io/)
@@ -276,12 +274,13 @@ Enable `CCM_EMBED_DATA_FILES=1` to include them in semantic search.
   with real Ollama embeddings
 - ✅ `evaluate_with_mode` emits `ranked` hit lists and per-task `latency_ms` for
   all query types, enabling Recall@K / MRR@K computation
-- ✅ Honest first results: hybrid 82.9% (29/35) vs semantic-only 80.0% (28/35);
-  `get_context`/`read_graph` 20/20 across all three repos
+- ✅ First pilot results (35 tasks): hybrid 82.9% (29/35) vs semantic-only
+  80.0% (28/35); the `get_context`/`read_graph` tasks are cursor and
+  neighbourhood lookups, not agent tasks
 
 ### v0.3.12
-- ✅ Offline semantic gate raised to **180/180** (100%); the CI gate now requires
-  100% with no regression, and all 50 `search_code` tasks pass
+- ✅ Offline synthetic regression gate expanded to 180 tasks; CI now fails on any
+  drop from 100% (a regression guard on fixture embeddings, not a quality measure)
 - ✅ Synthetic fixture embeds at 512 dimensions (was 64), weighting the code
   symbol ahead of body noise to fix low-dimensional `search_code` recall loss
 - ✅ `score_hits` honors both `node_ids` and `file_paths` when a task supplies both
