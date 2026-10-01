@@ -1,0 +1,342 @@
+{
+  "schema_version": 1,
+  "harness_revision": "ecf757665cda16406d5d919f7ff0ac704f14349c",
+  "preregistration": "benchmarks/freshness/PREREGISTRATION.md",
+  "system": {
+    "name": "ccm",
+    "version": "ccm-cli 0.3.13",
+    "artifacts": [
+      {
+        "name": "ccm-cli",
+        "sha256": "554dcdf9fcafdfc3e4bab3f30836d87462c6ecbb8712dcf0233753ccb3803373"
+      },
+      {
+        "name": "ccm-mcp",
+        "sha256": "74502d0a7d92efea2765a56936778304533a532b78cb7f2945c1f00ed08c291d"
+      }
+    ]
+  },
+  "environment": {
+    "platform": "macOS-26.6.2-arm64-arm-64bit-Mach-O",
+    "machine": "arm64",
+    "cpu": "Apple M4",
+    "logical_cpus": 10,
+    "memory_bytes": 17179869184,
+    "python": "3.14.3"
+  },
+  "settings": {
+    "t_grid_s": [
+      0.0,
+      0.25,
+      0.5,
+      1.0,
+      2.0,
+      5.0,
+      30.0
+    ],
+    "settle_s": 1.0,
+    "ready_poll_s": 0.1,
+    "ready_timeout_s": 120.0,
+    "request_timeout_s": 30.0,
+    "repetitions": 3,
+    "scenarios": [
+      "S5"
+    ]
+  },
+  "started_at": "2026-10-01T13:39:30+00:00",
+  "finished_at": "2026-10-01T13:41:04+00:00",
+  "complete": true,
+  "runs": [
+    {
+      "scenario": "S5",
+      "repo": "generated",
+      "repetition": 1,
+      "index_seconds": 0.06028845798573457,
+      "ready_seconds": 0.3263616670155898,
+      "baseline_ok": true,
+      "baseline_detail": "node=occupant_fn lines=15-17",
+      "crashed": false,
+      "error": "",
+      "probes": [
+        {
+          "phase": "edit",
+          "t_target_s": 0.0,
+          "t_actual_s": 0.0,
+          "duration_s": 0.0023,
+          "verdict": "STALE_SILENT",
+          "label_channel": "none",
+          "label_text": "fresh · auto-refresh on",
+          "partial": false,
+          "reflected_count": null,
+          "detail": "node=occupant_fn lines=15-17"
+        },
+        {
+          "phase": "edit",
+          "t_target_s": 0.25,
+          "t_actual_s": 0.2551,
+          "duration_s": 0.064,
+          "verdict": "CORRECT",
+          "label_channel": "none",
+          "label_text": "fresh · auto-refresh on",
+          "partial": false,
+          "reflected_count": null,
+          "detail": "node=shifted_fn lines=15-17"
+        },
+        {
+          "phase": "edit",
+          "t_target_s": 0.5,
+          "t_actual_s": 0.5014,
+          "duration_s": 0.0023,
+          "verdict": "CORRECT",
+          "label_channel": "none",
+          "label_text": "fresh · auto-refresh on",
+          "partial": false,
+          "reflected_count": null,
+          "detail": "node=shifted_fn lines=15-17"
+        },
+        {
+          "phase": "edit",
+          "t_target_s": 1.0,
+          "t_actual_s": 1.005,
+          "duration_s": 0.0022,
+          "verdict": "CORRECT",
+          "label_channel": "none",
+          "label_text": "fresh · auto-refresh on",
+          "partial": false,
+          "reflected_count": null,
+          "detail": "node=shifted_fn lines=15-17"
+        },
+        {
+          "phase": "edit",
+          "t_target_s": 2.0,
+          "t_actual_s": 2.0026,
+          "duration_s": 0.0025,
+          "verdict": "CORRECT",
+          "label_channel": "none",
+          "label_text": "fresh · auto-refresh on",
+          "partial": false,
+          "reflected_count": null,
+          "detail": "node=shifted_fn lines=15-17"
+        },
+        {
+          "phase": "edit",
+          "t_target_s": 5.0,
+          "t_actual_s": 5.0014,
+          "duration_s": 0.0025,
+          "verdict": "CORRECT",
+          "label_channel": "none",
+          "label_text": "fresh · auto-refresh on",
+          "partial": false,
+          "reflected_count": null,
+          "detail": "node=shifted_fn lines=15-17"
+        },
+        {
+          "phase": "edit",
+          "t_target_s": 30.0,
+          "t_actual_s": 30.002,
+          "duration_s": 0.0043,
+          "verdict": "CORRECT",
+          "label_channel": "none",
+          "label_text": "fresh · auto-refresh on",
+          "partial": false,
+          "reflected_count": null,
+          "detail": "node=shifted_fn lines=15-17"
+        }
+      ]
+    },
+    {
+      "scenario": "S5",
+      "repo": "generated",
+      "repetition": 2,
+      "index_seconds": 0.12639137500082143,
+      "ready_seconds": 0.3279552909953054,
+      "baseline_ok": true,
+      "baseline_detail": "node=occupant_fn lines=15-17",
+      "crashed": false,
+      "error": "",
+      "probes": [
+        {
+          "phase": "edit",
+          "t_target_s": 0.0,
+          "t_actual_s": 0.0,
+          "duration_s": 0.0018,
+          "verdict": "STALE_SILENT",
+          "label_channel": "none",
+          "label_text": "fresh · auto-refresh on",
+          "partial": false,
+          "reflected_count": null,
+          "detail": "node=occupant_fn lines=15-17"
+        },
+        {
+          "phase": "edit",
+          "t_target_s": 0.25,
+          "t_actual_s": 0.2545,
+          "duration_s": 0.0653,
+          "verdict": "CORRECT",
+          "label_channel": "none",
+          "label_text": "fresh · auto-refresh on",
+          "partial": false,
+          "reflected_count": null,
+          "detail": "node=shifted_fn lines=15-17"
+        },
+        {
+          "phase": "edit",
+          "t_target_s": 0.5,
+          "t_actual_s": 0.5034,
+          "duration_s": 0.0016,
+          "verdict": "CORRECT",
+          "label_channel": "none",
+          "label_text": "fresh · auto-refresh on",
+          "partial": false,
+          "reflected_count": null,
+          "detail": "node=shifted_fn lines=15-17"
+        },
+        {
+          "phase": "edit",
+          "t_target_s": 1.0,
+          "t_actual_s": 1.0008,
+          "duration_s": 0.0016,
+          "verdict": "CORRECT",
+          "label_channel": "none",
+          "label_text": "fresh · auto-refresh on",
+          "partial": false,
+          "reflected_count": null,
+          "detail": "node=shifted_fn lines=15-17"
+        },
+        {
+          "phase": "edit",
+          "t_target_s": 2.0,
+          "t_actual_s": 2.0024,
+          "duration_s": 0.0022,
+          "verdict": "CORRECT",
+          "label_channel": "none",
+          "label_text": "fresh · auto-refresh on",
+          "partial": false,
+          "reflected_count": null,
+          "detail": "node=shifted_fn lines=15-17"
+        },
+        {
+          "phase": "edit",
+          "t_target_s": 5.0,
+          "t_actual_s": 5.0051,
+          "duration_s": 0.0036,
+          "verdict": "CORRECT",
+          "label_channel": "none",
+          "label_text": "fresh · auto-refresh on",
+          "partial": false,
+          "reflected_count": null,
+          "detail": "node=shifted_fn lines=15-17"
+        },
+        {
+          "phase": "edit",
+          "t_target_s": 30.0,
+          "t_actual_s": 30.004,
+          "duration_s": 0.0026,
+          "verdict": "CORRECT",
+          "label_channel": "none",
+          "label_text": "fresh · auto-refresh on",
+          "partial": false,
+          "reflected_count": null,
+          "detail": "node=shifted_fn lines=15-17"
+        }
+      ]
+    },
+    {
+      "scenario": "S5",
+      "repo": "generated",
+      "repetition": 3,
+      "index_seconds": 0.12529870800790377,
+      "ready_seconds": 0.32483174998196773,
+      "baseline_ok": true,
+      "baseline_detail": "node=occupant_fn lines=15-17",
+      "crashed": false,
+      "error": "",
+      "probes": [
+        {
+          "phase": "edit",
+          "t_target_s": 0.0,
+          "t_actual_s": 0.0,
+          "duration_s": 0.0017,
+          "verdict": "STALE_SILENT",
+          "label_channel": "none",
+          "label_text": "fresh · auto-refresh on",
+          "partial": false,
+          "reflected_count": null,
+          "detail": "node=occupant_fn lines=15-17"
+        },
+        {
+          "phase": "edit",
+          "t_target_s": 0.25,
+          "t_actual_s": 0.2519,
+          "duration_s": 0.0672,
+          "verdict": "CORRECT",
+          "label_channel": "none",
+          "label_text": "fresh · auto-refresh on",
+          "partial": false,
+          "reflected_count": null,
+          "detail": "node=shifted_fn lines=15-17"
+        },
+        {
+          "phase": "edit",
+          "t_target_s": 0.5,
+          "t_actual_s": 0.5006,
+          "duration_s": 0.0022,
+          "verdict": "CORRECT",
+          "label_channel": "none",
+          "label_text": "fresh · auto-refresh on",
+          "partial": false,
+          "reflected_count": null,
+          "detail": "node=shifted_fn lines=15-17"
+        },
+        {
+          "phase": "edit",
+          "t_target_s": 1.0,
+          "t_actual_s": 1.005,
+          "duration_s": 0.0023,
+          "verdict": "CORRECT",
+          "label_channel": "none",
+          "label_text": "fresh · auto-refresh on",
+          "partial": false,
+          "reflected_count": null,
+          "detail": "node=shifted_fn lines=15-17"
+        },
+        {
+          "phase": "edit",
+          "t_target_s": 2.0,
+          "t_actual_s": 2.0008,
+          "duration_s": 0.0024,
+          "verdict": "CORRECT",
+          "label_channel": "none",
+          "label_text": "fresh · auto-refresh on",
+          "partial": false,
+          "reflected_count": null,
+          "detail": "node=shifted_fn lines=15-17"
+        },
+        {
+          "phase": "edit",
+          "t_target_s": 5.0,
+          "t_actual_s": 5.0024,
+          "duration_s": 0.0023,
+          "verdict": "CORRECT",
+          "label_channel": "none",
+          "label_text": "fresh · auto-refresh on",
+          "partial": false,
+          "reflected_count": null,
+          "detail": "node=shifted_fn lines=15-17"
+        },
+        {
+          "phase": "edit",
+          "t_target_s": 30.0,
+          "t_actual_s": 30.001,
+          "duration_s": 0.0044,
+          "verdict": "CORRECT",
+          "label_channel": "none",
+          "label_text": "fresh · auto-refresh on",
+          "partial": false,
+          "reflected_count": null,
+          "detail": "node=shifted_fn lines=15-17"
+        }
+      ]
+    }
+  ]
+}

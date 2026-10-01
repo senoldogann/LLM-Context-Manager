@@ -195,4 +195,7 @@ disclosed because it was seen before pre-registration.
    and `find_usages` titles use one-word node types (`core/src/engine.rs`), so
    S1–S4 and S6–S8 are unaffected. S5 was re-run alone (3 repetitions) with
    the fixed harness. Both results files are published; the summary takes S5
-   from the re-run.
+   from the re-run. Rerun outcome (3/3, harness `ecf7576`): baseline met;
+   `STALE_SILENT` at t = 0; `CORRECT` from t = 0.25 s on; status line
+   `fresh · auto-refresh on` in every probe, so the one stale answer carried no
+   label. No errors, no partial states.
