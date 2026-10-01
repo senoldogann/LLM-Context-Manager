@@ -28,6 +28,15 @@
       "languages": ["javascript"],
       "size_hint": "medium",
       "notes": "Express web framework; middleware chain and router."
+    },
+    {
+      "name": "django",
+      "url": "https://github.com/django/django.git",
+      "ref": "5.1",
+      "commit": "373cb3037fe4e67adbac9ac43340391e859aa957",
+      "languages": ["python"],
+      "size_hint": "large",
+      "notes": "Django web framework; large Python codebase for the L1 freshness benchmark (S1)."
     }
   ]
 }

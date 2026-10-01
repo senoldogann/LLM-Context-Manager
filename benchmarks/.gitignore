@@ -7,3 +7,7 @@ corpus/
 **/ccm_graph.json
 **/ccm_manifest.json
 **/ccm_current
+
+# Python harness (benchmarks/freshness): uv ortamı ve bayt kodu
+.venv/
+__pycache__/

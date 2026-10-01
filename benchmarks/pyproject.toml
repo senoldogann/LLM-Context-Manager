@@ -1,0 +1,31 @@
+[project]
+name = "ccm-bench"
+version = "0.1.0"
+description = "CCM-Bench: freshness (L1) and edge accuracy (L2) harnesses for code-graph MCP servers"
+requires-python = ">=3.11"
+dependencies = []
+
+[dependency-groups]
+dev = [
+    "mypy==1.18.2",
+    "ruff==0.14.0",
+]
+
+[tool.uv]
+package = false
+
+[tool.mypy]
+strict = true
+python_version = "3.11"
+warn_unreachable = true
+disallow_any_explicit = true
+files = ["freshness"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP", "ANN", "RET", "SIM", "PL", "RUF"]
+# RUF001-003: Türkçe yorum ve metinlerdeki harfler bilinçli olarak kullanılıyor.
+ignore = ["PLR2004", "PLR0913", "PLR0911", "PLR0912", "PLR0915", "RUF001", "RUF002", "RUF003"]
