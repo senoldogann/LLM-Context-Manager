@@ -621,15 +621,17 @@ async fn wait_for_index_job(
 /// ve aktif generation atomik şekilde vektörlü hale gelir. Upgrade yarıda kalırsa
 /// bile `update_index`'in self-repair yolu (`vector_table_required && unhealthy`)
 /// sonraki `index_project` çağrısında eksik vektörleri onarır.
-fn schedule_semantic_upgrade(
+pub(crate) fn schedule_semantic_upgrade(
     state: Arc<crate::server::ServerState>,
     project_path: std::sync::Arc<str>,
     db_path: String,
+    kind: crate::server::SemanticUpgradeKind,
 ) {
-    // Otomatik yenileme yükseltme bitene kadar ertelenir; aksi halde eksik
-    // vektör tablosunu görüp aynı embedding işini ikinci kez başlatır.
+    // Hızlı indeks yükseltmesi bitene kadar otomatik yenileme ertelenir; model
+    // değişikliği yükseltmesi graf yenilemelerini durdurmaz (bkz.
+    // `SemanticUpgradeKind`).
     let project_key = crate::server::project_key_for_path(&project_path);
-    state.begin_semantic_upgrade(&project_key);
+    state.begin_semantic_upgrade(&project_key, kind);
     // Detached worker: MCP çıkışında ölmeyen, kendi process grubunda koşan süreç.
     // Yalnızca iş tamamlandığında (süreç hâlâ yaşıyorsa) engine cache tazelenir.
     tokio::spawn(async move {
@@ -648,7 +650,7 @@ fn schedule_semantic_upgrade(
                 tracing::warn!(error = %error, "Background semantic upgrade failed");
             }
         }
-        refresh_state.end_semantic_upgrade(&project_key);
+        refresh_state.end_semantic_upgrade(&project_key, kind);
     });
 }
 
@@ -871,6 +873,7 @@ async fn run_index_project(
                     state.clone(),
                     project_path.to_string().into(),
                     db_path.clone(),
+                    crate::server::SemanticUpgradeKind::QuickIndex,
                 );
             }
 
@@ -953,7 +956,7 @@ fn format_index_stats_result(stats: ccm_core::IndexStats, mode: IndexModeArg) ->
     // yalnızca sözcüksel sonuç döndürmesinin nedeni görünmez kalır.
     let semantic_notice = stats.semantic_unavailable.as_ref().map(|reason| {
         format!(
-            "Semantic search is unavailable: {}. Graph tools (find_usages, impact_of_change, trace_call_chain, get_context, read_graph) work normally; call index_project again once the embedding service is reachable.",
+            "Semantic search is unavailable: {}. Graph tools (find_usages, impact_of_change, trace_call_chain, get_context, read_graph) work normally; call index_project again once that is resolved.",
             reason
         )
     });

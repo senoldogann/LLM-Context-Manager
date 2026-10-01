@@ -73,7 +73,8 @@ kirilir?" gibi sorulari tahminden sorgulanabilir gercege donusturur.
 
 ### Yüksek Performanslı Çekirdek
 - **Rust Tabanlı** - Hızlı indeksleme ve sorgulama
-- **Toplu Embedding** - Büyük kod bloklarını kısa sürede işler
+- **Yerleşik Embedding** - Semantik arama kurulumsuz çalışır: sabitlenmiş, çok dilli ve kod üzerinde eğitilmiş bir embedding modeli ikilinin içinde çalışır (Ollama ve API anahtarı gerekmez)
+- **Belirlenimci Embedding** - Tüm fiziksel çekirdeklerde çıkarım başına tek parça; bir parçanın vektörü komşularına bağlı olmaz (Ollama/OpenAI istekleri batch'lenir)
 - **LanceDB** - Düşük gecikmeli vektör depolama
 - **Tree-sitter** - Rust, Python, TypeScript, JavaScript, Go, Java, Kotlin, C#, C, C++, Ruby, PHP ve Swift için sağlam AST analizi
 
@@ -167,18 +168,20 @@ npm publish --access public --provenance
 
 ## Konfigurasyon
 
-`~/.ccm/.env` dosyasi olusturun (veya repodaki `.env.example` dosyasini baz alin):
+Semantik arama icin ayar gerekmez: varsayilan yerlesik yerel embedding
+modelidir (bkz. [Embedding](#embedding)). `~/.ccm/.env` dosyasini (veya repodaki
+`.env.example` dosyasini) yalnizca varsayilanlari degistirmek icin olusturun:
 
 ```ini
-# Secenek A: Lokal (onerilen)
+# Varsayilan: yerlesik yerel model, ayar gerekmez.
+
+# Secenek B: Ollama
 EMBEDDING_PROVIDER=ollama
 EMBEDDING_HOST=http://127.0.0.1:11434
 EMBEDDING_MODEL=mxbai-embed-large
 
-# Secenek B: Bulut (OpenAI)
-EMBEDDING_PROVIDER=openai
-EMBEDDING_API_KEY=sk-your-key
-EMBEDDING_MODEL=text-embedding-3-small
+# Seçenek C: OpenAI. Bu tek satır onu seçer; kod parçaları OpenAI'a gönderilir.
+OPENAI_API_KEY=sk-your-key
 
 # Ag ve limitler
 EMBEDDING_TIMEOUT_SECS=30
@@ -212,7 +215,68 @@ Gelismis ayarlar:
 - Chunking, batch size, hibrit agirliklar ve `OPENAI_API_KEY`, `CCM_SKIP_CHECKSUM`, `CCM_MCP_REQUIRE_ALLOWED_ROOTS`, `CCM_EMBED_DATA`, `EMBEDDING_DISABLED` gibi uyumluluk alias'lari icin `.env.example` dosyasina bakin.
 - Hibrit skor agirliklari icin [`docs/hybrid-ranking.md`](./docs/hybrid-ranking.md) dosyasini kullanin.
 
-**Not:** Semantik arama için Ollama'nın çalışıyor (`ollama serve`) ve modelin indirilmiş olması (`ollama pull mxbai-embed-large`) gerekir. Embedding servisine ulaşılamazsa indeksleme yine de graf-yalnız bir indeks aktive eder (graf araçları çalışır, `search_code` sözcüksel eşleşmeye düşer) ve nedenini raporlar; servis erişilebilirken yapılan sonraki indeksleme vektörleri tamamlar. `ccm-cli doctor` embedding servisine gerçek bir deneme isteği gönderir.
+### Embedding
+
+**Varsayılan: yerleşik yerel model.** `EMBEDDING_*` ayarı yoksa ve `~/.ccm/.env`
+içinde `OPENAI_API_KEY` bulunmuyorsa CCM kodu süreç içinde
+[`ibm-granite/granite-embedding-97m-multilingual-r2`](https://huggingface.co/ibm-granite/granite-embedding-97m-multilingual-r2)
+ile (Apache-2.0; IBM'in int8 ONNX dosyası, 384 boyut, CLS pooling, girdiler 512
+token'da kesilir) ONNX Runtime üzerinden, fiziksel çekirdeklerle embed eder.
+
+- **İndirme:** ilk indeksleme (ya da `ccm-cli models pull`) Hugging Face'ten
+  sabitlenmiş bir revizyondan ~124 MB (98 MB model + 25 MB tokenizer + ayarlar)
+  indirir: `~/.ccm/models/ibm-granite--granite-embedding-97m-multilingual-r2/<revizyon>/`.
+  Her dosya sabitlenmiş SHA-256 ile doğrulanır; uyuşmazlık ya da başarısız indirme
+  açık bir hatadır, sessiz geri dönüş yoktur. Yalnızca model indirilir; kodunuz
+  makineden çıkmaz.
+- **Ağsız kurulum:** bağlı bir makinede `ccm-cli models pull` çalıştırıp
+  `~/.ccm/models` dizinini kopyalayın; önceden yerleştirilen dosyalar doğrulandıktan
+  sonra kullanılır. `CCM_MODEL_DIR` model kökünü, `HF_ENDPOINT` aynayı değiştirir.
+- **Ayar:** `CCM_EMBED_THREADS` (varsayılan: fiziksel çekirdek sayısı; container'daki
+  cgroup sınırı gibi kullanılabilir CPU kotasıyla sınırlanır). Model
+  çıkarım başına tek parça embed eder: int8 aktivasyonları çağrı başına quantize
+  edildiğinden batch'leme bir parçanın vektörünü aynı çağrıdaki parçalara bağlı
+  kılardı. `CCM_LOCAL_EMBED_BATCH` yerel çıkarım batch'ini ayarlar (varsayılan 1);
+  `CCM_EMBED_BATCH_SIZE` Ollama/OpenAI isteği başına metin sayısını belirler
+  (varsayılan 32).
+- **Intel Mac (`x86_64-apple-darwin`):** ONNX Runtime bu hedef için hazır ikili
+  yayımlamadığından yerel model derlenmez. `~/.ccm/.env` içine `OPENAI_API_KEY`
+  eklenene ya da `EMBEDDING_PROVIDER` verilene kadar CCM graf-yalnız indeks kurar;
+  `ccm-cli doctor` ve indeksleme çıktısı nedenini söyler.
+
+**İsteğe bağlı yükseltme: OpenAI.** `~/.ccm/.env` içine `OPENAI_API_KEY=sk-...`
+eklerseniz CCM, resmi `https://api.openai.com/v1` endpoint'inde
+`text-embedding-3-small` ile embed eder; bu endpoint için
+`CCM_ALLOW_REMOTE_EMBEDDING` onayı gerekmez. Bu durumda kod parçaları OpenAI'a
+gönderilir. Yalnızca `~/.ccm/.env` içindeki anahtar sayılır: kabukta export
+edilmiş bir anahtar sağlayıcıyı asla değiştirmez, böylece kod açık bir tercih
+olmadan makineden çıkmaz. [`benchmarks/`](./benchmarks/README.md) yerleşik modelle
+karşılaştırmayı içerir.
+
+**Sağlayıcı seçimi:** `EMBEDDING_PROVIDER=local|ollama|openai` verilmişse o
+kullanılır. Verilmemişse `~/.ccm/.env` içindeki `OPENAI_API_KEY`, `EMBEDDING_HOST`
+ayarlı değilse OpenAI'ı seçer (`EMBEDDING_MODEL` bu durumda yalnızca OpenAI
+modelini belirler). Bu anahtar yokken `EMBEDDING_HOST` ya da `EMBEDDING_MODEL`
+ayarlıysa önceki Ollama/OpenAI davranışı korunur (mevcut yapılandırmalar
+değişmeden çalışır); hiçbiri yoksa yerel model kullanılır.
+`CCM_DISABLE_EMBEDDER=1` semantik aramayı kapatır.
+
+**Model değişikliği:** indeks manifesti vektörleri üreten sağlayıcı, model,
+revizyon ve boyutu kaydeder; iki modelin vektörleri asla karışmaz. Değişiklikten
+sonra (0.3.x'ten yükseltmede Ollama ile kurulmuş indeksin yeni yerel varsayılanla
+karşılaşması dahil) MCP sunucusu etkin indeksi arka planda bir kez yeniden embed
+eder (tazelik satırı `semantic index being rebuilt` der; otomatik yenileme bu
+sırada grafı güncel tutar ve `search_code` o bitene kadar graf sonuçlarını
+kullanır). `ccm-cli index` /
+`index_project` aynı işi istendiğinde yapar.
+
+Embedding kaynağına ulaşılamazsa (Ollama ya da OpenAI erişilemez, model
+indirilemedi) indeksleme
+yine de graf-yalnız bir indeks aktive eder (graf araçları çalışır, `search_code`
+sözcüksel eşleşmeye düşer) ve nedenini raporlar; sonraki indeksleme vektörleri
+tamamlar. `ccm-cli doctor` embedder durumunu raporlar: yerel modelde dosyaları
+indirmeden denetler ve bir deneme embedding'i yapar; Ollama/OpenAI'de gerçek bir
+deneme isteği gönderir.
 
 **Guvenlik:** MCP varsayilan olarak strict allowlist uygular; yalnizca `CCM_ALLOWED_ROOTS` (yoksa `CCM_PROJECT_ROOT`) altindaki dizinler ve host'un MCP `roots` ile bildirdigi calisma alanlari indekslenebilir/okunabilir. Genis erisim gerekiyorsa `CCM_REQUIRE_ALLOWED_ROOTS=0` verilebilir; bu modda bile erisim baslangic proje kokuyle sinirli kalir.
 
@@ -235,8 +299,11 @@ ccm-cli query --text "src/main.rs:50"
 # Watch mode
 ccm-cli index --path . --watch
 
-# Kurulum, allowlist ve index uyumlulugunu denetle
+# Kurulum, allowlist, index uyumlulugu ve embedder durumunu denetle
 ccm-cli doctor --path .
+
+# Yerlesik embedding modelini onceden indir ve dogrula
+ccm-cli models pull
 
 # Degerlendirme calistir
 ccm-cli eval --tasks eval/golden_tasks.v3.ccm.json
@@ -349,10 +416,10 @@ Lokal source build icin `cargo build --release` komutu halen makinenizde `protoc
 ### "No context found"
 1. Once `ccm-cli index --path .` calistirin
 2. Override ettiyseniz `CCM_PROJECT_ROOT` degerinin indexlenen dizinle ayni oldugunu kontrol edin
-3. Ollama'nin ayakta oldugundan emin olun
+3. Embedder durumunu `ccm-cli doctor` ile denetleyin (yerel model dosyalari ya da Ollama/OpenAI servisi)
 
 ### Yavas indexleme
-- Ilk calisma embedding modelini indirir
+- Ilk calisma yerel embedding modelini bir kez indirir (~124 MB); `ccm-cli models pull` onceden indirir
 - Sonraki calismalar incremental oldugu icin daha hizlidir
 
 ### "Checksum manifest not found" / "Checksum mismatch"

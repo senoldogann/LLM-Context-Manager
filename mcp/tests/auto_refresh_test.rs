@@ -1,6 +1,9 @@
 mod common;
 
-use common::{found_node, poll_find_nodes, run_update_index_process, McpSession};
+use common::{
+    embedding_env, found_node, index_with_model, poll_find_nodes, run_update_index_process,
+    start_embed_server, McpSession,
+};
 use serde_json::{json, Value};
 use std::error::Error;
 use std::fs;
@@ -387,6 +390,144 @@ fn quick_index_upgrade_defers_refresh_without_blocking_reads() -> Result<(), Box
         Duration::from_secs(20),
         |text| found_node(text, "during_upgrade_symbol") && text.starts_with("_Index: fresh"),
     )?;
+    Ok(())
+}
+
+/// Etkin indeksin manifestine kaydedilmiş embedding modeli.
+fn recorded_embedding_model(project: &Path) -> Result<Option<String>, Box<dyn Error>> {
+    let artifacts = ccm_core::resolve_index_artifacts(&project.to_string_lossy(), None)?;
+    Ok(ccm_core::read_index_embedding(&artifacts.manifest_path)?.map(|identity| identity.model))
+}
+
+/// Okuma aracının yanıtındaki tazelik satırı (ilk satır).
+fn freshness_line(text: &str) -> &str {
+    text.lines().next().unwrap_or_default()
+}
+
+#[test]
+fn embedding_model_change_rebuilds_the_semantic_index_in_the_background(
+) -> Result<(), Box<dyn Error>> {
+    let project = tempdir()?;
+    fs::write(project.path().join("main.rs"), "fn existing_symbol() {}\n")?;
+    let host = start_embed_server(&[])?;
+    index_with_model(project.path(), &host, "ccm-test-embed-a")?;
+    assert_eq!(
+        recorded_embedding_model(project.path())?.as_deref(),
+        Some("ccm-test-embed-a")
+    );
+
+    // Model değişti: sunucu vektörleri kendiliğinden bir kez yeniden kurar.
+    // Worker gecikmesi yükseltmeyi okumaların göreceği kadar uzatır.
+    let mut env = embedding_env(&host, "ccm-test-embed-b");
+    env.push(("CCM_INTERNAL_INDEX_TEST_DELAY_MS", "8000"));
+    let mut session = McpSession::start(project.path(), &env)?;
+    poll_find_nodes(
+        &mut session,
+        "existing_symbol",
+        Duration::from_secs(20),
+        |text| freshness_line(text).contains("semantic index being rebuilt in the background"),
+    )?;
+
+    // Yeniden embed graf yenilemelerini durdurmaz: yükseltme sürerken yapılan
+    // değişiklik taze görünür.
+    fs::write(
+        project.path().join("added.rs"),
+        "fn during_rebuild_symbol() {}\n",
+    )?;
+    let during = poll_find_nodes(
+        &mut session,
+        "during_rebuild_symbol",
+        Duration::from_secs(20),
+        |text| {
+            found_node(text, "during_rebuild_symbol")
+                && freshness_line(text).contains("semantic index being rebuilt in the background")
+        },
+    )?;
+    let line = freshness_line(&during);
+    assert!(
+        line.starts_with("_Index: fresh · auto-refresh on · ")
+            && !line.contains("waiting for semantic upgrade"),
+        "unexpected freshness line during the re-embed: {during}"
+    );
+
+    poll_find_nodes(
+        &mut session,
+        "during_rebuild_symbol",
+        Duration::from_secs(60),
+        |text| {
+            found_node(text, "during_rebuild_symbol")
+                && freshness_line(text) == "_Index: fresh · auto-refresh on_"
+        },
+    )?;
+    assert_eq!(
+        recorded_embedding_model(project.path())?.as_deref(),
+        Some("ccm-test-embed-b"),
+        "the rebuilt generation records the configured model"
+    );
+    // Yeni generation yabancı aktivasyon olarak yüklendi; tam karşılaştırma
+    // yükseltme sırasında eklenen dosyayı yeni modelle embed etti.
+    let artifacts = ccm_core::resolve_index_artifacts(&project.path().to_string_lossy(), None)?;
+    let added_vectors = tokio::runtime::Runtime::new()?.block_on(async {
+        ccm_core::vector::store::LanceDbStore::new(
+            &artifacts.db_path.to_string_lossy(),
+            "code_vectors",
+        )
+        .await?
+        .vectors_for_file("./added.rs")
+        .await
+    })?;
+    assert!(
+        !added_vectors.is_empty(),
+        "the file added during the re-embed must have vectors in the new generation"
+    );
+    Ok(())
+}
+
+#[test]
+fn failed_embedding_rebuild_is_not_retried_in_the_same_process() -> Result<(), Box<dyn Error>> {
+    let project = tempdir()?;
+    fs::write(project.path().join("main.rs"), "fn existing_symbol() {}\n")?;
+    let host = start_embed_server(&["ccm-test-embed-rejected"])?;
+    index_with_model(project.path(), &host, "ccm-test-embed-a")?;
+
+    let mut env = embedding_env(&host, "ccm-test-embed-rejected");
+    env.push(("CCM_INTERNAL_INDEX_TEST_DELAY_MS", "2000"));
+    let mut session = McpSession::start(project.path(), &env)?;
+    poll_find_nodes(
+        &mut session,
+        "existing_symbol",
+        Duration::from_secs(20),
+        |text| freshness_line(text).contains("semantic index being rebuilt in the background"),
+    )?;
+    // Yükseltme başarısız oldu: neden ve onarım yolu tazelik satırında kalır.
+    poll_find_nodes(
+        &mut session,
+        "existing_symbol",
+        Duration::from_secs(60),
+        |text| freshness_line(text).contains("semantic search unavailable"),
+    )?;
+
+    // Sonraki yenileme turu yükseltmeyi bu süreçte yeniden başlatmaz; başlatsaydı
+    // worker gecikmesi boyunca satır yeniden kurulumu gösterirdi.
+    fs::write(project.path().join("added.rs"), "fn added_symbol() {}\n")?;
+    let after_edit = poll_find_nodes(
+        &mut session,
+        "added_symbol",
+        Duration::from_secs(20),
+        |text| found_node(text, "added_symbol"),
+    )?;
+    let line = freshness_line(&after_edit);
+    assert!(
+        !line.contains("being rebuilt")
+            && line.contains("semantic search unavailable")
+            && line.contains("ccm-test-embed-rejected"),
+        "unexpected freshness line: {after_edit}"
+    );
+    assert_eq!(
+        recorded_embedding_model(project.path())?.as_deref(),
+        Some("ccm-test-embed-a"),
+        "the active index keeps its vectors when the rebuild fails"
+    );
     Ok(())
 }
 

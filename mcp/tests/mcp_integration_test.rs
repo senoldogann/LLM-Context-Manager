@@ -1,3 +1,6 @@
+mod common;
+
+use common::{index_with_model, start_embed_server};
 use serde_json::json;
 use std::fs;
 use std::io::{BufRead, BufReader, Write};
@@ -650,11 +653,14 @@ fn mcp_non_strict_empty_allowlist_stays_within_default_root(
 #[test]
 fn mcp_implicit_default_path_obeys_strict_allowlist() -> Result<(), Box<dyn std::error::Error>> {
     let project = tempdir()?;
+    let home = tempdir()?;
     fs::write(project.path().join("main.rs"), "fn hidden() {}\n")?;
 
     let mut cmd = Command::new(assert_cmd::cargo::cargo_bin!("ccm-mcp"));
     cmd.env("CCM_DISABLE_EMBEDDER", "1")
         .env("CCM_MCP_DEBUG", "0")
+        .env("HOME", home.path())
+        .env("USERPROFILE", home.path())
         .env_remove("CCM_ALLOWED_ROOTS")
         .env_remove("CCM_PROJECT_ROOT")
         .env_remove("CCM_REQUIRE_ALLOWED_ROOTS")
@@ -1419,6 +1425,7 @@ fn mcp_client_roots_select_and_allow_the_workspace() -> Result<(), Box<dyn std::
     // MCP roots ile bildirdiği çalışma alanı varsayılan kök olarak kullanılır.
     let pinned = tempdir()?;
     let workspace = tempdir()?;
+    let home = tempdir()?;
     fs::write(workspace.path().join("main.rs"), "fn workspace_only() {}\n")?;
 
     let mut cmd = Command::new(assert_cmd::cargo::cargo_bin!("ccm-mcp"));
@@ -1426,6 +1433,8 @@ fn mcp_client_roots_select_and_allow_the_workspace() -> Result<(), Box<dyn std::
         .env("CCM_MCP_DEBUG", "0")
         .env("CCM_REQUIRE_ALLOWED_ROOTS", "1")
         .env("CCM_ALLOWED_ROOTS", pinned.path())
+        .env("HOME", home.path())
+        .env("USERPROFILE", home.path())
         .env_remove("CCM_PROJECT_ROOT")
         .current_dir("/")
         .stdin(Stdio::piped())
@@ -1535,5 +1544,167 @@ fn mcp_serves_the_active_generation_while_reindexing() -> Result<(), Box<dyn std
     assert!(tool_text(&retrieval).contains("stable_symbol (Score:"));
 
     let _ = child.kill();
+    Ok(())
+}
+
+/// Kök dizinsiz sunucu (proje kökü yok, depo `CCM_DB_PATH` ile verilir) başka
+/// bir embedding modeliyle kurulmuş vektörleri sorgu vektörüyle karşılaştırmaz:
+/// arama graf sonuçlarına döner ve neden sonucun başındaki satırda görünür.
+#[test]
+fn rootless_engine_reports_vectors_of_another_embedding_model(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let dir = tempdir()?;
+    let project = dir.path().join("project");
+    let home = dir.path().join("home");
+    fs::create_dir_all(&project)?;
+    fs::create_dir_all(&home)?;
+    fs::write(project.join("main.rs"), "fn existing_symbol() {}\n")?;
+    let host = start_embed_server(&[])?;
+    index_with_model(&project, &host, "ccm-test-embed-a")?;
+    let artifacts = ccm_core::resolve_index_artifacts(&project.to_string_lossy(), None)?;
+
+    // Başlatma dizini ev dizini olduğundan örtük kök de seçilmez.
+    let mut child = Command::new(assert_cmd::cargo::cargo_bin!("ccm-mcp"))
+        .current_dir(&home)
+        .env("HOME", &home)
+        .env_remove("CCM_PROJECT_ROOT")
+        .env_remove("CCM_ALLOWED_ROOTS")
+        .env("CCM_REQUIRE_ALLOWED_ROOTS", "0")
+        .env("CCM_DB_PATH", &artifacts.db_path)
+        .env("CCM_MCP_DEBUG", "0")
+        .env("CCM_DISABLE_EMBEDDER", "0")
+        .env_remove("EMBEDDING_DISABLED")
+        .env_remove("CCM_EMBEDDING_FIXTURE")
+        .env("EMBEDDING_PROVIDER", "ollama")
+        .env("EMBEDDING_HOST", &host)
+        .env("EMBEDDING_MODEL", "ccm-test-embed-b")
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null())
+        .spawn()?;
+    let mut stdin = child.stdin.take().ok_or("stdin")?;
+    let mut reader = BufReader::new(child.stdout.take().ok_or("stdout")?);
+    send_request(
+        &mut stdin,
+        &mut reader,
+        json!({"jsonrpc":"2.0","id":0,"method":"initialize","params":{}}),
+    )?;
+    let searched = send_request(
+        &mut stdin,
+        &mut reader,
+        json!({
+            "jsonrpc":"2.0","id":1,"method":"tools/call",
+            "params":{"name":"search_code","arguments":{"query":"existing_symbol"}}
+        }),
+    )?;
+    child.kill()?;
+    child.wait()?;
+
+    assert!(tool_succeeded(&searched), "{searched}");
+    let text = tool_text(&searched);
+    assert!(
+        text.lines().next().is_some_and(|line| {
+            line.contains("semantic search unavailable")
+                && line.contains("ccm-test-embed-a")
+                && line.contains("ccm-test-embed-b")
+        }),
+        "the reason must lead the result: {text}"
+    );
+    assert!(
+        text.contains("existing_symbol"),
+        "search falls back to graph results: {text}"
+    );
+    Ok(())
+}
+
+/// Gerçek yerel modelle MCP uçtan uca: ayarsız sunucu `index_now` ile semantik
+/// indeks kurar, `search_code` semantik skorlu sonuç döndürür. ~120 MB model
+/// indirir; `CCM_TEST_LOCAL_MODEL=1 cargo test -p ccm-mcp -- --ignored local_model`.
+#[test]
+#[ignore = "downloads the ~120 MB local model; set CCM_TEST_LOCAL_MODEL=1"]
+fn local_model_serves_semantic_search_over_mcp() -> Result<(), Box<dyn std::error::Error>> {
+    if std::env::var("CCM_TEST_LOCAL_MODEL").as_deref() != Ok("1") {
+        return Ok(());
+    }
+    let dir = tempdir()?;
+    let project_root = dir.path().join("project");
+    let isolated_home = dir.path().join("home");
+    fs::create_dir_all(&project_root)?;
+    fs::create_dir_all(&isolated_home)?;
+    fs::write(
+        project_root.join("billing.rs"),
+        "/// Computes the tax owed on an invoice.\npub fn compute_invoice_tax(amount: f64, rate: f64) -> f64 {\n    amount * rate\n}\n",
+    )?;
+    fs::write(
+        project_root.join("network.rs"),
+        "pub fn open_tcp_connection(host: &str, port: u16) -> std::io::Result<std::net::TcpStream> {\n    std::net::TcpStream::connect((host, port))\n}\n",
+    )?;
+    let model_dir = std::env::var_os("CCM_MODEL_DIR")
+        .map(std::path::PathBuf::from)
+        .or_else(|| {
+            std::env::var_os("HOME")
+                .map(|home| std::path::PathBuf::from(home).join(".ccm").join("models"))
+        })
+        .ok_or("HOME or CCM_MODEL_DIR is required for the model cache")?;
+
+    let mut child = Command::new(assert_cmd::cargo::cargo_bin!("ccm-mcp"))
+        .env("HOME", &isolated_home)
+        .env("CCM_MODEL_DIR", &model_dir)
+        .env_remove("CCM_DISABLE_EMBEDDER")
+        .env_remove("EMBEDDING_DISABLED")
+        .env_remove("CCM_EMBEDDING_FIXTURE")
+        .env_remove("EMBEDDING_PROVIDER")
+        .env_remove("EMBEDDING_HOST")
+        .env_remove("EMBEDDING_MODEL")
+        .env_remove("OPENAI_API_KEY")
+        .env_remove("EMBEDDING_API_KEY")
+        .env("CCM_MCP_DEBUG", "0")
+        .env("CCM_PROJECT_ROOT", &project_root)
+        .env("CCM_ALLOWED_ROOTS", &project_root)
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null())
+        .spawn()?;
+    let mut stdin = child.stdin.take().ok_or("stdin")?;
+    let mut reader = BufReader::new(child.stdout.take().ok_or("stdout")?);
+    send_request(
+        &mut stdin,
+        &mut reader,
+        json!({"jsonrpc":"2.0","id":0,"method":"initialize","params":{}}),
+    )?;
+    let indexed = send_request(
+        &mut stdin,
+        &mut reader,
+        json!({
+            "jsonrpc":"2.0","id":1,"method":"tools/call",
+            "params":{"name":"index_now","arguments":{
+                "project_path": project_root.to_string_lossy()
+            }}
+        }),
+    )?;
+    let index_text = tool_text(&indexed).to_string();
+    assert!(
+        index_text.contains("Chunks Embedded: 2"),
+        "index_now must embed both functions: {index_text}"
+    );
+    let searched = send_request(
+        &mut stdin,
+        &mut reader,
+        json!({
+            "jsonrpc":"2.0","id":2,"method":"tools/call",
+            "params":{"name":"search_code","arguments":{
+                "query":"where is the tax of an invoice calculated",
+                "project_path": project_root.to_string_lossy()
+            }}
+        }),
+    )?;
+    let search_text = tool_text(&searched).to_string();
+    let first = search_text
+        .split("\n## ")
+        .find(|block| block.contains("**Reason:**"))
+        .ok_or_else(|| format!("no results: {search_text}"))?;
+    assert!(first.contains("compute_invoice_tax"), "{search_text}");
+    assert!(!first.contains("semantic 0.00"), "{search_text}");
+    child.kill()?;
     Ok(())
 }

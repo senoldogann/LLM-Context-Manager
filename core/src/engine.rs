@@ -635,6 +635,16 @@ impl RetrievalEngine {
         // Bu durumda çağırana anlamsız bir iç hata taşımak yerine graph fallback'i kullanılır.
         let hits = match self.vector_store.search(query, seed_limit).await {
             Ok(h) => h,
+            // İndeks başka bir embedding modeliyle kuruldu: sorgu vektörü tabloyla
+            // karşılaştırılamaz. Neden canlı indeksin tazelik satırında ve bu
+            // uyarıda görünür; sonuçlar graf üzerinden gelir.
+            Err(e) if e.is::<crate::vector::embedder::EmbeddingIdentityMismatch>() => {
+                tracing::warn!(
+                    reason = %e,
+                    "Semantic search skipped because the index vectors come from another embedding model; using graph results"
+                );
+                vec![]
+            }
             Err(e) => {
                 let msg = e.to_string();
                 if msg.contains("Embedder not initialized")

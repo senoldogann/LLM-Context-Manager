@@ -45,12 +45,22 @@ RUN cargo build --release
 
 FROM debian:bookworm-slim AS runtime
 
-# reqwest/rustls ile dış embedding sağlayıcısına TLS bağlantısı için CA sertifikaları.
+# reqwest/rustls ile TLS bağlantıları (yerleşik modelin tek seferlik indirmesi,
+# dış embedding sağlayıcıları) için CA sertifikaları. ONNX Runtime ikililere
+# statik bağlıdır; ek paylaşımlı kütüphane gerekmez.
 RUN apt-get update \
     && apt-get install -y --no-install-recommends ca-certificates \
     && rm -rf /var/lib/apt/lists/* \
     && groupadd --gid 1000 ccm \
-    && useradd --uid 1000 --gid ccm --shell /usr/sbin/nologin --no-create-home ccm
+    && useradd --uid 1000 --gid ccm --shell /usr/sbin/nologin --no-create-home ccm \
+    && mkdir -p /models \
+    && chown ccm:ccm /models
+
+# Varsayılan embedder yerleşik yerel modeldir; dosyaları (~124 MB) ilk
+# indekslemede buraya indirilir ve SHA-256 ile doğrulanır. Her çalıştırmada
+# yeniden indirilmemesi için adlandırılmış bir volume bağlayın:
+# `-v ccm-models:/models` (yeni volume bu dizinin sahipliğini alır).
+ENV CCM_MODEL_DIR=/models
 
 COPY --from=builder /src/target/release/ccm-cli /usr/local/bin/ccm-cli
 COPY --from=builder /src/target/release/ccm-mcp /usr/local/bin/ccm-mcp

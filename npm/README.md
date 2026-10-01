@@ -21,9 +21,12 @@ closed mid-upgrade) and raised the offline semantic gate to 180/180.
 ### Prerequisites
 
 1. **Node.js** 16+ installed
-2. **Ollama** installed and running (for local embeddings)
-   - Download: https://ollama.com
-   - Pull required model: `ollama pull mxbai-embed-large`
+
+That's all: semantic search uses a built-in embedding model that runs inside the
+binary. The first index downloads it once (~124 MB, from Hugging Face, checksum
+verified). Ollama or OpenAI remain optional providers. On Intel Macs the built-in
+model is not available, so the index stays graph-only until a provider is
+configured (see [Embeddings](#embeddings)).
 
 ### Installation
 
@@ -111,9 +114,10 @@ npx @senoldogann/context-manager index --path . --db-path /custom/path
 
 CCM uses a **Local-First** architecture:
 
-- ✅ Your code **never** leaves your machine
-- ✅ All embeddings run locally via Ollama
-- ✅ No external API calls (unless you configure OpenAI)
+- ✅ By default your code **never** leaves your machine
+- ✅ Embeddings run locally inside the binary (built-in model) or via your own Ollama
+- ✅ The only default network access is the one-time model download from Hugging Face
+- ✅ OpenAI is opt-in: code chunks go to OpenAI only after you add `OPENAI_API_KEY` to `~/.ccm/.env`; a key exported in your shell never switches providers
 
 ---
 
@@ -121,19 +125,20 @@ CCM uses a **Local-First** architecture:
 
 ### Environment Variables
 
-Create `~/.ccm/.env` (or start from the repository's `.env.example`):
+Nothing is required for embeddings. Create `~/.ccm/.env` (or start from the
+repository's `.env.example`) only to change defaults:
 
 ```ini
-# Local (Recommended)
+# Default: built-in local model, nothing to set.
+
+# Ollama (Optional)
 EMBEDDING_PROVIDER=ollama
 EMBEDDING_HOST=http://127.0.0.1:11434
 EMBEDDING_MODEL=mxbai-embed-large
 EMBEDDING_API_KEY=ollama
 
-# Cloud (Optional)
-EMBEDDING_PROVIDER=openai
-EMBEDDING_API_KEY=sk-your-key
-EMBEDDING_MODEL=text-embedding-3-small
+# OpenAI (Optional): this one line selects it; code chunks are sent to OpenAI
+OPENAI_API_KEY=sk-your-key
 
 # Networking & Limits
 EMBEDDING_TIMEOUT_SECS=30
@@ -162,6 +167,15 @@ CCM_ALLOW_UNVERIFIED_BINARIES=0
 CCM_DOWNLOAD_TIMEOUT_MS=120000
 CCM_DOWNLOAD_ATTEMPTS=3
 ```
+
+### Embeddings
+
+- **Default model:** [`ibm-granite/granite-embedding-97m-multilingual-r2`](https://huggingface.co/ibm-granite/granite-embedding-97m-multilingual-r2) (Apache-2.0, int8 ONNX, 384-d), run in-process with ONNX Runtime on the physical CPU cores, capped by the available CPU quota (`CCM_EMBED_THREADS` overrides).
+- **Download:** ~124 MB on first use, or ahead of time with `npx @senoldogann/context-manager models pull`. Files are pinned to a Hugging Face revision, SHA-256 verified, and stored in `~/.ccm/models/` (`CCM_MODEL_DIR` moves it; `HF_ENDPOINT` selects a mirror). A mismatch or failed download is reported explicitly; the index then stays graph-only until the next run.
+- **Air-gapped:** copy a verified `~/.ccm/models` directory to the target machine; pre-placed files are used after checksum verification.
+- **Provider selection:** `EMBEDDING_PROVIDER=local|ollama|openai` wins. Otherwise an `OPENAI_API_KEY` in `~/.ccm/.env` selects OpenAI `text-embedding-3-small` on the official endpoint unless `EMBEDDING_HOST` is set (`EMBEDDING_MODEL` then only picks the OpenAI model). Without that key, `EMBEDDING_HOST` or `EMBEDDING_MODEL` keeps the previous Ollama/OpenAI behavior, so existing configs work unchanged; with neither, the built-in model is used. `CCM_DISABLE_EMBEDDER=1` turns semantic search off.
+- **Changing models** (including upgrading from 0.3.x with an Ollama-built index): the MCP server re-embeds the active index once in the background while auto-refresh keeps the graph fresh, and `index_project` / `ccm-cli index` do it on demand; vectors of different models are never mixed, and `search_code` uses graph results until the rebuild finishes.
+- **Intel Macs (`x86_64-apple-darwin`):** no prebuilt ONNX Runtime exists for this target, so the built-in model is not included; until `OPENAI_API_KEY` is in `~/.ccm/.env` or `EMBEDDING_PROVIDER` is set, the index is graph-only and `doctor` says why.
 
 Advanced overrides:
 - `CCM_PROJECT_ROOT` pins the default project root and overrides the workspace reported by the host. Without it the MCP server resolves its default project in this order: the workspace the host reports via MCP `roots` → the launch directory when it lies inside `CCM_ALLOWED_ROOTS` (never `/` or your home directory) → the single `CCM_ALLOWED_ROOTS` entry.

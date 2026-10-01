@@ -5,9 +5,11 @@ open-source repositories** — not the project's own synthetic gate.
 
 ## What this measures
 
-Three real repositories, pinned to exact commits, indexed with **real Ollama
-embeddings** (`mxbai-embed-large`). Each repo has a hand-curated set of golden
-tasks (verified against the actual source) covering CCM's three retrieval modes:
+Three real repositories, pinned to exact commits, indexed with **real
+embeddings**: the recorded baseline uses Ollama `mxbai-embed-large`; the
+[built-in local model](#results-built-in-local-model-2026-09-30) is measured on
+the same tasks. Each repo has a hand-curated set of golden tasks (verified
+against the actual source) covering CCM's three retrieval modes:
 
 | Task type | Question being asked | Retrieval signal |
 |---|---|---|
@@ -59,6 +61,106 @@ each clone under `data/` (gitignored). Tasks reference the pinned commit.
 Recall, MRR and latency here are means over the 15 `search_code` tasks only;
 the per-repo tables printed by `aggregate.py` cover all query types.
 
+## Results: built-in local model (2026-09-30)
+
+Default embedder since the local-embedder change:
+`ibm-granite/granite-embedding-97m-multilingual-r2` (IBM's int8 ONNX export,
+384-d, CLS pooling, 512-token inputs) run in-process by fastembed 7.1 / ONNX
+Runtime 1.28 on the CPU of an Apple M4 (10 cores: 4 performance + 6 efficiency),
+10 threads (physical cores), one text per inference call (the shipped default;
+the batched rows set `CCM_LOCAL_EMBED_BATCH=32`). Same corpus, same 35 tasks,
+same code revision for every row; the mxbai row was re-run on this revision
+through Ollama and reproduced the recorded numbers exactly.
+
+### Search quality (search_code only, K=5)
+
+| Embedder | Mode | Pass | R@5 | MRR@5 |
+|---|---|---|---|---|
+| mxbai-embed-large (Ollama, 335M, 1024-d) | semantic-only | 8/15 | 0.533 | 0.352 |
+| | hybrid | 9/15 | 0.600 | 0.436 |
+| **granite-97m int8, one text per call (default)** | semantic-only | **9/15** | **0.600** | 0.419 |
+| | hybrid | **10/15** | **0.667** | **0.497** |
+| granite-97m int8, `CCM_LOCAL_EMBED_BATCH=32` | semantic-only | 8/15 | 0.533 | **0.489** |
+| | hybrid | 8/15 | 0.533 | 0.489 |
+
+Reports: [`results/local-granite-97m-int8-bs1/`](./results/local-granite-97m-int8-bs1/)
+(default) and [`results/local-granite-97m-int8-bs32/`](./results/local-granite-97m-int8-bs32/).
+`get_context` and `read_graph` do not depend on the embedder and match across
+rows, except `serde-graph-002`: its node id no longer exists in the graph built
+by the current parser ("Node not found in graph" for every embedder, so the
+serde eval exits with "9 of 10 tasks were scored"). That is a graph change since
+the v0.3.13 recording, not an embedding effect.
+
+### Indexing speed (full index, same machine, back to back)
+
+| Repo | Chunks | mxbai via Ollama | local, one text per call (default) | local, batch 32 |
+|---|---|---|---|---|
+| flask | 2498 | 81.4 ms/chunk, 203.5 s | 23.4 ms/chunk, 58.9 s | 12.2 ms/chunk, 33.8 s |
+| express | 173 | 67.6 ms/chunk, 11.9 s | 22.7 ms/chunk, 4.1 s | 17.1 ms/chunk, 3.1 s |
+| serde | 4042 | 81.0 ms/chunk, 327.5 s | 19.0 ms/chunk, 77.1 s | 19.1 ms/chunk, 77.3 s |
+
+"ms/chunk" covers the embedding phase (including LanceDB writes); the time is
+the whole `ccm-cli index` run including parsing and the ~0.8 s model load. The
+machine was shared with other builds (1-minute load average 6–15 during these
+runs), so treat the timings as ±2×: in interleaved flask runs the two local batch
+sizes measured 45.9/32.5, 34.8/14.7 and 14.9/14.2 ms/chunk (batch 1/batch 32) as
+the load average moved between 30 and 12.
+
+### What the local-model numbers say
+
+1. **Not worse than the mxbai baseline, 3–4× faster.** With the default (one
+   text per call) semantic-only and hybrid search each pass one more task than
+   mxbai, with higher MRR (the first relevant hit ranks earlier). Differences
+   of one or two tasks out of 15 are within noise for this pilot.
+2. **Batching changes int8 vectors, so the default is one text per call.**
+   IBM's int8 file quantizes activations dynamically over the whole batch
+   tensor, so a text's vector depends on its batch-mates (cosine 0.95–0.97 to
+   the same text embedded alone; the fp32 file is batch-invariant). One text
+   per inference call keeps vectors a pure function of the text (what chunk
+   reuse and the live index assume) and scored best here. `CCM_LOCAL_EMBED_BATCH=32`
+   was up to 2× faster on flask and no faster on serde in these runs, at the
+   cost of that determinism (and, here, of recall).
+3. **int8 vs fp32:** single-text cosine to IBM's fp32 export is 0.946–0.977 on
+   code snippets; the fp32 export reproduces the model card's similarity matrix
+   to 0.002, the int8 one to 0.08 with the same ranking.
+
+## Results: OpenAI embeddings (2026-10-01)
+
+`text-embedding-3-small` (1536-d) and `text-embedding-3-large` (3072-d) through
+the official API (`EMBEDDING_PROVIDER=openai`, 32 texts per request); same
+corpus, same 35 tasks, same code revision as the built-in model rows. Vector
+search is exact (no ANN index) and OpenAI vectors have unit length, so the
+ranking equals cosine similarity for every model.
+
+### Search quality (search_code only, K=5)
+
+| Embedder | Mode | Pass | R@5 | MRR@5 |
+|---|---|---|---|---|
+| **text-embedding-3-small** (default when OpenAI is selected) | semantic-only | **9/15** | **0.600** | **0.439** |
+| | hybrid | **10/15** | **0.667** | 0.452 |
+| text-embedding-3-large | semantic-only | 6/15 | 0.400 | 0.322 |
+| | hybrid | 9/15 | 0.600 | 0.428 |
+| granite-97m int8, built-in (from above) | semantic-only | 9/15 | 0.600 | 0.419 |
+| | hybrid | 10/15 | 0.667 | 0.497 |
+
+Reports: [`results/openai-text-embedding-3-small/`](./results/openai-text-embedding-3-small/)
+and [`results/openai-text-embedding-3-large/`](./results/openai-text-embedding-3-large/).
+
+1. **`-large` did not beat `-small` here.** It lost three `search_code` tasks
+   in semantic-only mode (flask 2/5 vs 4/5, serde 1/5 vs 2/5) and one in hybrid
+   mode. With 15 tasks that is within noise, but nothing here justifies ~6.5×
+   the price per token and vectors twice the size, so `-small` is the default
+   when OpenAI is selected.
+2. **OpenAI does not beat the built-in model on this benchmark.** `-small`
+   matches granite on pass rate and R@5; granite keeps the higher hybrid MRR
+   and needs no network. These English queries do not measure multilingual
+   retrieval, where OpenAI reports its larger gains.
+3. **Every query is an API round trip:** 0.5–0.8 s mean per `search_code`
+   query in these runs, against 25–165 ms for the built-in model. Indexing the
+   three repos (6,713 chunks) took about 1.7 min with `-small` and 2.6 min
+   with `-large`. The machine was also compiling during the OpenAI runs, so
+   treat both timings as indicative.
+
 ## What the numbers actually say
 
 1. **Graph coverage is the strong suit.** Every `get_context` and `read_graph`
@@ -108,22 +210,33 @@ retrieval bias toward the derive side and toward large files.
 
 ```bash
 # 1. Clone corpus at pinned commits (~15s)
-benchmarks/scripts/fetch_corpus.sh
+bash benchmarks/scripts/fetch_corpus.sh
 
-# 2. Index each repo (needs Ollama with mxbai-embed-large; 5-7 min/repo)
+# 2. Index each repo. Built-in local model by default (~1-2 min for all three);
+#    for the recorded mxbai baseline export EMBEDDING_PROVIDER=ollama first
+#    (needs Ollama with mxbai-embed-large; 3-6 min/repo); for the OpenAI rows
+#    export EMBEDDING_PROVIDER=openai and EMBEDDING_MODEL=text-embedding-3-small
+#    (or -large), with OPENAI_API_KEY in ~/.ccm/.env
 target/release/ccm-cli index --path benchmarks/corpus/flask
 target/release/ccm-cli index --path benchmarks/corpus/express
 target/release/ccm-cli index --path benchmarks/corpus/serde
 
-# 3. Evaluate structural vs hybrid per repo (~2 min)
-benchmarks/scripts/run_benchmark.sh
+# 3. Evaluate structural vs hybrid per repo (~2 min). Give every embedder its
+#    own report directory via CCM_BENCH_RESULTS so runs are never mixed; without
+#    it the script writes the mxbai baseline into benchmarks/results. The script
+#    exits non-zero after serde ("9 of 10 tasks were scored", see above); all
+#    three reports are written.
+CCM_BENCH_RESULTS=benchmarks/results/local-granite-97m-int8-bs1 bash benchmarks/scripts/run_benchmark.sh
 
-# 4. Aggregate into the summary table
-python3 benchmarks/scripts/aggregate.py
+# 4. Aggregate into the summary table (directory argument optional)
+python3 benchmarks/scripts/aggregate.py benchmarks/results/local-granite-97m-int8-bs1
 ```
 
-Reports land in `benchmarks/results/<repo>.compare.json` and are committed as
-evidence. Repo clones and indexes are gitignored.
+Reports land in `benchmarks/results/<repo>.compare.json` for the mxbai baseline,
+or in `$CCM_BENCH_RESULTS` when set; keep one directory per embedder (for
+example `benchmarks/results/local-granite-97m-int8-bs1/`) and commit each as
+evidence. Repo clones and indexes are gitignored. Switching embedders re-embeds
+an existing index once (the index manifest records the embedding model).
 
 ## Honest caveats
 

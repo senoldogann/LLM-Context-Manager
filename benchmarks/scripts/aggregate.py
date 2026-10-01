@@ -2,7 +2,8 @@
 """Aggregate external-benchmark comparison reports into a summary table.
 
 Reads benchmarks/results/<repo>.compare.json (produced by run_benchmark.sh via
-`ccm-cli eval --compare`) and emits:
+`ccm-cli eval --compare`), or <dir>/<repo>.compare.json when a results directory
+is given as the first argument, and emits:
   - per-repo, per-mode, per-query-type pass rates
   - Recall@K and MRR@K (K = max_rank, default 5) computed from `ranked` lists
   - mean latency per mode/query-type
@@ -85,9 +86,9 @@ def compute_metrics(task, ranked):
     return metrics
 
 
-def load_reports():
+def load_reports(results):
     reports = {}
-    for path in sorted(RESULTS.glob("*.compare.json")):
+    for path in sorted(results.glob("*.compare.json")):
         reports[path.stem.replace(".compare", "")] = json.loads(path.read_text())
     return reports
 
@@ -97,9 +98,10 @@ def mean_or_zero(values):
 
 
 def main():
-    reports = load_reports()
+    results = Path(sys.argv[1]).resolve() if len(sys.argv) > 1 else RESULTS
+    reports = load_reports(results)
     if not reports:
-        print(f"No reports found under {RESULTS}/*.compare.json", file=sys.stderr)
+        print(f"No reports found under {results}/*.compare.json", file=sys.stderr)
         return 1
 
     print("=" * 100)

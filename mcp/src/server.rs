@@ -16,6 +16,7 @@ use crate::tools;
 use ccm_core::engine::RetrievalEngine;
 use ccm_core::graph::CodeGraph;
 use ccm_core::live::{IndexMigrationRequired, LiveIndex};
+use ccm_core::vector::embedder::{EmbeddingIdentityMismatch, EmbeddingSource};
 use ccm_core::vector::store::LanceDbStore;
 
 const LATEST_PROTOCOL_VERSION: &str = "2025-11-25";
@@ -67,10 +68,51 @@ pub struct ServerState {
     /// Proje başına otomatik yenileme durumu (anahtar: kanonik proje yolu).
     freshness:
         std::sync::Mutex<std::collections::HashMap<String, Arc<crate::freshness::FreshnessHandle>>>,
-    /// Süren semantik yükseltme sayısı, proje başına (anahtar: kanonik proje yolu).
-    /// Aynı projede üst üste hızlı indeks alınırsa yükseltmeler çakışır; sayaç
-    /// yenilemenin ancak sonuncusu bitince başlamasını sağlar.
-    semantic_upgrades: std::sync::Mutex<std::collections::HashMap<String, usize>>,
+    /// Süren semantik yükseltmelerin türe göre sayısı, proje başına (anahtar:
+    /// kanonik proje yolu). Aynı projede üst üste hızlı indeks alınırsa
+    /// yükseltmeler çakışır; sayaç ertelenen yenilemenin ancak sonuncusu bitince
+    /// başlamasını sağlar.
+    semantic_upgrades: std::sync::Mutex<std::collections::HashMap<String, SemanticUpgradeCounts>>,
+    /// Embedding kimliği değiştiği için bu süreçte yeniden embed'i planlanmış
+    /// projeler (anahtar: kanonik proje yolu); her proje süreç başına bir kez.
+    reembeds: std::sync::Mutex<std::collections::HashSet<String>>,
+}
+
+/// Semantik yükseltmenin nedeni; otomatik yenilemenin onu bekleyip
+/// beklemeyeceğini belirler.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum SemanticUpgradeKind {
+    /// Hızlı (graf-yalnız) indeksin vektörleri kuruluyor. Canlı yenileme bu sürede
+    /// değişen parçaları graf-yalnız generation'a embed eder ve yarım bir vektör
+    /// tablosu doğururdu (arama yarım vektörleri kullanırdı); yenilemeler yükseltme
+    /// bitene kadar ertelenir.
+    QuickIndex,
+    /// Etkin indeksin vektörleri başka bir embedding modeline ait ve yeniden embed
+    /// ediliyor. Canlı indeks bu durumda vektör yazmaz, korunacak bir şey yoktur:
+    /// graf yenilemeleri sürer. Yeni generation etkinleşince yabancı aktivasyon
+    /// olarak yüklenir; tam karşılaştırma arada yapılan değişiklikleri yeni
+    /// kimlikle embed ederek yeniden uygular.
+    ModelChange,
+}
+
+/// Bir projede süren semantik yükseltmelerin türe göre sayısı.
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+struct SemanticUpgradeCounts {
+    quick_index: usize,
+    model_change: usize,
+}
+
+impl SemanticUpgradeCounts {
+    fn count_mut(&mut self, kind: SemanticUpgradeKind) -> &mut usize {
+        match kind {
+            SemanticUpgradeKind::QuickIndex => &mut self.quick_index,
+            SemanticUpgradeKind::ModelChange => &mut self.model_change,
+        }
+    }
+
+    fn total(&self) -> usize {
+        self.quick_index + self.model_change
+    }
 }
 
 #[derive(Clone)]
@@ -360,6 +402,7 @@ impl ServerState {
             outgoing_requests: std::sync::Mutex::new(Vec::new()),
             freshness: std::sync::Mutex::new(std::collections::HashMap::new()),
             semantic_upgrades: std::sync::Mutex::new(std::collections::HashMap::new()),
+            reembeds: std::sync::Mutex::new(std::collections::HashSet::new()),
         })
     }
 
@@ -433,51 +476,104 @@ impl ServerState {
         }
     }
 
-    /// Hızlı indeksin semantik yükseltmesi başladı; otomatik yenileme ertelenir.
-    pub(crate) fn begin_semantic_upgrade(&self, project_key: &str) {
-        *self
-            .semantic_upgrades
-            .lock()
-            .unwrap()
+    /// Semantik yükseltme başladı. Tazelik satırı semantik indeksin yeniden
+    /// kurulduğunu söyler; hızlı indeks yükseltmesinde otomatik yenileme ayrıca
+    /// ertelenir (bkz. `SemanticUpgradeKind`).
+    pub(crate) fn begin_semantic_upgrade(&self, project_key: &str, kind: SemanticUpgradeKind) {
+        let mut upgrades = self.semantic_upgrades.lock().unwrap();
+        *upgrades
             .entry(project_key.to_string())
-            .or_insert(0) += 1;
+            .or_default()
+            .count_mut(kind) += 1;
+        // Sayaç kilidi tutulurken yayınlanır: eşzamanlı bir bitişin yayını bu
+        // durumu ezemez.
+        self.publish_semantic_upgrade(project_key, true);
     }
 
-    /// Yükseltme bitti (başarılı ya da değil). Projede başka yükseltme kalmadıysa
-    /// ertelenen yenileme uyandırılır; çakışan bir yükseltme sürüyorsa ertelenme
+    /// Yükseltme bitti (başarılı ya da değil). Süren hızlı indeks yükseltmesi
+    /// kalmadıysa tam karşılaştırma istenir: ertelenen değişiklikler işlenir ve
+    /// yükseltmenin kurduğu generation (varsa) yüklenip arada yapılan
+    /// değişiklikler ona uygulanır. Hızlı indeks yükseltmesi sürüyorsa ertelenme
     /// onun bitişine kadar sürer.
-    pub(crate) fn end_semantic_upgrade(&self, project_key: &str) {
+    pub(crate) fn end_semantic_upgrade(&self, project_key: &str, kind: SemanticUpgradeKind) {
         let remaining = {
             let mut upgrades = self.semantic_upgrades.lock().unwrap();
-            match upgrades.get_mut(project_key) {
-                Some(count) if *count > 1 => {
-                    *count -= 1;
-                    *count
-                }
-                Some(_) => {
-                    upgrades.remove(project_key);
-                    0
-                }
-                None => {
-                    tracing::warn!(
-                        project = %project_key,
-                        "Semantic upgrade ended without a registered start"
-                    );
-                    0
-                }
+            let counts = upgrades.entry(project_key.to_string()).or_default();
+            let count = counts.count_mut(kind);
+            if *count == 0 {
+                tracing::warn!(
+                    project = %project_key,
+                    kind = ?kind,
+                    "Semantic upgrade ended without a registered start"
+                );
+            } else {
+                *count -= 1;
             }
+            let remaining = *counts;
+            if remaining.total() == 0 {
+                upgrades.remove(project_key);
+                self.publish_semantic_upgrade(project_key, false);
+            }
+            remaining
         };
-        if remaining == 0 {
+        if remaining.quick_index == 0 {
             self.request_refresh(project_key);
         }
     }
 
-    pub(crate) fn semantic_upgrade_running(&self, project_key: &str) -> bool {
+    /// Süren semantik yükseltmeyi projenin tazelik durumuna yazar.
+    fn publish_semantic_upgrade(&self, project_key: &str, running: bool) {
+        if let Some(handle) = self.freshness_handle(project_key) {
+            handle
+                .state
+                .send_modify(|freshness| freshness.semantic_upgrade_running = running);
+        }
+    }
+
+    /// Etkin indeksin vektörleri yapılandırılmış embedding modelinden farklı bir
+    /// modelle kurulduysa hızlı indeksin ayrık semantik yükseltmesini başlatır:
+    /// vektörler yapılandırılmış modelle bir kez yeniden üretilir ve yeni
+    /// generation etkinleşir. Graf yenilemeleri o sürede sürer (bkz.
+    /// `SemanticUpgradeKind::ModelChange`). Proje başına süreç ömründe bir kez
+    /// denenir; yükseltme başarısız olursa neden tazelik satırında kalır ve
+    /// `index_project` onarır. Proje kilidi altında çağrılır: yükseltme böylece
+    /// aynı projede elle indekslemeyle ya da başka bir yükseltmeyle aynı anda
+    /// başlamaz.
+    pub(crate) fn schedule_reembed_once(
+        self: &Arc<Self>,
+        project_key: &str,
+        mismatch: &EmbeddingIdentityMismatch,
+    ) -> Result<()> {
+        if self.reembeds.lock().unwrap().contains(project_key) {
+            return Ok(());
+        }
+        let db_path = self.project_db_path(project_key)?;
+        self.reembeds
+            .lock()
+            .unwrap()
+            .insert(project_key.to_string());
+        tracing::info!(
+            project = %project_key,
+            reason = %mismatch,
+            "Embedding model changed; re-embedding the active index once in the background"
+        );
+        crate::tools::schedule_semantic_upgrade(
+            self.clone(),
+            project_key.into(),
+            db_path.to_string_lossy().to_string(),
+            SemanticUpgradeKind::ModelChange,
+        );
+        Ok(())
+    }
+
+    /// Hızlı indeksin semantik yükseltmesi sürüyor mu? Otomatik yenileme yalnızca
+    /// bu sürede ertelenir.
+    pub(crate) fn quick_index_upgrade_running(&self, project_key: &str) -> bool {
         self.semantic_upgrades
             .lock()
             .unwrap()
             .get(project_key)
-            .is_some_and(|count| *count > 0)
+            .is_some_and(|counts| counts.quick_index > 0)
     }
 
     /// Projenin bekleyen yenilemesini en fazla `budget` kadar bekler; otomatik
@@ -793,7 +889,10 @@ async fn load_migration_engine(
             error
         )
     })?;
-    let store = LanceDbStore::new(&artifacts.db_path.to_string_lossy(), "code_vectors").await?;
+    let identity_mismatch = engine_embedding_mismatch(&artifacts.manifest_path, &graph)?;
+    let store = LanceDbStore::new(&artifacts.db_path.to_string_lossy(), "code_vectors")
+        .await?
+        .with_identity_mismatch(identity_mismatch);
     let indexed_at = ccm_core::read_index_timestamp(&artifacts.manifest_path)?;
     Ok(CachedEngine {
         engine: Arc::new(RetrievalEngine::new_with_active_policy(
@@ -807,6 +906,35 @@ async fn load_migration_engine(
             indexed_at,
         },
     })
+}
+
+/// Canlı indeks dışındaki engine'lerin (kök dizinsiz depo, taşınacak indeks)
+/// vektörleri yapılandırılmış embedding kaynağıyla karıştırılamıyorsa
+/// uyuşmazlığı: arama sorgu vektörünü başka bir modelin tablosuyla (boyut hatası
+/// ya da yanlış komşular) karşılaştırmak yerine açık bir nedenle graf
+/// sonuçlarına döner. Kaynak çözülemezse canlı indeksteki gibi uyarı yazılır ve
+/// denetim atlanır; aynı hata embedder kurulurken yüzeye çıkar.
+fn engine_embedding_mismatch(
+    manifest_path: &Path,
+    graph: &CodeGraph,
+) -> Result<Option<EmbeddingIdentityMismatch>> {
+    let source = match EmbeddingSource::from_env() {
+        Ok(source) => source,
+        Err(error) => {
+            tracing::warn!(
+                manifest = %manifest_path.display(),
+                error = %error,
+                "Embedding configuration could not be resolved; the index embedding identity is not checked"
+            );
+            return Ok(None);
+        }
+    };
+    let recorded = ccm_core::read_index_embedding(manifest_path)?;
+    Ok(ccm_core::index_embedding_mismatch(
+        &source,
+        recorded.as_ref(),
+        graph,
+    ))
 }
 
 /// Etkin generation'ın veritabanı, graf ve manifest artefaktlarının üçü de diskte mi?
@@ -862,7 +990,11 @@ async fn load_rootless_engine(db_path: &Path) -> Result<Arc<RetrievalEngine>> {
     } else {
         CodeGraph::new()
     };
-    let store = LanceDbStore::new(&db_path.to_string_lossy(), "code_vectors").await?;
+    let identity_mismatch =
+        engine_embedding_mismatch(&artifact_parent.join("ccm_manifest.json"), &graph)?;
+    let store = LanceDbStore::new(&db_path.to_string_lossy(), "code_vectors")
+        .await?
+        .with_identity_mismatch(identity_mismatch);
     let policy_path = artifact_parent.join("ccm_learn/policies.json");
     Ok(Arc::new(RetrievalEngine::new_with_active_policy(
         Arc::new(RwLock::new(graph)),
@@ -1439,7 +1571,22 @@ async fn run_tool(
                 ccm_core::unix_now_secs(),
             ),
         ),
-        None => result,
+        // Kök dizinsiz depo otomatik yenilenmez ve tazelik satırı almaz; vektörleri
+        // başka bir modelle kurulduysa neden yine de sonuçta görünür.
+        None => match engine.vector_store.identity_mismatch() {
+            Some(mismatch) => crate::freshness::with_freshness_line(
+                result,
+                &crate::freshness::format_freshness_line(
+                    &crate::freshness::ProjectFreshness {
+                        semantic_unavailable: Some(mismatch.to_string()),
+                        ..crate::freshness::disabled_freshness()
+                    },
+                    None,
+                    ccm_core::unix_now_secs(),
+                ),
+            ),
+            None => result,
+        },
     })
 }
 

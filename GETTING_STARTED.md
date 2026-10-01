@@ -39,31 +39,74 @@ cargo build --release
 ```bash
 docker build -t ccm:local .
 
-# Index the current directory (mounted at /workspace)
-docker run --rm -v "$PWD":/workspace -w /workspace \
-  -e EMBEDDING_HOST=http://host.docker.internal:11434 \
-  -e EMBEDDING_MODEL=mxbai-embed-large \
+# Index the current directory (mounted at /workspace). The built-in embedding
+# model is downloaded once into the `ccm-models` volume.
+docker run --rm -v "$PWD":/workspace -v ccm-models:/models -w /workspace \
   ccm:local index --path /workspace
 
 # Query it
-docker run --rm -v "$PWD":/workspace -w /workspace \
-  -e EMBEDDING_HOST=http://host.docker.internal:11434 \
+docker run --rm -v "$PWD":/workspace -v ccm-models:/models -w /workspace \
   ccm:local query --text "authentication flow"
 ```
 
-Or use `docker compose run --rm ccm index --path /workspace`. On Linux, replace
-`host.docker.internal` with your host IP if the Docker bridge cannot resolve it.
+The image runs Linux, so the built-in model works there on Intel Macs too. To
+use Ollama on the host instead, pass the same settings to every command:
+
+```bash
+docker run --rm -v "$PWD":/workspace -w /workspace \
+  -e EMBEDDING_PROVIDER=ollama \
+  -e EMBEDDING_HOST=http://host.docker.internal:11434 \
+  -e EMBEDDING_MODEL=mxbai-embed-large \
+  ccm:local index --path /workspace
+```
+
+Or use `docker compose run --rm ccm index --path /workspace` (it mounts the
+models volume; the Ollama settings are commented out in `docker-compose.yml`).
+On Linux, replace `host.docker.internal` with your host IP if the Docker bridge
+cannot resolve it.
+
+To embed with OpenAI in the container, select it explicitly: there the key is a
+plain environment variable, which never switches the provider on its own.
+`-e OPENAI_API_KEY` passes the key through from your shell:
+
+```bash
+docker run --rm -v "$PWD":/workspace -w /workspace \
+  -e EMBEDDING_PROVIDER=openai -e OPENAI_API_KEY \
+  ccm:local index --path /workspace
+```
 
 ### Step 2: Configure
 
 Create `~/.ccm/.env` with the basics below, or start from the repository's `.env.example` for the full advanced list.
 
-Ensure [Ollama](https://ollama.com) is running:
+Embeddings need no setup: a built-in model runs inside the binary and is
+downloaded once (~124 MB) on the first index. To fetch it ahead of time (or to
+prepare an offline machine), run:
+
+```bash
+npx @senoldogann/context-manager models pull
+```
+
+To use OpenAI embeddings instead, add your key to `~/.ccm/.env`. Only this file
+counts: a key exported in your shell does not switch providers. CCM then uses
+the official endpoint and `text-embedding-3-small`, and code chunks are sent to OpenAI:
+
+```ini
+# ~/.ccm/.env
+OPENAI_API_KEY=sk-your-key
+```
+
+To use [Ollama](https://ollama.com) instead:
 
 ```bash
 ollama serve
 ollama pull mxbai-embed-large
+# ~/.ccm/.env
+EMBEDDING_PROVIDER=ollama
 ```
+
+On Intel Macs the built-in model is not available: until one of the providers
+above is configured, CCM builds a graph-only index and `doctor` explains why.
 
 Optional production settings (recommended for server use):
 

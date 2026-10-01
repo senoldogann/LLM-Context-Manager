@@ -44,6 +44,11 @@ tokio-stream = { version = "0.1", features = ["net"] }
 futures = "0.3"
 reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
 dotenvy = "0.15"
+# Yerel model dosyalarının sabitlenmiş SHA-256 doğrulaması ve iş parçacığı sayısı
+# (fiziksel çekirdek) için; üçü de bağımlılık ağacında zaten bulunuyor.
+sha2 = "0.10"
+hex = "0.4"
+num_cpus = "1.16"
 ignore = "0.4"
 tree-sitter-java = "0.23.5"
 # tree-sitter-kotlin 0.3.x, tree-sitter 0.26 ile uyumsuz — ng fork kullanılıyor
@@ -54,6 +59,12 @@ tree-sitter-cpp = "0.23.4"
 tree-sitter-ruby = "0.23.1"
 tree-sitter-php = "0.24.2"
 tree-sitter-swift = "0.7.3"
+
+# Yerleşik yerel embedding (ONNX Runtime). ort'un hazır ONNX Runtime ikilileri
+# x86_64-apple-darwin için yayımlanmadığından yerel sağlayıcı bu hedefte derlenmez
+# (bkz. `vector::local`); hf-hub/görsel modeller kapalı, modeli CCM kendisi indirir.
+[target.'cfg(not(all(target_os = "macos", target_arch = "x86_64")))'.dependencies]
+fastembed = { version = "7.1.0", default-features = false, features = ["ort-download-binaries-rustls-tls"] }
 
 [dev-dependencies]
 tempfile = "3.8"

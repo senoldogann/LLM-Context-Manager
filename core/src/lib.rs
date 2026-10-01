@@ -21,6 +21,7 @@ use crate::engine::{CursorPosition, RetrievalEngine};
 use crate::fs_utils::{detect_language, read_text_file_limited, FileReadError};
 use crate::graph::CodeGraph;
 use crate::parser::{CodeParser, SupportedLanguage};
+use crate::vector::embedder::{EmbeddingIdentity, EmbeddingIdentityMismatch, EmbeddingSource};
 use crate::vector::store::LanceDbStore;
 use anyhow::Result;
 use rayon::prelude::*;
@@ -201,7 +202,13 @@ pub async fn run_query(query: &str, project_path: &str) -> Result<Vec<ContextSug
         CodeGraph::new()
     };
 
-    let store = LanceDbStore::new(&db_path_str, "code_vectors").await?;
+    // İndeks başka bir embedding modeliyle kurulduysa sorgu vektörü tabloyla
+    // karşılaştırılamaz; arama semantiği atlayıp graf fallback'ine geçer.
+    let recorded = read_index_embedding(&artifacts.manifest_path)?;
+    let mismatch = EmbeddingSource::from_env()?.mismatch_with(recorded.as_ref());
+    let store = LanceDbStore::new(&db_path_str, "code_vectors")
+        .await?
+        .with_identity_mismatch(mismatch);
     let engine = RetrievalEngine::new(std::sync::Arc::new(tokio::sync::RwLock::new(graph)), store);
 
     // If query looks like file:line, do cursor prediction
@@ -365,6 +372,31 @@ pub enum IndexMode {
 
 /// Belirtilen modda sondan sona tam indeksleme yapar.
 pub async fn index_directory_with_mode(
+    path: &str,
+    db_path: Option<&str>,
+    mode: IndexMode,
+) -> Result<IndexStats> {
+    index_directory_with_mode_inner(path, db_path, mode)
+        .await
+        .map(with_unconfigured_embedder_notice)
+}
+
+/// Sağlayıcı yapılandırılmamışsa (bkz. `ProviderChoice::Unconfigured`) graf-yalnız
+/// indeksin nedenini sonuca ekler; CLI ve MCP bu alanı kullanıcıya gösterir.
+fn with_unconfigured_embedder_notice(stats: IndexStats) -> IndexStats {
+    if stats.semantic_unavailable.is_some() || !crate::vector::embedder::embedder_unconfigured() {
+        return stats;
+    }
+    IndexStats {
+        semantic_unavailable: Some(
+            crate::vector::embedder::EMBEDDER_UNCONFIGURED_REASON.to_string(),
+        ),
+        ..stats
+    }
+}
+
+/// `index_directory_with_mode` gövdesi.
+async fn index_directory_with_mode_inner(
     path: &str,
     db_path: Option<&str>,
     mode: IndexMode,
@@ -628,6 +660,8 @@ async fn build_index_generation(
                 let engine = RetrievalEngine::new(graph_arc.clone(), store);
                 match engine.index_graph().await {
                     Ok(counts) => {
+                        manifest.embedding =
+                            written_embedding_identity(&engine.vector_store).await?;
                         stats.embedded_chunks = counts.embedded;
                         stats.reused_chunks = counts.reused;
                         info!(
@@ -1124,6 +1158,13 @@ fn copy_directory(source: &Path, destination: &Path) -> Result<()> {
 /// Updates an existing index incrementally (using Git or filesystem snapshots).
 /// If the index or graph does not exist, it falls back to a full index.
 pub async fn update_index(path: &str, db_path: Option<&str>) -> Result<IndexStats> {
+    update_index_inner(path, db_path)
+        .await
+        .map(with_unconfigured_embedder_notice)
+}
+
+/// `update_index` gövdesi.
+async fn update_index_inner(path: &str, db_path: Option<&str>) -> Result<IndexStats> {
     use tracing::info;
 
     let project_root = std::fs::canonicalize(path).map_err(|error| {
@@ -1177,10 +1218,17 @@ pub async fn update_index(path: &str, db_path: Option<&str>) -> Result<IndexStat
     )?;
     let (changed_rel, deleted_rel) = diff_manifest(&manifest, &new_manifest);
     let unchanged = changed_rel.is_empty() && deleted_rel.is_empty();
+    let source = EmbeddingSource::from_env()?;
     if unchanged {
         if let Some(counts) = recorded_semantic_nodes(&manifest, &active.graph_path) {
-            let health =
-                vector_index_health(&active, &requested_db_path, embedded_node_count(counts)).await;
+            let health = vector_index_health(
+                &active,
+                &requested_db_path,
+                embedded_node_count(counts),
+                &source,
+                manifest.embedding.as_ref(),
+            )
+            .await;
             return finish_unchanged_index(path, db_path, health).await;
         }
     }
@@ -1202,8 +1250,14 @@ pub async fn update_index(path: &str, db_path: Option<&str>) -> Result<IndexStat
         return index_directory(path, db_path).await;
     }
 
-    let health =
-        vector_index_health(&active, &requested_db_path, semantic_node_count(&graph)).await;
+    let health = vector_index_health(
+        &active,
+        &requested_db_path,
+        semantic_node_count(&graph),
+        &source,
+        manifest.embedding.as_ref(),
+    )
+    .await;
     if unchanged {
         return finish_unchanged_index(path, db_path, health).await;
     }
@@ -1235,7 +1289,8 @@ pub async fn update_index(path: &str, db_path: Option<&str>) -> Result<IndexStat
     if health.repair_needed() {
         tracing::warn!(
             vector_table = %health.table_path.display(),
-            "Vector index incomplete with pending source changes; performing full re-index."
+            embedding_change = health.identity_mismatch.as_ref().map(ToString::to_string),
+            "Vector index incomplete or built with another embedding model, with pending source changes; performing full re-index."
         );
         return index_directory(path, db_path).await;
     }
@@ -1279,7 +1334,15 @@ pub async fn update_index(path: &str, db_path: Option<&str>) -> Result<IndexStat
 
         info!("Starting incremental indexing for {}", path);
         let stats = engine.incremental_index_paths(path, &changed_files).await?;
-        let committed_manifest = restore_retry_files(&manifest, new_manifest, &stats.retry_files);
+        let mut committed_manifest =
+            restore_retry_files(&manifest, new_manifest, &stats.retry_files);
+        // Embedding kapalıyken tablodaki eski vektörler olduğu gibi kalır ve
+        // kimlikleri korunur; açıkken tablo yapılandırılmış kaynağın kimliğini
+        // taşır (kimliksiz eski indeks bu noktada kimlik kazanır).
+        if source != EmbeddingSource::Disabled {
+            committed_manifest.embedding =
+                written_embedding_identity(&engine.vector_store).await?;
+        }
 
         save_graph_with_manifest(
             &*graph_arc.read().await,
@@ -1337,12 +1400,15 @@ struct VectorHealth {
     required: bool,
     /// Tablo okunabiliyor ve en az embed edilecek düğüm kadar satır içeriyor mu.
     complete: Result<bool>,
+    /// Tablodaki vektörler yapılandırılmış embedder'dan farklı bir kaynaktan
+    /// geliyorsa nedeni; vektörler karıştırılmaz, hepsi bir kez yeniden embed edilir.
+    identity_mismatch: Option<EmbeddingIdentityMismatch>,
     table_path: PathBuf,
 }
 
 impl VectorHealth {
     fn repair_needed(&self) -> bool {
-        self.required && !matches!(self.complete, Ok(true))
+        self.required && (self.identity_mismatch.is_some() || !matches!(self.complete, Ok(true)))
     }
 }
 
@@ -1350,15 +1416,15 @@ async fn vector_index_health(
     active: &IndexArtifactPaths,
     requested_db_path: &Path,
     semantic_nodes: usize,
+    source: &EmbeddingSource,
+    recorded: Option<&EmbeddingIdentity>,
 ) -> VectorHealth {
-    let embedder_disabled = std::env::var("CCM_DISABLE_EMBEDDER")
-        .or_else(|_| std::env::var("EMBEDDING_DISABLED"))
-        .map(|value| matches!(value.to_lowercase().as_str(), "1" | "true" | "yes"))
-        .unwrap_or(false);
-    let fixture_enabled = std::env::var("CCM_EMBEDDING_FIXTURE")
-        .ok()
-        .is_some_and(|value| !value.trim().is_empty());
-    let required = (fixture_enabled || !embedder_disabled) && semantic_nodes > 0;
+    let required = *source != EmbeddingSource::Disabled && semantic_nodes > 0;
+    let identity_mismatch = if required {
+        source.mismatch_with(recorded)
+    } else {
+        None
+    };
     let table_path = active.db_path.join("code_vectors.lance");
     let complete = if !required {
         Ok(true)
@@ -1382,6 +1448,7 @@ async fn vector_index_health(
     VectorHealth {
         required,
         complete,
+        identity_mismatch,
         table_path,
     }
 }
@@ -1399,8 +1466,9 @@ async fn finish_unchanged_index(
     if health.repair_needed() {
         tracing::warn!(
             vector_table = %health.table_path.display(),
+            embedding_change = health.identity_mismatch.as_ref().map(ToString::to_string),
             error = ?health.complete.err(),
-            "Vector index is incomplete or corrupt. Repairing semantics from the active graph."
+            "Vector index is incomplete, corrupt or built with another embedding model. Re-embedding from the active graph."
         );
         return match upgrade_active_index_semantics(path, db_path).await {
             // Graf zaten güncel; yalnızca semantik katman hâlâ beklemede.
@@ -1457,6 +1525,16 @@ pub async fn upgrade_active_index_semantics(
     path: &str,
     db_path: Option<&str>,
 ) -> Result<IndexStats> {
+    upgrade_active_index_semantics_inner(path, db_path)
+        .await
+        .map(with_unconfigured_embedder_notice)
+}
+
+/// `upgrade_active_index_semantics` gövdesi.
+async fn upgrade_active_index_semantics_inner(
+    path: &str,
+    db_path: Option<&str>,
+) -> Result<IndexStats> {
     use std::sync::Arc;
     use tracing::info;
 
@@ -1491,10 +1569,8 @@ pub async fn upgrade_active_index_semantics(
     // MCP canlı yenilemesi etkin generation'a önce grafı sonra manifesti yazar;
     // manifest önce kopyalanınca kopyalanan manifest graftan yeni olamaz. Vektörler
     // kopyalanan graftan üretilir, böylece staging grafıyla birebir eşleşir.
-    std::fs::copy(
-        &active.manifest_path,
-        staging_root.join("ccm_manifest.json"),
-    )?;
+    let staged_manifest_path = staging_root.join("ccm_manifest.json");
+    let manifest = read_manifest(&active.manifest_path)?;
     std::fs::copy(&active.graph_path, &staged_graph_path)?;
     let graph = CodeGraph::from_file(&staged_graph_path.to_string_lossy())?;
     let semantic_nodes = semantic_node_count(&graph);
@@ -1517,7 +1593,17 @@ pub async fn upgrade_active_index_semantics(
 
     let graph_arc = Arc::new(tokio::sync::RwLock::new(graph));
     let engine = RetrievalEngine::new(graph_arc.clone(), store);
-    engine.index_graph().await?;
+    let counts = engine.index_graph().await?;
+    // Kopyalanan graf ve onun manifesti değişmedi; yalnızca yeni vektörlerin
+    // kimliği kaydedilir.
+    let embedding = written_embedding_identity(&engine.vector_store).await?;
+    save_manifest(
+        &staged_manifest_path,
+        &IndexManifest {
+            embedding,
+            ..manifest
+        },
+    )?;
 
     info!(
         nodes = semantic_nodes,
@@ -1532,12 +1618,37 @@ pub async fn upgrade_active_index_semantics(
 
     Ok(IndexStats {
         nodes_created: semantic_nodes,
+        embedded_chunks: counts.embedded,
+        reused_chunks: counts.reused,
         ..IndexStats::default()
     })
 }
 
+/// Vektör tablosundaki vektörlerin kimliği: yapılandırılmış kaynağın kimliği
+/// ve tablonun boyutu. Tablo yoksa ya da embedding kapalıysa `None`.
+async fn written_embedding_identity(store: &LanceDbStore) -> Result<Option<EmbeddingIdentity>> {
+    match store.vector_dim().await? {
+        Some(dim) => Ok(EmbeddingSource::from_env()?.identity(dim)),
+        None => Ok(None),
+    }
+}
+
 pub fn semantic_node_count(graph: &CodeGraph) -> usize {
     embedded_node_count(semantic_node_counts(graph))
+}
+
+/// İndeksin vektörleri (`recorded` kimliğiyle kurulmuş) `source` ile
+/// karıştırılamıyorsa uyuşmazlığı döndürür. Embed edilecek düğümü olmayan
+/// grafın vektörü de yoktur; uyuşmazlık aranmaz.
+pub fn index_embedding_mismatch(
+    source: &EmbeddingSource,
+    recorded: Option<&EmbeddingIdentity>,
+    graph: &CodeGraph,
+) -> Option<EmbeddingIdentityMismatch> {
+    if semantic_node_count(graph) == 0 {
+        return None;
+    }
+    source.mismatch_with(recorded)
 }
 
 /// Grafın embedding'e giren düğüm türlerini sayar.
@@ -1772,6 +1883,10 @@ struct IndexManifest {
     /// bu uzunlukta değilse (bozulma, eski manifest) graf yüklenip doğrulanır.
     #[serde(default)]
     graph_bytes: Option<u64>,
+    /// Vektör tablosundaki vektörleri üreten embedding kaynağı. Eski
+    /// manifestlerde ve vektörsüz (graf-yalnız) indekslerde yok.
+    #[serde(default)]
+    embedding: Option<EmbeddingIdentity>,
     files: HashMap<String, FileFingerprint>,
 }
 
@@ -1797,6 +1912,35 @@ pub fn unix_now_secs() -> u64 {
         .duration_since(UNIX_EPOCH)
         .map(|value| value.as_secs())
         .unwrap_or(0)
+}
+
+/// Manifestteki embedding kimliğini okur; alan ya da manifest yoksa (eski ya
+/// da vektörsüz indeks) `None`.
+pub fn read_index_embedding(manifest_path: &Path) -> Result<Option<EmbeddingIdentity>> {
+    #[derive(Deserialize)]
+    struct ManifestEmbedding {
+        #[serde(default)]
+        embedding: Option<EmbeddingIdentity>,
+    }
+    let bytes = match std::fs::read(manifest_path) {
+        Ok(bytes) => bytes,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+        Err(error) => {
+            return Err(anyhow::anyhow!(
+                "Index manifest '{}' could not be read: {}",
+                manifest_path.display(),
+                error
+            ))
+        }
+    };
+    let parsed: ManifestEmbedding = serde_json::from_slice(&bytes).map_err(|error| {
+        anyhow::anyhow!(
+            "Index manifest '{}' could not be parsed: {}",
+            manifest_path.display(),
+            error
+        )
+    })?;
+    Ok(parsed.embedding)
 }
 
 /// Manifestteki indeksleme zamanını okur; alan yoksa (eski manifest) `None`.
@@ -2118,6 +2262,8 @@ fn build_manifest(
         indexed_at: Some(indexed_at),
         semantic_nodes: None,
         graph_bytes: None,
+        // Tarama vektör tablosunu değiştirmez; tablonun kimliği aynen taşınır.
+        embedding: previous.embedding.clone(),
         files,
     })
 }
@@ -2525,6 +2671,7 @@ mod policy_tests {
             indexed_at: None,
             semantic_nodes: None,
             graph_bytes: None,
+            embedding: None,
             files: HashMap::from([(
                 "./src/lib.rs".to_string(),
                 FileFingerprint {
@@ -2541,6 +2688,7 @@ mod policy_tests {
             indexed_at: None,
             semantic_nodes: None,
             graph_bytes: None,
+            embedding: None,
             files: HashMap::from([(
                 "./src/lib.rs".to_string(),
                 FileFingerprint {
