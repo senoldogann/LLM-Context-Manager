@@ -115,19 +115,30 @@ pub enum ReferenceFacts {
     Syntax(SyntaxFacts),
 }
 
+/// Dosya kimliğinin yol bileşenleri; kimlikler `./göreli/yol` biçimindedir ve
+/// baştaki `./` bir bileşen değildir.
+fn path_components(file_id: &str) -> Vec<String> {
+    file_id
+        .strip_prefix("./")
+        .unwrap_or(file_id)
+        .split(['/', '\\'])
+        .map(str::to_string)
+        .collect()
+}
+
 /// Python dosyasının paketi, kök göreli yol bileşenleri olarak
-/// (`app/core.py` → `[app]`, `app/__init__.py` → `[app]`).
+/// (`./app/core.py` → `[app]`, `./app/__init__.py` → `[app]`).
 pub fn python_package(file_id: &str) -> Vec<String> {
-    let mut parts: Vec<String> = file_id.split(['/', '\\']).map(str::to_string).collect();
+    let mut parts = path_components(file_id);
     parts.pop();
     parts
 }
 
-/// Python dosyasının modül yolu bileşenleri (`app/core.py` → `[app, core]`,
-/// `app/__init__.py` → `[app]`); `.py` dosyası değilse `None`.
+/// Python dosyasının modül yolu bileşenleri (`./app/core.py` → `[app, core]`,
+/// `./app/__init__.py` → `[app]`); `.py` dosyası değilse `None`.
 pub fn python_module_path(file_id: &str) -> Option<Vec<String>> {
     let stem = file_id.strip_suffix(".py")?;
-    let mut parts: Vec<String> = stem.split(['/', '\\']).map(str::to_string).collect();
+    let mut parts = path_components(stem);
     if parts.last().is_some_and(|last| last == "__init__") {
         parts.pop();
     }

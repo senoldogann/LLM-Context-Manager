@@ -9,8 +9,11 @@ use petgraph::graph::NodeIndex;
 use std::collections::HashMap;
 use tree_sitter::{Node, Tree};
 
-use crate::graph::{CodeGraph, CodeNode, EdgeType, NodeType};
+use crate::graph::{
+    CodeGraph, CodeNode, EdgeType, NodeType, ReferenceFacts, SyntaxFacts, SyntaxLanguage,
+};
 use crate::parser::SupportedLanguage;
+use crate::vector::python_facts;
 
 /// Extractor extracts semantic code elements from an AST and populates a CodeGraph.
 pub struct Extractor {
@@ -47,13 +50,21 @@ impl Extractor {
             content: "".into(),
             start_line: 1,
             end_line,
-            facts: crate::graph::ReferenceFacts::Lexical,
+            facts: ReferenceFacts::Lexical,
         };
         let file_idx = graph.add_node(file_node);
         self.node_map.insert(file_id.to_string(), file_idx);
 
         // Walk the AST and extract elements
         self.walk_node(tree.root_node(), graph, file_idx, file_id, "")?;
+
+        if matches!(self.language, SupportedLanguage::Python) {
+            graph.graph[file_idx].facts = ReferenceFacts::Syntax(python_facts::module_facts(
+                tree.root_node(),
+                &self.source_code,
+                file_id,
+            ));
+        }
 
         Ok(file_idx)
     }
@@ -112,7 +123,7 @@ impl Extractor {
                 content: final_content.into(),
                 start_line: node.start_position().row + 1, // 1-indexed
                 end_line: node.end_position().row + 1,
-                facts: crate::graph::ReferenceFacts::Lexical,
+                facts: self.reference_facts(&node, file_id),
             };
 
             let current_idx = graph.add_node(code_node);
@@ -135,6 +146,22 @@ impl Extractor {
         }
 
         Ok(())
+    }
+
+    /// Düğümün referans olguları: Python'da sözdiziminden, diğer dillerde sözcüksel.
+    fn reference_facts(&self, node: &Node, file_id: &str) -> ReferenceFacts {
+        match self.language {
+            SupportedLanguage::Python => ReferenceFacts::Syntax(match node.kind() {
+                "function_definition" => {
+                    python_facts::function_facts(*node, &self.source_code, file_id)
+                }
+                "class_definition" => python_facts::class_facts(*node, &self.source_code, file_id),
+                // Atama ve import düğümleri kenar üretmez: çağrılar kapsayan
+                // fonksiyona ya da dosyaya, import bağları kapsamın sahibine aittir.
+                _ => SyntaxFacts::empty(SyntaxLanguage::Python),
+            }),
+            _ => ReferenceFacts::Lexical,
+        }
     }
 
     /// Heuristic to find docstrings/comments immediately preceding a node.
