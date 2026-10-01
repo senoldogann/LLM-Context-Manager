@@ -73,7 +73,8 @@ questions like "what breaks if I change this?" from guesses into queryable facts
 - **Deep Traversal** - Ask "Who calls this?" and get accurate answers
 
 ### ⚡ High-Performance Core
-- **Rust-Powered** - Blazing fast indexing and queries
+- **Rust-Powered** - Single-binary CLI and MCP server; index and query timings
+  are published in [`benchmarks/`](./benchmarks/README.md), not claimed here
 - **Built-in Embeddings** - Semantic search works out of the box: a pinned multilingual, code-trained embedding model runs inside the binary (no Ollama, no API key)
 - **Deterministic Embedding** - One chunk per inference call on all physical cores, so a chunk's vector never depends on its neighbors (Ollama/OpenAI requests are batched)
 - **LanceDB** - Millisecond-latency vector storage

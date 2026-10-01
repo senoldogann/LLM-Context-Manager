@@ -614,6 +614,9 @@ mod tests {
 
     #[test]
     fn embedding_host_rejects_non_loopback_without_explicit_consent() {
+        // Ortam değişkenleri süreç genelinde paylaşılır; diğer testlerle yarışmamak
+        // için ENV_LOCK altında değiştirilir.
+        let _guard = ENV_LOCK.lock().unwrap();
         assert!(validate_embedding_host("http://127.0.0.1:11434", &Provider::Ollama).is_ok());
         assert!(validate_embedding_host("http://localhost:8080", &Provider::Ollama).is_ok());
         assert!(

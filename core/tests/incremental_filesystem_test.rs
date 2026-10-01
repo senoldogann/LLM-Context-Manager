@@ -914,6 +914,7 @@ async fn update_index_embeds_only_changed_chunks() -> Result<()> {
     struct EnvRestore;
     impl Drop for EnvRestore {
         fn drop(&mut self) {
+            std::env::remove_var("EMBEDDING_PROVIDER");
             std::env::remove_var("EMBEDDING_HOST");
             std::env::remove_var("EMBEDDING_MODEL");
             std::env::set_var("CCM_DISABLE_EMBEDDER", "1");
@@ -1012,6 +1013,7 @@ async fn live_refresh_reuses_vectors_in_the_active_table() -> Result<()> {
     struct EnvRestore;
     impl Drop for EnvRestore {
         fn drop(&mut self) {
+            std::env::remove_var("EMBEDDING_PROVIDER");
             std::env::remove_var("EMBEDDING_HOST");
             std::env::remove_var("EMBEDDING_MODEL");
             std::env::set_var("CCM_DISABLE_EMBEDDER", "1");

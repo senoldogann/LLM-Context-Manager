@@ -221,19 +221,22 @@ target/release/ccm-cli index --path benchmarks/corpus/flask
 target/release/ccm-cli index --path benchmarks/corpus/express
 target/release/ccm-cli index --path benchmarks/corpus/serde
 
-# 3. Evaluate structural vs hybrid per repo (~2 min); CCM_BENCH_RESULTS keeps
-#    runs of different embedders apart. The script exits non-zero after serde
-#    ("9 of 10 tasks were scored", see above); all three reports are written.
+# 3. Evaluate structural vs hybrid per repo (~2 min). Give every embedder its
+#    own report directory via CCM_BENCH_RESULTS so runs are never mixed; without
+#    it the script writes the mxbai baseline into benchmarks/results. The script
+#    exits non-zero after serde ("9 of 10 tasks were scored", see above); all
+#    three reports are written.
 CCM_BENCH_RESULTS=benchmarks/results/local-granite-97m-int8-bs1 bash benchmarks/scripts/run_benchmark.sh
 
 # 4. Aggregate into the summary table (directory argument optional)
 python3 benchmarks/scripts/aggregate.py benchmarks/results/local-granite-97m-int8-bs1
 ```
 
-Reports land in `benchmarks/results/<repo>.compare.json` (mxbai baseline) or the
-chosen results directory and are committed as evidence. Repo clones and indexes
-are gitignored. Switching embedders re-embeds an existing index once (the index
-manifest records the embedding model).
+Reports land in `benchmarks/results/<repo>.compare.json` for the mxbai baseline,
+or in `$CCM_BENCH_RESULTS` when set; keep one directory per embedder (for
+example `benchmarks/results/local-granite-97m-int8-bs1/`) and commit each as
+evidence. Repo clones and indexes are gitignored. Switching embedders re-embeds
+an existing index once (the index manifest records the embedding model).
 
 ## Honest caveats
 
