@@ -2,7 +2,10 @@
 
 use anyhow::Result;
 use ccm_core::engine::RetrievalEngine;
-use ccm_core::graph::{CallTarget, CodeGraph, EdgeType, ImportBinding, ReferenceFacts};
+use ccm_core::graph::{
+    usages_of, CallTarget, CodeGraph, EdgeType, ImportBinding, ReferenceFacts, UsageError,
+    UsageRelation,
+};
 use ccm_core::vector::store::LanceDbStore;
 use petgraph::graph::NodeIndex;
 use petgraph::visit::EdgeRef;
@@ -418,5 +421,50 @@ async fn incremental_updates_follow_import_and_reexport_changes() -> Result<()> 
         vec![EdgeType::Calls]
     );
     assert!(edge_types(&graph, main, node(&graph, "app/core.py", "run")).is_empty());
+    Ok(())
+}
+
+#[tokio::test]
+async fn usages_report_relations_and_a_missing_node() -> Result<()> {
+    let (_dir, engine) = index_fixture(FIXTURE).await?;
+    let graph = engine.graph.read().await;
+
+    let base_save = member(&graph, "app/models.py", "Base", "save");
+    let report = usages_of(&graph, &graph.graph[base_save].id)?;
+    let seen: Vec<(String, UsageRelation)> = report
+        .usages
+        .iter()
+        .map(|usage| (usage.node.name.clone(), usage.relation))
+        .collect();
+    assert_eq!(
+        seen,
+        vec![
+            ("save".to_string(), UsageRelation::Calls),
+            ("persist".to_string(), UsageRelation::MayCall)
+        ]
+    );
+
+    let run = node(&graph, "app/core.py", "run");
+    let relations: Vec<UsageRelation> = usages_of(&graph, &graph.graph[run].id)?
+        .usages
+        .iter()
+        .map(|usage| usage.relation)
+        .collect();
+    assert_eq!(
+        relations,
+        vec![
+            UsageRelation::Calls,
+            UsageRelation::Imports,
+            UsageRelation::Imports
+        ]
+    );
+
+    // Kararlı kimliği artık olmayan sembol, dosyadaki tek fonksiyona bulanık
+    // eşleşmemeli; boş liste yerine açık hata dönmeli.
+    let gone = "./app/util.py:function_definition:symbol:ffffffffffffffff:0";
+    assert_eq!(
+        usages_of(&graph, gone).unwrap_err(),
+        UsageError::NodeNotFound(gone.to_string())
+    );
     Ok(())
 }

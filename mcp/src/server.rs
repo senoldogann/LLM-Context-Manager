@@ -1371,7 +1371,7 @@ fn handle_list_tools(id: Option<Value>) -> JsonRpcResponse {
         ToolDefinition {
             name: "find_usages".to_string(),
             title: "Find Usages".to_string(),
-            description: Some("Find all nodes that call or reference a given node. Answers 'who calls this function?'.".to_string()),
+            description: Some("Find all nodes that call or reference a given node. Answers 'who calls this function?'. Each usage is labeled calls, calls (inferred), may call, imports or inherits; an unknown node ID is an error, not an empty result.".to_string()),
             input_schema: serde_json::json!({
                 "type": "object",
                 "properties": {

@@ -1079,34 +1079,69 @@ pub async fn find_usages(engine: &Arc<RetrievalEngine>, args: &Value) -> Result<
     let project_path = args.get("project_path").and_then(|v| v.as_str());
     let normalized_id = normalize_graph_node_id(node_id, project_path)?;
     let limit = limit_from_args(args, 20);
-    let usages = engine.find_usages(&normalized_id, limit).await;
-
-    if usages.is_empty() {
-        return Ok(ToolResult {
-            content: vec![ToolResultContent {
-                content_type: "text".to_string(),
-                text: format!("No usages found for node: '{}'", node_id),
-            }],
-            is_error: None,
-        });
+    let report = match engine.find_usages(&normalized_id).await {
+        Ok(report) => report,
+        Err(error) => {
+            return Ok(ToolResult {
+                content: vec![ToolResultContent {
+                    content_type: "text".to_string(),
+                    text: error.to_string(),
+                }],
+                is_error: Some(true),
+            });
+        }
+    };
+    let shown: Vec<ccm_core::engine::ContextSuggestion> = report
+        .usages
+        .iter()
+        .take(limit)
+        .map(|usage| ccm_core::engine::usage_suggestion(usage, &report.target.name))
+        .collect();
+    let mut text = usage_summary(&report.target.name, &report.usages);
+    if shown.len() < report.usages.len() {
+        text.push_str(&format!(
+            " (showing {} of {}; raise `limit` for more)",
+            shown.len(),
+            report.usages.len()
+        ));
+    }
+    if !shown.is_empty() {
+        text.push_str("\n\n");
+        text.push_str(&format_suggestions_output(
+            &shown,
+            include_body_from_args(args),
+            max_chars_from_args(args),
+        ));
     }
 
     Ok(ToolResult {
         content: vec![ToolResultContent {
             content_type: "text".to_string(),
-            text: format!(
-                "## Usages of `{}` ({} found)\n\n{}",
-                node_id,
-                usages.len(),
-                format_suggestions_output(
-                    &usages,
-                    include_body_from_args(args),
-                    max_chars_from_args(args),
-                )
-            ),
+            text,
         }],
         is_error: None,
     })
+}
+
+/// `find_usages` özet satırı: ilişki başına kullanım sayısı.
+fn usage_summary(target_name: &str, usages: &[ccm_core::graph::Usage]) -> String {
+    use ccm_core::graph::UsageRelation;
+    let count = |relation: UsageRelation| {
+        usages
+            .iter()
+            .filter(|usage| usage.relation == relation)
+            .count()
+    };
+    format!(
+        "{} usages of `{}`: {} calls, {} inferred, {} may call, {} imports, {} inherits",
+        usages.len(),
+        target_name,
+        count(UsageRelation::Calls),
+        count(UsageRelation::CallsInferred),
+        count(UsageRelation::MayCall),
+        count(UsageRelation::Imports),
+        count(UsageRelation::Inherits),
+    )
 }
 
 /// Tool: trace_call_chain

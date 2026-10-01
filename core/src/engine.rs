@@ -861,61 +861,14 @@ impl RetrievalEngine {
         self.graph.read().await.find_node_fuzzy_by_id(id)
     }
 
-    /// Verilen node'u çağıran / kullanan tüm node'ları döndürür (ters bağlantı analizi).
-    pub async fn find_usages(&self, node_id: &str, limit: usize) -> Vec<ContextSuggestion> {
-        use petgraph::Direction;
-
+    /// Verilen düğümü kullananlar, ilişki etiketli ve kesinlik sırasıyla. Kimlik
+    /// güncel indekste yoksa boş liste değil `UsageError::NodeNotFound` döner.
+    pub async fn find_usages(
+        &self,
+        node_id: &str,
+    ) -> Result<crate::graph::UsageReport, crate::graph::UsageError> {
         let graph = self.graph.read().await;
-
-        // Önce fuzzy ile node'u bul
-        let target_node = match graph.find_node_fuzzy_by_id(node_id) {
-            Some(n) => n,
-            None => return Vec::new(),
-        };
-
-        let Some(target_idx) = graph.find_node_index_by_id(&target_node.id) else {
-            return Vec::new();
-        };
-
-        let mut results = Vec::new();
-
-        // Tüm node'ları tara — bu node'a Calls/Imports/Defines kenarı olan kaynaklara bak
-        for edge in graph.graph.edges_directed(target_idx, Direction::Incoming) {
-            if results.len() >= limit {
-                break;
-            }
-            let source = &graph.graph[edge.source()];
-            if matches!(source.node_type, NodeType::File | NodeType::DataFile) {
-                continue;
-            }
-            let rel = match edge.weight() {
-                crate::graph::EdgeType::Calls => "Calls",
-                crate::graph::EdgeType::CallAmbiguous => "Calls (ambiguous name match)",
-                crate::graph::EdgeType::CallInferred => {
-                    "Calls (inferred: unique name, not imported)"
-                }
-                crate::graph::EdgeType::Imports => "Imports",
-                crate::graph::EdgeType::ImportAmbiguous => "Imports (ambiguous name match)",
-                crate::graph::EdgeType::Defines => "Defines",
-                crate::graph::EdgeType::Contains => "Contains",
-                crate::graph::EdgeType::Inherits => "Inherits",
-                crate::graph::EdgeType::Reads => "Reads",
-                crate::graph::EdgeType::Writes => "Writes",
-            };
-            results.push(ContextSuggestion {
-                node_id: Some(source.id.clone()),
-                file_path: Some(extract_file_path(&source.id)),
-                start_line: Some(source.start_line),
-                end_line: Some(source.end_line),
-                node_type: Some(format!("{:?}", source.node_type)),
-                title: format!("{:?}: {}", source.node_type, source.name),
-                content: source.content.to_string(),
-                relevance_score: 1.0,
-                reason: format!("{} → {}", rel, target_node.name),
-            });
-        }
-
-        results
+        crate::graph::usages_of(&graph, node_id)
     }
 
     /// from_id'den to_id'ye giden çağrı zincirini BFS ile bulur.
@@ -1475,6 +1428,23 @@ impl RetrievalEngine {
             started.elapsed().as_millis() as u64,
         );
         Ok(suggestions)
+    }
+}
+
+/// Bir kullanımın araç çıktısındaki bloğu: `reason` ilişkiyi taşır
+/// (`calls → hedef`, `may call → hedef`, …).
+pub fn usage_suggestion(usage: &crate::graph::Usage, target_name: &str) -> ContextSuggestion {
+    let node = &usage.node;
+    ContextSuggestion {
+        node_id: Some(node.id.clone()),
+        file_path: Some(extract_file_path(&node.id)),
+        start_line: Some(node.start_line),
+        end_line: Some(node.end_line),
+        node_type: Some(format!("{:?}", node.node_type)),
+        title: format!("{:?}: {}", node.node_type, node.name),
+        content: node.content.to_string(),
+        relevance_score: 1.0,
+        reason: format!("{} → {}", usage.relation.label(), target_name),
     }
 }
 
