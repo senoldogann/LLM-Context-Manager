@@ -68,7 +68,7 @@ Default embedder since the local-embedder change:
 384-d, CLS pooling, 512-token inputs) run in-process by fastembed 7.1 / ONNX
 Runtime 1.28 on the CPU of an Apple M4 (10 cores: 4 performance + 6 efficiency),
 10 threads (physical cores), one text per inference call (the shipped default;
-the batched rows set `CCM_EMBED_BATCH_SIZE=32`). Same corpus, same 35 tasks,
+the batched rows set `CCM_LOCAL_EMBED_BATCH=32`). Same corpus, same 35 tasks,
 same code revision for every row; the mxbai row was re-run on this revision
 through Ollama and reproduced the recorded numbers exactly.
 
@@ -80,7 +80,7 @@ through Ollama and reproduced the recorded numbers exactly.
 | | hybrid | 9/15 | 0.600 | 0.436 |
 | **granite-97m int8, one text per call (default)** | semantic-only | **9/15** | **0.600** | 0.419 |
 | | hybrid | **10/15** | **0.667** | **0.497** |
-| granite-97m int8, `CCM_EMBED_BATCH_SIZE=32` | semantic-only | 8/15 | 0.533 | **0.489** |
+| granite-97m int8, `CCM_LOCAL_EMBED_BATCH=32` | semantic-only | 8/15 | 0.533 | **0.489** |
 | | hybrid | 8/15 | 0.533 | 0.489 |
 
 Reports: [`results/local-granite-97m-int8-bs1/`](./results/local-granite-97m-int8-bs1/)
@@ -117,7 +117,7 @@ the load average moved between 30 and 12.
    tensor, so a text's vector depends on its batch-mates (cosine 0.95–0.97 to
    the same text embedded alone; the fp32 file is batch-invariant). One text
    per inference call keeps vectors a pure function of the text (what chunk
-   reuse and the live index assume) and scored best here. `CCM_EMBED_BATCH_SIZE=32`
+   reuse and the live index assume) and scored best here. `CCM_LOCAL_EMBED_BATCH=32`
    was up to 2× faster on flask and no faster on serde in these runs, at the
    cost of that determinism (and, here, of recall).
 3. **int8 vs fp32:** single-text cosine to IBM's fp32 export is 0.946–0.977 on

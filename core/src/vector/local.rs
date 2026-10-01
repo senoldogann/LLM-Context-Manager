@@ -77,7 +77,7 @@ async fn load(spec: &'static LocalModelSpec) -> Result<Arc<LocalEmbedder>> {
 }
 
 /// ONNX Runtime iş parçacığı sayısı: `CCM_EMBED_THREADS` ya da fiziksel
-/// çekirdek sayısı. Geçersiz değer açık bir hatadır.
+/// çekirdek/işletim sistemi CPU kotasının küçüğü. Geçersiz değer açık hatadır.
 fn embedding_threads() -> Result<usize> {
     match std::env::var("CCM_EMBED_THREADS") {
         Ok(value) => value
@@ -91,7 +91,11 @@ fn embedding_threads() -> Result<usize> {
                     value
                 )
             }),
-        Err(std::env::VarError::NotPresent) => Ok(num_cpus::get_physical().max(1)),
+        // get_physical() host çekirdeklerini sayar; get() Linux cgroup CPU
+        // kotasını dikkate alır. Container içinde ikisinin küçüğünü kullan.
+        Err(std::env::VarError::NotPresent) => {
+            Ok(num_cpus::get_physical().min(num_cpus::get()).max(1))
+        }
         Err(error) => Err(anyhow::anyhow!("CCM_EMBED_THREADS is not valid: {}", error)),
     }
 }

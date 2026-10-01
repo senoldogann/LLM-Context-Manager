@@ -307,6 +307,49 @@ pub fn read_verified(dir: &Path, file: &PinnedFile, source: &ModelSource) -> Res
     Ok(bytes)
 }
 
+/// Hedef dosyaya ait, güvenli yaştan daha eski yarım indirmeleri temizler.
+/// Yeni `.part` dosyalarına dokunmaz; böylece eşzamanlı indiricilerle yarışmaz.
+fn remove_stale_partial_downloads(target: &Path, stale_after: Duration) {
+    let (Some(parent), Some(name)) = (target.parent(), target.file_name()) else {
+        return;
+    };
+    let prefix = format!("{}.", name.to_string_lossy());
+    let entries = match std::fs::read_dir(parent) {
+        Ok(entries) => entries,
+        // İlk indirmede dizin henüz yoktur; temizlenecek bir şey yok.
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return,
+        Err(error) => {
+            tracing::warn!(
+                path = %parent.display(),
+                error = %error,
+                "Failed to list partial model downloads for cleanup"
+            );
+            return;
+        }
+    };
+    for entry in entries.flatten() {
+        let file_name = entry.file_name().to_string_lossy().to_string();
+        if !file_name.starts_with(&prefix) || !file_name.ends_with(".part") {
+            continue;
+        }
+        let stale = entry
+            .metadata()
+            .and_then(|metadata| metadata.modified())
+            .ok()
+            .and_then(|modified| modified.elapsed().ok())
+            .is_some_and(|age| age >= stale_after);
+        if stale {
+            if let Err(error) = std::fs::remove_file(entry.path()) {
+                tracing::warn!(
+                    path = %entry.path().display(),
+                    error = %error,
+                    "Failed to remove stale partial model download"
+                );
+            }
+        }
+    }
+}
+
 /// Eksik dosyaları sabitlenmiş kaynaktan indirir; mevcut dosyalara dokunmaz
 /// (onları okuyan taraf doğrular). İndirilen içerik doğrulanmadan yerine
 /// taşınmaz.
@@ -329,6 +372,7 @@ pub async fn download_missing_files(
             outcomes.push((*file, FileOutcome::AlreadyPresent));
             continue;
         }
+        remove_stale_partial_downloads(&target, Duration::from_secs(24 * 60 * 60));
         let client = match client.as_ref() {
             Some(client) => client,
             None => client.insert(download_client()?),
@@ -623,11 +667,13 @@ fn sha256_of_file(path: &Path) -> Result<String> {
 #[cfg(test)]
 mod tests {
     use super::{
-        download_missing_files, inspect_file, pull_model_files, FileOutcome, FileState,
-        ModelDownloadFailed, ModelFileMismatch, ModelSource, PinnedFile, DEFAULT_LOCAL_MODEL,
+        download_missing_files, inspect_file, pull_model_files, remove_stale_partial_downloads,
+        FileOutcome, FileState, ModelDownloadFailed, ModelFileMismatch, ModelSource, PinnedFile,
+        DEFAULT_LOCAL_MODEL,
     };
     use sha2::{Digest, Sha256};
     use std::io::{BufRead, BufReader, Write};
+    use std::time::Duration;
 
     const CONTENT: &[u8] = b"pinned model bytes";
 
@@ -706,6 +752,24 @@ mod tests {
             std::path::Path::new("ibm-granite--granite-embedding-97m-multilingual-r2")
                 .join("835ad14087e140460703cf0fae09f97d469d65c2")
         );
+    }
+
+    #[test]
+    fn stale_partial_cleanup_only_removes_matching_parts() -> anyhow::Result<()> {
+        let dir = tempfile::tempdir()?;
+        let parent = dir.path().join("onnx");
+        std::fs::create_dir_all(&parent)?;
+        let target = parent.join("model.onnx");
+        let matching = parent.join("model.onnx.123.456.part");
+        let unrelated = parent.join("other.onnx.123.456.part");
+        std::fs::write(&matching, b"partial")?;
+        std::fs::write(&unrelated, b"keep")?;
+
+        remove_stale_partial_downloads(&target, Duration::ZERO);
+
+        assert!(!matching.exists());
+        assert!(unrelated.exists());
+        Ok(())
     }
 
     #[tokio::test]
