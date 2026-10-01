@@ -1,0 +1,1094 @@
+{
+  "schema_version": 1,
+  "generated_at": 1790842855,
+  "structural": {
+    "schema_version": 1,
+    "generated_at": 1790842850,
+    "totals": {
+      "tasks": 13,
+      "scored": 13,
+      "passed": 12,
+      "failed": 1,
+      "skipped": 0
+    },
+    "results": [
+      {
+        "id": "flask-search-001",
+        "query_type": "search_code",
+        "status": "fail",
+        "detail": "Recall below threshold",
+        "matches": 0,
+        "expected_min_recall": 1,
+        "max_rank": 5,
+        "matched_items": [],
+        "recall_at_k": 0.0,
+        "precision_at_k": 0.0,
+        "relevant_coverage": 0.0,
+        "tokens_estimated": 217,
+        "latency_ms": 804.815875,
+        "ranked": [
+          "./tests/test_views.py:function_definition:symbol:2336fc6d591d1747:0",
+          "./tests/test_views.py:function_definition:symbol:c000da996e069579:0",
+          "./src/flask/views.py:function_definition:symbol:669d089b4ddccb0b:0",
+          "./src/flask/views.py:function_definition:symbol:c5d2f45e34283930:1",
+          "./src/flask/views.py:function_definition:symbol:c5d2f45e34283930:0"
+        ],
+        "missing_relevant": [
+          "./src/flask/app.py"
+        ],
+        "retrieved_unused": [
+          "./tests/test_views.py:function_definition:symbol:2336fc6d591d1747:0",
+          "./tests/test_views.py:function_definition:symbol:c000da996e069579:0",
+          "./src/flask/views.py:function_definition:symbol:669d089b4ddccb0b:0",
+          "./src/flask/views.py:function_definition:symbol:c5d2f45e34283930:1",
+          "./src/flask/views.py:function_definition:symbol:c5d2f45e34283930:0"
+        ]
+      },
+      {
+        "id": "flask-search-002",
+        "query_type": "search_code",
+        "status": "pass",
+        "detail": "Recall threshold met",
+        "matches": 1,
+        "expected_min_recall": 1,
+        "max_rank": 5,
+        "matched_items": [
+          "./src/flask/app.py"
+        ],
+        "recall_at_k": 1.0,
+        "precision_at_k": 0.2,
+        "relevant_coverage": 1.0,
+        "tokens_estimated": 245,
+        "latency_ms": 839.348208,
+        "ranked": [
+          "./src/flask/app.py:function_definition:symbol:ccdf3a9f457c375e:0#chunk0",
+          "./src/flask/sansio/blueprints.py:function_definition:symbol:a999bd53f059e796:0",
+          "./src/flask/app.py:class_definition:symbol:896b7aa6f54f6ce0:0#chunk61",
+          "./src/flask/sansio/scaffold.py:function_definition:symbol:398cf389e5a29cb5:0#chunk0",
+          "./src/flask/app.py:function_definition:symbol:a76fbc5461b3f5c8:0"
+        ],
+        "missing_relevant": [],
+        "retrieved_unused": [
+          "./src/flask/app.py:function_definition:symbol:ccdf3a9f457c375e:0#chunk0",
+          "./src/flask/sansio/blueprints.py:function_definition:symbol:a999bd53f059e796:0",
+          "./src/flask/app.py:class_definition:symbol:896b7aa6f54f6ce0:0#chunk61",
+          "./src/flask/sansio/scaffold.py:function_definition:symbol:398cf389e5a29cb5:0#chunk0",
+          "./src/flask/app.py:function_definition:symbol:a76fbc5461b3f5c8:0"
+        ]
+      },
+      {
+        "id": "flask-search-003",
+        "query_type": "search_code",
+        "status": "pass",
+        "detail": "Recall threshold met",
+        "matches": 1,
+        "expected_min_recall": 1,
+        "max_rank": 5,
+        "matched_items": [
+          "./src/flask/testing.py"
+        ],
+        "recall_at_k": 1.0,
+        "precision_at_k": 0.2,
+        "relevant_coverage": 1.0,
+        "tokens_estimated": 20,
+        "latency_ms": 917.359375,
+        "ranked": [
+          "./src/flask/app.py:function_definition:symbol:abaacc2d25af3a34:0#chunk0",
+          "./src/flask/app.py:class_definition:symbol:896b7aa6f54f6ce0:0#chunk30",
+          "./src/flask/testing.py:class_definition:symbol:d82c58d4397776f0:0#chunk0",
+          "./examples/tutorial/tests/conftest.py:function_definition:symbol:ee2be1d48a2744bd:0",
+          "./src/flask/app.py:function_definition:symbol:abaacc2d25af3a34:0#chunk1"
+        ],
+        "missing_relevant": [],
+        "retrieved_unused": [
+          "./src/flask/app.py:function_definition:symbol:abaacc2d25af3a34:0#chunk0",
+          "./src/flask/app.py:class_definition:symbol:896b7aa6f54f6ce0:0#chunk30",
+          "./src/flask/testing.py:class_definition:symbol:d82c58d4397776f0:0#chunk0",
+          "./examples/tutorial/tests/conftest.py:function_definition:symbol:ee2be1d48a2744bd:0",
+          "./src/flask/app.py:function_definition:symbol:abaacc2d25af3a34:0#chunk1"
+        ]
+      },
+      {
+        "id": "flask-search-004",
+        "query_type": "search_code",
+        "status": "pass",
+        "detail": "Recall threshold met",
+        "matches": 1,
+        "expected_min_recall": 1,
+        "max_rank": 5,
+        "matched_items": [
+          "./src/flask/helpers.py"
+        ],
+        "recall_at_k": 1.0,
+        "precision_at_k": 0.2,
+        "relevant_coverage": 1.0,
+        "tokens_estimated": 114,
+        "latency_ms": 830.742375,
+        "ranked": [
+          "./src/flask/app.py:function_definition:symbol:2eb1c5001ab43fb2:0#chunk0",
+          "./src/flask/views.py:function_definition:symbol:c5d2f45e34283930:1",
+          "./src/flask/views.py:function_definition:symbol:c5d2f45e34283930:0",
+          "./src/flask/helpers.py:function_definition:symbol:85147454adb4135b:0#chunk0",
+          "./src/flask/helpers.py:function_definition:symbol:85147454adb4135b:0#chunk1"
+        ],
+        "missing_relevant": [],
+        "retrieved_unused": [
+          "./src/flask/app.py:function_definition:symbol:2eb1c5001ab43fb2:0#chunk0",
+          "./src/flask/views.py:function_definition:symbol:c5d2f45e34283930:1",
+          "./src/flask/views.py:function_definition:symbol:c5d2f45e34283930:0",
+          "./src/flask/helpers.py:function_definition:symbol:85147454adb4135b:0#chunk0",
+          "./src/flask/helpers.py:function_definition:symbol:85147454adb4135b:0#chunk1"
+        ]
+      },
+      {
+        "id": "flask-search-005",
+        "query_type": "search_code",
+        "status": "pass",
+        "detail": "Recall threshold met",
+        "matches": 1,
+        "expected_min_recall": 1,
+        "max_rank": 5,
+        "matched_items": [
+          "./src/flask/helpers.py"
+        ],
+        "recall_at_k": 1.0,
+        "precision_at_k": 0.2,
+        "relevant_coverage": 1.0,
+        "tokens_estimated": 102,
+        "latency_ms": 794.659459,
+        "ranked": [
+          "./src/flask/app.py:function_definition:symbol:923583a307c94f07:0#chunk0",
+          "./src/flask/helpers.py:function_definition:symbol:0c9f2e6a2c8df9f2:0#chunk0",
+          "./src/flask/app.py:class_definition:symbol:896b7aa6f54f6ce0:0#chunk48",
+          "./src/flask/wrappers.py:function_definition:symbol:78b27532085d9322:0",
+          "./src/flask/app.py:class_definition:symbol:896b7aa6f54f6ce0:0#chunk51"
+        ],
+        "missing_relevant": [],
+        "retrieved_unused": [
+          "./src/flask/app.py:function_definition:symbol:923583a307c94f07:0#chunk0",
+          "./src/flask/helpers.py:function_definition:symbol:0c9f2e6a2c8df9f2:0#chunk0",
+          "./src/flask/app.py:class_definition:symbol:896b7aa6f54f6ce0:0#chunk48",
+          "./src/flask/wrappers.py:function_definition:symbol:78b27532085d9322:0",
+          "./src/flask/app.py:class_definition:symbol:896b7aa6f54f6ce0:0#chunk51"
+        ]
+      },
+      {
+        "id": "flask-graph-001",
+        "query_type": "read_graph",
+        "status": "pass",
+        "detail": "Recall threshold met",
+        "matches": 1,
+        "expected_min_recall": 1,
+        "max_rank": 5,
+        "matched_items": [
+          "./src/flask/app.py"
+        ],
+        "recall_at_k": 1.0,
+        "precision_at_k": 0.058823529411764705,
+        "relevant_coverage": 1.0,
+        "tokens_estimated": 16802,
+        "latency_ms": 20.740542,
+        "ranked": [
+          "./src/flask/app.py:function_definition:symbol:a76fbc5461b3f5c8:0",
+          "./src/flask/app.py:function_definition:symbol:ccdf3a9f457c375e:0",
+          "./src/flask/app.py:function_definition:symbol:cfa23bdb589ab368:0",
+          "./src/flask/app.py:function_definition:symbol:2ca85a67fbdb387e:0",
+          "./src/flask/app.py:function_definition:symbol:6498ce0ce328b31a:0",
+          "./src/flask/wrappers.py:class_definition:symbol:f5a34167743ea3a5:0",
+          "./src/flask/app.py:assignment:symbol:4703d2b3341d9bb1:2",
+          "./src/flask/app.py:assignment:symbol:4703d2b3341d9bb1:1",
+          "./src/flask/app.py:assignment:symbol:4703d2b3341d9bb1:0",
+          "./src/flask/app.py:assignment:symbol:de5c888eee0685fd:0",
+          "./src/flask/app.py:assignment:symbol:f2d3cd950a242ad0:0",
+          "./src/flask/app.py:function_definition:symbol:90c1b1f0d6b48f30:0",
+          "./tests/test_reqctx.py:assignment:symbol:5fa9087666e506be:0",
+          "./tests/test_reqctx.py:function_definition:symbol:72ef1687d32d2d76:0",
+          "./tests/test_reqctx.py:assignment:symbol:ff37f5a5a2de5c1d:0",
+          "./tests/test_reqctx.py:function_definition:symbol:c2dea4cb1ec4a515:0",
+          "./src/flask/app.py:class_definition:symbol:896b7aa6f54f6ce0:0"
+        ],
+        "missing_relevant": [],
+        "retrieved_unused": [
+          "./src/flask/app.py:function_definition:symbol:a76fbc5461b3f5c8:0",
+          "./src/flask/app.py:function_definition:symbol:ccdf3a9f457c375e:0",
+          "./src/flask/app.py:function_definition:symbol:cfa23bdb589ab368:0",
+          "./src/flask/app.py:function_definition:symbol:2ca85a67fbdb387e:0",
+          "./src/flask/app.py:function_definition:symbol:6498ce0ce328b31a:0",
+          "./src/flask/wrappers.py:class_definition:symbol:f5a34167743ea3a5:0",
+          "./src/flask/app.py:assignment:symbol:4703d2b3341d9bb1:2",
+          "./src/flask/app.py:assignment:symbol:4703d2b3341d9bb1:1",
+          "./src/flask/app.py:assignment:symbol:4703d2b3341d9bb1:0",
+          "./src/flask/app.py:assignment:symbol:de5c888eee0685fd:0",
+          "./src/flask/app.py:assignment:symbol:f2d3cd950a242ad0:0",
+          "./src/flask/app.py:function_definition:symbol:90c1b1f0d6b48f30:0",
+          "./tests/test_reqctx.py:assignment:symbol:5fa9087666e506be:0",
+          "./tests/test_reqctx.py:function_definition:symbol:72ef1687d32d2d76:0",
+          "./tests/test_reqctx.py:assignment:symbol:ff37f5a5a2de5c1d:0",
+          "./tests/test_reqctx.py:function_definition:symbol:c2dea4cb1ec4a515:0",
+          "./src/flask/app.py:class_definition:symbol:896b7aa6f54f6ce0:0"
+        ]
+      },
+      {
+        "id": "flask-graph-002",
+        "query_type": "read_graph",
+        "status": "pass",
+        "detail": "Recall threshold met",
+        "matches": 1,
+        "expected_min_recall": 1,
+        "max_rank": 5,
+        "matched_items": [
+          "./src/flask/app.py"
+        ],
+        "recall_at_k": 1.0,
+        "precision_at_k": 0.1,
+        "relevant_coverage": 1.0,
+        "tokens_estimated": 15362,
+        "latency_ms": 20.827667,
+        "ranked": [
+          "./src/flask/app.py:function_definition:symbol:6498ce0ce328b31a:0",
+          "./src/flask/app.py:function_definition:symbol:496db86676019fd9:0",
+          "./src/flask/app.py:function_definition:symbol:26304ae02a12398b:0",
+          "./src/flask/app.py:function_definition:symbol:78e6f3a7b4eb50f2:0",
+          "./src/flask/app.py:assignment:symbol:5b6a1e7775d090e8:0",
+          "./src/flask/app.py:assignment:symbol:2a09d9e82102a297:0",
+          "./src/flask/app.py:assignment:symbol:d327b1bcdad09f2f:0",
+          "./src/flask/app.py:assignment:symbol:4703d2b3341d9bb1:1",
+          "./src/flask/app.py:function_definition:symbol:a76fbc5461b3f5c8:0",
+          "./src/flask/app.py:class_definition:symbol:896b7aa6f54f6ce0:0"
+        ],
+        "missing_relevant": [],
+        "retrieved_unused": [
+          "./src/flask/app.py:function_definition:symbol:6498ce0ce328b31a:0",
+          "./src/flask/app.py:function_definition:symbol:496db86676019fd9:0",
+          "./src/flask/app.py:function_definition:symbol:26304ae02a12398b:0",
+          "./src/flask/app.py:function_definition:symbol:78e6f3a7b4eb50f2:0",
+          "./src/flask/app.py:assignment:symbol:5b6a1e7775d090e8:0",
+          "./src/flask/app.py:assignment:symbol:2a09d9e82102a297:0",
+          "./src/flask/app.py:assignment:symbol:d327b1bcdad09f2f:0",
+          "./src/flask/app.py:assignment:symbol:4703d2b3341d9bb1:1",
+          "./src/flask/app.py:function_definition:symbol:a76fbc5461b3f5c8:0",
+          "./src/flask/app.py:class_definition:symbol:896b7aa6f54f6ce0:0"
+        ]
+      },
+      {
+        "id": "flask-graph-003",
+        "query_type": "read_graph",
+        "status": "pass",
+        "detail": "Recall threshold met",
+        "matches": 1,
+        "expected_min_recall": 1,
+        "max_rank": 5,
+        "matched_items": [
+          "./src/flask/app.py"
+        ],
+        "recall_at_k": 0.5,
+        "precision_at_k": 0.06666666666666667,
+        "relevant_coverage": 0.5,
+        "tokens_estimated": 15976,
+        "latency_ms": 20.225040999999997,
+        "ranked": [
+          "./src/flask/app.py:function_definition:symbol:90c1b1f0d6b48f30:0",
+          "./src/flask/sansio/app.py:function_definition:symbol:b07f5450809e184f:0",
+          "./src/flask/app.py:function_definition:symbol:90a46071e0b0a21f:0",
+          "./src/flask/app.py:function_definition:symbol:3ebf2c7da78d260e:0",
+          "./src/flask/app.py:function_definition:symbol:a76fbc5461b3f5c8:0",
+          "./tests/test_views.py:class_definition:symbol:d4166f3834a344a1:0",
+          "./src/flask/app.py:assignment:symbol:1754499dbbcb6f2b:3",
+          "./src/flask/app.py:assignment:symbol:1754499dbbcb6f2b:2",
+          "./src/flask/app.py:assignment:symbol:f2d3cd950a242ad0:1",
+          "./src/flask/app.py:assignment:symbol:1754499dbbcb6f2b:1",
+          "./src/flask/app.py:assignment:symbol:f2d3cd950a242ad0:0",
+          "./src/flask/app.py:assignment:symbol:1754499dbbcb6f2b:0",
+          "./src/flask/app.py:assignment:symbol:d56da92e7a55f0cc:0",
+          "./src/flask/app.py:function_definition:symbol:087cf7b53eb857c2:0",
+          "./src/flask/app.py:class_definition:symbol:896b7aa6f54f6ce0:0"
+        ],
+        "missing_relevant": [
+          "./src/flask/ctx.py"
+        ],
+        "retrieved_unused": [
+          "./src/flask/app.py:function_definition:symbol:90c1b1f0d6b48f30:0",
+          "./src/flask/sansio/app.py:function_definition:symbol:b07f5450809e184f:0",
+          "./src/flask/app.py:function_definition:symbol:90a46071e0b0a21f:0",
+          "./src/flask/app.py:function_definition:symbol:3ebf2c7da78d260e:0",
+          "./src/flask/app.py:function_definition:symbol:a76fbc5461b3f5c8:0",
+          "./tests/test_views.py:class_definition:symbol:d4166f3834a344a1:0",
+          "./src/flask/app.py:assignment:symbol:1754499dbbcb6f2b:3",
+          "./src/flask/app.py:assignment:symbol:1754499dbbcb6f2b:2",
+          "./src/flask/app.py:assignment:symbol:f2d3cd950a242ad0:1",
+          "./src/flask/app.py:assignment:symbol:1754499dbbcb6f2b:1",
+          "./src/flask/app.py:assignment:symbol:f2d3cd950a242ad0:0",
+          "./src/flask/app.py:assignment:symbol:1754499dbbcb6f2b:0",
+          "./src/flask/app.py:assignment:symbol:d56da92e7a55f0cc:0",
+          "./src/flask/app.py:function_definition:symbol:087cf7b53eb857c2:0",
+          "./src/flask/app.py:class_definition:symbol:896b7aa6f54f6ce0:0"
+        ]
+      },
+      {
+        "id": "flask-graph-004",
+        "query_type": "read_graph",
+        "status": "pass",
+        "detail": "Recall threshold met",
+        "matches": 1,
+        "expected_min_recall": 1,
+        "max_rank": 5,
+        "matched_items": [
+          "./src/flask/app.py"
+        ],
+        "recall_at_k": 1.0,
+        "precision_at_k": 0.0625,
+        "relevant_coverage": 1.0,
+        "tokens_estimated": 16609,
+        "latency_ms": 21.576125,
+        "ranked": [
+          "./src/flask/app.py:function_definition:symbol:3ebf2c7da78d260e:0",
+          "./src/flask/app.py:function_definition:symbol:56fc1d4cf790b3aa:0",
+          "./src/flask/app.py:function_definition:symbol:2ca85a67fbdb387e:0",
+          "./src/flask/app.py:function_definition:symbol:78e6f3a7b4eb50f2:0",
+          "./src/flask/sansio/app.py:function_definition:symbol:3435fc65457a6f28:0",
+          "./src/flask/wrappers.py:class_definition:symbol:f5a34167743ea3a5:0",
+          "./src/flask/app.py:assignment:symbol:2586f2fd966bad8b:2",
+          "./src/flask/app.py:assignment:symbol:e20641c9e7eb14cf:0",
+          "./src/flask/app.py:assignment:symbol:2586f2fd966bad8b:1",
+          "./src/flask/app.py:assignment:symbol:2586f2fd966bad8b:0",
+          "./src/flask/app.py:assignment:symbol:9a5c865095981668:1",
+          "./src/flask/app.py:assignment:symbol:9a5c865095981668:0",
+          "./src/flask/app.py:assignment:symbol:27a2114e1b9e105e:0",
+          "./src/flask/app.py:assignment:symbol:f2d3cd950a242ad0:1",
+          "./src/flask/app.py:function_definition:symbol:90c1b1f0d6b48f30:0",
+          "./src/flask/app.py:class_definition:symbol:896b7aa6f54f6ce0:0"
+        ],
+        "missing_relevant": [],
+        "retrieved_unused": [
+          "./src/flask/app.py:function_definition:symbol:3ebf2c7da78d260e:0",
+          "./src/flask/app.py:function_definition:symbol:56fc1d4cf790b3aa:0",
+          "./src/flask/app.py:function_definition:symbol:2ca85a67fbdb387e:0",
+          "./src/flask/app.py:function_definition:symbol:78e6f3a7b4eb50f2:0",
+          "./src/flask/sansio/app.py:function_definition:symbol:3435fc65457a6f28:0",
+          "./src/flask/wrappers.py:class_definition:symbol:f5a34167743ea3a5:0",
+          "./src/flask/app.py:assignment:symbol:2586f2fd966bad8b:2",
+          "./src/flask/app.py:assignment:symbol:e20641c9e7eb14cf:0",
+          "./src/flask/app.py:assignment:symbol:2586f2fd966bad8b:1",
+          "./src/flask/app.py:assignment:symbol:2586f2fd966bad8b:0",
+          "./src/flask/app.py:assignment:symbol:9a5c865095981668:1",
+          "./src/flask/app.py:assignment:symbol:9a5c865095981668:0",
+          "./src/flask/app.py:assignment:symbol:27a2114e1b9e105e:0",
+          "./src/flask/app.py:assignment:symbol:f2d3cd950a242ad0:1",
+          "./src/flask/app.py:function_definition:symbol:90c1b1f0d6b48f30:0",
+          "./src/flask/app.py:class_definition:symbol:896b7aa6f54f6ce0:0"
+        ]
+      },
+      {
+        "id": "flask-ctx-001",
+        "query_type": "get_context",
+        "status": "pass",
+        "detail": "Recall threshold met",
+        "matches": 1,
+        "expected_min_recall": 1,
+        "max_rank": 5,
+        "matched_items": [
+          "./src/flask/app.py"
+        ],
+        "recall_at_k": 1.0,
+        "precision_at_k": 0.058823529411764705,
+        "relevant_coverage": 1.0,
+        "tokens_estimated": 16802,
+        "latency_ms": 22.252958,
+        "ranked": [
+          "./src/flask/app.py:function_definition:symbol:a76fbc5461b3f5c8:0",
+          "./src/flask/app.py:function_definition:symbol:ccdf3a9f457c375e:0",
+          "./src/flask/app.py:function_definition:symbol:cfa23bdb589ab368:0",
+          "./src/flask/app.py:function_definition:symbol:2ca85a67fbdb387e:0",
+          "./src/flask/app.py:function_definition:symbol:6498ce0ce328b31a:0",
+          "./src/flask/wrappers.py:class_definition:symbol:f5a34167743ea3a5:0",
+          "./src/flask/app.py:assignment:symbol:4703d2b3341d9bb1:2",
+          "./src/flask/app.py:assignment:symbol:4703d2b3341d9bb1:1",
+          "./src/flask/app.py:assignment:symbol:4703d2b3341d9bb1:0",
+          "./src/flask/app.py:assignment:symbol:de5c888eee0685fd:0",
+          "./src/flask/app.py:assignment:symbol:f2d3cd950a242ad0:0",
+          "./src/flask/app.py:function_definition:symbol:90c1b1f0d6b48f30:0",
+          "./tests/test_reqctx.py:assignment:symbol:5fa9087666e506be:0",
+          "./tests/test_reqctx.py:function_definition:symbol:72ef1687d32d2d76:0",
+          "./tests/test_reqctx.py:assignment:symbol:ff37f5a5a2de5c1d:0",
+          "./tests/test_reqctx.py:function_definition:symbol:c2dea4cb1ec4a515:0",
+          "./src/flask/app.py:class_definition:symbol:896b7aa6f54f6ce0:0"
+        ],
+        "missing_relevant": [],
+        "retrieved_unused": [
+          "./src/flask/app.py:function_definition:symbol:a76fbc5461b3f5c8:0",
+          "./src/flask/app.py:function_definition:symbol:ccdf3a9f457c375e:0",
+          "./src/flask/app.py:function_definition:symbol:cfa23bdb589ab368:0",
+          "./src/flask/app.py:function_definition:symbol:2ca85a67fbdb387e:0",
+          "./src/flask/app.py:function_definition:symbol:6498ce0ce328b31a:0",
+          "./src/flask/wrappers.py:class_definition:symbol:f5a34167743ea3a5:0",
+          "./src/flask/app.py:assignment:symbol:4703d2b3341d9bb1:2",
+          "./src/flask/app.py:assignment:symbol:4703d2b3341d9bb1:1",
+          "./src/flask/app.py:assignment:symbol:4703d2b3341d9bb1:0",
+          "./src/flask/app.py:assignment:symbol:de5c888eee0685fd:0",
+          "./src/flask/app.py:assignment:symbol:f2d3cd950a242ad0:0",
+          "./src/flask/app.py:function_definition:symbol:90c1b1f0d6b48f30:0",
+          "./tests/test_reqctx.py:assignment:symbol:5fa9087666e506be:0",
+          "./tests/test_reqctx.py:function_definition:symbol:72ef1687d32d2d76:0",
+          "./tests/test_reqctx.py:assignment:symbol:ff37f5a5a2de5c1d:0",
+          "./tests/test_reqctx.py:function_definition:symbol:c2dea4cb1ec4a515:0",
+          "./src/flask/app.py:class_definition:symbol:896b7aa6f54f6ce0:0"
+        ]
+      },
+      {
+        "id": "flask-ctx-002",
+        "query_type": "get_context",
+        "status": "pass",
+        "detail": "Recall threshold met",
+        "matches": 1,
+        "expected_min_recall": 1,
+        "max_rank": 5,
+        "matched_items": [
+          "./src/flask/app.py"
+        ],
+        "recall_at_k": 1.0,
+        "precision_at_k": 0.1,
+        "relevant_coverage": 1.0,
+        "tokens_estimated": 15362,
+        "latency_ms": 29.533,
+        "ranked": [
+          "./src/flask/app.py:function_definition:symbol:6498ce0ce328b31a:0",
+          "./src/flask/app.py:function_definition:symbol:496db86676019fd9:0",
+          "./src/flask/app.py:function_definition:symbol:26304ae02a12398b:0",
+          "./src/flask/app.py:function_definition:symbol:78e6f3a7b4eb50f2:0",
+          "./src/flask/app.py:assignment:symbol:5b6a1e7775d090e8:0",
+          "./src/flask/app.py:assignment:symbol:2a09d9e82102a297:0",
+          "./src/flask/app.py:assignment:symbol:d327b1bcdad09f2f:0",
+          "./src/flask/app.py:assignment:symbol:4703d2b3341d9bb1:1",
+          "./src/flask/app.py:function_definition:symbol:a76fbc5461b3f5c8:0",
+          "./src/flask/app.py:class_definition:symbol:896b7aa6f54f6ce0:0"
+        ],
+        "missing_relevant": [],
+        "retrieved_unused": [
+          "./src/flask/app.py:function_definition:symbol:6498ce0ce328b31a:0",
+          "./src/flask/app.py:function_definition:symbol:496db86676019fd9:0",
+          "./src/flask/app.py:function_definition:symbol:26304ae02a12398b:0",
+          "./src/flask/app.py:function_definition:symbol:78e6f3a7b4eb50f2:0",
+          "./src/flask/app.py:assignment:symbol:5b6a1e7775d090e8:0",
+          "./src/flask/app.py:assignment:symbol:2a09d9e82102a297:0",
+          "./src/flask/app.py:assignment:symbol:d327b1bcdad09f2f:0",
+          "./src/flask/app.py:assignment:symbol:4703d2b3341d9bb1:1",
+          "./src/flask/app.py:function_definition:symbol:a76fbc5461b3f5c8:0",
+          "./src/flask/app.py:class_definition:symbol:896b7aa6f54f6ce0:0"
+        ]
+      },
+      {
+        "id": "flask-ctx-003",
+        "query_type": "get_context",
+        "status": "pass",
+        "detail": "Recall threshold met",
+        "matches": 1,
+        "expected_min_recall": 1,
+        "max_rank": 5,
+        "matched_items": [
+          "./src/flask/helpers.py"
+        ],
+        "recall_at_k": 1.0,
+        "precision_at_k": 0.2,
+        "relevant_coverage": 1.0,
+        "tokens_estimated": 3216,
+        "latency_ms": 30.389958,
+        "ranked": [
+          "./src/flask/helpers.py:function_definition:symbol:0c9f2e6a2c8df9f2:0",
+          "./src/flask/app.py:function_definition:symbol:923583a307c94f07:0",
+          "./src/flask/sansio/app.py:function_definition:symbol:cc0150dffddb04e7:0",
+          "./src/flask/app.py:function_definition:symbol:923583a307c94f07:0",
+          "./src/flask/helpers.py"
+        ],
+        "missing_relevant": [],
+        "retrieved_unused": [
+          "./src/flask/helpers.py:function_definition:symbol:0c9f2e6a2c8df9f2:0",
+          "./src/flask/app.py:function_definition:symbol:923583a307c94f07:0",
+          "./src/flask/sansio/app.py:function_definition:symbol:cc0150dffddb04e7:0",
+          "./src/flask/app.py:function_definition:symbol:923583a307c94f07:0"
+        ]
+      },
+      {
+        "id": "flask-ctx-004",
+        "query_type": "get_context",
+        "status": "pass",
+        "detail": "Recall threshold met",
+        "matches": 1,
+        "expected_min_recall": 1,
+        "max_rank": 5,
+        "matched_items": [
+          "./src/flask/testing.py"
+        ],
+        "recall_at_k": 1.0,
+        "precision_at_k": 0.5,
+        "relevant_coverage": 1.0,
+        "tokens_estimated": 105,
+        "latency_ms": 26.926333,
+        "ranked": [
+          "./src/flask/testing.py:assignment:symbol:49fc33ede400f1b5:0",
+          "./src/flask/testing.py:function_definition:symbol:bbc47d8ed5badaaa:0"
+        ],
+        "missing_relevant": [],
+        "retrieved_unused": [
+          "./src/flask/testing.py:assignment:symbol:49fc33ede400f1b5:0",
+          "./src/flask/testing.py:function_definition:symbol:bbc47d8ed5badaaa:0"
+        ]
+      }
+    ]
+  },
+  "hybrid": {
+    "schema_version": 1,
+    "generated_at": 1790842855,
+    "totals": {
+      "tasks": 13,
+      "scored": 13,
+      "passed": 13,
+      "failed": 0,
+      "skipped": 0
+    },
+    "results": [
+      {
+        "id": "flask-search-001",
+        "query_type": "search_code",
+        "status": "pass",
+        "detail": "Recall threshold met",
+        "matches": 1,
+        "expected_min_recall": 1,
+        "max_rank": 5,
+        "matched_items": [
+          "./src/flask/app.py"
+        ],
+        "recall_at_k": 1.0,
+        "precision_at_k": 0.2,
+        "relevant_coverage": 1.0,
+        "tokens_estimated": 623,
+        "latency_ms": 813.328208,
+        "ranked": [
+          "./src/flask/views.py:function_definition:symbol:669d089b4ddccb0b:0",
+          "./src/flask/views.py:function_definition:symbol:c5d2f45e34283930:1",
+          "./src/flask/views.py:function_definition:symbol:c5d2f45e34283930:0",
+          "./src/flask/views.py:function_definition:symbol:c89268a8210464be:0",
+          "./src/flask/app.py:function_definition:symbol:6498ce0ce328b31a:0"
+        ],
+        "missing_relevant": [],
+        "retrieved_unused": [
+          "./src/flask/views.py:function_definition:symbol:669d089b4ddccb0b:0",
+          "./src/flask/views.py:function_definition:symbol:c5d2f45e34283930:1",
+          "./src/flask/views.py:function_definition:symbol:c5d2f45e34283930:0",
+          "./src/flask/views.py:function_definition:symbol:c89268a8210464be:0",
+          "./src/flask/app.py:function_definition:symbol:6498ce0ce328b31a:0"
+        ]
+      },
+      {
+        "id": "flask-search-002",
+        "query_type": "search_code",
+        "status": "pass",
+        "detail": "Recall threshold met",
+        "matches": 1,
+        "expected_min_recall": 1,
+        "max_rank": 5,
+        "matched_items": [
+          "./src/flask/app.py"
+        ],
+        "recall_at_k": 1.0,
+        "precision_at_k": 0.2,
+        "relevant_coverage": 1.0,
+        "tokens_estimated": 15183,
+        "latency_ms": 750.19875,
+        "ranked": [
+          "./src/flask/app.py:function_definition:symbol:ccdf3a9f457c375e:0",
+          "./src/flask/sansio/blueprints.py:function_definition:symbol:a999bd53f059e796:0",
+          "./src/flask/app.py:class_definition:symbol:896b7aa6f54f6ce0:0",
+          "./src/flask/sansio/scaffold.py:function_definition:symbol:398cf389e5a29cb5:0",
+          "./src/flask/app.py:function_definition:symbol:a76fbc5461b3f5c8:0"
+        ],
+        "missing_relevant": [],
+        "retrieved_unused": [
+          "./src/flask/app.py:function_definition:symbol:ccdf3a9f457c375e:0",
+          "./src/flask/sansio/blueprints.py:function_definition:symbol:a999bd53f059e796:0",
+          "./src/flask/app.py:class_definition:symbol:896b7aa6f54f6ce0:0",
+          "./src/flask/sansio/scaffold.py:function_definition:symbol:398cf389e5a29cb5:0",
+          "./src/flask/app.py:function_definition:symbol:a76fbc5461b3f5c8:0"
+        ]
+      },
+      {
+        "id": "flask-search-003",
+        "query_type": "search_code",
+        "status": "pass",
+        "detail": "Recall threshold met",
+        "matches": 1,
+        "expected_min_recall": 1,
+        "max_rank": 5,
+        "matched_items": [
+          "./src/flask/testing.py"
+        ],
+        "recall_at_k": 1.0,
+        "precision_at_k": 0.2,
+        "relevant_coverage": 1.0,
+        "tokens_estimated": 16404,
+        "latency_ms": 739.8417499999999,
+        "ranked": [
+          "./src/flask/app.py:function_definition:symbol:abaacc2d25af3a34:0",
+          "./src/flask/app.py:class_definition:symbol:896b7aa6f54f6ce0:0",
+          "./src/flask/testing.py:class_definition:symbol:d82c58d4397776f0:0",
+          "./examples/tutorial/tests/conftest.py:function_definition:symbol:ee2be1d48a2744bd:0",
+          "./tests/conftest.py:function_definition:symbol:7cf5f17069ebfd52:0"
+        ],
+        "missing_relevant": [],
+        "retrieved_unused": [
+          "./src/flask/app.py:function_definition:symbol:abaacc2d25af3a34:0",
+          "./src/flask/app.py:class_definition:symbol:896b7aa6f54f6ce0:0",
+          "./src/flask/testing.py:class_definition:symbol:d82c58d4397776f0:0",
+          "./examples/tutorial/tests/conftest.py:function_definition:symbol:ee2be1d48a2744bd:0",
+          "./tests/conftest.py:function_definition:symbol:7cf5f17069ebfd52:0"
+        ]
+      },
+      {
+        "id": "flask-search-004",
+        "query_type": "search_code",
+        "status": "pass",
+        "detail": "Recall threshold met",
+        "matches": 1,
+        "expected_min_recall": 1,
+        "max_rank": 5,
+        "matched_items": [
+          "./src/flask/helpers.py"
+        ],
+        "recall_at_k": 1.0,
+        "precision_at_k": 0.2,
+        "relevant_coverage": 1.0,
+        "tokens_estimated": 2357,
+        "latency_ms": 780.876166,
+        "ranked": [
+          "./src/flask/app.py:function_definition:symbol:2eb1c5001ab43fb2:0",
+          "./src/flask/views.py:function_definition:symbol:c5d2f45e34283930:1",
+          "./src/flask/views.py:function_definition:symbol:c5d2f45e34283930:0",
+          "./src/flask/helpers.py:function_definition:symbol:85147454adb4135b:0",
+          "./src/flask/wrappers.py:class_definition:symbol:f5a34167743ea3a5:0"
+        ],
+        "missing_relevant": [],
+        "retrieved_unused": [
+          "./src/flask/app.py:function_definition:symbol:2eb1c5001ab43fb2:0",
+          "./src/flask/views.py:function_definition:symbol:c5d2f45e34283930:1",
+          "./src/flask/views.py:function_definition:symbol:c5d2f45e34283930:0",
+          "./src/flask/helpers.py:function_definition:symbol:85147454adb4135b:0",
+          "./src/flask/wrappers.py:class_definition:symbol:f5a34167743ea3a5:0"
+        ]
+      },
+      {
+        "id": "flask-search-005",
+        "query_type": "search_code",
+        "status": "pass",
+        "detail": "Recall threshold met",
+        "matches": 1,
+        "expected_min_recall": 1,
+        "max_rank": 5,
+        "matched_items": [
+          "./src/flask/helpers.py"
+        ],
+        "recall_at_k": 1.0,
+        "precision_at_k": 0.2,
+        "relevant_coverage": 1.0,
+        "tokens_estimated": 16814,
+        "latency_ms": 757.196959,
+        "ranked": [
+          "./src/flask/app.py:function_definition:symbol:923583a307c94f07:0",
+          "./src/flask/helpers.py:function_definition:symbol:0c9f2e6a2c8df9f2:0",
+          "./src/flask/app.py:class_definition:symbol:896b7aa6f54f6ce0:0",
+          "./src/flask/wrappers.py:function_definition:symbol:78b27532085d9322:0",
+          "./src/flask/sansio/app.py:function_definition:symbol:0ec6d7744194f604:0"
+        ],
+        "missing_relevant": [],
+        "retrieved_unused": [
+          "./src/flask/app.py:function_definition:symbol:923583a307c94f07:0",
+          "./src/flask/helpers.py:function_definition:symbol:0c9f2e6a2c8df9f2:0",
+          "./src/flask/app.py:class_definition:symbol:896b7aa6f54f6ce0:0",
+          "./src/flask/wrappers.py:function_definition:symbol:78b27532085d9322:0",
+          "./src/flask/sansio/app.py:function_definition:symbol:0ec6d7744194f604:0"
+        ]
+      },
+      {
+        "id": "flask-graph-001",
+        "query_type": "read_graph",
+        "status": "pass",
+        "detail": "Recall threshold met",
+        "matches": 1,
+        "expected_min_recall": 1,
+        "max_rank": 5,
+        "matched_items": [
+          "./src/flask/app.py"
+        ],
+        "recall_at_k": 1.0,
+        "precision_at_k": 0.058823529411764705,
+        "relevant_coverage": 1.0,
+        "tokens_estimated": 16802,
+        "latency_ms": 21.924,
+        "ranked": [
+          "./src/flask/app.py:function_definition:symbol:a76fbc5461b3f5c8:0",
+          "./src/flask/app.py:function_definition:symbol:ccdf3a9f457c375e:0",
+          "./src/flask/app.py:function_definition:symbol:cfa23bdb589ab368:0",
+          "./src/flask/app.py:function_definition:symbol:2ca85a67fbdb387e:0",
+          "./src/flask/app.py:function_definition:symbol:6498ce0ce328b31a:0",
+          "./src/flask/wrappers.py:class_definition:symbol:f5a34167743ea3a5:0",
+          "./src/flask/app.py:assignment:symbol:4703d2b3341d9bb1:2",
+          "./src/flask/app.py:assignment:symbol:4703d2b3341d9bb1:1",
+          "./src/flask/app.py:assignment:symbol:4703d2b3341d9bb1:0",
+          "./src/flask/app.py:assignment:symbol:de5c888eee0685fd:0",
+          "./src/flask/app.py:assignment:symbol:f2d3cd950a242ad0:0",
+          "./src/flask/app.py:function_definition:symbol:90c1b1f0d6b48f30:0",
+          "./tests/test_reqctx.py:assignment:symbol:5fa9087666e506be:0",
+          "./tests/test_reqctx.py:function_definition:symbol:72ef1687d32d2d76:0",
+          "./tests/test_reqctx.py:assignment:symbol:ff37f5a5a2de5c1d:0",
+          "./tests/test_reqctx.py:function_definition:symbol:c2dea4cb1ec4a515:0",
+          "./src/flask/app.py:class_definition:symbol:896b7aa6f54f6ce0:0"
+        ],
+        "missing_relevant": [],
+        "retrieved_unused": [
+          "./src/flask/app.py:function_definition:symbol:a76fbc5461b3f5c8:0",
+          "./src/flask/app.py:function_definition:symbol:ccdf3a9f457c375e:0",
+          "./src/flask/app.py:function_definition:symbol:cfa23bdb589ab368:0",
+          "./src/flask/app.py:function_definition:symbol:2ca85a67fbdb387e:0",
+          "./src/flask/app.py:function_definition:symbol:6498ce0ce328b31a:0",
+          "./src/flask/wrappers.py:class_definition:symbol:f5a34167743ea3a5:0",
+          "./src/flask/app.py:assignment:symbol:4703d2b3341d9bb1:2",
+          "./src/flask/app.py:assignment:symbol:4703d2b3341d9bb1:1",
+          "./src/flask/app.py:assignment:symbol:4703d2b3341d9bb1:0",
+          "./src/flask/app.py:assignment:symbol:de5c888eee0685fd:0",
+          "./src/flask/app.py:assignment:symbol:f2d3cd950a242ad0:0",
+          "./src/flask/app.py:function_definition:symbol:90c1b1f0d6b48f30:0",
+          "./tests/test_reqctx.py:assignment:symbol:5fa9087666e506be:0",
+          "./tests/test_reqctx.py:function_definition:symbol:72ef1687d32d2d76:0",
+          "./tests/test_reqctx.py:assignment:symbol:ff37f5a5a2de5c1d:0",
+          "./tests/test_reqctx.py:function_definition:symbol:c2dea4cb1ec4a515:0",
+          "./src/flask/app.py:class_definition:symbol:896b7aa6f54f6ce0:0"
+        ]
+      },
+      {
+        "id": "flask-graph-002",
+        "query_type": "read_graph",
+        "status": "pass",
+        "detail": "Recall threshold met",
+        "matches": 1,
+        "expected_min_recall": 1,
+        "max_rank": 5,
+        "matched_items": [
+          "./src/flask/app.py"
+        ],
+        "recall_at_k": 1.0,
+        "precision_at_k": 0.1,
+        "relevant_coverage": 1.0,
+        "tokens_estimated": 15362,
+        "latency_ms": 21.301417,
+        "ranked": [
+          "./src/flask/app.py:function_definition:symbol:6498ce0ce328b31a:0",
+          "./src/flask/app.py:function_definition:symbol:496db86676019fd9:0",
+          "./src/flask/app.py:function_definition:symbol:26304ae02a12398b:0",
+          "./src/flask/app.py:function_definition:symbol:78e6f3a7b4eb50f2:0",
+          "./src/flask/app.py:assignment:symbol:5b6a1e7775d090e8:0",
+          "./src/flask/app.py:assignment:symbol:2a09d9e82102a297:0",
+          "./src/flask/app.py:assignment:symbol:d327b1bcdad09f2f:0",
+          "./src/flask/app.py:assignment:symbol:4703d2b3341d9bb1:1",
+          "./src/flask/app.py:function_definition:symbol:a76fbc5461b3f5c8:0",
+          "./src/flask/app.py:class_definition:symbol:896b7aa6f54f6ce0:0"
+        ],
+        "missing_relevant": [],
+        "retrieved_unused": [
+          "./src/flask/app.py:function_definition:symbol:6498ce0ce328b31a:0",
+          "./src/flask/app.py:function_definition:symbol:496db86676019fd9:0",
+          "./src/flask/app.py:function_definition:symbol:26304ae02a12398b:0",
+          "./src/flask/app.py:function_definition:symbol:78e6f3a7b4eb50f2:0",
+          "./src/flask/app.py:assignment:symbol:5b6a1e7775d090e8:0",
+          "./src/flask/app.py:assignment:symbol:2a09d9e82102a297:0",
+          "./src/flask/app.py:assignment:symbol:d327b1bcdad09f2f:0",
+          "./src/flask/app.py:assignment:symbol:4703d2b3341d9bb1:1",
+          "./src/flask/app.py:function_definition:symbol:a76fbc5461b3f5c8:0",
+          "./src/flask/app.py:class_definition:symbol:896b7aa6f54f6ce0:0"
+        ]
+      },
+      {
+        "id": "flask-graph-003",
+        "query_type": "read_graph",
+        "status": "pass",
+        "detail": "Recall threshold met",
+        "matches": 1,
+        "expected_min_recall": 1,
+        "max_rank": 5,
+        "matched_items": [
+          "./src/flask/app.py"
+        ],
+        "recall_at_k": 0.5,
+        "precision_at_k": 0.06666666666666667,
+        "relevant_coverage": 0.5,
+        "tokens_estimated": 15976,
+        "latency_ms": 25.1985,
+        "ranked": [
+          "./src/flask/app.py:function_definition:symbol:90c1b1f0d6b48f30:0",
+          "./src/flask/sansio/app.py:function_definition:symbol:b07f5450809e184f:0",
+          "./src/flask/app.py:function_definition:symbol:90a46071e0b0a21f:0",
+          "./src/flask/app.py:function_definition:symbol:3ebf2c7da78d260e:0",
+          "./src/flask/app.py:function_definition:symbol:a76fbc5461b3f5c8:0",
+          "./tests/test_views.py:class_definition:symbol:d4166f3834a344a1:0",
+          "./src/flask/app.py:assignment:symbol:1754499dbbcb6f2b:3",
+          "./src/flask/app.py:assignment:symbol:1754499dbbcb6f2b:2",
+          "./src/flask/app.py:assignment:symbol:f2d3cd950a242ad0:1",
+          "./src/flask/app.py:assignment:symbol:1754499dbbcb6f2b:1",
+          "./src/flask/app.py:assignment:symbol:f2d3cd950a242ad0:0",
+          "./src/flask/app.py:assignment:symbol:1754499dbbcb6f2b:0",
+          "./src/flask/app.py:assignment:symbol:d56da92e7a55f0cc:0",
+          "./src/flask/app.py:function_definition:symbol:087cf7b53eb857c2:0",
+          "./src/flask/app.py:class_definition:symbol:896b7aa6f54f6ce0:0"
+        ],
+        "missing_relevant": [
+          "./src/flask/ctx.py"
+        ],
+        "retrieved_unused": [
+          "./src/flask/app.py:function_definition:symbol:90c1b1f0d6b48f30:0",
+          "./src/flask/sansio/app.py:function_definition:symbol:b07f5450809e184f:0",
+          "./src/flask/app.py:function_definition:symbol:90a46071e0b0a21f:0",
+          "./src/flask/app.py:function_definition:symbol:3ebf2c7da78d260e:0",
+          "./src/flask/app.py:function_definition:symbol:a76fbc5461b3f5c8:0",
+          "./tests/test_views.py:class_definition:symbol:d4166f3834a344a1:0",
+          "./src/flask/app.py:assignment:symbol:1754499dbbcb6f2b:3",
+          "./src/flask/app.py:assignment:symbol:1754499dbbcb6f2b:2",
+          "./src/flask/app.py:assignment:symbol:f2d3cd950a242ad0:1",
+          "./src/flask/app.py:assignment:symbol:1754499dbbcb6f2b:1",
+          "./src/flask/app.py:assignment:symbol:f2d3cd950a242ad0:0",
+          "./src/flask/app.py:assignment:symbol:1754499dbbcb6f2b:0",
+          "./src/flask/app.py:assignment:symbol:d56da92e7a55f0cc:0",
+          "./src/flask/app.py:function_definition:symbol:087cf7b53eb857c2:0",
+          "./src/flask/app.py:class_definition:symbol:896b7aa6f54f6ce0:0"
+        ]
+      },
+      {
+        "id": "flask-graph-004",
+        "query_type": "read_graph",
+        "status": "pass",
+        "detail": "Recall threshold met",
+        "matches": 1,
+        "expected_min_recall": 1,
+        "max_rank": 5,
+        "matched_items": [
+          "./src/flask/app.py"
+        ],
+        "recall_at_k": 1.0,
+        "precision_at_k": 0.0625,
+        "relevant_coverage": 1.0,
+        "tokens_estimated": 16609,
+        "latency_ms": 28.341959,
+        "ranked": [
+          "./src/flask/app.py:function_definition:symbol:3ebf2c7da78d260e:0",
+          "./src/flask/app.py:function_definition:symbol:56fc1d4cf790b3aa:0",
+          "./src/flask/app.py:function_definition:symbol:2ca85a67fbdb387e:0",
+          "./src/flask/app.py:function_definition:symbol:78e6f3a7b4eb50f2:0",
+          "./src/flask/sansio/app.py:function_definition:symbol:3435fc65457a6f28:0",
+          "./src/flask/wrappers.py:class_definition:symbol:f5a34167743ea3a5:0",
+          "./src/flask/app.py:assignment:symbol:2586f2fd966bad8b:2",
+          "./src/flask/app.py:assignment:symbol:e20641c9e7eb14cf:0",
+          "./src/flask/app.py:assignment:symbol:2586f2fd966bad8b:1",
+          "./src/flask/app.py:assignment:symbol:2586f2fd966bad8b:0",
+          "./src/flask/app.py:assignment:symbol:9a5c865095981668:1",
+          "./src/flask/app.py:assignment:symbol:9a5c865095981668:0",
+          "./src/flask/app.py:assignment:symbol:27a2114e1b9e105e:0",
+          "./src/flask/app.py:assignment:symbol:f2d3cd950a242ad0:1",
+          "./src/flask/app.py:function_definition:symbol:90c1b1f0d6b48f30:0",
+          "./src/flask/app.py:class_definition:symbol:896b7aa6f54f6ce0:0"
+        ],
+        "missing_relevant": [],
+        "retrieved_unused": [
+          "./src/flask/app.py:function_definition:symbol:3ebf2c7da78d260e:0",
+          "./src/flask/app.py:function_definition:symbol:56fc1d4cf790b3aa:0",
+          "./src/flask/app.py:function_definition:symbol:2ca85a67fbdb387e:0",
+          "./src/flask/app.py:function_definition:symbol:78e6f3a7b4eb50f2:0",
+          "./src/flask/sansio/app.py:function_definition:symbol:3435fc65457a6f28:0",
+          "./src/flask/wrappers.py:class_definition:symbol:f5a34167743ea3a5:0",
+          "./src/flask/app.py:assignment:symbol:2586f2fd966bad8b:2",
+          "./src/flask/app.py:assignment:symbol:e20641c9e7eb14cf:0",
+          "./src/flask/app.py:assignment:symbol:2586f2fd966bad8b:1",
+          "./src/flask/app.py:assignment:symbol:2586f2fd966bad8b:0",
+          "./src/flask/app.py:assignment:symbol:9a5c865095981668:1",
+          "./src/flask/app.py:assignment:symbol:9a5c865095981668:0",
+          "./src/flask/app.py:assignment:symbol:27a2114e1b9e105e:0",
+          "./src/flask/app.py:assignment:symbol:f2d3cd950a242ad0:1",
+          "./src/flask/app.py:function_definition:symbol:90c1b1f0d6b48f30:0",
+          "./src/flask/app.py:class_definition:symbol:896b7aa6f54f6ce0:0"
+        ]
+      },
+      {
+        "id": "flask-ctx-001",
+        "query_type": "get_context",
+        "status": "pass",
+        "detail": "Recall threshold met",
+        "matches": 1,
+        "expected_min_recall": 1,
+        "max_rank": 5,
+        "matched_items": [
+          "./src/flask/app.py"
+        ],
+        "recall_at_k": 1.0,
+        "precision_at_k": 0.058823529411764705,
+        "relevant_coverage": 1.0,
+        "tokens_estimated": 16802,
+        "latency_ms": 29.686667,
+        "ranked": [
+          "./src/flask/app.py:function_definition:symbol:a76fbc5461b3f5c8:0",
+          "./src/flask/app.py:function_definition:symbol:ccdf3a9f457c375e:0",
+          "./src/flask/app.py:function_definition:symbol:cfa23bdb589ab368:0",
+          "./src/flask/app.py:function_definition:symbol:2ca85a67fbdb387e:0",
+          "./src/flask/app.py:function_definition:symbol:6498ce0ce328b31a:0",
+          "./src/flask/wrappers.py:class_definition:symbol:f5a34167743ea3a5:0",
+          "./src/flask/app.py:assignment:symbol:4703d2b3341d9bb1:2",
+          "./src/flask/app.py:assignment:symbol:4703d2b3341d9bb1:1",
+          "./src/flask/app.py:assignment:symbol:4703d2b3341d9bb1:0",
+          "./src/flask/app.py:assignment:symbol:de5c888eee0685fd:0",
+          "./src/flask/app.py:assignment:symbol:f2d3cd950a242ad0:0",
+          "./src/flask/app.py:function_definition:symbol:90c1b1f0d6b48f30:0",
+          "./tests/test_reqctx.py:assignment:symbol:5fa9087666e506be:0",
+          "./tests/test_reqctx.py:function_definition:symbol:72ef1687d32d2d76:0",
+          "./tests/test_reqctx.py:assignment:symbol:ff37f5a5a2de5c1d:0",
+          "./tests/test_reqctx.py:function_definition:symbol:c2dea4cb1ec4a515:0",
+          "./src/flask/app.py:class_definition:symbol:896b7aa6f54f6ce0:0"
+        ],
+        "missing_relevant": [],
+        "retrieved_unused": [
+          "./src/flask/app.py:function_definition:symbol:a76fbc5461b3f5c8:0",
+          "./src/flask/app.py:function_definition:symbol:ccdf3a9f457c375e:0",
+          "./src/flask/app.py:function_definition:symbol:cfa23bdb589ab368:0",
+          "./src/flask/app.py:function_definition:symbol:2ca85a67fbdb387e:0",
+          "./src/flask/app.py:function_definition:symbol:6498ce0ce328b31a:0",
+          "./src/flask/wrappers.py:class_definition:symbol:f5a34167743ea3a5:0",
+          "./src/flask/app.py:assignment:symbol:4703d2b3341d9bb1:2",
+          "./src/flask/app.py:assignment:symbol:4703d2b3341d9bb1:1",
+          "./src/flask/app.py:assignment:symbol:4703d2b3341d9bb1:0",
+          "./src/flask/app.py:assignment:symbol:de5c888eee0685fd:0",
+          "./src/flask/app.py:assignment:symbol:f2d3cd950a242ad0:0",
+          "./src/flask/app.py:function_definition:symbol:90c1b1f0d6b48f30:0",
+          "./tests/test_reqctx.py:assignment:symbol:5fa9087666e506be:0",
+          "./tests/test_reqctx.py:function_definition:symbol:72ef1687d32d2d76:0",
+          "./tests/test_reqctx.py:assignment:symbol:ff37f5a5a2de5c1d:0",
+          "./tests/test_reqctx.py:function_definition:symbol:c2dea4cb1ec4a515:0",
+          "./src/flask/app.py:class_definition:symbol:896b7aa6f54f6ce0:0"
+        ]
+      },
+      {
+        "id": "flask-ctx-002",
+        "query_type": "get_context",
+        "status": "pass",
+        "detail": "Recall threshold met",
+        "matches": 1,
+        "expected_min_recall": 1,
+        "max_rank": 5,
+        "matched_items": [
+          "./src/flask/app.py"
+        ],
+        "recall_at_k": 1.0,
+        "precision_at_k": 0.1,
+        "relevant_coverage": 1.0,
+        "tokens_estimated": 15362,
+        "latency_ms": 21.496624999999998,
+        "ranked": [
+          "./src/flask/app.py:function_definition:symbol:6498ce0ce328b31a:0",
+          "./src/flask/app.py:function_definition:symbol:496db86676019fd9:0",
+          "./src/flask/app.py:function_definition:symbol:26304ae02a12398b:0",
+          "./src/flask/app.py:function_definition:symbol:78e6f3a7b4eb50f2:0",
+          "./src/flask/app.py:assignment:symbol:5b6a1e7775d090e8:0",
+          "./src/flask/app.py:assignment:symbol:2a09d9e82102a297:0",
+          "./src/flask/app.py:assignment:symbol:d327b1bcdad09f2f:0",
+          "./src/flask/app.py:assignment:symbol:4703d2b3341d9bb1:1",
+          "./src/flask/app.py:function_definition:symbol:a76fbc5461b3f5c8:0",
+          "./src/flask/app.py:class_definition:symbol:896b7aa6f54f6ce0:0"
+        ],
+        "missing_relevant": [],
+        "retrieved_unused": [
+          "./src/flask/app.py:function_definition:symbol:6498ce0ce328b31a:0",
+          "./src/flask/app.py:function_definition:symbol:496db86676019fd9:0",
+          "./src/flask/app.py:function_definition:symbol:26304ae02a12398b:0",
+          "./src/flask/app.py:function_definition:symbol:78e6f3a7b4eb50f2:0",
+          "./src/flask/app.py:assignment:symbol:5b6a1e7775d090e8:0",
+          "./src/flask/app.py:assignment:symbol:2a09d9e82102a297:0",
+          "./src/flask/app.py:assignment:symbol:d327b1bcdad09f2f:0",
+          "./src/flask/app.py:assignment:symbol:4703d2b3341d9bb1:1",
+          "./src/flask/app.py:function_definition:symbol:a76fbc5461b3f5c8:0",
+          "./src/flask/app.py:class_definition:symbol:896b7aa6f54f6ce0:0"
+        ]
+      },
+      {
+        "id": "flask-ctx-003",
+        "query_type": "get_context",
+        "status": "pass",
+        "detail": "Recall threshold met",
+        "matches": 1,
+        "expected_min_recall": 1,
+        "max_rank": 5,
+        "matched_items": [
+          "./src/flask/helpers.py"
+        ],
+        "recall_at_k": 1.0,
+        "precision_at_k": 0.2,
+        "relevant_coverage": 1.0,
+        "tokens_estimated": 3216,
+        "latency_ms": 24.990958,
+        "ranked": [
+          "./src/flask/helpers.py:function_definition:symbol:0c9f2e6a2c8df9f2:0",
+          "./src/flask/app.py:function_definition:symbol:923583a307c94f07:0",
+          "./src/flask/sansio/app.py:function_definition:symbol:cc0150dffddb04e7:0",
+          "./src/flask/app.py:function_definition:symbol:923583a307c94f07:0",
+          "./src/flask/helpers.py"
+        ],
+        "missing_relevant": [],
+        "retrieved_unused": [
+          "./src/flask/helpers.py:function_definition:symbol:0c9f2e6a2c8df9f2:0",
+          "./src/flask/app.py:function_definition:symbol:923583a307c94f07:0",
+          "./src/flask/sansio/app.py:function_definition:symbol:cc0150dffddb04e7:0",
+          "./src/flask/app.py:function_definition:symbol:923583a307c94f07:0"
+        ]
+      },
+      {
+        "id": "flask-ctx-004",
+        "query_type": "get_context",
+        "status": "pass",
+        "detail": "Recall threshold met",
+        "matches": 1,
+        "expected_min_recall": 1,
+        "max_rank": 5,
+        "matched_items": [
+          "./src/flask/testing.py"
+        ],
+        "recall_at_k": 1.0,
+        "precision_at_k": 0.5,
+        "relevant_coverage": 1.0,
+        "tokens_estimated": 105,
+        "latency_ms": 30.723541,
+        "ranked": [
+          "./src/flask/testing.py:assignment:symbol:49fc33ede400f1b5:0",
+          "./src/flask/testing.py:function_definition:symbol:bbc47d8ed5badaaa:0"
+        ],
+        "missing_relevant": [],
+        "retrieved_unused": [
+          "./src/flask/testing.py:assignment:symbol:49fc33ede400f1b5:0",
+          "./src/flask/testing.py:function_definition:symbol:bbc47d8ed5badaaa:0"
+        ]
+      }
+    ]
+  },
+  "comparison": {
+    "structural_pass_rate": 92.3076923076923,
+    "hybrid_pass_rate": 100.0,
+    "improvement": 7.692307692307693,
+    "by_query_type": {
+      "get_context": {
+        "structural_pass_rate": 100.0,
+        "hybrid_pass_rate": 100.0,
+        "improvement": 0.0
+      },
+      "read_graph": {
+        "structural_pass_rate": 100.0,
+        "hybrid_pass_rate": 100.0,
+        "improvement": 0.0
+      },
+      "search_code": {
+        "structural_pass_rate": 80.0,
+        "hybrid_pass_rate": 100.0,
+        "improvement": 20.0
+      }
+    }
+  }
+}

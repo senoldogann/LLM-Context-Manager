@@ -124,6 +124,43 @@ the load average moved between 30 and 12.
    code snippets; the fp32 export reproduces the model card's similarity matrix
    to 0.002, the int8 one to 0.08 with the same ranking.
 
+## Results: OpenAI embeddings (2026-10-01)
+
+`text-embedding-3-small` (1536-d) and `text-embedding-3-large` (3072-d) through
+the official API (`EMBEDDING_PROVIDER=openai`, 32 texts per request); same
+corpus, same 35 tasks, same code revision as the built-in model rows. Vector
+search is exact (no ANN index) and OpenAI vectors have unit length, so the
+ranking equals cosine similarity for every model.
+
+### Search quality (search_code only, K=5)
+
+| Embedder | Mode | Pass | R@5 | MRR@5 |
+|---|---|---|---|---|
+| **text-embedding-3-small** (default when OpenAI is selected) | semantic-only | **9/15** | **0.600** | **0.439** |
+| | hybrid | **10/15** | **0.667** | 0.452 |
+| text-embedding-3-large | semantic-only | 6/15 | 0.400 | 0.322 |
+| | hybrid | 9/15 | 0.600 | 0.428 |
+| granite-97m int8, built-in (from above) | semantic-only | 9/15 | 0.600 | 0.419 |
+| | hybrid | 10/15 | 0.667 | 0.497 |
+
+Reports: [`results/openai-text-embedding-3-small/`](./results/openai-text-embedding-3-small/)
+and [`results/openai-text-embedding-3-large/`](./results/openai-text-embedding-3-large/).
+
+1. **`-large` did not beat `-small` here.** It lost three `search_code` tasks
+   in semantic-only mode (flask 2/5 vs 4/5, serde 1/5 vs 2/5) and one in hybrid
+   mode. With 15 tasks that is within noise, but nothing here justifies ~6.5×
+   the price per token and vectors twice the size, so `-small` is the default
+   when OpenAI is selected.
+2. **OpenAI does not beat the built-in model on this benchmark.** `-small`
+   matches granite on pass rate and R@5; granite keeps the higher hybrid MRR
+   and needs no network. These English queries do not measure multilingual
+   retrieval, where OpenAI reports its larger gains.
+3. **Every query is an API round trip:** 0.5–0.8 s mean per `search_code`
+   query in these runs, against 25–165 ms for the built-in model. Indexing the
+   three repos (6,713 chunks) took about 1.7 min with `-small` and 2.6 min
+   with `-large`. The machine was also compiling during the OpenAI runs, so
+   treat both timings as indicative.
+
 ## What the numbers actually say
 
 1. **Graph coverage is the strong suit.** Every `get_context` and `read_graph`
@@ -173,18 +210,21 @@ retrieval bias toward the derive side and toward large files.
 
 ```bash
 # 1. Clone corpus at pinned commits (~15s)
-benchmarks/scripts/fetch_corpus.sh
+bash benchmarks/scripts/fetch_corpus.sh
 
 # 2. Index each repo. Built-in local model by default (~1-2 min for all three);
 #    for the recorded mxbai baseline export EMBEDDING_PROVIDER=ollama first
-#    (needs Ollama with mxbai-embed-large; 3-6 min/repo)
+#    (needs Ollama with mxbai-embed-large; 3-6 min/repo); for the OpenAI rows
+#    export EMBEDDING_PROVIDER=openai and EMBEDDING_MODEL=text-embedding-3-small
+#    (or -large), with OPENAI_API_KEY in ~/.ccm/.env
 target/release/ccm-cli index --path benchmarks/corpus/flask
 target/release/ccm-cli index --path benchmarks/corpus/express
 target/release/ccm-cli index --path benchmarks/corpus/serde
 
 # 3. Evaluate structural vs hybrid per repo (~2 min); CCM_BENCH_RESULTS keeps
-#    runs of different embedders apart
-CCM_BENCH_RESULTS=benchmarks/results/local-granite-97m-int8-bs1 benchmarks/scripts/run_benchmark.sh
+#    runs of different embedders apart. The script exits non-zero after serde
+#    ("9 of 10 tasks were scored", see above); all three reports are written.
+CCM_BENCH_RESULTS=benchmarks/results/local-granite-97m-int8-bs1 bash benchmarks/scripts/run_benchmark.sh
 
 # 4. Aggregate into the summary table (directory argument optional)
 python3 benchmarks/scripts/aggregate.py benchmarks/results/local-granite-97m-int8-bs1
