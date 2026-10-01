@@ -381,3 +381,42 @@ async fn a_method_name_shared_by_many_classes_produces_no_edge() -> Result<()> {
     assert_eq!(outgoing, 0, "x.get() with 6 candidates must not link");
     Ok(())
 }
+
+#[tokio::test]
+async fn incremental_updates_follow_import_and_reexport_changes() -> Result<()> {
+    let (dir, engine) = index_fixture(FIXTURE).await?;
+    let root = dir.path().to_string_lossy().to_string();
+
+    std::fs::write(
+        dir.path().join("app/cli.py"),
+        CLI.replace("import app.other as other", "import app.util as other"),
+    )?;
+    engine
+        .incremental_index_paths(&root, &[PathBuf::from("app/cli.py")])
+        .await?;
+    {
+        let graph = engine.graph.read().await;
+        let main = node(&graph, "app/cli.py", "main");
+        assert_eq!(
+            edge_types(&graph, main, node(&graph, "app/util.py", "helper")),
+            vec![EdgeType::Calls]
+        );
+        assert!(edge_types(&graph, main, node(&graph, "app/other.py", "helper")).is_empty());
+    }
+
+    std::fs::write(
+        dir.path().join("app/__init__.py"),
+        "from .other import start as start_app\n",
+    )?;
+    engine
+        .incremental_index_paths(&root, &[PathBuf::from("app/__init__.py")])
+        .await?;
+    let graph = engine.graph.read().await;
+    let main = node(&graph, "app/cli.py", "main");
+    assert_eq!(
+        edge_types(&graph, main, node(&graph, "app/other.py", "start")),
+        vec![EdgeType::Calls]
+    );
+    assert!(edge_types(&graph, main, node(&graph, "app/core.py", "run")).is_empty());
+    Ok(())
+}

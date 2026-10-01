@@ -176,18 +176,32 @@ impl CodeGraph {
         refreshed
     }
 
-    /// Dosyanın referans hedefi olabilen düğümlerinin adları. Artımlı güncelleme
-    /// bu adları dosya değişmeden önce ve sonra toplar; bu adlardan birini anan
-    /// kaynakların kenarları yeniden hesaplanır.
+    /// Dosyanın referans hedefi olabilen düğümlerinin adları ve Python dosyasında
+    /// import bağlarının yerel adları (paket yeniden dışa aktarmaları). Artımlı
+    /// güncelleme bu adları dosya değişmeden önce ve sonra toplar; bu adlardan
+    /// birini anan kaynakların kenarları yeniden hesaplanır.
     pub fn reference_target_names(&self, file_id: &str) -> HashSet<String> {
-        self.find_nodes_by_file(file_id)
+        let mut names: HashSet<String> = self
+            .find_nodes_by_file(file_id)
             .iter()
             .map(|idx| &self.graph[*idx])
             .filter(|node| {
                 is_reference_target_type(&node.node_type) && is_referenceable_symbol(&node.name)
             })
             .map(|node| node.name.clone())
-            .collect()
+            .collect();
+        if let Some(file_idx) = self.find_file_node(file_id) {
+            if let ReferenceFacts::Syntax(facts) = &self.graph[file_idx].facts {
+                names.extend(
+                    facts
+                        .imports
+                        .iter()
+                        .filter(|binding| binding.local != "*")
+                        .map(|binding| binding.local.clone()),
+                );
+            }
+        }
+        names
     }
 
     /// Verilen kaynakların referans kenarlarını tek kural kümesiyle çözer.
