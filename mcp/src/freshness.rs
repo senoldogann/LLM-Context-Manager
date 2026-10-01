@@ -852,13 +852,25 @@ fn inject_targeted_refresh_failure(request: &RefreshRequest) -> anyhow::Result<(
             .unwrap_or(0);
         std::sync::atomic::AtomicUsize::new(count)
     });
-    let injected = remaining
-        .fetch_update(
-            std::sync::atomic::Ordering::SeqCst,
-            std::sync::atomic::Ordering::SeqCst,
-            |count| count.checked_sub(1),
-        )
-        .is_ok();
+    // `fetch_update` Rust 1.99'da kullanımdan kaldırıldı; aynı atomik azaltma
+    // her sürümde uyarısız derlenen bir karşılaştır-değiştir döngüsüdür.
+    let injected = loop {
+        let current = remaining.load(std::sync::atomic::Ordering::SeqCst);
+        let Some(next) = current.checked_sub(1) else {
+            break false;
+        };
+        if remaining
+            .compare_exchange(
+                current,
+                next,
+                std::sync::atomic::Ordering::SeqCst,
+                std::sync::atomic::Ordering::SeqCst,
+            )
+            .is_ok()
+        {
+            break true;
+        }
+    };
     if injected {
         anyhow::bail!("injected targeted scan failure (CCM_INTERNAL_REFRESH_TEST_FAIL_TARGETED)");
     }
