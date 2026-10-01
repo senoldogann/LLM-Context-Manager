@@ -5,8 +5,9 @@ open-source repositories** — not the project's own synthetic gate.
 
 ## What this measures
 
-Three real repositories, pinned to exact commits, indexed with **real
-embeddings**: the recorded baseline uses Ollama `mxbai-embed-large`; the
+Three real repositories (serde, Flask, Express; Django is used only by the
+Level 1 freshness benchmark below), pinned to exact commits, indexed with
+**real embeddings**: the recorded baseline uses Ollama `mxbai-embed-large`; the
 [built-in local model](#results-built-in-local-model-2026-09-30) is measured on
 the same tasks. Each repo has a hand-curated set of golden tasks (verified
 against the actual source) covering CCM's three retrieval modes:
@@ -28,9 +29,159 @@ The other two task types exercise the graph directly.
 | serde | v1.0.219 | `49d098de` | Rust | ~40k | 4644 |
 | flask | 3.0.3 | `c12a5d87` | Python | ~6k | 4212 |
 | express | 4.19.2 | `04bc6278` | JavaScript | ~4k | 2420 |
+| django | 5.1 | `373cb303` | Python | — | — |
 
 Corpus is cloned by `scripts/fetch_corpus.sh` (gitignored); indexes live inside
 each clone under `data/` (gitignored). Tasks reference the pinned commit.
+Django is used only by Level 1, so no LOC or node count was recorded for it.
+
+## Level 1: freshness after an edit
+
+Pre-registered in [`freshness/PREREGISTRATION.md`](freshness/PREREGISTRATION.md)
+on 2026-10-01, before any measured run; post-run changes are recorded there
+under *Deviations*, never edited in place. The harness opens a system's MCP
+server over stdio with an empty `HOME`, indexes a pinned repository, applies one
+scripted edit, and asks system-neutral questions (`callers`, `exists`,
+`node_at`) at t = 0, 0.25, 0.5, 1, 2, 5 and 30 s after the edit's last write
+returns, with 3 repetitions. Each probe is classified by the pre-registered
+oracle: `CORRECT`, `STALE_SILENT`, `STALE_LABELED`, `STALE_STRUCTURED_ONLY` or
+`ERROR_EMPTY` (an error, a timeout, a missing target or a partial update).
+Scenarios S2–S8 use small purpose-built repositories; only S1 uses real ones.
+
+**H1 (pre-registered).** On S1 (real repositories, all edits, all probe times),
+CCM's silent-stale rate must be at least 5 percentage points lower than the best
+competitor's; or within 5 points with CCM the only system whose label reaches
+the model-visible `content` text. **H1 is not measurable from this run:** no
+competitor has been run (approval gate G1), so only CCM's own numbers are
+published.
+
+### Results (2026-10-01, CCM 0.3.13 = `136b106`, macOS arm64)
+
+Raw files: full run
+[`results/freshness/ccm-0.3.13-136b106.json`](results/freshness/ccm-0.3.13-136b106.json)
+(harness `4fbc8d5`), S5 re-run
+[`results/freshness/ccm-0.3.13-136b106-s5-rerun.json`](results/freshness/ccm-0.3.13-136b106-s5-rerun.json)
+(harness `ecf7576`, which contains the `a38ce16` parser fix). The first run's S5
+block parsing was broken (deviation 1), so the summary takes S5 from the re-run.
+
+**S1 by probe time** (3 repetitions, 9 probes per repo per time):
+
+| t | Repo | Probes | Correct | Silent stale | Labeled stale | Error/empty |
+|---|---|---|---|---|---|---|
+| 0 s | flask | 9 | 0 | 6 | 0 | 3 |
+| 0 s | django | 9 | 8 | 0 | 0 | 1 (partial) |
+| 0.25–30 s | flask | 54 | 54 | 0 | 0 | 0 |
+| 0.25–30 s | django | 54 | 54 | 0 | 0 | 0 |
+
+The S1 silent-stale rate (H1 input): **6/126 (5%)**. Every stale answer was
+Flask at t = 0; the status line was `fresh · auto-refresh on` and no label
+reached `content` text.
+
+**Time to the correct answer** (the first probe time after which every later
+probe is `CORRECT`; median over 3 repetitions):
+
+| Scenario | Repo | Time to correct | Correct at t = 0 |
+|---|---|---|---|
+| S1-add | flask | 0.25 s (0.25–0.25) | 0/3 |
+| S1-remove | flask | 0.25 s (0.25–0.25) | 0/3 |
+| S1-rename | flask | 0.25 s (0.25–0.25) | 0/3 (3 errors) |
+| S1-add | django | 0 s | 3/3 |
+| S1-remove | django | 0 s | 3/3 |
+| S1-rename | django | 0 s (0–0.25) | 2/3 (1 partial error) |
+| S2 (auto-refresh off, external re-index) | generated | 0 s | 3/3, labeled |
+| S3-branch | generated | 0 s | 3/3 |
+| S3-bulk (20 files) | generated | 0 s | 3/3 |
+| S4-nested | generated | 0.25 s | 0/3 |
+| S4-nogit | generated | 0.25 s | 0/3 |
+| S5 (insert lines above the cursor) | generated | 0.25 s (0.25–0.25) | 0/3 |
+| S6 (50 files) | generated | 0 s | 3/3 |
+| S7 fixed (after a broken save) | generated | 0.25 s (0.25–1) | 0/3 |
+| S8-delete | generated | 0.25 s | 0/3 |
+| S8-move | generated | 0.25 s | 0/3 |
+
+S7 phase 1 (a syntactically broken save) has no "correct" state: the last good
+state was preserved in 21/21 probes, silently (`PRESERVED_SILENT`).
+
+### What the numbers say
+
+1. **On real repositories the stale window is short.** 6 of 126 S1 probes (5%)
+   returned the pre-edit state; all six were Flask at t = 0. From t = 0.25 s on,
+   all 108 S1 probes were correct. The same shape appears in S4-nested,
+   S4-nogit, S5, S8-delete and S8-move; S1-add/remove/rename, S3-branch,
+   S3-bulk and S6 were already correct at t = 0.
+2. **None of the 23 stale probes carried a label.** Across the whole run, every
+   stale answer came with the status line `fresh · auto-refresh on`; no
+   staleness text reached the model-visible `content` channel. The one signal
+   that does reach it is the auto-refresh-off state
+   (`auto-refresh off · indexed Xs ago`), which S2 showed correctly from t = 0.
+3. **A broken edit preserves the last good state, silently.** S7 phase 1:
+   21/21 probes `PRESERVED_SILENT`; no `refresh failed` label appeared.
+4. **S6 (50 files, one pass) reflected all 50 callers at t = 0** and the count
+   never decreased during the 30 s window (50/50 at every probe in all three
+   repetitions).
+5. **The S1-rename failures at t = 0 are a state, not a timing artefact.** At
+   t = 0 the Flask rename probes (3/3) returned the renamed symbol as absent and
+   the old symbol as present but with an empty caller list — neither the
+   pre-edit nor the post-edit state, hence `ERROR_EMPTY`. One Django repetition
+   failed the same way (`partial`): the old symbol was gone, the renamed one was
+   not found yet.
+6. **Descriptive timings (not a pre-registered metric):** median index build
+   0.15 s (Flask) / 1.94 s (Django); ready after session start 0.35 s / 1.23 s;
+   one probe, both tool calls, 11 ms / 186 ms.
+
+### Limits
+
+- One machine (macOS 26.6.2, Apple M4, 16 GiB), one CCM build (0.3.13, `main`
+  at `136b106`), 3 repetitions. Probes run in one session and in order, so
+  earlier probes can affect later ones; per-repetition counts are in the raw
+  files and no pooled significance test is claimed.
+- Only CCM was measured. H1 requires at least one competitor run (gate G1);
+  nothing here is a comparison with any other system.
+- S2–S8 use generated repositories: they show behaviour in a known situation,
+  not value on real code.
+- Django's S1 probes were already correct at t = 0 in 8 of 9 cases while
+  Flask's were not. Django probes take ~0.19 s against Flask's ~0.01 s, so the
+  harness cannot tell whether the watcher had reacted before the question
+  arrived; per-repo timing differences are descriptive, not evidence.
+- Not measured here: agent outcomes, token cost, edge accuracy (Level 2),
+  platforms other than macOS.
+- Conflict of interest: the benchmark was written for the CCM maintainer, and
+  CCM is the system under test. Safeguards are listed in the pre-registration;
+  every raw probe is published, including the ones that read badly for CCM.
+
+### Reproducing
+
+```bash
+cd benchmarks
+
+# Corpus: shallow clones of the pinned repositories in corpus.json (~15 s)
+scripts/fetch_corpus.sh
+
+# Full run. The current harness produces a valid S5 in the same run; the
+# two-file split below reflects the historical parser bug (deviation 1).
+PYTHONDONTWRITEBYTECODE=1 uv run --frozen python -m freshness run \
+  --system ccm --ccm-bin-dir "$HOME/.cargo/bin" \
+  --corpus-dir corpus --work-dir <empty-dir> --log-dir <log-dir> \
+  --out results/freshness/ccm-0.3.13-136b106.json \
+  --repetitions 3 --scenarios all \
+  --request-timeout 30 --ready-timeout 120 --command-timeout 900
+PYTHONDONTWRITEBYTECODE=1 uv run --frozen python -m freshness report \
+  --results results/freshness/ccm-0.3.13-136b106.json \
+  --out results/freshness/ccm-0.3.13-136b106.md
+
+# S5 alone, as re-run for this report
+PYTHONDONTWRITEBYTECODE=1 uv run --frozen python -m freshness run \
+  --system ccm --ccm-bin-dir "$HOME/.cargo/bin" \
+  --corpus-dir corpus --work-dir <empty-dir> --log-dir <log-dir> \
+  --out results/freshness/ccm-0.3.13-136b106-s5-rerun.json \
+  --repetitions 3 --scenarios S5 \
+  --request-timeout 30 --ready-timeout 120 --command-timeout 900
+```
+
+The work directory must be empty; the harness refuses to run while
+`benchmarks/freshness`, `benchmarks/pyproject.toml` or `benchmarks/uv.lock`
+have uncommitted changes. Level 2 (CCM's call edges against language servers)
+is a separate, not-yet-run benchmark.
 
 ## Results (2026-08-21, Ollama mxbai-embed-large)
 
