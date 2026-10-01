@@ -14,11 +14,14 @@ English | [Turkce](./README.tr.md)
 > 5.1 (6,670 files) a saved change shows up in graph results after a median of
 > about 0.6 s ([measurement](https://github.com/senoldogann/LLM-Context-Manager/pull/5):
 > release build, embedder off). Query responses start with the index state
-> (`fresh`, or `auto-refresh off · indexed Xs ago`), and a failed re-index never
-> replaces the last good graph. In the pre-registered L1 freshness benchmark,
-> graph answers matched the edit from 0.25 s on; in the sub-250 ms window before
-> the watcher applies the event, a pre-edit answer can still carry the `fresh`
-> label ([benchmarks/](./benchmarks/README.md)).
+> (`fresh`, `stale · …` while a registered change is pending, or
+> `auto-refresh off · indexed Xs ago`), and a failed re-index never replaces the
+> last good graph. In the pre-registered L1 freshness benchmark (one-function
+> edits in Flask 3.0.3 and Django 5.1, probes at fixed times), every graph answer
+> from 0.25 s after a save on matched the edit; in the sub-250 ms window before
+> the watcher applies the event, 6 of 126 probes returned the pre-edit answer
+> still labeled `fresh`, and 4 more a partial or empty one
+> ([benchmarks/](./benchmarks/README.md)).
 
 > **Status, v0.3.13:** search quality has a 35-task pilot benchmark; whether the
 > graph saves agents time or tokens is not measured yet. What is and is not
@@ -43,11 +46,8 @@ edit:
 - **Fresh after a save:** a file watcher applies changes to the index the MCP
   server already holds in memory (median ~0.6 s on Django 5.1, graph only).
 - **Says when it is not watching:** with auto-refresh off, responses say
-  `auto-refresh off · indexed Xs ago`, so an agent can tell a fresh answer from
-  one that predates your last edits. With auto-refresh on, a saved change is
-  reflected from 0.25 s on; in the sub-250 ms window before the watcher applies
-  the event, a pre-edit answer can still carry the same `fresh` label (5% of 126
-  probes in the L1 run).
+  `auto-refresh off · indexed Xs ago`. With auto-refresh on, the status line
+  does not yet cover the sub-250 ms window above.
 - **Never half-built:** each index is built as a new generation and activated
   atomically; a failed or interrupted run leaves the previous graph serving.
 

@@ -6,7 +6,7 @@
 
 [English](./README.md) | Turkce
 
-> **Yapay zekâ kodlama ajanları için, kaydettiğiniz anda güncellenen ve geride kaldığında bunu söyleyen bir kod grafı.**
+> **Yapay zekâ kodlama ajanları için, düzenlemelerinize ayak uyduran ve izlemediği zaman bunu söyleyen bir kod grafı.**
 
 > CCM projenizi tree-sitter ile (13 dil) ayrıştırır, diskte bir çağrı ve import
 > grafı ile isteğe bağlı bir anlamsal indeks tutar ve bunları Claude Code, Codex
@@ -14,8 +14,14 @@
 > kaydedilen bir değişiklik graf sonuçlarında medyan yaklaşık 0,6 sn sonra
 > görünür ([ölçüm](https://github.com/senoldogann/LLM-Context-Manager/pull/5):
 > release derleme, embedder kapalı). Sorgu yanıtları indeksin durumuyla başlar
-> (`fresh` ya da `stale · N changed files pending`) ve başarısız bir yeniden
-> indeksleme son sağlam grafın yerini asla almaz.
+> (`fresh`, kaydedilmiş bir değişiklik beklerken `stale · …` ya da
+> `auto-refresh off · indexed Xs ago`) ve başarısız bir yeniden indeksleme son
+> sağlam grafın yerini asla almaz. Ön-kayıtlı L1 tazelik benchmark'ında (Flask
+> 3.0.3 ve Django 5.1'de tek fonksiyonluk düzenlemeler, sabit zamanlı problar)
+> kayıttan 0,25 sn sonrasından itibaren her graf cevabı düzenlemeyle uyuştu;
+> izleyicinin olayı uygulamasından önceki 250 ms altı pencerede 126 probun 6'sı
+> hâlâ `fresh` etiketli düzenleme öncesi cevabı, 4'ü de kısmi ya da boş bir
+> cevap döndürdü ([benchmarks/](./benchmarks/README.md)).
 
 > **Durum, v0.3.13:** arama kalitesi için 35 görevlik bir pilot benchmark var;
 > grafın ajanlara zaman ya da token kazandırıp kazandırmadığı henüz ölçülmedi.
@@ -39,8 +45,9 @@ güncel tutar:
 
 - **Kayıttan sonra taze:** bir dosya izleyicisi değişiklikleri MCP sunucusunun
   bellekte tuttuğu indekse uygular (Django 5.1'de medyan ~0,6 sn, yalnız graf).
-- **Geride kaldığında söyler:** sorgu yanıtları indeksin durumuyla başlar; ajan
-  taze bir cevabı son düzenlemelerinizden önceki bir cevaptan ayırt edebilir.
+- **İzlemediğinde söyler:** otomatik yenileme kapalıyken yanıtlar
+  `auto-refresh off · indexed Xs ago` der. Otomatik yenileme açıkken durum
+  satırı yukarıdaki 250 ms altı pencereyi henüz kapsamıyor.
 - **Asla yarım değil:** her indeks yeni bir generation olarak kurulur ve atomik
   olarak etkinleştirilir; başarısız ya da yarıda kesilen bir çalıştırma önceki
   grafı hizmette bırakır.
