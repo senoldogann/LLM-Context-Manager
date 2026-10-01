@@ -16,7 +16,7 @@ pub fn function_facts(definition: Node, source: &str, file_id: &str) -> SyntaxFa
     if let Some(body) = definition.child_by_field_name("body") {
         collect_scope(body, source, &package, &mut facts);
     }
-    facts
+    finish(facts)
 }
 
 /// Sınıfın olguları: taban sınıflar, dekoratörler ve sınıf gövdesindeki çağrılar
@@ -36,7 +36,7 @@ pub fn class_facts(definition: Node, source: &str, file_id: &str) -> SyntaxFacts
     if let Some(body) = definition.child_by_field_name("body") {
         collect_scope(body, source, &package, &mut facts);
     }
-    facts
+    finish(facts)
 }
 
 /// Modül düzeyindeki çağrılar ve importlar (fonksiyon ve sınıf gövdeleri hariç).
@@ -44,7 +44,7 @@ pub fn module_facts(root: Node, source: &str, file_id: &str) -> SyntaxFacts {
     let package = python_package(file_id);
     let mut facts = SyntaxFacts::empty(SyntaxLanguage::Python);
     collect_scope(root, source, &package, &mut facts);
-    facts
+    finish(facts)
 }
 
 /// `@dekoratör` uygulaması bir çağrıdır; tanımı saran `decorated_definition`
@@ -102,8 +102,43 @@ fn collect_node(node: Node, source: &str, package: &[String], facts: &mut Syntax
                 .imports
                 .extend(from_import_bindings(node, source, package));
         }
+        "identifier" => {
+            if is_reference_position(node) {
+                if let Some(name) = text(node, source) {
+                    facts.names.push(name);
+                }
+            }
+        }
         _ => collect_scope(node, source, package, facts),
     }
+}
+
+/// Tanımlayıcı çağrılmadan kullanılan bir ad mı? Öznitelik adı (`x.ad`), anahtar
+/// argüman adı, çağrının kendisi (çağrı yeri olarak sayılır), atama ve döngü
+/// hedefleri ile lambda parametreleri yeni bağ ya da ad değildir.
+fn is_reference_position(identifier: Node) -> bool {
+    let Some(parent) = identifier.parent() else {
+        return false;
+    };
+    let is_field = |field: &str| parent.child_by_field_name(field) == Some(identifier);
+    match parent.kind() {
+        "attribute" => !is_field("attribute"),
+        "keyword_argument" | "default_parameter" => !is_field("name"),
+        "call" => !is_field("function"),
+        "assignment" | "augmented_assignment" | "for_statement" | "for_in_clause" => {
+            !is_field("left")
+        }
+        "lambda_parameters" | "global_statement" | "nonlocal_statement" | "dotted_name"
+        | "as_pattern_target" => false,
+        _ => true,
+    }
+}
+
+/// Adları tekilleştirir: bir kaynak aynı adı kaç kez anarsa ansın tek referanstır.
+fn finish(mut facts: SyntaxFacts) -> SyntaxFacts {
+    facts.names.sort_unstable();
+    facts.names.dedup();
+    facts
 }
 
 /// Çağrılan ya da miras alınan ifadenin hedefi; adı olmayan ifadeler (`f()()`,

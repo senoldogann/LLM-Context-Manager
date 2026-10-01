@@ -52,9 +52,11 @@ güncel tutar:
   olarak etkinleştirilir; başarısız ya da yarıda kesilen bir çalıştırma önceki
   grafı hizmette bırakır.
 
-**Sınırlar, baştan.** Python dosyalarında çağrılar sözdizimi ağacından okunur
-ve dosyanın importları (`import`, `from … import`, göreli importlar, paket
-yeniden dışa aktarımları), `self`/`cls`/`super()` ve sınıf adlarıyla çözülür;
+**Sınırlar, baştan.** Python dosyalarında çağrılar ve adın diğer kullanımları
+(argümanlar, `User.objects` gibi öznitelik erişimi, tip ipuçları) sözdizimi
+ağacından okunur ve dosyanın importları (`import`, `from … import`, göreli
+importlar, `from .x import *` dahil paket yeniden dışa aktarımları),
+`self`/`cls`/`super()` ve sınıf adlarıyla çözülür;
 türü bilinmeyen bir alıcıdaki çağrı en çok beş aynı adlı tanıma *olası* çağrı
 olarak raporlanır, projeden çıkan importlar kenar üretmez. Diğer 12 dilde çağrı
 kenarları hâlâ isimle çözülür: bir çağrı önce aynı dosyadaki tanıma, yoksa başka

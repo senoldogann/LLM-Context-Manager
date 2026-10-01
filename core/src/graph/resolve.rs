@@ -6,7 +6,7 @@
 //! tek proje tanımına düşen çıplak adlar "çıkarım" kenarı üretir. Projeden çıkan
 //! importlar ve yerleşik adlar kenar üretmez.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use petgraph::graph::NodeIndex;
 use petgraph::visit::EdgeRef;
@@ -116,15 +116,21 @@ enum Resolution {
 pub(crate) struct PythonModules {
     /// Son bileşen → (tüm bileşenler, dosya kimliği)
     by_last: HashMap<String, Vec<(Vec<String>, String)>>,
+    /// `__init__.py` taşıyan dizinler (paketler), modül yolu bileşenleri olarak.
+    packages: HashSet<Vec<String>>,
 }
 
 impl PythonModules {
     pub(crate) fn new(graph: &CodeGraph) -> Self {
         let mut by_last: HashMap<String, Vec<(Vec<String>, String)>> = HashMap::new();
+        let mut packages: HashSet<Vec<String>> = HashSet::new();
         for file_id in graph.file_nodes_index.keys() {
             let Some(parts) = python_module_path(file_id) else {
                 continue;
             };
+            if file_id.ends_with("__init__.py") {
+                packages.insert(parts.clone());
+            }
             if let Some(last) = parts.last().cloned() {
                 by_last
                     .entry(last)
@@ -132,11 +138,12 @@ impl PythonModules {
                     .push((parts, file_id.clone()));
             }
         }
-        Self { by_last }
+        Self { by_last, packages }
     }
 
     /// Yolun dosyaları: kök göreli tam eşleşme varsa yalnız o; yoksa yolu sonek
-    /// olarak taşıyan dosyalar (`src/` düzeni).
+    /// olarak taşıyan dosyalar (`src/` düzeni). Sonek eşleşmesinde atılan önek bir
+    /// paket olamaz: `src/flask/json/` standart kütüphanenin `json`'u değildir.
     pub(crate) fn files(&self, module: &str) -> Vec<&str> {
         let wanted: Vec<&str> = module.split('.').collect();
         let Some(candidates) = wanted.last().and_then(|last| self.by_last.get(*last)) else {
@@ -154,7 +161,9 @@ impl PythonModules {
         candidates
             .iter()
             .filter(|(parts, _)| {
-                parts.len() > wanted.len() && same(&parts[parts.len() - wanted.len()..])
+                parts.len() > wanted.len()
+                    && same(&parts[parts.len() - wanted.len()..])
+                    && !self.packages.contains(&parts[..parts.len() - wanted.len()])
             })
             .map(|(_, file)| file.as_str())
             .collect()
@@ -229,10 +238,24 @@ pub(crate) fn python_references<'g>(
             }
         }
     }
+    // Çağrılmadan kullanılan adlar; aynı hedefe çağrı kenarı varsa o yeterlidir.
+    let mut referenced: Vec<NodeIndex> = Vec::new();
+    for name in &facts.names {
+        for target in reference_targets(graph, modules, &scope, name) {
+            if target != source_idx && !strongest.contains_key(&target) {
+                referenced.push(target);
+            }
+        }
+    }
     let mut references: Vec<(NodeIndex, NodeIndex, EdgeType)> = strongest
         .into_iter()
         .map(|(target, edge)| (source_idx, target, edge))
         .collect();
+    references.extend(
+        referenced
+            .into_iter()
+            .map(|target| (source_idx, target, EdgeType::References)),
+    );
     let mut imported: HashMap<NodeIndex, EdgeType> = HashMap::new();
     for binding in &facts.imports {
         let Some(symbol) = binding.symbol.as_deref().filter(|symbol| *symbol != "*") else {
@@ -276,11 +299,38 @@ fn edge_rank(edge: &EdgeType) -> u8 {
         EdgeType::Calls => 0,
         EdgeType::CallInferred => 1,
         EdgeType::CallAmbiguous => 2,
-        EdgeType::Imports => 3,
-        EdgeType::ImportAmbiguous => 4,
-        EdgeType::Inherits => 5,
-        EdgeType::Defines | EdgeType::Contains | EdgeType::Reads | EdgeType::Writes => 6,
+        EdgeType::References => 3,
+        EdgeType::Imports => 4,
+        EdgeType::ImportAmbiguous => 5,
+        EdgeType::Inherits => 6,
+        EdgeType::Defines | EdgeType::Contains | EdgeType::Reads | EdgeType::Writes => 7,
     }
+}
+
+/// Çağrılmadan kullanılan adın hedefleri: aynı dosyadaki tanım, import bağı ya da
+/// yıldız import. Tahmini ya da olası hedef üretmez; çözülemeyen ad yereldir.
+fn reference_targets(
+    graph: &CodeGraph,
+    modules: &PythonModules,
+    scope: &Scope<'_>,
+    name: &str,
+) -> Vec<NodeIndex> {
+    let local = module_scope_definitions(graph, scope.file_id, name, scope.source_idx);
+    if !local.is_empty() {
+        return local;
+    }
+    if let Some(binding) = scope.binding(name) {
+        return match binding.symbol.as_deref() {
+            Some(symbol) if symbol != "*" => {
+                symbol_in_module(graph, modules, &binding.module, symbol, 0)
+            }
+            _ => Vec::new(),
+        };
+    }
+    scope
+        .wildcards()
+        .flat_map(|binding| symbol_in_module(graph, modules, &binding.module, name, 0))
+        .collect()
 }
 
 fn call_edges(resolution: Resolution) -> Vec<(NodeIndex, EdgeType)> {
@@ -338,10 +388,24 @@ fn resolve_bare(
     if !local.is_empty() {
         return Resolution::Exact(local);
     }
+    // Özyineleme: ad kaynağın kendisiyse başka dosyadaki aynı adlı tanıma düşülmez.
+    if refers_to_itself(graph, scope.source_idx, name) {
+        return Resolution::External;
+    }
     if let Some(binding) = scope.binding(name) {
         return match binding.symbol.as_deref() {
             Some(symbol) if symbol != "*" => {
-                non_empty_exact(symbol_in_module(graph, modules, &binding.module, symbol, 0))
+                let targets = symbol_in_module(graph, modules, &binding.module, symbol, 0);
+                if !targets.is_empty() {
+                    Resolution::Exact(targets)
+                } else if modules.files(&binding.module).is_empty() {
+                    Resolution::External
+                } else {
+                    // Modül projede ama ad bulunamadı (`__all__`, dinamik dışa
+                    // aktarma): projede tek tanım varsa çıkarım olarak bağlanır.
+                    unique_python_definition(graph, scope.source_idx, symbol)
+                        .map_or(Resolution::External, Resolution::Inferred)
+                }
             }
             // Modül adı çağrılmaz.
             _ => Resolution::External,
@@ -516,6 +580,7 @@ fn symbol_in_module(
         let ReferenceFacts::Syntax(file_facts) = &graph.graph[file_idx].facts else {
             continue;
         };
+        let mut reexported = Vec::new();
         for binding in file_facts
             .imports
             .iter()
@@ -526,7 +591,7 @@ fn symbol_in_module(
                 .as_deref()
                 .filter(|original| *original != "*")
             {
-                targets.extend(symbol_in_module(
+                reexported.extend(symbol_in_module(
                     graph,
                     modules,
                     &binding.module,
@@ -535,6 +600,24 @@ fn symbol_in_module(
                 ));
             }
         }
+        // `from .alt import *` yeniden dışa aktarması: `__all__` olmadan Python
+        // alt çizgiyle başlamayan adları taşır (`__all__` M3'te).
+        if reexported.is_empty() && !symbol.starts_with('_') {
+            for binding in file_facts
+                .imports
+                .iter()
+                .filter(|binding| binding.symbol.as_deref() == Some("*"))
+            {
+                reexported.extend(symbol_in_module(
+                    graph,
+                    modules,
+                    &binding.module,
+                    symbol,
+                    depth + 1,
+                ));
+            }
+        }
+        targets.extend(reexported);
     }
     targets.sort_unstable();
     targets.dedup();
@@ -631,6 +714,109 @@ fn top_level_named(graph: &CodeGraph, file_id: &str, name: &str) -> Vec<NodeInde
                     .is_some_and(|parent| graph.graph[parent].node_type == NodeType::File)
         })
         .collect()
+}
+
+/// Artımlı yenilemede etkilenen adları Python'un dolaylı bağımlılıklarıyla
+/// genişletir: değişen dosyalardaki sınıfların kalıtılan üye adları (değişiklik
+/// sonrası durum) ve paket yeniden dışa aktarma zincirlerinin takma adları
+/// (`from .core import run as start_app` → `run` etkilenirse `start_app` de).
+pub(crate) fn expand_affected_names(
+    graph: &CodeGraph,
+    changed_files: &HashSet<String>,
+    names: &HashSet<String>,
+) -> HashSet<String> {
+    let mut expanded = names.clone();
+    for file_id in changed_files {
+        expanded.extend(inherited_member_names_in_file(graph, file_id));
+    }
+    let bindings: Vec<&ImportBinding> = graph
+        .graph
+        .node_weights()
+        .filter(|node| node.node_type == NodeType::File)
+        .filter_map(|node| match &node.facts {
+            ReferenceFacts::Syntax(facts) => Some(facts),
+            ReferenceFacts::Lexical => None,
+        })
+        .flat_map(|facts| facts.imports.iter())
+        .collect();
+    for _ in 0..MAX_REEXPORT_DEPTH {
+        let aliases: Vec<String> = bindings
+            .iter()
+            .filter(|binding| {
+                binding
+                    .symbol
+                    .as_deref()
+                    .is_some_and(|symbol| symbol != "*" && expanded.contains(symbol))
+                    && !expanded.contains(&binding.local)
+            })
+            .map(|binding| binding.local.clone())
+            .collect();
+        if aliases.is_empty() {
+            break;
+        }
+        expanded.extend(aliases);
+    }
+    expanded
+}
+
+/// Dosyadaki sınıfların tabanlarından (en çok `MAX_BASE_DEPTH` adım) kalıtılan
+/// üye adları.
+pub(crate) fn inherited_member_names_in_file(graph: &CodeGraph, file_id: &str) -> HashSet<String> {
+    let classes: Vec<NodeIndex> = graph
+        .find_nodes_by_file(file_id)
+        .iter()
+        .copied()
+        .filter(|idx| graph.graph[*idx].node_type == NodeType::Class)
+        .collect();
+    let mut names = HashSet::new();
+    if classes.is_empty() {
+        return names;
+    }
+    let modules = PythonModules::new(graph);
+    for class_idx in classes {
+        collect_inherited_names(graph, &modules, class_idx, 0, &mut names);
+    }
+    names
+}
+
+fn collect_inherited_names(
+    graph: &CodeGraph,
+    modules: &PythonModules,
+    class_idx: NodeIndex,
+    depth: usize,
+    names: &mut HashSet<String>,
+) {
+    if depth >= MAX_BASE_DEPTH {
+        return;
+    }
+    let ReferenceFacts::Syntax(facts) = &graph.graph[class_idx].facts else {
+        return;
+    };
+    let scope = Scope::of(graph, class_idx, facts);
+    for base in &facts.bases {
+        let Resolution::Exact(targets) = resolve_target(graph, modules, &scope, base) else {
+            continue;
+        };
+        for base_idx in targets {
+            if graph.graph[base_idx].node_type != NodeType::Class || base_idx == class_idx {
+                continue;
+            }
+            names.extend(
+                graph
+                    .graph
+                    .edges_directed(base_idx, Direction::Outgoing)
+                    .filter(|edge| matches!(edge.weight(), EdgeType::Contains))
+                    .map(|edge| graph.graph[edge.target()].name.clone()),
+            );
+            collect_inherited_names(graph, modules, base_idx, depth + 1, names);
+        }
+    }
+}
+
+/// Çıplak ad, kapsamda kaynağın kendisini mi gösteriyor (sınıf üyesi olmayan
+/// fonksiyonun kendini çağırması)?
+fn refers_to_itself(graph: &CodeGraph, source_idx: NodeIndex, name: &str) -> bool {
+    graph.graph[source_idx].name == name && !is_class_member(graph, source_idx)
 }
 
 fn is_class_member(graph: &CodeGraph, idx: NodeIndex) -> bool {

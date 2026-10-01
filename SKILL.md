@@ -370,7 +370,7 @@ Inspect a specific node's full details and its direct graph connections (calls, 
 
 ### 6. `find_usages`
 Find all callers of a given node (reverse-edge traversal). Answers "who uses this function/class?".
-Each usage carries a relation — `calls`, `calls (inferred)`, `may call`, `imports` or `inherits` — and an unknown node ID returns an error telling you to call `find_nodes` again.
+Each usage carries a relation — `calls`, `calls (inferred)`, `may call`, `references`, `imports`, `may import` or `inherits` — and an unknown node ID returns an error telling you to call `find_nodes` again.
 
 **Parameters**
 

@@ -1038,25 +1038,16 @@ impl RetrievalEngine {
                 .graph
                 .edges_directed(node_idx, petgraph::Direction::Incoming)
             {
-                if !matches!(
-                    edge.weight(),
-                    crate::graph::EdgeType::Calls
-                        | crate::graph::EdgeType::Imports
-                        | crate::graph::EdgeType::Defines
-                        | crate::graph::EdgeType::Inherits
-                        | crate::graph::EdgeType::Reads
-                        | crate::graph::EdgeType::Writes
-                ) {
+                let Some(relation) = impact_relation(edge.weight()) else {
                     continue;
-                }
+                };
                 let source_idx = edge.source();
                 if file_nodes.contains(&source_idx) {
                     continue;
                 }
+                // Python'da modül düzeyi importlar ve çağrılar `File` düğümünden
+                // çıkar; o dosya değişen dosyaya doğrudan bağımlıdır.
                 let source = &graph.graph[source_idx];
-                if matches!(source.node_type, NodeType::File | NodeType::DataFile) {
-                    continue;
-                }
                 let file = extract_file_path(&source.id);
                 if impacted_ids.insert(source.id.clone()) {
                     let target = &graph.graph[node_idx];
@@ -1070,10 +1061,13 @@ impl RetrievalEngine {
                         content: source.content.to_string(),
                         relevance_score: (1.0 - depth as f32 * 0.15).max(0.55),
                         reason: if depth == 0 {
-                            format!("Directly depends on {} in changed file", target.name)
+                            format!(
+                                "Directly depends on {} in changed file ({relation})",
+                                target.name
+                            )
                         } else {
                             format!(
-                                "Transitively depends on changed file via {} (depth {})",
+                                "Transitively depends on changed file via {} ({relation}, depth {})",
                                 target.name,
                                 depth + 1
                             )
@@ -1428,6 +1422,26 @@ impl RetrievalEngine {
             started.elapsed().as_millis() as u64,
         );
         Ok(suggestions)
+    }
+}
+
+/// Etki analizinde izlenen bağımlılık kenarının kısa etiketi; bağımlılık
+/// olmayan kenarlar (`Contains`) için `None`. Belirsiz kenarlar da izlenir:
+/// "ne bozulabilir" sorusunda olası bağımlılık etiketiyle raporlanır.
+fn impact_relation(edge: &crate::graph::EdgeType) -> Option<&'static str> {
+    use crate::graph::EdgeType;
+    match edge {
+        EdgeType::Calls => Some("calls"),
+        EdgeType::CallInferred => Some("calls, inferred"),
+        EdgeType::CallAmbiguous => Some("may call"),
+        EdgeType::References => Some("references"),
+        EdgeType::Imports => Some("imports"),
+        EdgeType::ImportAmbiguous => Some("may import"),
+        EdgeType::Inherits => Some("inherits"),
+        EdgeType::Defines => Some("defines"),
+        EdgeType::Reads => Some("reads"),
+        EdgeType::Writes => Some("writes"),
+        EdgeType::Contains => None,
     }
 }
 

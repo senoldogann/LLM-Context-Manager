@@ -67,6 +67,9 @@ pub struct SyntaxFacts {
     pub imports: Vec<ImportBinding>,
     /// Sınıf düğümünde taban sınıf ifadeleri.
     pub bases: Vec<CallTarget>,
+    /// Çağrılmadan kullanılan adlar: argümanlar, öznitelik zincirinin başı
+    /// (`User.objects`), atamanın sağ tarafı, tip ipuçları. Tekil ve sıralı.
+    pub names: Vec<String>,
 }
 
 impl SyntaxFacts {
@@ -77,12 +80,16 @@ impl SyntaxFacts {
             calls: Vec::new(),
             imports: Vec::new(),
             bases: Vec::new(),
+            names: Vec::new(),
         }
     }
 
     /// Düğüm kenar üretebilir mi?
     pub fn has_references(&self) -> bool {
-        !(self.calls.is_empty() && self.imports.is_empty() && self.bases.is_empty())
+        !(self.calls.is_empty()
+            && self.imports.is_empty()
+            && self.bases.is_empty()
+            && self.names.is_empty())
     }
 
     /// Olgular adlardan birini anıyor mu? Artımlı yenileme etkilenen kaynakları
@@ -95,6 +102,7 @@ impl SyntaxFacts {
         };
         self.calls.iter().any(|call| target_mentions(&call.target))
             || self.bases.iter().any(target_mentions)
+            || self.names.iter().any(|name| names.contains(name))
             || self.imports.iter().any(|binding| {
                 names.contains(&binding.local)
                     || binding

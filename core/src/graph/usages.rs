@@ -17,8 +17,12 @@ pub enum UsageRelation {
     CallsInferred,
     /// Alıcı türü bilinmiyor ya da birden çok aday var.
     MayCall,
+    /// Çağırmadan kullanıyor (argüman, öznitelik erişimi, tip ipucu).
+    References,
     /// Sembolü import ediyor.
     Imports,
+    /// Aynı adlı birden çok tanımdan birini import ediyor olabilir.
+    MayImport,
     /// Bu sınıftan türüyor.
     Inherits,
 }
@@ -30,7 +34,9 @@ impl UsageRelation {
             UsageRelation::Calls => "calls",
             UsageRelation::CallsInferred => "calls (inferred: unique name, not imported)",
             UsageRelation::MayCall => "may call (receiver type unknown or several candidates)",
+            UsageRelation::References => "references (uses without calling)",
             UsageRelation::Imports => "imports",
+            UsageRelation::MayImport => "may import (ambiguous name match)",
             UsageRelation::Inherits => "inherits",
         }
     }
@@ -40,7 +46,9 @@ impl UsageRelation {
             EdgeType::Calls => Some(UsageRelation::Calls),
             EdgeType::CallInferred => Some(UsageRelation::CallsInferred),
             EdgeType::CallAmbiguous => Some(UsageRelation::MayCall),
-            EdgeType::Imports | EdgeType::ImportAmbiguous => Some(UsageRelation::Imports),
+            EdgeType::References => Some(UsageRelation::References),
+            EdgeType::Imports => Some(UsageRelation::Imports),
+            EdgeType::ImportAmbiguous => Some(UsageRelation::MayImport),
             EdgeType::Inherits => Some(UsageRelation::Inherits),
             EdgeType::Defines | EdgeType::Contains | EdgeType::Reads | EdgeType::Writes => None,
         }

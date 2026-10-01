@@ -75,6 +75,10 @@ class User(Base):
         "app/shim.py",
         "class Flask:\n    def __init__(self, name):\n        self.name = name\n",
     ),
+    (
+        "app/views.py",
+        "from app.models import User\n\n\ndef show(x):\n    if isinstance(x, User):\n        return User.objects\n    return None\n",
+    ),
     ("app/broken.py", "def broken(:\n    return helper(\n"),
     ("lib.rs", "fn bar() {}\nfn foo() { bar(); }\n"),
 ];
@@ -466,5 +470,234 @@ async fn usages_report_relations_and_a_missing_node() -> Result<()> {
         usages_of(&graph, gone).unwrap_err(),
         UsageError::NodeNotFound(gone.to_string())
     );
+    Ok(())
+}
+
+/// Grafın `Contains` dışı kenarları (kaynak kimliği, hedef kimliği, tür).
+fn edge_triples(graph: &CodeGraph) -> std::collections::BTreeSet<(String, String, String)> {
+    graph
+        .graph
+        .edge_indices()
+        .filter_map(|edge| {
+            let (source, target) = graph.graph.edge_endpoints(edge)?;
+            let weight = &graph.graph[edge];
+            (!matches!(weight, EdgeType::Contains)).then(|| {
+                (
+                    graph.graph[source].id.clone(),
+                    graph.graph[target].id.clone(),
+                    format!("{weight:?}"),
+                )
+            })
+        })
+        .collect()
+}
+
+/// Dosyaları değiştirip artımlı indeksler; kenarları aynı son durumun taze
+/// indeksiyle karşılaştırır.
+async fn assert_incremental_matches_fresh(
+    initial: &[(&str, &str)],
+    changes: &[(&str, &str)],
+) -> Result<()> {
+    let (dir, engine) = index_fixture(initial).await?;
+    let root = dir.path().to_string_lossy().to_string();
+    let mut changed = Vec::new();
+    for (path, content) in changes {
+        std::fs::write(dir.path().join(path), content)?;
+        changed.push(PathBuf::from(path));
+    }
+    engine.incremental_index_paths(&root, &changed).await?;
+    let mut final_files: Vec<(&str, &str)> = initial
+        .iter()
+        .filter(|(path, _)| !changes.iter().any(|(changed, _)| changed == path))
+        .copied()
+        .collect();
+    final_files.extend(changes.iter().copied());
+    let (_fresh_dir, fresh) = index_fixture(&final_files).await?;
+    let incremental_edges = edge_triples(&*engine.graph.read().await);
+    let fresh_edges = edge_triples(&*fresh.graph.read().await);
+    assert_eq!(incremental_edges, fresh_edges);
+    Ok(())
+}
+
+#[tokio::test]
+async fn impact_of_change_reports_python_importers_and_users() -> Result<()> {
+    let (_dir, engine) = index_fixture(FIXTURE).await?;
+    let (start_id, show_id) = {
+        let graph = engine.graph.read().await;
+        (
+            graph.graph[member(&graph, "app/core.py", "Engine", "start")]
+                .id
+                .clone(),
+            graph.graph[node(&graph, "app/views.py", "show")].id.clone(),
+        )
+    };
+    let ids = |results: Vec<ccm_core::engine::ContextSuggestion>| -> Vec<String> {
+        results
+            .into_iter()
+            .filter_map(|result| result.node_id)
+            .collect()
+    };
+    let util = ids(engine.impact_of_change("./app/util.py", 50).await);
+    assert!(
+        util.contains(&"./app/core.py".to_string()),
+        "module importer: {util:?}"
+    );
+    assert!(util.contains(&start_id), "caller of helper: {util:?}");
+    let models = ids(engine.impact_of_change("./app/models.py", 50).await);
+    assert!(
+        models.contains(&"./app/views.py".to_string()),
+        "module importer: {models:?}"
+    );
+    assert!(
+        models.contains(&show_id),
+        "function using User without calling it: {models:?}"
+    );
+    Ok(())
+}
+
+#[tokio::test]
+async fn incremental_refresh_follows_reexport_chains() -> Result<()> {
+    assert_incremental_matches_fresh(
+        &[
+            ("app/__init__.py", "from .core import run as start_app\n"),
+            ("app/core.py", "from .impl import execute as run\n"),
+            ("app/impl.py", "def other():\n    return 0\n"),
+            (
+                "app/cli.py",
+                "from . import start_app\n\n\ndef main():\n    return start_app()\n",
+            ),
+        ],
+        &[(
+            "app/impl.py",
+            "def other():\n    return 0\n\n\ndef execute():\n    return 1\n",
+        )],
+    )
+    .await
+}
+
+#[tokio::test]
+async fn incremental_refresh_follows_base_class_changes() -> Result<()> {
+    assert_incremental_matches_fresh(
+        &[
+            ("app/mixin.py", "class Mixin:\n    def x(self):\n        return 1\n"),
+            ("app/base.py", "class Base:\n    pass\n"),
+            (
+                "app/sub.py",
+                "from app.base import Base\n\n\nclass Sub(Base):\n    def f(self):\n        return self.x()\n",
+            ),
+        ],
+        &[(
+            "app/base.py",
+            "from app.mixin import Mixin\n\n\nclass Base(Mixin):\n    pass\n",
+        )],
+    )
+    .await
+}
+
+#[tokio::test]
+async fn star_reexports_in_a_package_resolve() -> Result<()> {
+    let (_dir, engine) = index_fixture(&[
+        ("pkg/__init__.py", "from .aggregates import *\nfrom .forms import *\n"),
+        ("pkg/aggregates.py", "class Sum:\n    pass\n"),
+        ("pkg/forms.py", "class Form:\n    pass\n"),
+        (
+            "app/use.py",
+            "import pkg\nfrom pkg import Sum\n\n\ndef total():\n    return Sum()\n\n\nclass F(pkg.Form):\n    pass\n",
+        ),
+    ])
+    .await?;
+    let graph = engine.graph.read().await;
+    let sum = node(&graph, "pkg/aggregates.py", "Sum");
+    assert_eq!(
+        edge_types(&graph, node(&graph, "app/use.py", "total"), sum),
+        vec![EdgeType::Calls]
+    );
+    assert_eq!(
+        edge_types(&graph, file_node(&graph, "app/use.py"), sum),
+        vec![EdgeType::Imports]
+    );
+    assert_eq!(
+        edge_types(
+            &graph,
+            node(&graph, "app/use.py", "F"),
+            node(&graph, "pkg/forms.py", "Form")
+        ),
+        vec![EdgeType::Inherits]
+    );
+    Ok(())
+}
+
+#[tokio::test]
+async fn standard_library_imports_do_not_resolve_into_project_subpackages() -> Result<()> {
+    let (_dir, engine) = index_fixture(&[
+        ("src/flask/__init__.py", "VERSION = 1\n"),
+        (
+            "src/flask/json/__init__.py",
+            "def dumps(obj):\n    return str(obj)\n",
+        ),
+        (
+            "src/flask/json/provider.py",
+            "import json\n\n\ndef dumps(obj):\n    return json.dumps(obj)\n",
+        ),
+    ])
+    .await?;
+    let graph = engine.graph.read().await;
+    let provider_dumps = node(&graph, "src/flask/json/provider.py", "dumps");
+    let package_dumps = node(&graph, "src/flask/json/__init__.py", "dumps");
+    assert!(
+        edge_types(&graph, provider_dumps, package_dumps).is_empty(),
+        "`import json` is the standard library"
+    );
+    Ok(())
+}
+
+#[tokio::test]
+async fn recursion_does_not_link_to_a_same_named_function_elsewhere() -> Result<()> {
+    let (_dir, engine) = index_fixture(&[
+        ("app/a.py", "def walk(n):\n    return walk(n - 1)\n"),
+        ("app/b.py", "def walk():\n    return 0\n"),
+    ])
+    .await?;
+    let graph = engine.graph.read().await;
+    let walk = node(&graph, "app/a.py", "walk");
+    let outgoing = graph
+        .graph
+        .edges_directed(walk, Direction::Outgoing)
+        .filter(|edge| !matches!(edge.weight(), EdgeType::Contains))
+        .count();
+    assert_eq!(outgoing, 0, "a recursive call is not a call to b.walk");
+    Ok(())
+}
+
+#[tokio::test]
+async fn usages_label_non_call_uses_and_ambiguous_imports() -> Result<()> {
+    let (_dir, engine) = index_fixture(FIXTURE).await?;
+    let graph = engine.graph.read().await;
+    let user = node(&graph, "app/models.py", "User");
+    let relations: Vec<(String, UsageRelation)> = usages_of(&graph, &graph.graph[user].id)?
+        .usages
+        .iter()
+        .map(|usage| (usage.node.name.clone(), usage.relation))
+        .collect();
+    assert!(
+        relations.contains(&("show".to_string(), UsageRelation::References)),
+        "isinstance(x, User) and User.objects: {relations:?}"
+    );
+    drop(graph);
+
+    let (_dir, engine) = index_fixture(&[
+        ("a/utils.py", "def helper():\n    return 1\n"),
+        ("b/utils.py", "def helper():\n    return 2\n"),
+        ("app/x.py", "from utils import helper\n"),
+    ])
+    .await?;
+    let graph = engine.graph.read().await;
+    let helper = node(&graph, "a/utils.py", "helper");
+    let relations: Vec<UsageRelation> = usages_of(&graph, &graph.graph[helper].id)?
+        .usages
+        .iter()
+        .map(|usage| usage.relation)
+        .collect();
+    assert_eq!(relations, vec![UsageRelation::MayImport]);
     Ok(())
 }

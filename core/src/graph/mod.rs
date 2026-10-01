@@ -44,11 +44,13 @@ pub struct CodeNode {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
 pub enum EdgeType {
     Calls,
-    /// Aynı isimde birden çok hedef olduğunda üretilen belirsiz çağrı kenarı.
-    /// Name-match tabanlıdır; scope-resolved doğrulama yapılmamıştır (Phase 1).
+    /// Olası çağrı: sözcüksel yolda aynı dosyada aynı adlı birden çok hedef,
+    /// Python'da alıcı türü bilinmeyen çağrının en çok beş adayı ya da birden çok
+    /// kesin hedef.
     CallAmbiguous,
     /// İmport ya da yerel tanımla çözülemeyen, projede tek tanımı olan ada bağlanan
-    /// çağrı (ör. yıldız import). Kesin değildir.
+    /// çıplak Python çağrısı (ör. proje dışı yıldız import ya da `__all__` ile
+    /// dışa aktarılan ad). Kesin değildir.
     CallInferred,
     Defines,
     Imports,
@@ -58,6 +60,9 @@ pub enum EdgeType {
     Inherits,
     Reads,
     Writes,
+    /// Python'da çağrılmadan kullanım: argüman, öznitelik zincirinin başı,
+    /// atamanın sağ tarafı ya da tip ipucu (`isinstance(x, User)`, `User.objects`).
+    References,
 }
 
 #[derive(Clone)]
@@ -146,16 +151,20 @@ impl CodeGraph {
     /// affect and returns how many sources and edges were recomputed.
     ///
     /// Affected sources are the sources inside `changed_files` plus every other
-    /// source whose content mentions one of `affected_names` (the referenceable
-    /// names the changed files defined before or define after the update). Any
-    /// other source only mentions names whose target sets did not change, so its
-    /// edges stay exactly what a full [`CodeGraph::rebuild_reference_edges`] would
+    /// source that mentions one of `affected_names` (the referenceable names the
+    /// changed files defined before or define after the update), widened for
+    /// Python by the names a source can reach without mentioning them: members
+    /// inherited through the changed classes' bases and the aliases of package
+    /// re-export chains (both up to the resolver's depth limits). Any other
+    /// source only mentions names whose target sets did not change, so its edges
+    /// stay exactly what a full [`CodeGraph::rebuild_reference_edges`] would
     /// produce.
     pub fn refresh_reference_edges(
         &mut self,
         changed_files: &HashSet<String>,
         affected_names: &HashSet<String>,
     ) -> ReferenceRefresh {
+        let affected_names = resolve::expand_affected_names(self, changed_files, affected_names);
         let sources: Vec<NodeIndex> = self
             .graph
             .node_indices()
@@ -163,7 +172,7 @@ impl CodeGraph {
                 let node = &self.graph[*idx];
                 is_reference_source(node)
                     && (changed_files.contains(graph_node_file_path(&node.id))
-                        || source_mentions_any(node, affected_names))
+                        || source_mentions_any(node, &affected_names))
             })
             .collect();
         let references = self.resolve_references(&sources);
@@ -204,6 +213,9 @@ impl CodeGraph {
                 );
             }
         }
+        // Taban listesi değişen sınıfın alt sınıflarındaki `self.ad()` çağrıları
+        // kalıtılan üye adlarıyla yeniden çözülür (değişiklik öncesi durum).
+        names.extend(resolve::inherited_member_names_in_file(self, file_id));
         names
     }
 
@@ -806,6 +818,7 @@ fn is_reference_edge(edge: &EdgeType) -> bool {
             | EdgeType::Imports
             | EdgeType::ImportAmbiguous
             | EdgeType::Inherits
+            | EdgeType::References
     )
 }
 
@@ -833,11 +846,9 @@ fn is_reference_target_type(node_type: &NodeType) -> bool {
     )
 }
 
-/// İçerik, adlardan birine birebir eşit bir tanımlayıcı içeriyor mu? Karar
-/// referans çözümüyle aynı tokenizer'a aittir.
 /// Kaynak adlardan birini anıyor mu? Sözcüksel düğümde içerik, sözdizimi
-/// olgularında çağrı/bağ/taban adları taranır (Python `File` düğümünün içeriği
-/// boştur; modül düzeyi çağrı ve importları yalnız olgularındadır).
+/// olgularında çağrı/bağ/taban/ad listeleri taranır (Python `File` düğümünün
+/// içeriği boştur; modül düzeyi çağrı ve importları yalnız olgularındadır).
 fn source_mentions_any(node: &CodeNode, names: &HashSet<String>) -> bool {
     match &node.facts {
         ReferenceFacts::Lexical => mentions_any_name(&node.content, names),
@@ -845,6 +856,8 @@ fn source_mentions_any(node: &CodeNode, names: &HashSet<String>) -> bool {
     }
 }
 
+/// İçerik, adlardan birine birebir eşit bir tanımlayıcı içeriyor mu? Karar
+/// referans çözümüyle aynı tokenizer'a aittir.
 fn mentions_any_name(content: &str, names: &HashSet<String>) -> bool {
     !names.is_empty()
         && identifier_spans(content).any(|(start, end)| names.contains(&content[start..end]))
@@ -1428,6 +1441,7 @@ mod tests {
                 symbol: Some("helper".to_string()),
             }],
             bases: Vec::new(),
+            names: vec!["User".to_string()],
         };
         let mut graph = CodeGraph::new();
         graph.add_node(CodeNode {

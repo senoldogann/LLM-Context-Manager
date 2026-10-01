@@ -51,9 +51,11 @@ edit:
 - **Never half-built:** each index is built as a new generation and activated
   atomically; a failed or interrupted run leaves the previous graph serving.
 
-**Limits, stated up front.** In Python files, calls are read from the syntax
-tree and resolved through the file's imports (`import`, `from … import`,
-relative imports, package re-exports), `self`/`cls`/`super()` and class names;
+**Limits, stated up front.** In Python files, calls and other uses of a name
+(arguments, attribute access such as `User.objects`, type hints) are read from
+the syntax tree and resolved through the file's imports (`import`,
+`from … import`, relative imports, package re-exports including
+`from .x import *`), `self`/`cls`/`super()` and class names;
 a call on a receiver whose type is unknown is reported as a *possible* call to
 at most five same-named definitions, and imports that leave the project produce
 no edge. In the other 12 languages call edges are still resolved by name: a
