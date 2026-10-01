@@ -139,7 +139,6 @@ fn file_node(graph: &CodeGraph, file: &str) -> NodeIndex {
 }
 
 /// İki düğüm arasındaki `Contains` dışı kenar türleri.
-#[allow(dead_code)]
 fn edge_types(graph: &CodeGraph, from: NodeIndex, to: NodeIndex) -> Vec<EdgeType> {
     let mut types: Vec<EdgeType> = graph
         .graph
@@ -226,5 +225,159 @@ async fn python_facts_come_from_the_syntax_tree() -> Result<()> {
     // Sözdizimi çıkarıcısı olmayan diller sözcüksel kalır.
     let foo = node(&graph, "lib.rs", "foo");
     assert_eq!(graph.graph[foo].facts, ReferenceFacts::Lexical);
+    Ok(())
+}
+
+#[tokio::test]
+async fn python_calls_resolve_through_scopes_and_imports() -> Result<()> {
+    let (_dir, engine) = index_fixture(FIXTURE).await?;
+    let graph = engine.graph.read().await;
+    let calls = vec![EdgeType::Calls];
+    let ambiguous = vec![EdgeType::CallAmbiguous];
+    let none: Vec<EdgeType> = Vec::new();
+
+    let start = member(&graph, "app/core.py", "Engine", "start");
+    let stop = member(&graph, "app/core.py", "Engine", "stop");
+    let util_helper = node(&graph, "app/util.py", "helper");
+    let other_helper = node(&graph, "app/other.py", "helper");
+    let other_start = node(&graph, "app/other.py", "start");
+    let engine_class = node(&graph, "app/core.py", "Engine");
+    let run = node(&graph, "app/core.py", "run");
+    let main = node(&graph, "app/cli.py", "main");
+    let persist = node(&graph, "app/cli.py", "persist");
+    let base = node(&graph, "app/models.py", "Base");
+    let user = node(&graph, "app/models.py", "User");
+    let base_save = member(&graph, "app/models.py", "Base", "save");
+    let user_save = member(&graph, "app/models.py", "User", "save");
+    let shim_flask = node(&graph, "app/shim.py", "Flask");
+
+    assert_eq!(edge_types(&graph, start, stop), calls, "self.stop()");
+    assert_eq!(
+        edge_types(&graph, start, util_helper),
+        calls,
+        "imported helper"
+    );
+    assert_eq!(
+        edge_types(&graph, start, other_helper),
+        none,
+        "same name, other module"
+    );
+    assert_eq!(
+        edge_types(&graph, run, engine_class),
+        calls,
+        "Engine() constructor"
+    );
+    assert_eq!(
+        edge_types(&graph, run, start),
+        ambiguous,
+        "engine.start(): receiver unknown"
+    );
+    assert_eq!(
+        edge_types(&graph, run, other_start),
+        ambiguous,
+        "engine.start(): receiver unknown"
+    );
+    assert_eq!(
+        edge_types(&graph, run, util_helper),
+        none,
+        "comment and string are not calls"
+    );
+    assert_eq!(
+        edge_types(&graph, main, other_helper),
+        calls,
+        "module alias other.helper()"
+    );
+    assert_eq!(edge_types(&graph, main, util_helper), none);
+    assert_eq!(
+        edge_types(&graph, main, shim_flask),
+        none,
+        "flask is outside the project"
+    );
+    assert_eq!(
+        edge_types(&graph, main, run),
+        calls,
+        "re-exported start_app"
+    );
+    assert_eq!(edge_types(&graph, persist, base_save), ambiguous);
+    assert_eq!(edge_types(&graph, persist, user_save), ambiguous);
+    assert_eq!(edge_types(&graph, user, base), vec![EdgeType::Inherits]);
+    assert_eq!(
+        edge_types(&graph, user_save, base_save),
+        calls,
+        "super().save()"
+    );
+    assert_eq!(
+        edge_types(&graph, file_node(&graph, "app/core.py"), util_helper),
+        vec![EdgeType::Imports]
+    );
+    assert_eq!(
+        edge_types(&graph, file_node(&graph, "app/__init__.py"), run),
+        vec![EdgeType::Imports]
+    );
+    assert_eq!(
+        edge_types(&graph, file_node(&graph, "app/cli.py"), run),
+        vec![EdgeType::Imports]
+    );
+    // Python dışı diller değişmez.
+    assert_eq!(
+        edge_types(
+            &graph,
+            node(&graph, "lib.rs", "foo"),
+            node(&graph, "lib.rs", "bar")
+        ),
+        calls
+    );
+    Ok(())
+}
+
+#[tokio::test]
+async fn root_relative_module_wins_over_a_suffix_match() -> Result<()> {
+    let (_dir, engine) = index_fixture(&[
+        ("app/util.py", "def helper():\n    return 1\n"),
+        ("tests/app/util.py", "def helper():\n    return 2\n"),
+        (
+            "app/core.py",
+            "from app.util import helper\n\n\ndef run():\n    return helper()\n",
+        ),
+        ("src/pkg/mod.py", "def work():\n    return 1\n"),
+        (
+            "src/pkg/use.py",
+            "from pkg.mod import work\n\n\ndef go():\n    return work()\n",
+        ),
+    ])
+    .await?;
+    let graph = engine.graph.read().await;
+    let run = node(&graph, "app/core.py", "run");
+    assert_eq!(
+        edge_types(&graph, run, node(&graph, "app/util.py", "helper")),
+        vec![EdgeType::Calls]
+    );
+    assert!(edge_types(&graph, run, node(&graph, "tests/app/util.py", "helper")).is_empty());
+    let go = node(&graph, "src/pkg/use.py", "go");
+    assert_eq!(
+        edge_types(&graph, go, node(&graph, "src/pkg/mod.py", "work")),
+        vec![EdgeType::Calls]
+    );
+    Ok(())
+}
+
+#[tokio::test]
+async fn a_method_name_shared_by_many_classes_produces_no_edge() -> Result<()> {
+    let mut source = String::new();
+    for index in 0..6 {
+        source.push_str(&format!(
+            "class C{index}:\n    def get(self):\n        return {index}\n\n\n"
+        ));
+    }
+    source.push_str("def use(x):\n    return x.get()\n");
+    let (_dir, engine) = index_fixture(&[("app/many.py", source.as_str())]).await?;
+    let graph = engine.graph.read().await;
+    let use_idx = node(&graph, "app/many.py", "use");
+    let outgoing = graph
+        .graph
+        .edges_directed(use_idx, Direction::Outgoing)
+        .filter(|edge| !matches!(edge.weight(), EdgeType::Contains))
+        .count();
+    assert_eq!(outgoing, 0, "x.get() with 6 candidates must not link");
     Ok(())
 }

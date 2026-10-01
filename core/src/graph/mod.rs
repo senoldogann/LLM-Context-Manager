@@ -5,6 +5,7 @@ use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
 pub mod references;
+mod resolve;
 
 pub use references::{
     python_module_path, python_package, CallSite, CallTarget, ImportBinding, ReferenceFacts,
@@ -159,7 +160,7 @@ impl CodeGraph {
                 let node = &self.graph[*idx];
                 is_reference_source(node)
                     && (changed_files.contains(graph_node_file_path(&node.id))
-                        || mentions_any_name(&node.content, affected_names))
+                        || source_mentions_any(node, affected_names))
             })
             .collect();
         let references = self.resolve_references(&sources);
@@ -196,9 +197,22 @@ impl CodeGraph {
     /// tekrarsızdır.
     fn resolve_references(&self, sources: &[NodeIndex]) -> Vec<(NodeIndex, NodeIndex, EdgeType)> {
         let mut symbols = SymbolTable::new(self);
+        let modules = resolve::PythonModules::new(self);
         let mut references = Vec::new();
         for source_idx in sources {
-            self.resolve_source_references(*source_idx, &mut symbols, &mut references);
+            match &self.graph[*source_idx].facts {
+                ReferenceFacts::Lexical => {
+                    self.resolve_source_references(*source_idx, &mut symbols, &mut references)
+                }
+                ReferenceFacts::Syntax(facts) => match facts.language {
+                    SyntaxLanguage::Python => references.extend(resolve::python_references(
+                        self,
+                        &modules,
+                        *source_idx,
+                        facts,
+                    )),
+                },
+            }
         }
         references
     }
@@ -774,15 +788,20 @@ fn is_reference_edge(edge: &EdgeType) -> bool {
             | EdgeType::CallInferred
             | EdgeType::Imports
             | EdgeType::ImportAmbiguous
+            | EdgeType::Inherits
     )
 }
 
-/// İçeriği referans üreten düğümler.
+/// Referans üreten düğümler: sözcüksel düğümlerde türe göre, sözdizimi
+/// olgularında referansı olan her düğüm (fonksiyon, sınıf, dosya).
 fn is_reference_source(node: &CodeNode) -> bool {
-    matches!(
-        node.node_type,
-        NodeType::Function | NodeType::Method | NodeType::Variable | NodeType::Import
-    )
+    match &node.facts {
+        ReferenceFacts::Lexical => matches!(
+            node.node_type,
+            NodeType::Function | NodeType::Method | NodeType::Variable | NodeType::Import
+        ),
+        ReferenceFacts::Syntax(facts) => facts.has_references(),
+    }
 }
 
 /// Referans hedefi olabilen düğüm türleri.
@@ -799,6 +818,16 @@ fn is_reference_target_type(node_type: &NodeType) -> bool {
 
 /// İçerik, adlardan birine birebir eşit bir tanımlayıcı içeriyor mu? Karar
 /// referans çözümüyle aynı tokenizer'a aittir.
+/// Kaynak adlardan birini anıyor mu? Sözcüksel düğümde içerik, sözdizimi
+/// olgularında çağrı/bağ/taban adları taranır (Python `File` düğümünün içeriği
+/// boştur; modül düzeyi çağrı ve importları yalnız olgularındadır).
+fn source_mentions_any(node: &CodeNode, names: &HashSet<String>) -> bool {
+    match &node.facts {
+        ReferenceFacts::Lexical => mentions_any_name(&node.content, names),
+        ReferenceFacts::Syntax(facts) => facts.mentions_any(names),
+    }
+}
+
 fn mentions_any_name(content: &str, names: &HashSet<String>) -> bool {
     !names.is_empty()
         && identifier_spans(content).any(|(start, end)| names.contains(&content[start..end]))
