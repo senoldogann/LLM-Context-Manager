@@ -185,10 +185,8 @@ EMBEDDING_HOST=http://127.0.0.1:11434
 EMBEDDING_MODEL=mxbai-embed-large
 # No API key is required for local Ollama.
 
-# Option C: Cloud (OpenAI)
-EMBEDDING_PROVIDER=openai
-EMBEDDING_API_KEY=sk-your-key
-EMBEDDING_MODEL=text-embedding-3-small
+# Option C: OpenAI. This one line selects it; code chunks are sent to OpenAI.
+OPENAI_API_KEY=sk-your-key
 
 # Networking & Limits
 EMBEDDING_TIMEOUT_SECS=30
@@ -226,10 +224,11 @@ Advanced overrides:
 
 ### Embeddings
 
-**Default: built-in local model.** With no `EMBEDDING_*` settings, CCM embeds
-code in-process with [`ibm-granite/granite-embedding-97m-multilingual-r2`](https://huggingface.co/ibm-granite/granite-embedding-97m-multilingual-r2)
+**Default: built-in local model.** With no `EMBEDDING_*` settings and no
+`OPENAI_API_KEY` in `~/.ccm/.env`, CCM embeds code in-process with
+[`ibm-granite/granite-embedding-97m-multilingual-r2`](https://huggingface.co/ibm-granite/granite-embedding-97m-multilingual-r2)
 (Apache-2.0; IBM's int8 ONNX export, 384-d vectors, CLS pooling, inputs truncated
-to 512 tokens) through ONNX Runtime, using all physical CPU cores.
+to 512 tokens) through ONNX Runtime, on the physical CPU cores.
 
 - **Download:** the first index (or `ccm-cli models pull`) downloads ~124 MB
   (98 MB model + 25 MB tokenizer + configs) from Hugging Face at a pinned revision
@@ -240,19 +239,31 @@ to 512 tokens) through ONNX Runtime, using all physical CPU cores.
 - **Offline / air-gapped:** run `ccm-cli models pull` on a connected machine and
   copy `~/.ccm/models` over; pre-placed files are used after checksum verification.
   `CCM_MODEL_DIR` moves the models root, `HF_ENDPOINT` selects a mirror.
-- **Tuning:** `CCM_EMBED_THREADS` (default: physical cores). The model embeds one
+- **Tuning:** `CCM_EMBED_THREADS` (default: physical cores, capped by the
+  available CPU quota, e.g. a container's cgroup limit). The model embeds one
   chunk per inference call: its int8 activations are quantized per call, so
   batching would make a chunk's vector depend on the chunks embedded with it.
   `CCM_LOCAL_EMBED_BATCH` sets the local inference batch (default 1);
   `CCM_EMBED_BATCH_SIZE` sets the texts per Ollama/OpenAI request (default 32).
 - **Intel Macs (`x86_64-apple-darwin`):** ONNX Runtime ships no prebuilt binary
-  for this target, so the local model is not compiled in and Ollama stays the
-  default there (`ccm-cli doctor` says so).
+  for this target, so the local model is not compiled in. Until `OPENAI_API_KEY`
+  is in `~/.ccm/.env` or `EMBEDDING_PROVIDER` is set, CCM builds a graph-only
+  index; `ccm-cli doctor` and the index output say why.
+
+**Optional upgrade: OpenAI.** Add `OPENAI_API_KEY=sk-...` to `~/.ccm/.env` and
+CCM embeds with `text-embedding-3-small` on the official `https://api.openai.com/v1`
+endpoint, which needs no `CCM_ALLOW_REMOTE_EMBEDDING` opt-in. Code chunks are
+then sent to OpenAI. Only the key in `~/.ccm/.env` counts: a key that is merely
+exported in your shell never switches the provider, so code does not leave the
+machine without an explicit choice. [`benchmarks/`](./benchmarks/README.md)
+compares it with the built-in model.
 
 **Provider selection:** `EMBEDDING_PROVIDER=local|ollama|openai` wins when set.
-When it is unset, setting `EMBEDDING_HOST` or `EMBEDDING_MODEL` keeps the previous
-Ollama/OpenAI behavior, so existing configurations work unchanged; otherwise the
-local model is used. `CCM_DISABLE_EMBEDDER=1` turns semantic search off.
+Otherwise an `OPENAI_API_KEY` in `~/.ccm/.env` selects OpenAI unless
+`EMBEDDING_HOST` is set (`EMBEDDING_MODEL` then only picks the OpenAI model).
+Without that key, setting `EMBEDDING_HOST` or `EMBEDDING_MODEL` keeps the previous
+Ollama/OpenAI behavior, so existing configurations work unchanged, and with
+neither the local model is used. `CCM_DISABLE_EMBEDDER=1` turns semantic search off.
 
 **Changing models:** the index manifest records which provider, model, revision
 and dimension produced its vectors, and vectors of two models are never mixed.
@@ -263,7 +274,8 @@ keeps the graph fresh meanwhile and `search_code` uses graph results until it
 finishes).
 `ccm-cli index` / `index_project` re-embed on demand the same way.
 
-If the embedding source is unavailable (Ollama down, model download failed),
+If the embedding source is unavailable (Ollama or OpenAI unreachable, model
+download failed),
 indexing still activates a graph-only index (graph tools work, `search_code`
 falls back to lexical matching) and reports why; the next index run fills in the
 vectors. `ccm-cli doctor` reports the embedder state: for the local model it

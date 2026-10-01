@@ -180,10 +180,8 @@ EMBEDDING_PROVIDER=ollama
 EMBEDDING_HOST=http://127.0.0.1:11434
 EMBEDDING_MODEL=mxbai-embed-large
 
-# Secenek C: Bulut (OpenAI)
-EMBEDDING_PROVIDER=openai
-EMBEDDING_API_KEY=sk-your-key
-EMBEDDING_MODEL=text-embedding-3-small
+# Seçenek C: OpenAI. Bu tek satır onu seçer; kod parçaları OpenAI'a gönderilir.
+OPENAI_API_KEY=sk-your-key
 
 # Ag ve limitler
 EMBEDDING_TIMEOUT_SECS=30
@@ -219,10 +217,11 @@ Gelismis ayarlar:
 
 ### Embedding
 
-**Varsayılan: yerleşik yerel model.** `EMBEDDING_*` ayarı yoksa CCM kodu süreç
-içinde [`ibm-granite/granite-embedding-97m-multilingual-r2`](https://huggingface.co/ibm-granite/granite-embedding-97m-multilingual-r2)
+**Varsayılan: yerleşik yerel model.** `EMBEDDING_*` ayarı yoksa ve `~/.ccm/.env`
+içinde `OPENAI_API_KEY` bulunmuyorsa CCM kodu süreç içinde
+[`ibm-granite/granite-embedding-97m-multilingual-r2`](https://huggingface.co/ibm-granite/granite-embedding-97m-multilingual-r2)
 ile (Apache-2.0; IBM'in int8 ONNX dosyası, 384 boyut, CLS pooling, girdiler 512
-token'da kesilir) ONNX Runtime üzerinden, tüm fiziksel çekirdeklerle embed eder.
+token'da kesilir) ONNX Runtime üzerinden, fiziksel çekirdeklerle embed eder.
 
 - **İndirme:** ilk indeksleme (ya da `ccm-cli models pull`) Hugging Face'ten
   sabitlenmiş bir revizyondan ~124 MB (98 MB model + 25 MB tokenizer + ayarlar)
@@ -233,20 +232,34 @@ token'da kesilir) ONNX Runtime üzerinden, tüm fiziksel çekirdeklerle embed ed
 - **Ağsız kurulum:** bağlı bir makinede `ccm-cli models pull` çalıştırıp
   `~/.ccm/models` dizinini kopyalayın; önceden yerleştirilen dosyalar doğrulandıktan
   sonra kullanılır. `CCM_MODEL_DIR` model kökünü, `HF_ENDPOINT` aynayı değiştirir.
-- **Ayar:** `CCM_EMBED_THREADS` (varsayılan: fiziksel çekirdek sayısı). Model
+- **Ayar:** `CCM_EMBED_THREADS` (varsayılan: fiziksel çekirdek sayısı; container'daki
+  cgroup sınırı gibi kullanılabilir CPU kotasıyla sınırlanır). Model
   çıkarım başına tek parça embed eder: int8 aktivasyonları çağrı başına quantize
   edildiğinden batch'leme bir parçanın vektörünü aynı çağrıdaki parçalara bağlı
   kılardı. `CCM_LOCAL_EMBED_BATCH` yerel çıkarım batch'ini ayarlar (varsayılan 1);
   `CCM_EMBED_BATCH_SIZE` Ollama/OpenAI isteği başına metin sayısını belirler
   (varsayılan 32).
 - **Intel Mac (`x86_64-apple-darwin`):** ONNX Runtime bu hedef için hazır ikili
-  yayımlamadığından yerel model derlenmez; orada varsayılan Ollama'dır
-  (`ccm-cli doctor` bunu bildirir).
+  yayımlamadığından yerel model derlenmez. `~/.ccm/.env` içine `OPENAI_API_KEY`
+  eklenene ya da `EMBEDDING_PROVIDER` verilene kadar CCM graf-yalnız indeks kurar;
+  `ccm-cli doctor` ve indeksleme çıktısı nedenini söyler.
+
+**İsteğe bağlı yükseltme: OpenAI.** `~/.ccm/.env` içine `OPENAI_API_KEY=sk-...`
+eklerseniz CCM, resmi `https://api.openai.com/v1` endpoint'inde
+`text-embedding-3-small` ile embed eder; bu endpoint için
+`CCM_ALLOW_REMOTE_EMBEDDING` onayı gerekmez. Bu durumda kod parçaları OpenAI'a
+gönderilir. Yalnızca `~/.ccm/.env` içindeki anahtar sayılır: kabukta export
+edilmiş bir anahtar sağlayıcıyı asla değiştirmez, böylece kod açık bir tercih
+olmadan makineden çıkmaz. [`benchmarks/`](./benchmarks/README.md) yerleşik modelle
+karşılaştırmayı içerir.
 
 **Sağlayıcı seçimi:** `EMBEDDING_PROVIDER=local|ollama|openai` verilmişse o
-kullanılır. Verilmemişse `EMBEDDING_HOST` ya da `EMBEDDING_MODEL` ayarlıyken önceki
-Ollama/OpenAI davranışı korunur (mevcut yapılandırmalar değişmeden çalışır); aksi
-halde yerel model seçilir. `CCM_DISABLE_EMBEDDER=1` semantik aramayı kapatır.
+kullanılır. Verilmemişse `~/.ccm/.env` içindeki `OPENAI_API_KEY`, `EMBEDDING_HOST`
+ayarlı değilse OpenAI'ı seçer (`EMBEDDING_MODEL` bu durumda yalnızca OpenAI
+modelini belirler). Bu anahtar yokken `EMBEDDING_HOST` ya da `EMBEDDING_MODEL`
+ayarlıysa önceki Ollama/OpenAI davranışı korunur (mevcut yapılandırmalar
+değişmeden çalışır); hiçbiri yoksa yerel model kullanılır.
+`CCM_DISABLE_EMBEDDER=1` semantik aramayı kapatır.
 
 **Model değişikliği:** indeks manifesti vektörleri üreten sağlayıcı, model,
 revizyon ve boyutu kaydeder; iki modelin vektörleri asla karışmaz. Değişiklikten
@@ -257,7 +270,8 @@ sırada grafı güncel tutar ve `search_code` o bitene kadar graf sonuçlarını
 kullanır). `ccm-cli index` /
 `index_project` aynı işi istendiğinde yapar.
 
-Embedding kaynağına ulaşılamazsa (Ollama kapalı, model indirilemedi) indeksleme
+Embedding kaynağına ulaşılamazsa (Ollama ya da OpenAI erişilemez, model
+indirilemedi) indeksleme
 yine de graf-yalnız bir indeks aktive eder (graf araçları çalışır, `search_code`
 sözcüksel eşleşmeye düşer) ve nedenini raporlar; sonraki indeksleme vektörleri
 tamamlar. `ccm-cli doctor` embedder durumunu raporlar: yerel modelde dosyaları

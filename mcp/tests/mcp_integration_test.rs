@@ -653,11 +653,14 @@ fn mcp_non_strict_empty_allowlist_stays_within_default_root(
 #[test]
 fn mcp_implicit_default_path_obeys_strict_allowlist() -> Result<(), Box<dyn std::error::Error>> {
     let project = tempdir()?;
+    let home = tempdir()?;
     fs::write(project.path().join("main.rs"), "fn hidden() {}\n")?;
 
     let mut cmd = Command::new(assert_cmd::cargo::cargo_bin!("ccm-mcp"));
     cmd.env("CCM_DISABLE_EMBEDDER", "1")
         .env("CCM_MCP_DEBUG", "0")
+        .env("HOME", home.path())
+        .env("USERPROFILE", home.path())
         .env_remove("CCM_ALLOWED_ROOTS")
         .env_remove("CCM_PROJECT_ROOT")
         .env_remove("CCM_REQUIRE_ALLOWED_ROOTS")
@@ -1422,6 +1425,7 @@ fn mcp_client_roots_select_and_allow_the_workspace() -> Result<(), Box<dyn std::
     // MCP roots ile bildirdiği çalışma alanı varsayılan kök olarak kullanılır.
     let pinned = tempdir()?;
     let workspace = tempdir()?;
+    let home = tempdir()?;
     fs::write(workspace.path().join("main.rs"), "fn workspace_only() {}\n")?;
 
     let mut cmd = Command::new(assert_cmd::cargo::cargo_bin!("ccm-mcp"));
@@ -1429,6 +1433,8 @@ fn mcp_client_roots_select_and_allow_the_workspace() -> Result<(), Box<dyn std::
         .env("CCM_MCP_DEBUG", "0")
         .env("CCM_REQUIRE_ALLOWED_ROOTS", "1")
         .env("CCM_ALLOWED_ROOTS", pinned.path())
+        .env("HOME", home.path())
+        .env("USERPROFILE", home.path())
         .env_remove("CCM_PROJECT_ROOT")
         .current_dir("/")
         .stdin(Stdio::piped())
@@ -1650,6 +1656,8 @@ fn local_model_serves_semantic_search_over_mcp() -> Result<(), Box<dyn std::erro
         .env_remove("EMBEDDING_PROVIDER")
         .env_remove("EMBEDDING_HOST")
         .env_remove("EMBEDDING_MODEL")
+        .env_remove("OPENAI_API_KEY")
+        .env_remove("EMBEDDING_API_KEY")
         .env("CCM_MCP_DEBUG", "0")
         .env("CCM_PROJECT_ROOT", &project_root)
         .env("CCM_ALLOWED_ROOTS", &project_root)

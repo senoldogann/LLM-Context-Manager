@@ -1,6 +1,6 @@
 use crate::vector::embedder::{
-    embedder_disabled_by_env, fixture_path_from_env, Embedder, EmbeddingIdentity,
-    EmbeddingIdentityMismatch,
+    embedder_disabled_by_env, embedder_unconfigured, fixture_path_from_env, Embedder,
+    EmbeddingIdentity, EmbeddingIdentityMismatch,
 };
 use anyhow::{Context, Result};
 use arrow_array::{FixedSizeListArray, Float32Array, RecordBatch, StringArray};
@@ -201,7 +201,9 @@ impl LanceDbStore {
         // Kapatma ve fixture bayrakları `~/.ccm/.env`'de de olabilir; okunmadan
         // önce yüklenir (bkz. `EmbeddingSource::from_env`).
         crate::vector::remote::load_user_env_file()?;
-        let embedder_disabled = embedder_disabled_by_env();
+        // Yapılandırılmamış sağlayıcı da kapatma bayrağı gibi embedding'i atlar:
+        // kalıcı bir eksiklik her güncellemede tam yeniden indekslemeye düşmemeli.
+        let embedder_disabled = embedder_disabled_by_env() || embedder_unconfigured();
 
         let fixture = match fixture_path_from_env() {
             Some(fixture_path) => {
@@ -247,7 +249,7 @@ impl LanceDbStore {
     async fn embedder(&self) -> Result<Arc<Embedder>> {
         if self.embedder_disabled {
             anyhow::bail!(
-                "Embedder not initialized (disabled via environment). Semantic search is disabled."
+                "Embedder not initialized: semantic search is disabled (CCM_DISABLE_EMBEDDER) or no embedding provider is configured."
             );
         }
         self.embedder

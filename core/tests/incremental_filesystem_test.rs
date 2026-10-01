@@ -744,6 +744,7 @@ async fn unreachable_embedder_still_activates_a_graph_only_index() -> Result<()>
     struct EnvRestore;
     impl Drop for EnvRestore {
         fn drop(&mut self) {
+            std::env::remove_var("EMBEDDING_PROVIDER");
             std::env::remove_var("EMBEDDING_HOST");
             std::env::remove_var("EMBEDDING_TIMEOUT_SECS");
             std::env::set_var("CCM_DISABLE_EMBEDDER", "1");
@@ -751,6 +752,7 @@ async fn unreachable_embedder_still_activates_a_graph_only_index() -> Result<()>
     }
     let _restore = EnvRestore;
     std::env::remove_var("CCM_DISABLE_EMBEDDER");
+    std::env::set_var("EMBEDDING_PROVIDER", "ollama");
     std::env::set_var("EMBEDDING_HOST", "http://127.0.0.1:9");
     std::env::set_var("EMBEDDING_TIMEOUT_SECS", "2");
     let project = tempdir()?;
@@ -920,6 +922,7 @@ async fn update_index_embeds_only_changed_chunks() -> Result<()> {
     let _restore = EnvRestore;
     let (host, embedded_inputs) = start_counting_embed_server()?;
     std::env::remove_var("CCM_DISABLE_EMBEDDER");
+    std::env::set_var("EMBEDDING_PROVIDER", "ollama");
     std::env::set_var("EMBEDDING_HOST", &host);
     std::env::set_var("EMBEDDING_MODEL", "ccm-test-embed");
 
@@ -1017,6 +1020,7 @@ async fn live_refresh_reuses_vectors_in_the_active_table() -> Result<()> {
     let _restore = EnvRestore;
     let (host, embedded_inputs) = start_counting_embed_server()?;
     std::env::remove_var("CCM_DISABLE_EMBEDDER");
+    std::env::set_var("EMBEDDING_PROVIDER", "ollama");
     std::env::set_var("EMBEDDING_HOST", &host);
     std::env::set_var("EMBEDDING_MODEL", "ccm-test-embed");
 
@@ -1075,6 +1079,7 @@ struct EmbeddingEnvRestore;
 
 impl Drop for EmbeddingEnvRestore {
     fn drop(&mut self) {
+        std::env::remove_var("EMBEDDING_PROVIDER");
         std::env::remove_var("EMBEDDING_HOST");
         std::env::remove_var("EMBEDDING_MODEL");
         std::env::set_var("CCM_DISABLE_EMBEDDER", "1");
@@ -1112,6 +1117,7 @@ async fn embedding_model_change_reembeds_everything_once_then_reuses_chunks() ->
     let (host, embedded_inputs) = start_counting_embed_server()?;
     let embedded = || embedded_inputs.load(std::sync::atomic::Ordering::SeqCst);
     std::env::remove_var("CCM_DISABLE_EMBEDDER");
+    std::env::set_var("EMBEDDING_PROVIDER", "ollama");
     std::env::set_var("EMBEDDING_HOST", &host);
     std::env::set_var("EMBEDDING_MODEL", "ccm-test-embed");
 
@@ -1165,6 +1171,7 @@ async fn embedding_model_change_with_pending_edits_rebuilds_without_reuse() -> R
     let (host, embedded_inputs) = start_counting_embed_server()?;
     let embedded = || embedded_inputs.load(std::sync::atomic::Ordering::SeqCst);
     std::env::remove_var("CCM_DISABLE_EMBEDDER");
+    std::env::set_var("EMBEDDING_PROVIDER", "ollama");
     std::env::set_var("EMBEDDING_HOST", &host);
     std::env::set_var("EMBEDDING_MODEL", "ccm-test-embed");
 
@@ -1199,6 +1206,7 @@ async fn index_without_recorded_identity_keeps_its_remote_vectors() -> Result<()
     let (host, embedded_inputs) = start_counting_embed_server()?;
     let embedded = || embedded_inputs.load(std::sync::atomic::Ordering::SeqCst);
     std::env::remove_var("CCM_DISABLE_EMBEDDER");
+    std::env::set_var("EMBEDDING_PROVIDER", "ollama");
     std::env::set_var("EMBEDDING_HOST", &host);
     std::env::set_var("EMBEDDING_MODEL", "ccm-test-embed");
 
@@ -1237,6 +1245,7 @@ async fn live_refresh_records_the_identity_of_a_legacy_index() -> Result<()> {
     let _restore = EmbeddingEnvRestore;
     let (host, _embedded_inputs) = start_counting_embed_server()?;
     std::env::remove_var("CCM_DISABLE_EMBEDDER");
+    std::env::set_var("EMBEDDING_PROVIDER", "ollama");
     std::env::set_var("EMBEDDING_HOST", &host);
     std::env::set_var("EMBEDDING_MODEL", "ccm-test-embed");
 
@@ -1273,6 +1282,7 @@ async fn live_refresh_never_mixes_vectors_from_another_model() -> Result<()> {
     let (host, embedded_inputs) = start_counting_embed_server()?;
     let embedded = || embedded_inputs.load(std::sync::atomic::Ordering::SeqCst);
     std::env::remove_var("CCM_DISABLE_EMBEDDER");
+    std::env::set_var("EMBEDDING_PROVIDER", "ollama");
     std::env::set_var("EMBEDDING_HOST", &host);
     std::env::set_var("EMBEDDING_MODEL", "ccm-test-embed");
 

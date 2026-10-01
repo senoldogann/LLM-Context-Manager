@@ -65,6 +65,16 @@ models volume; the Ollama settings are commented out in `docker-compose.yml`).
 On Linux, replace `host.docker.internal` with your host IP if the Docker bridge
 cannot resolve it.
 
+To embed with OpenAI in the container, select it explicitly: there the key is a
+plain environment variable, which never switches the provider on its own.
+`-e OPENAI_API_KEY` passes the key through from your shell:
+
+```bash
+docker run --rm -v "$PWD":/workspace -w /workspace \
+  -e EMBEDDING_PROVIDER=openai -e OPENAI_API_KEY \
+  ccm:local index --path /workspace
+```
+
 ### Step 2: Configure
 
 Create `~/.ccm/.env` with the basics below, or start from the repository's `.env.example` for the full advanced list.
@@ -77,8 +87,16 @@ prepare an offline machine), run:
 npx @senoldogann/context-manager models pull
 ```
 
-To use [Ollama](https://ollama.com) instead (and on Intel Macs, where the
-built-in model is not available and Ollama is the default):
+To use OpenAI embeddings instead, add your key to `~/.ccm/.env`. Only this file
+counts: a key exported in your shell does not switch providers. CCM then uses
+the official endpoint and `text-embedding-3-small`, and code chunks are sent to OpenAI:
+
+```ini
+# ~/.ccm/.env
+OPENAI_API_KEY=sk-your-key
+```
+
+To use [Ollama](https://ollama.com) instead:
 
 ```bash
 ollama serve
@@ -86,6 +104,9 @@ ollama pull mxbai-embed-large
 # ~/.ccm/.env
 EMBEDDING_PROVIDER=ollama
 ```
+
+On Intel Macs the built-in model is not available: until one of the providers
+above is configured, CCM builds a graph-only index and `doctor` explains why.
 
 Optional production settings (recommended for server use):
 

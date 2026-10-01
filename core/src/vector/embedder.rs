@@ -4,16 +4,21 @@
 //! Sağlayıcı seçimi:
 //! - `EMBEDDING_PROVIDER=local|ollama|openai` (ve OpenAI-uyumlu adlar) açıkça
 //!   verilmişse o kullanılır.
-//! - Verilmemişse `EMBEDDING_HOST` ya da `EMBEDDING_MODEL` ayarlı olduğunda
-//!   önceki Ollama/OpenAI çözümü korunur; hiçbiri yoksa yerleşik yerel model
-//!   seçilir. Yerel sağlayıcının derlenmediği hedefte (x86_64-apple-darwin)
-//!   varsayılan Ollama'dır.
+//! - Verilmemişse ve `EMBEDDING_HOST` yoksa `~/.ccm/.env`'deki
+//!   `OPENAI_API_KEY` OpenAI'ı seçer (`EMBEDDING_MODEL` yalnızca modeli
+//!   belirler); yalnızca kabukta export edilmiş bir anahtar seçmez.
+//! - Bu anahtar yokken `EMBEDDING_HOST` ya da `EMBEDDING_MODEL` ayarlıysa
+//!   önceki Ollama/OpenAI çözümü korunur. Aksi halde desteklenen hedeflerde
+//!   yerleşik yerel model kullanılır. Yerel sağlayıcının derlenmediği hedefte
+//!   (x86_64-apple-darwin) sağlayıcı yapılandırılmamış sayılır: embedding
+//!   atlanır, graf-yalnız indeks kurulur ve nedeni kullanıcıya bildirilir.
 //! - `CCM_EMBEDDING_FIXTURE` ve `CCM_DISABLE_EMBEDDER` seçimden önce gelir.
 
 use crate::vector::local_model::{LocalModelSpec, DEFAULT_LOCAL_MODEL};
 use crate::vector::remote::{
-    load_user_env_file, provider_label, resolve_provider, Provider, RemoteEmbedder,
-    DEFAULT_OLLAMA_HOST, DEFAULT_REMOTE_MODEL,
+    load_user_env_file, provider_label, resolve_provider, user_env_file_defines_openai_key,
+    Provider, RemoteEmbedder, DEFAULT_OLLAMA_HOST, DEFAULT_OPENAI_HOST, DEFAULT_OPENAI_MODEL,
+    DEFAULT_REMOTE_MODEL,
 };
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
@@ -77,36 +82,74 @@ pub struct ProviderSettings {
     pub host: Option<String>,
     /// `EMBEDDING_MODEL`
     pub model: Option<String>,
+    /// `~/.ccm/.env` boş olmayan bir `OPENAI_API_KEY` tanımlıyor mu? Kabukta
+    /// export edilmiş anahtar sayılmaz; anahtarın kendisi bu yapıda tutulmaz.
+    pub openai_key_in_user_env_file: bool,
 }
 
 impl ProviderSettings {
-    /// Değerleri süreç ortamından okur (`~/.ccm/.env` önceden yüklenmiş olmalı).
-    pub fn from_env() -> Self {
+    /// Değerleri süreç ortamından okur (`~/.ccm/.env` önceden yüklenmiş olmalı);
+    /// OpenAI anahtarının varlığını yalnızca `~/.ccm/.env` dosyasından okur.
+    pub fn from_env() -> Result<Self> {
         let read = |name: &str| {
             std::env::var(name)
                 .ok()
                 .map(|value| value.trim().to_string())
                 .filter(|value| !value.is_empty())
         };
-        Self {
+        Ok(Self {
             provider: read("EMBEDDING_PROVIDER"),
             host: read("EMBEDDING_HOST"),
             model: read("EMBEDDING_MODEL"),
-        }
+            openai_key_in_user_env_file: user_env_file_defines_openai_key()?,
+        })
     }
 
-    /// Uzak sağlayıcının adresi.
-    pub fn host_or_default(&self) -> String {
+    /// Sağlayıcı çözümlemesi için eski varsayılan adres. Açık host yokken
+    /// provider adı yine seçimi belirler.
+    fn resolution_host(&self) -> String {
         self.host
             .clone()
             .unwrap_or_else(|| DEFAULT_OLLAMA_HOST.to_string())
     }
 
-    /// Uzak sağlayıcının modeli.
-    pub fn model_or_default(&self) -> String {
-        self.model
-            .clone()
-            .unwrap_or_else(|| DEFAULT_REMOTE_MODEL.to_string())
+    /// Resmi OpenAI varsayılanlarını yalnızca gerçek OpenAI seçimi için kullanır.
+    /// OpenAI-uyumlu özel sağlayıcıların eski host/model varsayılanlarını değiştirmez.
+    fn uses_official_openai_defaults(&self, provider: &Provider) -> bool {
+        if *provider != Provider::OpenAI {
+            return false;
+        }
+        if let Some(host) = self.host.as_deref() {
+            let normalized = host.trim_end_matches('/');
+            return normalized == DEFAULT_OPENAI_HOST
+                || normalized.strip_prefix(DEFAULT_OPENAI_HOST) == Some("/embeddings");
+        }
+        self.provider
+            .as_deref()
+            .map(|name| name.eq_ignore_ascii_case("openai"))
+            .unwrap_or(true)
+    }
+
+    /// Seçilmiş uzak sağlayıcının varsayılan adresi.
+    pub fn host_or_default_for(&self, provider: &Provider) -> String {
+        self.host.clone().unwrap_or_else(|| {
+            if self.uses_official_openai_defaults(provider) {
+                DEFAULT_OPENAI_HOST.to_string()
+            } else {
+                DEFAULT_OLLAMA_HOST.to_string()
+            }
+        })
+    }
+
+    /// Seçilmiş uzak sağlayıcının varsayılan modeli.
+    pub fn model_or_default_for(&self, provider: &Provider) -> String {
+        self.model.clone().unwrap_or_else(|| {
+            if self.uses_official_openai_defaults(provider) {
+                DEFAULT_OPENAI_MODEL.to_string()
+            } else {
+                DEFAULT_REMOTE_MODEL.to_string()
+            }
+        })
     }
 }
 
@@ -117,7 +160,14 @@ pub enum ProviderChoice {
     Local,
     /// Ollama ya da OpenAI-uyumlu HTTP servisi.
     Remote(Provider),
+    /// Yerel modelin derlenmediği hedefte hiçbir sağlayıcı yapılandırılmamış:
+    /// semantik arama kapalıdır (bkz. `EMBEDDER_UNCONFIGURED_REASON`).
+    Unconfigured,
 }
+
+/// `ProviderChoice::Unconfigured` durumunda kullanıcıya gösterilen neden ve
+/// semantik aramanın nasıl açılacağı.
+pub const EMBEDDER_UNCONFIGURED_REASON: &str = "no embedding provider is configured and the built-in local model is not available on x86_64-apple-darwin (no prebuilt ONNX Runtime); add OPENAI_API_KEY to ~/.ccm/.env or set EMBEDDING_PROVIDER=openai|ollama";
 
 /// Yerel sağlayıcı bu derleme hedefinde yok, ama açıkça istendi.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -138,7 +188,7 @@ pub fn choose_provider(
     settings: &ProviderSettings,
     local_available: bool,
 ) -> Result<ProviderChoice> {
-    let host = settings.host_or_default();
+    let host = settings.resolution_host();
     match settings.provider.as_deref().map(str::to_ascii_lowercase) {
         Some(name) if name == "local" => {
             if !local_available {
@@ -158,32 +208,48 @@ pub fn choose_provider(
             Ok(ProviderChoice::Local)
         }
         Some(name) => Ok(ProviderChoice::Remote(resolve_provider(&name, &host))),
+        // Dosyadaki anahtar, açık host yokken yalnızca model verilmiş olsa da
+        // OpenAI'ı seçer: `EMBEDDING_MODEL=text-embedding-3-large` OpenAI'ın
+        // modelini değiştirir, eski kurala göre Ollama'ya düşmez.
+        None if settings.host.is_none() && settings.openai_key_in_user_env_file => {
+            Ok(ProviderChoice::Remote(Provider::OpenAI))
+        }
         None if settings.host.is_some() || settings.model.is_some() => {
             Ok(ProviderChoice::Remote(resolve_provider("", &host)))
         }
         None if local_available => Ok(ProviderChoice::Local),
-        None => Ok(ProviderChoice::Remote(Provider::Ollama)),
+        None => Ok(ProviderChoice::Unconfigured),
     }
 }
 
 /// Ortamdaki yapılandırmadan sağlayıcıyı seçer; önce `~/.ccm/.env` yüklenir.
 pub fn configured_provider() -> Result<(ProviderChoice, ProviderSettings)> {
     load_user_env_file()?;
-    let settings = ProviderSettings::from_env();
+    let settings = ProviderSettings::from_env()?;
     let choice = choose_provider(&settings, LOCAL_EMBEDDER_AVAILABLE)?;
-    let defaulted_to_ollama = !LOCAL_EMBEDDER_AVAILABLE
-        && settings == ProviderSettings::default()
-        && choice == ProviderChoice::Remote(Provider::Ollama);
-    if defaulted_to_ollama {
+    Ok((choice, settings))
+}
+
+/// Sağlayıcı yapılandırılmamış mı (bkz. `ProviderChoice::Unconfigured`)? Bu
+/// durumda embedding atlanır ve graf-yalnız indeks kurulur. Fixture ve
+/// kapatma bayrağı seçimden önce gelir. Yapılandırma hatası kararı
+/// değiştirmez: aynı hata embedder kurulurken açıkça yüzeye çıkar ve graf
+/// araçlarını kullanılamaz kılmaz.
+pub fn embedder_unconfigured() -> bool {
+    // Önce `configured_provider` çalışır: bayraklar `~/.ccm/.env`'de de olabilir.
+    let unconfigured = matches!(configured_provider(), Ok((ProviderChoice::Unconfigured, _)))
+        && fixture_path_from_env().is_none()
+        && !embedder_disabled_by_env();
+    if unconfigured {
         static NOTICE: std::sync::Once = std::sync::Once::new();
         NOTICE.call_once(|| {
-            tracing::info!(
-                target_triple = "x86_64-apple-darwin",
-                "The built-in local embedder is not available on this platform (no prebuilt ONNX Runtime); defaulting to Ollama"
+            tracing::warn!(
+                reason = EMBEDDER_UNCONFIGURED_REASON,
+                "Semantic search is off; graph tools keep working"
             );
         });
     }
-    Ok((choice, settings))
+    unconfigured
 }
 
 /// İndeksteki vektörleri üreten embedding kaynağının kimliği; indeks
@@ -225,7 +291,8 @@ impl std::fmt::Display for EmbeddingIdentity {
 /// yapılmadan çözülür.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum EmbeddingSource {
-    /// Embedding kapalı: vektör üretilmez, kimlik denetlenmez.
+    /// Embedding kapalı (`CCM_DISABLE_EMBEDDER` ya da yapılandırılmamış
+    /// sağlayıcı): vektör üretilmez, kimlik denetlenmez.
     Disabled,
     /// Deterministik NDJSON fixture'ı; kimlik meta satırından gelir.
     Fixture(EmbeddingIdentity),
@@ -251,9 +318,10 @@ impl EmbeddingSource {
         let (choice, settings) = configured_provider()?;
         Ok(match choice {
             ProviderChoice::Local => Self::Local,
+            ProviderChoice::Unconfigured => Self::Disabled,
             ProviderChoice::Remote(provider) => Self::Remote {
+                model: settings.model_or_default_for(&provider),
                 provider,
-                model: settings.model_or_default(),
             },
         })
     }
@@ -361,15 +429,16 @@ impl Embedder {
         let (choice, settings) = configured_provider()?;
         match choice {
             ProviderChoice::Remote(provider) => RemoteEmbedder::configured(
-                provider,
-                settings.host_or_default(),
-                settings.model_or_default(),
+                provider.clone(),
+                settings.host_or_default_for(&provider),
+                settings.model_or_default_for(&provider),
             )
             .map(Self::Remote)
             .context(
                 "Embedder not initialized. Configure EMBEDDING_PROVIDER/EMBEDDING_HOST/EMBEDDING_MODEL and EMBEDDING_API_KEY (or OPENAI_API_KEY), or disable semantic search with CCM_DISABLE_EMBEDDER=1.",
             ),
             ProviderChoice::Local => local_embedder().await,
+            ProviderChoice::Unconfigured => Err(anyhow::anyhow!(EMBEDDER_UNCONFIGURED_REASON)),
         }
     }
 
@@ -433,6 +502,7 @@ mod tests {
             provider: provider.map(str::to_string),
             host: host.map(str::to_string),
             model: model.map(str::to_string),
+            openai_key_in_user_env_file: false,
         }
     }
 
@@ -445,9 +515,54 @@ mod tests {
     }
 
     #[test]
-    fn unconfigured_environment_without_local_support_keeps_ollama() {
+    fn unconfigured_environment_without_local_support_is_unconfigured() {
         assert_eq!(
             choose_provider(&settings(None, None, None), false).unwrap(),
+            ProviderChoice::Unconfigured
+        );
+    }
+
+    #[test]
+    fn user_env_file_openai_key_prefers_openai_over_the_local_default() {
+        let mut configured = settings(None, None, None);
+        configured.openai_key_in_user_env_file = true;
+        assert_eq!(
+            choose_provider(&configured, true).unwrap(),
+            ProviderChoice::Remote(Provider::OpenAI)
+        );
+        assert_eq!(
+            choose_provider(&configured, false).unwrap(),
+            ProviderChoice::Remote(Provider::OpenAI)
+        );
+        assert_eq!(
+            configured.host_or_default_for(&Provider::OpenAI),
+            "https://api.openai.com/v1"
+        );
+        assert_eq!(
+            configured.model_or_default_for(&Provider::OpenAI),
+            "text-embedding-3-small"
+        );
+
+        // Yalnızca model verilmişse OpenAI'ın modeli değişir; açık host eski
+        // çözümü korur.
+        let mut model_only = settings(None, None, Some("text-embedding-3-large"));
+        model_only.openai_key_in_user_env_file = true;
+        assert_eq!(
+            choose_provider(&model_only, true).unwrap(),
+            ProviderChoice::Remote(Provider::OpenAI)
+        );
+        assert_eq!(
+            model_only.host_or_default_for(&Provider::OpenAI),
+            "https://api.openai.com/v1"
+        );
+        assert_eq!(
+            model_only.model_or_default_for(&Provider::OpenAI),
+            "text-embedding-3-large"
+        );
+        let mut with_host = settings(None, Some("http://127.0.0.1:11434"), None);
+        with_host.openai_key_in_user_env_file = true;
+        assert_eq!(
+            choose_provider(&with_host, true).unwrap(),
             ProviderChoice::Remote(Provider::Ollama)
         );
     }
@@ -469,6 +584,33 @@ mod tests {
             )
             .unwrap(),
             ProviderChoice::Remote(Provider::OpenAI)
+        );
+    }
+
+    #[test]
+    fn openai_compatible_custom_provider_keeps_legacy_defaults() {
+        let configured = settings(Some("voyage"), None, None);
+        assert_eq!(
+            choose_provider(&configured, true).unwrap(),
+            ProviderChoice::Remote(Provider::OpenAI)
+        );
+        assert_eq!(
+            configured.host_or_default_for(&Provider::OpenAI),
+            "http://127.0.0.1:11434"
+        );
+        assert_eq!(
+            configured.model_or_default_for(&Provider::OpenAI),
+            "mxbai-embed-large"
+        );
+
+        let custom_host = settings(None, Some("https://embeddings.example/v1/embeddings"), None);
+        assert_eq!(
+            choose_provider(&custom_host, true).unwrap(),
+            ProviderChoice::Remote(Provider::OpenAI)
+        );
+        assert_eq!(
+            custom_host.model_or_default_for(&Provider::OpenAI),
+            "mxbai-embed-large"
         );
     }
 

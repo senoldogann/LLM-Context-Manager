@@ -197,7 +197,7 @@ async fn main() -> anyhow::Result<()> {
                     if let Some(reason) = &stats.semantic_unavailable {
                         tracing::warn!(
                             reason = %reason,
-                            "Graph index is ready; semantic search stays off until the next index run with the embedding service reachable"
+                            "Graph index is ready; semantic search stays off until the reason is resolved and the project is indexed again"
                         );
                     }
                 }
@@ -548,16 +548,35 @@ async fn probe_embedder() -> anyhow::Result<String> {
 /// Embedding kontrolü. Yerel modelin dosyaları eksikse doktor indirme yapmaz;
 /// durumu ve yapılacak işi bildirir. Dosyalar tamsa model yüklenip denenir.
 async fn embedding_check() -> serde_json::Value {
-    use ccm_core::vector::embedder::{configured_provider, ProviderChoice};
+    use ccm_core::vector::embedder::{
+        configured_provider, ProviderChoice, EMBEDDER_UNCONFIGURED_REASON,
+    };
     let platform_note = (!ccm_core::vector::embedder::LOCAL_EMBEDDER_AVAILABLE).then_some(
-        "the built-in local embedder is not available on x86_64-apple-darwin (no prebuilt ONNX Runtime); Ollama is the default on this platform",
+        "the built-in local embedder is not available on x86_64-apple-darwin (no prebuilt ONNX Runtime); add OPENAI_API_KEY to ~/.ccm/.env or set EMBEDDING_PROVIDER to enable semantic search",
     );
     let choice = match configured_provider() {
         Ok((choice, _)) => choice,
-        Err(error) => return serde_json::json!({"ok": false, "error": format!("{error:#}")}),
+        Err(error) => {
+            return serde_json::json!({
+                "ok": false,
+                "error": format!("{error:#}"),
+                "note": platform_note,
+            })
+        }
     };
+    if choice == ProviderChoice::Unconfigured {
+        return serde_json::json!({
+            "ok": false,
+            "error": EMBEDDER_UNCONFIGURED_REASON,
+            "note": platform_note,
+        });
+    }
     if choice == ProviderChoice::Local {
-        return local_model_check().await;
+        let mut check = local_model_check().await;
+        if let Some(note) = platform_note {
+            check["note"] = note.into();
+        }
+        return check;
     }
     match probe_embedder().await {
         Ok(endpoint) => {
@@ -680,10 +699,13 @@ async fn run_doctor(path: &std::path::Path, json: bool) -> anyhow::Result<()> {
         .map(ccm_core::semantic_node_count)
         .unwrap_or(0);
     let embedder_disabled = ccm_core::vector::embedder::embedder_disabled_by_env();
+    // Yapılandırılmamış sağlayıcıda indeks graf-yalnızdır: vektör tablosu
+    // beklenmez, nedeni embedding kontrolünde raporlanır.
+    let semantic_off = embedder_disabled || ccm_core::vector::embedder::embedder_unconfigured();
     let vector_table_path = db_path.join("code_vectors.lance");
     let vector_result = if !db_path.is_dir() {
         Err("vector database directory is missing".to_string())
-    } else if embedder_disabled {
+    } else if semantic_off {
         Ok(None)
     } else if semantic_nodes == 0 {
         Ok(Some(0))
@@ -716,7 +738,7 @@ async fn run_doctor(path: &std::path::Path, json: bool) -> anyhow::Result<()> {
     let recorded_embedding = ccm_core::read_index_embedding(&manifest_path)
         .ok()
         .flatten();
-    let identity_error = if embedder_disabled || semantic_nodes == 0 {
+    let identity_error = if semantic_off || semantic_nodes == 0 {
         None
     } else {
         ccm_core::vector::embedder::EmbeddingSource::from_env()
@@ -762,7 +784,7 @@ async fn run_doctor(path: &std::path::Path, json: bool) -> anyhow::Result<()> {
             "path": db_path,
             "rows": vector_rows,
             "embedding": recorded_embedding,
-            "disabled": embedder_disabled,
+            "disabled": semantic_off,
             "error": vector_error
         },
         "embedding": embedding_check,

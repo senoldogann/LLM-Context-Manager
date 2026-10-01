@@ -15,6 +15,11 @@ services:
       # EMBEDDING_PROVIDER: ollama
       # EMBEDDING_HOST: http://host.docker.internal:11434
       # EMBEDDING_MODEL: mxbai-embed-large
+      # OpenAI'a geçmek için aşağıdakileri aç; anahtar host ortamından gelir.
+      # Container'a ortam değişkeni olarak gelen anahtar sağlayıcıyı tek başına
+      # değiştirmez, bu yüzden EMBEDDING_PROVIDER açıkça verilir:
+      # EMBEDDING_PROVIDER: openai
+      # OPENAI_API_KEY: "${OPENAI_API_KEY}"
     # Kullanım:
     #   docker compose run --rm ccm index --path /workspace
     #   docker compose run --rm ccm query --text "authentication flow"

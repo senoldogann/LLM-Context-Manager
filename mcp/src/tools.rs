@@ -956,7 +956,7 @@ fn format_index_stats_result(stats: ccm_core::IndexStats, mode: IndexModeArg) ->
     // yalnızca sözcüksel sonuç döndürmesinin nedeni görünmez kalır.
     let semantic_notice = stats.semantic_unavailable.as_ref().map(|reason| {
         format!(
-            "Semantic search is unavailable: {}. Graph tools (find_usages, impact_of_change, trace_call_chain, get_context, read_graph) work normally; call index_project again once the embedding service is reachable.",
+            "Semantic search is unavailable: {}. Graph tools (find_usages, impact_of_change, trace_call_chain, get_context, read_graph) work normally; call index_project again once that is resolved.",
             reason
         )
     });

@@ -166,6 +166,8 @@ fn user_env_file_configures_the_cli_at_startup() -> Result<(), Box<dyn std::erro
             .env_remove("EMBEDDING_PROVIDER")
             .env_remove("EMBEDDING_HOST")
             .env_remove("EMBEDDING_MODEL")
+            .env_remove("OPENAI_API_KEY")
+            .env_remove("EMBEDDING_API_KEY")
             .env_remove("CCM_MODEL_DIR")
             .env_remove("HF_ENDPOINT")
             .args(args)
@@ -216,6 +218,47 @@ fn user_env_file_configures_the_cli_at_startup() -> Result<(), Box<dyn std::erro
     Ok(())
 }
 
+/// Kabukta export edilmiş bir `OPENAI_API_KEY` kodu OpenAI'a göndermeyi tek
+/// başına seçmez; örtük seçim yalnızca `~/.ccm/.env`'deki anahtara dayanır.
+/// Doktor yerel modelin dosyalarını indirmeden denetler; ağ kullanılmaz.
+#[test]
+fn shell_openai_key_alone_does_not_select_openai() -> Result<(), Box<dyn std::error::Error>> {
+    let dir = tempdir()?;
+    let project_root = dir.path().join("project");
+    let home = dir.path().join("home");
+    fs::create_dir_all(&project_root)?;
+    fs::create_dir_all(&home)?;
+    let project = project_root.to_string_lossy().to_string();
+    let doctor = Command::new(assert_cmd::cargo::cargo_bin!("ccm-cli"))
+        .current_dir(&project_root)
+        .env("HOME", &home)
+        .env("USERPROFILE", &home)
+        .env("CCM_PROJECT_ROOT", &project_root)
+        .env("CCM_MODEL_DIR", dir.path().join("models"))
+        .env("OPENAI_API_KEY", "sk-shell-exported-test-key")
+        .env_remove("CCM_DISABLE_EMBEDDER")
+        .env_remove("EMBEDDING_DISABLED")
+        .env_remove("CCM_EMBEDDING_FIXTURE")
+        .env_remove("EMBEDDING_PROVIDER")
+        .env_remove("EMBEDDING_HOST")
+        .env_remove("EMBEDDING_MODEL")
+        .env_remove("EMBEDDING_API_KEY")
+        .args(["doctor", "--path", &project, "--json"])
+        .output()?;
+    let report: serde_json::Value = serde_json::from_slice(&doctor.stdout)?;
+    let embedding = &report["checks"]["embedding"];
+    if ccm_core::vector::embedder::LOCAL_EMBEDDER_AVAILABLE {
+        assert_eq!(embedding["provider"], "local", "{report}");
+    } else {
+        assert_eq!(
+            embedding["error"],
+            ccm_core::vector::embedder::EMBEDDER_UNCONFIGURED_REASON,
+            "{report}"
+        );
+    }
+    Ok(())
+}
+
 /// Gerçek yerel modelle uçtan uca: hiçbir embedding ayarı yokken `index`
 /// semantik indeks kurar, manifest yerel modeli kaydeder ve `query` sonucu
 /// semantik skor taşır. ~120 MB model indirir (önbellek: `~/.ccm/models`);
@@ -254,6 +297,8 @@ fn local_model_indexes_and_searches_without_embedding_configuration(
             .env_remove("EMBEDDING_PROVIDER")
             .env_remove("EMBEDDING_HOST")
             .env_remove("EMBEDDING_MODEL")
+            .env_remove("OPENAI_API_KEY")
+            .env_remove("EMBEDDING_API_KEY")
             .args(args)
             .output()
     };

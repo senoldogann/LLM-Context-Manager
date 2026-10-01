@@ -84,19 +84,22 @@ npx @senoldogann/context-manager install
 ```ini
 # Default: nothing to set. The built-in local embedding model
 # (granite-embedding-97m-multilingual-r2, ~124 MB, downloaded once and
-# checksum-verified) runs inside the binary. Not available on Intel Macs,
-# where Ollama is the default.
+# checksum-verified) runs inside the binary. Not available on Intel Macs:
+# there the index stays graph-only until a provider below is configured.
 
 # Option B: Ollama
 # EMBEDDING_PROVIDER=ollama
 # EMBEDDING_HOST=http://127.0.0.1:11434
 # EMBEDDING_MODEL=mxbai-embed-large
 
-# Option C: Cloud (OpenAI)
-# EMBEDDING_PROVIDER=openai
-# EMBEDDING_API_KEY=sk-your-key
-# EMBEDDING_MODEL=text-embedding-3-small
+# Option C: OpenAI. This one line selects it (only from ~/.ccm/.env, never
+# from the shell); code chunks are then sent to OpenAI.
+# OPENAI_API_KEY=sk-your-key
 ```
+
+The CLI and MCP server load `~/.ccm/.env` themselves: never copy API keys into
+MCP host configs, prompts or logs. To switch to OpenAI, ask the user to add the
+key to `~/.ccm/.env`, then run `ccm-cli doctor --json`.
 
 Pre-fetch the built-in model (optional): `ccm-cli models pull`. After the
 embedding provider or model changes, the MCP server re-embeds the index once in

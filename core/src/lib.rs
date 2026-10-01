@@ -376,6 +376,31 @@ pub async fn index_directory_with_mode(
     db_path: Option<&str>,
     mode: IndexMode,
 ) -> Result<IndexStats> {
+    index_directory_with_mode_inner(path, db_path, mode)
+        .await
+        .map(with_unconfigured_embedder_notice)
+}
+
+/// Sağlayıcı yapılandırılmamışsa (bkz. `ProviderChoice::Unconfigured`) graf-yalnız
+/// indeksin nedenini sonuca ekler; CLI ve MCP bu alanı kullanıcıya gösterir.
+fn with_unconfigured_embedder_notice(stats: IndexStats) -> IndexStats {
+    if stats.semantic_unavailable.is_some() || !crate::vector::embedder::embedder_unconfigured() {
+        return stats;
+    }
+    IndexStats {
+        semantic_unavailable: Some(
+            crate::vector::embedder::EMBEDDER_UNCONFIGURED_REASON.to_string(),
+        ),
+        ..stats
+    }
+}
+
+/// `index_directory_with_mode` gövdesi.
+async fn index_directory_with_mode_inner(
+    path: &str,
+    db_path: Option<&str>,
+    mode: IndexMode,
+) -> Result<IndexStats> {
     let project_root = std::fs::canonicalize(path).map_err(|error| {
         anyhow::anyhow!("Project root '{}' could not be resolved: {}", path, error)
     })?;
@@ -1133,6 +1158,13 @@ fn copy_directory(source: &Path, destination: &Path) -> Result<()> {
 /// Updates an existing index incrementally (using Git or filesystem snapshots).
 /// If the index or graph does not exist, it falls back to a full index.
 pub async fn update_index(path: &str, db_path: Option<&str>) -> Result<IndexStats> {
+    update_index_inner(path, db_path)
+        .await
+        .map(with_unconfigured_embedder_notice)
+}
+
+/// `update_index` gövdesi.
+async fn update_index_inner(path: &str, db_path: Option<&str>) -> Result<IndexStats> {
     use tracing::info;
 
     let project_root = std::fs::canonicalize(path).map_err(|error| {
@@ -1490,6 +1522,16 @@ fn restore_retry_files(
 /// eksik vektörleri doldurur. Yeni bir staged jenerasyon üretip atomik aktifleştirir,
 /// böylece devam eden sorgular tutarlı kalır.
 pub async fn upgrade_active_index_semantics(
+    path: &str,
+    db_path: Option<&str>,
+) -> Result<IndexStats> {
+    upgrade_active_index_semantics_inner(path, db_path)
+        .await
+        .map(with_unconfigured_embedder_notice)
+}
+
+/// `upgrade_active_index_semantics` gövdesi.
+async fn upgrade_active_index_semantics_inner(
     path: &str,
     db_path: Option<&str>,
 ) -> Result<IndexStats> {
