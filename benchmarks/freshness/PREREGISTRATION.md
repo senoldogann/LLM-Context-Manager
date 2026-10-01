@@ -185,4 +185,14 @@ disclosed because it was seen before pre-registration.
 
 ## Deviations
 
-None yet.
+1. **S5 block parsing (found after the first CCM run).** `get_context` returns,
+   after the `## Current:` block, an `## Active element: …` block for the leaf
+   node at the cursor. The harness accepted only one-word block kinds, missed
+   that heading, and attributed the leaf's `Range` (16-16) to the `Current`
+   block. Every S5 probe was therefore `ERROR_EMPTY` and no S5 baseline held.
+   Names were unaffected: `occupant_fn` at t = 0 and `shifted_fn` from
+   t = 0.25 s on, in 3 of 3 runs. The fix accepts multi-word kinds. `find_nodes`
+   and `find_usages` titles use one-word node types (`core/src/engine.rs`), so
+   S1–S4 and S6–S8 are unaffected. S5 was re-run alone (3 repetitions) with
+   the fixed harness. Both results files are published; the summary takes S5
+   from the re-run.

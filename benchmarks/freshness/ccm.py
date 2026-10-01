@@ -37,7 +37,8 @@ STALE_MARKERS: tuple[str, ...] = (
     "auto-refresh unavailable",
 )
 FUNCTION_TYPES: frozenset[str] = frozenset({"Function", "Method"})
-HEADING = re.compile(r"^## (?P<kind>[A-Za-z]+): (?P<name>.+?) \(Score: [^)]*\)\s*$")
+# Tür birden çok kelime olabilir (ör. get_context'in `## Active element: …` bloğu).
+HEADING = re.compile(r"^## (?P<kind>[A-Za-z][A-Za-z ]*): (?P<name>.+?) \(Score: [^)]*\)\s*$")
 FIELD = re.compile(r"^\*\*(?P<key>[A-Za-z ]+):\*\* (?P<value>.*)$")
 RANGE = re.compile(r"(?P<start>\d+)-(?P<end>\d+)")
 STATUS = re.compile(r"_Index: (?P<status>.*)_")
