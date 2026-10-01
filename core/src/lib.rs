@@ -30,7 +30,7 @@ use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::time::UNIX_EPOCH;
 
-pub const INDEX_SCHEMA_VERSION: u32 = 4;
+pub const INDEX_SCHEMA_VERSION: u32 = 5;
 const GENERATIONS_DIRECTORY: &str = ".ccm-generations";
 const CURRENT_GENERATION_FILE: &str = "ccm_current";
 /// Etkinleştirme kilidinin taşıyıcı dosyası (bkz. `ActivationLock`). Eski
@@ -1843,6 +1843,7 @@ fn populate_graph_for_file(
             content: content.as_str().into(),
             start_line: 1,
             end_line: content.lines().count().max(1),
+            facts: crate::graph::ReferenceFacts::Lexical,
         };
         graph.add_node(node);
         return Ok(());

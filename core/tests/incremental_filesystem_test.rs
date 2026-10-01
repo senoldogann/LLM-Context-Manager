@@ -994,6 +994,7 @@ async fn live_index_refuses_indexes_that_need_a_migration() -> Result<()> {
         content: "".into(),
         start_line: 1,
         end_line: 1,
+        facts: ccm_core::graph::ReferenceFacts::Lexical,
     });
     legacy.save_to_file(&active.graph_path.to_string_lossy())?;
     let error = LiveIndex::load(&project_path, None, None)

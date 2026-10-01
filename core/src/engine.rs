@@ -366,6 +366,7 @@ impl RetrievalEngine {
                     content: content.into(),
                     start_line: 1,
                     end_line,
+                    facts: crate::graph::ReferenceFacts::Lexical,
                 };
                 staged_graph.add_node(node);
             } else {
@@ -890,6 +891,9 @@ impl RetrievalEngine {
             let rel = match edge.weight() {
                 crate::graph::EdgeType::Calls => "Calls",
                 crate::graph::EdgeType::CallAmbiguous => "Calls (ambiguous name match)",
+                crate::graph::EdgeType::CallInferred => {
+                    "Calls (inferred: unique name, not imported)"
+                }
                 crate::graph::EdgeType::Imports => "Imports",
                 crate::graph::EdgeType::ImportAmbiguous => "Imports (ambiguous name match)",
                 crate::graph::EdgeType::Defines => "Defines",
@@ -973,6 +977,7 @@ impl RetrievalEngine {
                     edge.weight(),
                     crate::graph::EdgeType::Calls
                         | crate::graph::EdgeType::CallAmbiguous
+                        | crate::graph::EdgeType::CallInferred
                         | crate::graph::EdgeType::Defines
                 ) {
                     let neighbor = edge.target();
@@ -1250,7 +1255,7 @@ impl RetrievalEngine {
             for edge in graph.graph.edges_directed(idx, Direction::Outgoing) {
                 let target_node = &graph.graph[edge.target()];
                 match edge.weight() {
-                    EdgeType::Calls | EdgeType::CallAmbiguous => {
+                    EdgeType::Calls | EdgeType::CallAmbiguous | EdgeType::CallInferred => {
                         calls.push(target_node.name.clone())
                     }
                     EdgeType::Contains => contains.push(target_node.name.clone()),
@@ -1261,7 +1266,10 @@ impl RetrievalEngine {
             // Incoming edges
             for edge in graph.graph.edges_directed(idx, Direction::Incoming) {
                 let source_node = &graph.graph[edge.source()];
-                if matches!(edge.weight(), EdgeType::Calls | EdgeType::CallAmbiguous) {
+                if matches!(
+                    edge.weight(),
+                    EdgeType::Calls | EdgeType::CallAmbiguous | EdgeType::CallInferred
+                ) {
                     called_by.push(source_node.name.clone());
                 }
             }
@@ -1271,7 +1279,9 @@ impl RetrievalEngine {
             for (target_id, weight) in outgoing {
                 if let Some(node) = graph.find_node_by_id(&target_id) {
                     match weight {
-                        EdgeType::Calls | EdgeType::CallAmbiguous => calls.push(node.name.clone()),
+                        EdgeType::Calls | EdgeType::CallAmbiguous | EdgeType::CallInferred => {
+                            calls.push(node.name.clone())
+                        }
                         EdgeType::Contains => contains.push(node.name.clone()),
                         _ => {}
                     }
@@ -1828,6 +1838,7 @@ mod retrieval_regression_tests {
             content: content.into(),
             start_line: 1,
             end_line: 3,
+            facts: crate::graph::ReferenceFacts::Lexical,
         };
         let single = super::build_embedding_text(&impl_node("impl Default for Room {\n}\n"));
         assert!(
@@ -1949,6 +1960,7 @@ mod retrieval_regression_tests {
             content: "async scanQr() {}".into(),
             start_line: 1,
             end_line: 1,
+            facts: crate::graph::ReferenceFacts::Lexical,
         });
         graph.add_node(CodeNode {
             id: secret_id.to_string(),
@@ -1957,6 +1969,7 @@ mod retrieval_regression_tests {
             content: "func secret() {}".into(),
             start_line: 2,
             end_line: 2,
+            facts: crate::graph::ReferenceFacts::Lexical,
         });
         let scan_idx = graph.find_node_index_by_id(scan_id).unwrap();
         let secret_idx = graph.find_node_index_by_id(secret_id).unwrap();
@@ -1999,6 +2012,7 @@ mod retrieval_regression_tests {
             content: "fn alpha() {}".into(),
             start_line: 1,
             end_line: 1,
+            facts: crate::graph::ReferenceFacts::Lexical,
         });
         let store = LanceDbStore::new(
             directory.path().join("db").to_string_lossy().as_ref(),
@@ -2045,6 +2059,7 @@ mod retrieval_regression_tests {
                 content: format!("fn func_{}() {{ func_{}() }}", index, index + 1).into(),
                 start_line: index + 1,
                 end_line: index + 1,
+                facts: crate::graph::ReferenceFacts::Lexical,
             });
             ids.push(id);
         }
@@ -2060,6 +2075,7 @@ mod retrieval_regression_tests {
                 content: "fn wide() {}".into(),
                 start_line: 200 + index,
                 end_line: 200 + index,
+                facts: crate::graph::ReferenceFacts::Lexical,
             });
             wide_ids.push(id);
         }

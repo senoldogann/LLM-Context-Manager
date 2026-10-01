@@ -47,6 +47,7 @@ impl Extractor {
             content: "".into(),
             start_line: 1,
             end_line,
+            facts: crate::graph::ReferenceFacts::Lexical,
         };
         let file_idx = graph.add_node(file_node);
         self.node_map.insert(file_id.to_string(), file_idx);
@@ -111,6 +112,7 @@ impl Extractor {
                 content: final_content.into(),
                 start_line: node.start_position().row + 1, // 1-indexed
                 end_line: node.end_position().row + 1,
+                facts: crate::graph::ReferenceFacts::Lexical,
             };
 
             let current_idx = graph.add_node(code_node);

@@ -861,7 +861,7 @@ fn index_with_an_old_schema_is_migrated_before_live_refreshes() -> Result<(), Bo
         "the migration must be a full re-index into a new generation, not a live stamp"
     );
     let manifest: Value = serde_json::from_slice(&fs::read(migrated.join("ccm_manifest.json"))?)?;
-    assert_eq!(manifest["schema_version"], 4);
+    assert_eq!(manifest["schema_version"], ccm_core::INDEX_SCHEMA_VERSION);
     Ok(())
 }
 

@@ -1504,6 +1504,7 @@ mod tests {
             content: "fn a() {}".into(),
             start_line: 1,
             end_line: 1,
+            facts: crate::graph::ReferenceFacts::Lexical,
         };
         let node_b = CodeNode {
             id: "./src/b.rs:func:2:0".to_string(),
@@ -1512,6 +1513,7 @@ mod tests {
             content: "fn b() {}".into(),
             start_line: 2,
             end_line: 2,
+            facts: crate::graph::ReferenceFacts::Lexical,
         };
 
         let idx_a = graph.add_node(node_a);
@@ -1533,6 +1535,7 @@ mod tests {
             content: "".into(),
             start_line: 1,
             end_line: 10,
+            facts: crate::graph::ReferenceFacts::Lexical,
         };
         let func_node = CodeNode {
             id: "./src/main.rs:func:1:0".to_string(),
@@ -1541,6 +1544,7 @@ mod tests {
             content: "fn main() {}".into(),
             start_line: 1,
             end_line: 1,
+            facts: crate::graph::ReferenceFacts::Lexical,
         };
 
         let file_idx = graph.add_node(file_node);

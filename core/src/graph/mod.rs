@@ -4,6 +4,13 @@ use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
+pub mod references;
+
+pub use references::{
+    python_module_path, python_package, CallSite, CallTarget, ImportBinding, ReferenceFacts,
+    SyntaxFacts, SyntaxLanguage,
+};
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub enum NodeType {
     File,
@@ -25,6 +32,9 @@ pub struct CodeNode {
     pub content: Arc<str>,
     pub start_line: usize,
     pub end_line: usize,
+    /// Referans olguları; eski indekslerde alan yoktur ve sözcüksel sayılır.
+    #[serde(default)]
+    pub facts: ReferenceFacts,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
@@ -33,6 +43,9 @@ pub enum EdgeType {
     /// Aynı isimde birden çok hedef olduğunda üretilen belirsiz çağrı kenarı.
     /// Name-match tabanlıdır; scope-resolved doğrulama yapılmamıştır (Phase 1).
     CallAmbiguous,
+    /// İmport ya da yerel tanımla çözülemeyen, projede tek tanımı olan ada bağlanan
+    /// çağrı (ör. yıldız import). Kesin değildir.
+    CallInferred,
     Defines,
     Imports,
     /// Birden çok aynı isimli hedef olduğunda üretilen belirsiz import kenarı.
@@ -756,7 +769,11 @@ fn symbol_targets<'g>(graph: &'g CodeGraph, name: &str) -> SymbolTargets<'g> {
 fn is_reference_edge(edge: &EdgeType) -> bool {
     matches!(
         edge,
-        EdgeType::Calls | EdgeType::CallAmbiguous | EdgeType::Imports | EdgeType::ImportAmbiguous
+        EdgeType::Calls
+            | EdgeType::CallAmbiguous
+            | EdgeType::CallInferred
+            | EdgeType::Imports
+            | EdgeType::ImportAmbiguous
     )
 }
 
@@ -909,6 +926,7 @@ mod tests {
             content: "fn test() {}".into(),
             start_line: 1,
             end_line: 1,
+            facts: crate::graph::ReferenceFacts::Lexical,
         };
         let index = graph.add_node(node);
         assert_eq!(index.index(), 0);
@@ -924,6 +942,7 @@ mod tests {
             content: "fn process_data() {}".into(),
             start_line: 1,
             end_line: 5,
+            facts: crate::graph::ReferenceFacts::Lexical,
         };
         let node2 = CodeNode {
             id: "./src/lib.rs:function_definition:symbol:10:0".to_string(),
@@ -932,6 +951,7 @@ mod tests {
             content: "fn process_data() {}".into(),
             start_line: 10,
             end_line: 15,
+            facts: crate::graph::ReferenceFacts::Lexical,
         };
 
         graph.add_node(node1);
@@ -955,6 +975,7 @@ mod tests {
             content: "fn foo() {}".into(),
             start_line: 1,
             end_line: 1,
+            facts: crate::graph::ReferenceFacts::Lexical,
         });
         let func_a_idx = graph.add_node(CodeNode {
             id: "./a.rs:func:foo".to_string(),
@@ -963,6 +984,7 @@ mod tests {
             content: "fn foo() {}".into(),
             start_line: 1,
             end_line: 1,
+            facts: crate::graph::ReferenceFacts::Lexical,
         });
         graph.add_edge(file_a_idx, func_a_idx, EdgeType::Contains);
 
@@ -973,6 +995,7 @@ mod tests {
             content: "fn bar() {}".into(),
             start_line: 1,
             end_line: 1,
+            facts: crate::graph::ReferenceFacts::Lexical,
         });
         let func_b_idx = graph.add_node(CodeNode {
             id: "./b.rs:func:bar".to_string(),
@@ -981,6 +1004,7 @@ mod tests {
             content: "fn bar() {}".into(),
             start_line: 1,
             end_line: 1,
+            facts: crate::graph::ReferenceFacts::Lexical,
         });
         graph.add_edge(file_b_idx, func_b_idx, EdgeType::Contains);
 
@@ -1008,6 +1032,7 @@ mod tests {
             content: "".into(),
             start_line: 1,
             end_line: 10,
+            facts: crate::graph::ReferenceFacts::Lexical,
         });
         let outer_idx = graph.add_node(CodeNode {
             id: "./f.rs:function:symbol:0000000000000001:0".to_string(),
@@ -1016,6 +1041,7 @@ mod tests {
             content: "fn outer() { fn inner() {} inner(); }".into(),
             start_line: 1,
             end_line: 10,
+            facts: crate::graph::ReferenceFacts::Lexical,
         });
         let inner_idx = graph.add_node(CodeNode {
             id: "./f.rs:function:symbol:0000000000000002:0".to_string(),
@@ -1024,6 +1050,7 @@ mod tests {
             content: "fn inner() {}".into(),
             start_line: 3,
             end_line: 5,
+            facts: crate::graph::ReferenceFacts::Lexical,
         });
 
         graph.add_edge(file_idx, outer_idx, EdgeType::Contains);
@@ -1046,6 +1073,7 @@ mod tests {
             content: "".into(),
             start_line: 1,
             end_line: 10,
+            facts: crate::graph::ReferenceFacts::Lexical,
         });
         let outer_idx = graph.add_node(CodeNode {
             id: "./f.rs:function:symbol:0000000000000001:0".to_string(),
@@ -1054,6 +1082,7 @@ mod tests {
             content: "fn outer() { fn inner() {} inner(); }".into(),
             start_line: 1,
             end_line: 10,
+            facts: crate::graph::ReferenceFacts::Lexical,
         });
         let inner_idx = graph.add_node(CodeNode {
             id: "./f.rs:function:symbol:0000000000000002:0".to_string(),
@@ -1062,6 +1091,7 @@ mod tests {
             content: "fn inner() {}".into(),
             start_line: 3,
             end_line: 5,
+            facts: crate::graph::ReferenceFacts::Lexical,
         });
 
         graph.add_edge(file_idx, outer_idx, EdgeType::Contains);
@@ -1086,6 +1116,7 @@ mod tests {
             content: "fn deep_function() {}".into(),
             start_line: 201,
             end_line: 205,
+            facts: crate::graph::ReferenceFacts::Lexical,
         });
         let found =
             graph.find_node_fuzzy_by_id("./src/tall.rs:function_item:symbol:bbbb000000000001:0");
@@ -1108,6 +1139,7 @@ mod tests {
             content: "fn first() {}".into(),
             start_line: 1,
             end_line: 1,
+            facts: crate::graph::ReferenceFacts::Lexical,
         });
         graph.add_node(CodeNode {
             id: "./src/multi.rs:function_item:symbol:aaaa000000000002:0".to_string(),
@@ -1116,6 +1148,7 @@ mod tests {
             content: "fn second() {}".into(),
             start_line: 201,
             end_line: 201,
+            facts: crate::graph::ReferenceFacts::Lexical,
         });
 
         let found =
@@ -1133,6 +1166,7 @@ mod tests {
             content: "class YoloDetector: pass".into(),
             start_line: 1,
             end_line: 1,
+            facts: crate::graph::ReferenceFacts::Lexical,
         });
         let import_idx = graph.add_node(CodeNode {
             id: "./camera.py:import_from_statement:symbol:2:0".to_string(),
@@ -1141,6 +1175,7 @@ mod tests {
             content: "from detector import YoloDetector".into(),
             start_line: 1,
             end_line: 1,
+            facts: crate::graph::ReferenceFacts::Lexical,
         });
         let function_idx = graph.add_node(CodeNode {
             id: "./camera.py:function_definition:symbol:3:0".to_string(),
@@ -1149,6 +1184,7 @@ mod tests {
             content: "def open_camera(detector: YoloDetector):\n    return YoloDetector()".into(),
             start_line: 3,
             end_line: 4,
+            facts: crate::graph::ReferenceFacts::Lexical,
         });
 
         graph.rebuild_reference_edges();
@@ -1177,6 +1213,7 @@ mod tests {
                 content: format!("def load(): return '{file}'").into(),
                 start_line: 1,
                 end_line: 1,
+                facts: crate::graph::ReferenceFacts::Lexical,
             });
         }
         let source_idx = graph.add_node(CodeNode {
@@ -1186,6 +1223,7 @@ mod tests {
             content: "def run(): return load()".into(),
             start_line: 1,
             end_line: 1,
+            facts: crate::graph::ReferenceFacts::Lexical,
         });
 
         graph.rebuild_reference_edges();
@@ -1211,6 +1249,7 @@ mod tests {
             content: String::new().into(),
             start_line: 1,
             end_line: 10,
+            facts: crate::graph::ReferenceFacts::Lexical,
         });
         let caller_idx = graph.add_node(CodeNode {
             id: "./src/a.rs:function_item:1:0".into(),
@@ -1219,6 +1258,7 @@ mod tests {
             content: "fn run() { helper(); }".into(),
             start_line: 1,
             end_line: 3,
+            facts: crate::graph::ReferenceFacts::Lexical,
         });
         let helper_a = graph.add_node(CodeNode {
             id: "./src/a.rs:function_item:4:0".into(),
@@ -1227,6 +1267,7 @@ mod tests {
             content: "fn helper() {}".into(),
             start_line: 4,
             end_line: 5,
+            facts: crate::graph::ReferenceFacts::Lexical,
         });
         let helper_b = graph.add_node(CodeNode {
             id: "./src/a.rs:function_item:6:0".into(),
@@ -1235,6 +1276,7 @@ mod tests {
             content: "fn helper(x: u32) {}".into(),
             start_line: 6,
             end_line: 7,
+            facts: crate::graph::ReferenceFacts::Lexical,
         });
         graph.add_edge(file_idx, caller_idx, EdgeType::Contains);
         graph.add_edge(file_idx, helper_a, EdgeType::Contains);
@@ -1273,6 +1315,7 @@ mod tests {
             content: "fn test_func() { println!(\"hello\"); }".into(),
             start_line: 1,
             end_line: 5,
+            facts: crate::graph::ReferenceFacts::Lexical,
         };
 
         let json = serde_json::to_string(&original_node).expect("failed to serialize node");
@@ -1297,6 +1340,7 @@ mod tests {
             content: "".into(),
             start_line: 0,
             end_line: 0,
+            facts: crate::graph::ReferenceFacts::Lexical,
         };
         let empty_json =
             serde_json::to_string(&empty_node).expect("failed to serialize empty node");
@@ -1313,11 +1357,45 @@ mod tests {
             content: long_text.as_str().into(),
             start_line: 1,
             end_line: 1000,
+            facts: crate::graph::ReferenceFacts::Lexical,
         };
         let long_json = serde_json::to_string(&long_node).expect("failed to serialize large node");
         let deserialized_long: CodeNode =
             serde_json::from_str(&long_json).expect("failed to deserialize large node");
         assert_eq!(deserialized_long.content.len(), 15_000);
         assert_eq!(deserialized_long.content.as_ref(), long_text.as_str());
+    }
+
+    #[test]
+    fn syntax_facts_survive_a_save_and_load() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let path = dir.path().join("graph.json");
+        let facts = SyntaxFacts {
+            language: SyntaxLanguage::Python,
+            calls: vec![CallSite {
+                target: CallTarget::SelfMember("stop".to_string()),
+                line: 7,
+            }],
+            imports: vec![ImportBinding {
+                local: "helper".to_string(),
+                module: "app.util".to_string(),
+                symbol: Some("helper".to_string()),
+            }],
+            bases: Vec::new(),
+        };
+        let mut graph = CodeGraph::new();
+        graph.add_node(CodeNode {
+            id: "app/core.py:function_definition:symbol:0000000000000001:0".to_string(),
+            node_type: NodeType::Function,
+            name: "start".to_string(),
+            content: "def start(self):\n    self.stop()\n".into(),
+            start_line: 6,
+            end_line: 7,
+            facts: ReferenceFacts::Syntax(facts.clone()),
+        });
+        graph.save_to_file(&path.to_string_lossy()).expect("save");
+        let loaded = CodeGraph::load_from_file(&path.to_string_lossy()).expect("load");
+        let node = loaded.graph.node_weights().next().expect("node");
+        assert_eq!(node.facts, ReferenceFacts::Syntax(facts));
     }
 }

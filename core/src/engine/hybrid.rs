@@ -216,6 +216,7 @@ mod tests {
             content: "".into(),
             start_line: 1,
             end_line: 1,
+            facts: crate::graph::ReferenceFacts::Lexical,
         }
     }
 
