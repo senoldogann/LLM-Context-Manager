@@ -199,3 +199,8 @@ disclosed because it was seen before pre-registration.
    `STALE_SILENT` at t = 0; `CORRECT` from t = 0.25 s on; status line
    `fresh · auto-refresh on` in every probe, so the one stale answer carried no
    label. No errors, no partial states.
+2. **Competitor runs not performed (2026-10-01).** The project moved from the
+   comparison to product work before any competitor was measured. Draft
+   adapters, smoke runs and their notes are archived on branch
+   `bench/ccm-bench` (commits `b78f708`–`50d2f7e`) and are not part of this
+   harness. H1 is not measurable; the published CCM results above are unchanged.
