@@ -1,0 +1,6 @@
+{"schema_version": 1, "max_matches": 10, "repos": {
+  "flask": {"symbols": ["url_for", "Flask", "add_url_rule", "dispatch_request", "jsonify"],
+            "files": ["src/flask/wrappers.py", "src/flask/helpers.py"]},
+  "django": {"symbols": ["reverse", "get_object_or_404", "slugify", "Paginator", "render"],
+             "files": ["django/utils/text.py", "django/shortcuts.py"]}
+}}
