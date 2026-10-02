@@ -56,8 +56,7 @@ Metric = Callable[[Outcome], float | None]
 def strings(value: JsonValue, context: str) -> tuple[str, ...]:
     """JSON dizisini metin demetine daraltır."""
     return tuple(
-        as_str(entry, context, ReportError)
-        for entry in as_list(value, context, ReportError)
+        as_str(entry, context, ReportError) for entry in as_list(value, context, ReportError)
     )
 
 
@@ -171,8 +170,7 @@ def bootstrap_median(values: list[float]) -> tuple[float, float]:
     """Medyanın, görevler yeniden örneklenerek bulunan %95 aralığı (sabit tohum)."""
     generator = random.Random(BOOTSTRAP_SEED)
     medians = sorted(
-        statistics.median(generator.choices(values, k=len(values)))
-        for _ in range(BOOTSTRAP_ROUNDS)
+        statistics.median(generator.choices(values, k=len(values))) for _ in range(BOOTSTRAP_ROUNDS)
     )
     return (medians[int(0.025 * BOOTSTRAP_ROUNDS)], medians[int(0.975 * BOOTSTRAP_ROUNDS) - 1])
 
@@ -252,11 +250,7 @@ def arm_rows(outcomes: list[Outcome]) -> list[str]:
         failures = sum(outcome.failure is not None for outcome in runs)
         costs = known_numbers([outcome.cost_usd for outcome in runs])
         unknown_costs = len(runs) - len(costs)
-        total_cost = (
-            f"— ({unknown_costs} unknown)"
-            if not costs
-            else f"${sum(costs):.2f}"
-        )
+        total_cost = f"— ({unknown_costs} unknown)" if not costs else f"${sum(costs):.2f}"
         if unknown_costs and costs:
             total_cost += f" + {unknown_costs} unknown"
         rows.append(
@@ -341,8 +335,7 @@ def task_rows(outcomes: list[Outcome]) -> list[str]:
                 costs.append(f"${statistics.fmean(known_costs):.3f}")
             else:
                 costs.append(
-                    f"${statistics.fmean(known_costs):.3f} "
-                    f"({len(known_costs)}/{len(runs)} known)"
+                    f"${statistics.fmean(known_costs):.3f} ({len(known_costs)}/{len(runs)} known)"
                 )
         rows.append(f"| `{task}` | " + " | ".join(wins) + " | " + " | ".join(costs) + " |")
     return rows
@@ -381,14 +374,10 @@ def header(setup: JsonValue, outcomes: list[Outcome]) -> list[str]:
     commit = as_str(environment.get("ccm_commit"), "settings.json: ccm_commit", ReportError)
     dirty = as_bool(environment.get("ccm_dirty"), "settings.json: ccm_dirty", ReportError)
     tasks = as_list(settings.get("tasks"), "settings.json: tasks", ReportError)
-    repetitions = as_int(
-        settings.get("repetitions"), "settings.json: repetitions", ReportError
-    )
+    repetitions = as_int(settings.get("repetitions"), "settings.json: repetitions", ReportError)
     planned = len(tasks) * len(ARMS) * repetitions
     design = (
-        "preregistered final design"
-        if len(tasks) == 24 and repetitions == 3
-        else "pilot design"
+        "preregistered final design" if len(tasks) == 24 and repetitions == 3 else "pilot design"
     )
     progress = (
         f"complete ({len(outcomes)}/{planned} runs)"

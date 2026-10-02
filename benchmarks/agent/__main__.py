@@ -238,20 +238,12 @@ def command_run(
                 record = run_one(settings, task, arm, repetition, secrets)
                 completed += 1
                 success = (
-                    record.failure is None
-                    and record.score is not None
-                    and record.score.success
+                    record.failure is None and record.score is not None and record.score.success
                 )
                 cost = (
-                    "unknown"
-                    if record.transcript is None
-                    else f"{record.transcript.cost_usd:.4f}"
+                    "unknown" if record.transcript is None else f"{record.transcript.cost_usd:.4f}"
                 )
-                turns = (
-                    "unknown"
-                    if record.transcript is None
-                    else str(record.transcript.num_turns)
-                )
+                turns = "unknown" if record.transcript is None else str(record.transcript.num_turns)
                 wall = "unknown" if record.wall_s is None else f"{record.wall_s:.1f}s"
                 print(
                     f"  success={success} cost_usd={cost} turns={turns} wall={wall}",

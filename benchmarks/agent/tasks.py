@@ -796,7 +796,7 @@ SERDE_TASKS: tuple[Task, ...] = (
         ),
         edit=None,
         notes=(
-            "rg \"Deserializer<'de> for\" serde/src/private/de.rs: 6 impl blocks, some inside "
+            'rg "Deserializer<\'de> for" serde/src/private/de.rs: 6 impl blocks, some inside '
             "nested modules of the same file."
         ),
     ),
