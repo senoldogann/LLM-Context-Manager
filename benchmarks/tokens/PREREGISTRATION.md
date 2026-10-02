@@ -46,4 +46,9 @@ means the v2 default budget left callers out; it is published, not hidden.
 
 ## Deviations
 
-None yet.
+1. **Two v2 runs.** The first v2 run (`9eb8ded`) came before the final review.
+   The review fixes and a resolver fix then changed the order of usages (file
+   and line instead of hash order) and removed `may call` edges to module-level
+   functions, so the final M2 head (`364c59a`) was measured again, on schema-7
+   indexes of the same corpus commits. Both runs are published; the README
+   reports the final one.

@@ -191,42 +191,49 @@ is a separate, not-yet-run benchmark.
 
 How many tool calls and response bytes an agent spends to get the same
 structural answers from CCM before (v1 = `fd9af8b`: the 0.3.13 tools plus the
-Python syntax graph) and after (v2 = `9eb8ded`) the token-efficient answer
-work: compact one-line results with a `max_tokens` budget, `target` as a name
-or `path:line`, `explain` and `map`. Pre-registered in
+Python syntax graph) and after (v2 = `364c59a`) the token-efficient answer
+work: compact one-line results with a `max_tokens` budget, `target` as a name,
+file or `path:line`, `explain` and `map`. Pre-registered in
 [`tokens/PREREGISTRATION.md`](tokens/PREREGISTRATION.md) before the first run;
-no deviations.
+one deviation (v2 was measured twice, see below).
 
 Method: 12 fixed questions per repository on Flask 3.0.3 and Django 5.1 (5
 callers, 5 explain, 2 impact; [`tokens/questions.json`](tokens/questions.json)),
-graph only (`CCM_DISABLE_EMBEDDER=1`), auto-refresh off, the same schema-6
-indexes for both versions, and every argument not named in the pre-registered
-tool plan at its default. Each version runs the scripted plan an agent would
-follow with that version's tools, including one follow-up call per listed
-candidate (at most 10) when a name is ambiguous. Estimated tokens = bytes / 4;
-no model or tokenizer is involved.
+graph only (`CCM_DISABLE_EMBEDDER=1`), auto-refresh off, and every argument not
+named in the pre-registered tool plan at its default. Each version runs the
+scripted plan an agent would follow with that version's tools, including one
+follow-up call per listed candidate (at most 10) when a name is ambiguous.
+Estimated tokens = bytes / 4; no model or tokenizer is involved.
 
 ### Results (2026-10-02, macOS arm64)
 
 | Questions (both repos) | v1 calls | v2 calls | v1 bytes | v2 bytes | Change |
 |---|---|---|---|---|---|
-| callers (10) | 48 | 44 | 199,853 | 36,680 | −82% |
-| explain (10) | 86 | 44 | 293,784 | 88,731 | −70% |
-| impact (4) | 4 | 4 | 33,275 | 14,363 | −57% |
-| **all 24** | **138** | **92** | **526,912** | **139,774** | **−73%** |
-| map (2, v2 only) | — | 2 | — | 8,082 | — |
+| callers (10) | 48 | 44 | 199,853 | 36,527 | −82% |
+| explain (10) | 86 | 44 | 293,784 | 85,402 | −71% |
+| impact (4) | 4 | 4 | 33,275 | 14,367 | −57% |
+| **all 24** | **138** | **92** | **526,912** | **136,296** | **−74%** |
+| map (2, v2 only) | — | 2 | — | 8,279 | — |
 
-Fixed cost per session: `tools/list` 9,333 → 6,596 bytes (−29%) and `SKILL.md`
-25,993 → 3,990 bytes (−85%).
+Fixed cost per session: `tools/list` 9,333 → 6,640 bytes (−29%) and `SKILL.md`
+25,993 → 4,051 bytes (−84%).
 
-Parity (honesty check): the v2 answers contain all 85 Flask and 78 of the 79
-Django caller locations that v1 returned. The missing one calls a test-local
-`render` function: Django has 68 definitions named `render`, both versions
-follow at most 10 of them, and v2's path-ordered candidate list did not include
-that one. The budget did not cut any caller.
+Parity (honesty check): the default v2 answers list 76 of Flask's 85 and 75 of
+Django's 79 caller locations that v1 returned (151 of 164). All 13 missing
+callers are still in the v2 graph. Twelve fall outside the first 20 usages that
+`find_usages` shows by default (v1 had the same limit); v2 orders usages by file
+and line, while v1 used hash order, so the two versions show different first 20.
+The thirteenth calls a test-local `render`: Django has 68 definitions named
+`render`, both versions follow at most 10, and v2's path-ordered candidate list
+does not include that one. The `max_tokens` budget did not cut any caller.
 
-Raw results: [`results/tokens/`](results/tokens/) (`baseline-fd9af8b`,
-`m2-9eb8ded`).
+Deviation: the first v2 run (`9eb8ded`, before the final review) measured
+139,774 bytes and 163 of 164 callers with hash order. The review fixes and a
+resolver fix (no `may call` edges from `x.name()` to module-level functions)
+changed the order and the edges, so the final head was measured again on
+schema-7 indexes of the same corpus commits. Both runs are in
+[`results/tokens/`](results/tokens/) (`baseline-fd9af8b`, `m2-9eb8ded`,
+`m2-364c59a`).
 
 ### Limits
 
@@ -238,24 +245,26 @@ Raw results: [`results/tokens/`](results/tokens/) (`baseline-fd9af8b`,
   languages are matched by name and were not measured.
 - Both versions include symbol bodies in `explain` answers (v1 through
   `get_context`); v2 caps a body at half of the budget.
-- One run on one machine. Byte counts are deterministic for a given index.
+- One run per version on one machine. Byte counts are deterministic for a given
+  index.
 
 ### Reproducing
 
 ```bash
 cd benchmarks
 PYTHONDONTWRITEBYTECODE=1 uv run --frozen python -m tokens run --version v2 \
-  --bin-dir ../target/debug --corpus-dir corpus --questions tokens/questions.json \
+  --bin-dir ../target/debug --corpus-dir <corpus-dir> --questions tokens/questions.json \
   --skill ../SKILL.md --home <empty-dir> --log-dir <log-dir> \
-  --out results/tokens/m2-9eb8ded.json
+  --out results/tokens/m2-364c59a.json
 PYTHONDONTWRITEBYTECODE=1 uv run --frozen python -m tokens report \
   --results results/tokens/baseline-fd9af8b.json \
-  --results results/tokens/m2-9eb8ded.json --out results/tokens/m2-9eb8ded.md
+  --results results/tokens/m2-364c59a.json --out results/tokens/m2-364c59a.md
 ```
 
-The corpus comes from `scripts/fetch_corpus.sh`, indexed with `ccm-cli index`;
-`--version v1` with binaries built from `fd9af8b` reproduces the baseline. The
-harness refuses to run while `benchmarks/tokens` has uncommitted changes.
+The corpus comes from `scripts/fetch_corpus.sh`, indexed with `ccm-cli index`
+from the version under test (v1 reads schema-6 indexes, v2 schema 7); `--version
+v1` with binaries built from `fd9af8b` reproduces the baseline. The harness
+refuses to run while `benchmarks/tokens` has uncommitted changes.
 
 ## Results (2026-08-21, Ollama mxbai-embed-large)
 

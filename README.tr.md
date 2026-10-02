@@ -25,8 +25,10 @@
 
 > **Durum:** arama kalitesi için 35 görevlik bir pilot benchmark var. Flask ve
 > Django üzerinde 24 sabit soruluk, LLM kullanmayan bir benchmark'ta 0.4.0
-> araçları 0.3 araçlarına göre %73 daha az cevap baytı ve üçte bir daha az
-> çağrıyla cevap veriyor; 164 çağıran konumunun 163'ünü koruyor
+> araçları 0.3 araçlarına göre %74 daha az cevap baytı ve üçte bir daha az
+> çağrıyla cevap veriyor. Graftan hiçbir çağıran kaybolmadı; 164 çağırandan 13'ü
+> varsayılan cevapların dışında kalıyor (12'si 20 sonuçluk sınırın ötesinde, biri
+> belirsiz bir adın arkasında)
 > ([token maliyeti](./benchmarks/README.md#token-cost-of-answers-m2)).
 > Ajanların görevleri daha hızlı ya da daha az tokenla bitirip bitirmediği henüz
 > ölçülmedi. Neyin ölçülüp neyin ölçülmediği:
