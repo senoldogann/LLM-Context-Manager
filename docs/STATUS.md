@@ -31,24 +31,25 @@ are parked. The owner's strategy notes are `docs/productization-plan.md`,
 | Other languages | matched by name and labelled `calls (inferred …)` or `may call` | `core/tests/lexical_labels_test.rs` |
 | Freshness after an edit (L1) | measured | `benchmarks/README.md`, "Level 1" |
 | Token cost of answers (M2) | measured | `benchmarks/README.md`, "Token cost of answers" |
-| Agent experiment (L3) | harness ready and checked without spending; not run | `benchmarks/agent/PREREGISTRATION.md` |
+| Agent experiment (L3) | harness ready for Claude Code and Codex, checked without spending; not run | `benchmarks/agent/PREREGISTRATION.md` |
 
 ## Next steps, in order
 
-1. **L3 pilot** (the owner starts it; it uses the subscription): 3 tasks × 3 arms × 1 repetition,
-   to check the harness on real runs and measure the cost of one run. Pilot results are not
-   reported as the L3 result.
+1. **L3 pilots** (the owner starts them; they use the subscriptions): 3 tasks × 3 arms × 1
+   repetition per agent, to check the harness on real runs and measure what one run uses. Pilot
+   results are not reported as the L3 result. Claude Code waits for its subscription limit to
+   reset; Codex needs its dedicated login first (see below).
 2. **L3 final run:** 24 tasks × 3 arms × 3 repetitions = 216 runs, sequential, about 8–18 hours
    unattended. A usage-limit stop is expected on a subscription; rerun the same command after the
    limit resets.
 3. **L3 report:** `python -m agent report`, a failure ledger written from the transcripts, then a
    data-based proposal for the README headline. Publish negative or mixed results too.
-4. **Codex arm** (ChatGPT subscription): not started. Use a dedicated `CODEX_HOME` logged in once
-   with `CODEX_HOME=<dir> codex login`, never a link or copy of `~/.codex/auth.json` (a token
-   refresh could break the owner's login). Run `codex exec --json --ephemeral
-   --ignore-user-config --ignore-rules`, disable the features that would leak into runs (memories,
-   apps, browser and computer use, hooks; see `codex features list`), and verify every run's
-   tools and instructions as the Claude path does. Add it to the preregistration before running.
+4. **Codex results:** the Codex agent is implemented (`benchmarks/agent/codex.py`, configuration
+   in the preregistration). Its zero-cost start without a login accepted every flag; the event
+   parsing and the run-level isolation check have not seen real output yet, so read the first
+   pilot transcripts before the final Codex run. The dedicated `CODEX_HOME` keeps the owner's
+   `~/.codex` login, memories, skills and global AGENTS.md out of the runs; never link or copy
+   `~/.codex/auth.json` (a token refresh could break the owner's login).
 5. Later, only if the L3 result supports it: TypeScript/JavaScript syntax-level resolution, then
    edge accuracy against language servers (L2).
 
@@ -58,23 +59,44 @@ Prerequisites: the corpus (`benchmarks/scripts/fetch_corpus.sh`), release binari
 (`cargo build --release -p ccm-cli -p ccm-mcp`, about 20 minutes) and the built-in embedding model
 in `~/.ccm/models` (downloaded by the first `ccm-cli` index).
 
+Claude Code, on the Claude subscription:
+
 ```bash
 claude setup-token                      # once; prints a token tied to the Claude subscription
 export CLAUDE_CODE_OAUTH_TOKEN=...      # in the terminal that runs the benchmark only
 cd benchmarks
 uv run python -m agent check --corpus-dir corpus
-uv run python -m agent run --auth subscription --model claude-opus-5-5 --effort high \
-  --embedding local --max-budget-usd 2 --max-total-usd 15 --timeout-s 1800 --repetitions 1 \
+uv run python -m agent run --agent claude --agent-bin ~/.local/bin/claude --auth subscription \
+  --model claude-opus-5-5 --effort high --embedding local --max-budget-usd 2 \
+  --max-total-usd 15 --timeout-s 1800 --repetitions 1 \
   --tasks flask-callers-ensure-sync,express-trap-req-get,serde-edit-with-bound \
-  --claude-bin ~/.local/bin/claude --ccm-bin-dir ../target/release \
-  --ccm-model-dir ~/.ccm/models --corpus-dir corpus --out-dir results/agent/pilot
-uv run python -m agent report --out-dir results/agent/pilot --out results/agent/pilot/report.md
+  --ccm-bin-dir ../target/release --ccm-model-dir ~/.ccm/models --corpus-dir corpus \
+  --out-dir results/agent/pilot-claude
+uv run python -m agent report --out-dir results/agent/pilot-claude \
+  --out results/agent/pilot-claude/report.md
 ```
 
-For the final run use `--tasks all --repetitions 3`, a new `--out-dir` and a total cap that fits
-the plan. Exit codes: 3 total cap reached, 4 usage or rate limit (rerun later), 5 isolation check
-failed (fix before continuing). A measured run refuses to start with uncommitted changes under
-`benchmarks/agent`. `--embedding openai` needs `OPENAI_API_KEY` in the same terminal.
+Codex, on the ChatGPT subscription (pass the native binary; the npm wrapper needs Node on `PATH`):
+
+```bash
+mkdir -p ~/.ccm-bench/codex-home && CODEX_HOME=~/.ccm-bench/codex-home codex login   # once
+cd benchmarks
+CODEX_BIN="$(npm root -g)/@openai/codex/node_modules/@openai/codex-darwin-arm64/vendor/aarch64-apple-darwin/bin/codex"
+uv run python -m agent run --agent codex --agent-bin "$CODEX_BIN" \
+  --codex-home ~/.ccm-bench/codex-home --auth subscription --model gpt-6.1-sol --effort high \
+  --embedding local --max-budget-usd 2 --max-total-usd 15 --timeout-s 1800 --repetitions 1 \
+  --tasks flask-callers-ensure-sync,express-trap-req-get,serde-edit-with-bound \
+  --ccm-bin-dir ../target/release --ccm-model-dir ~/.ccm/models --corpus-dir corpus \
+  --out-dir results/agent/pilot-codex
+```
+
+Use the newest model each agent offers when a run set starts (`~/.codex/models_cache.json` lists
+Codex's) and keep it for the whole set. The budget flags do not limit Codex, which reports no
+cost; its usage limit stops the run instead. For a final run use `--tasks all --repetitions 3`, a
+new `--out-dir` and a total cap that fits the plan. Exit codes: 3 total cap reached, 4 usage or
+rate limit (rerun later), 5 isolation check failed (fix before continuing). A measured run refuses
+to start with uncommitted changes under `benchmarks/agent`. `--embedding openai` needs
+`OPENAI_API_KEY` in the same terminal.
 
 ## Verifying changes
 

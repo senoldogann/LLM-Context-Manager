@@ -47,6 +47,24 @@ B and C are product configurations rather than a pure "tool present but never de
 ablation. The appended notes are therefore part of those arms and must not change after this
 preregistration.
 
+## Agents
+
+The three arms run separately for each agent, and arms are compared only within the same agent.
+
+- **Claude Code** (`--agent claude`): normal mode with the built-in tools above; B adds the CCM
+  server through `--mcp-config` and the note through `--append-system-prompt`; C allows only
+  `search_code`.
+- **Codex CLI** (`--agent codex`, ChatGPT subscription): `codex exec --json --ephemeral
+  --ignore-user-config --ignore-rules --sandbox workspace-write` with a dedicated `CODEX_HOME`
+  logged in once with `codex login`. Web search is disabled, and so are sub-agents, browser and
+  computer use, apps, plugins, skill search, hooks, goals, image generation and memories, which
+  leaves the shell (with Codex's bundled `rg`) and file edits. B adds the CCM server through
+  `-c mcp_servers.context-manager.*` and the note through `developer_instructions`; C limits the
+  server to `enabled_tools = ["search_code"]`. Codex reports neither its tool list nor a dollar
+  cost, so isolation is checked from the tools each run used: an MCP tool outside the arm's set,
+  web search, image generation or a sub-agent stops the measurement. Token counts are the quota
+  measure; turns and cost are reported as unknown.
+
 ## Repetitions and ordering
 
 The final run is 24 tasks × 3 arms × 3 repetitions = 216 agent runs. Arms are rotated
@@ -63,7 +81,7 @@ Report, without dropping failures:
 
 1. task success rate and 95% Wilson interval by arm;
 2. recall and precision of the structured answer;
-3. actual model cost in USD;
+3. model cost in USD as reported by Claude Code (Codex reports none);
 4. input tokens, including cache creation/read tokens, and output tokens;
 5. agent turns and wall-clock time;
 6. stale-answer count on edit tasks;
@@ -129,5 +147,7 @@ the final run is complete.
 3. 2026-10-02: `--auth subscription` added at the owner's request, so the agent can run on the
    owner's Claude subscription instead of an API key; it is the setting that matches how the tool
    is used day to day, and quota use is what the owner wants to measure. Usage-limit stops are not
-   recorded as runs. A second agent (Codex on a ChatGPT subscription) is planned but not part of
-   this preregistration until its isolation is verified.
+   recorded as runs.
+4. 2026-10-02: the Codex agent was added (see Agents) at the owner's request, to measure both
+   subscriptions. A zero-cost start without a login accepted every flag and override; its pilot
+   checks the run-level isolation on real output before any final Codex run.

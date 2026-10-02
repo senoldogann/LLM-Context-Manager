@@ -22,6 +22,7 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Literal
 
+from agent import codex
 from agent.score import Score, marker_files, score
 from agent.tasks import Task, prompt_for
 from freshness.jsonio import as_bool, as_float, as_int, as_list, as_object, as_str
@@ -32,6 +33,10 @@ Arm = Literal["A", "B", "C"]
 Embedding = Literal["local", "openai"]
 # subscription: `claude setup-token` ile üretilen abonelik jetonu; api-key: ücretli API anahtarı.
 Auth = Literal["subscription", "api-key"]
+# claude: Claude Code (Claude aboneliği ya da API anahtarı); codex: Codex CLI (ChatGPT aboneliği).
+AgentName = Literal["claude", "codex"]
+# Codex dökümünde kollara kapalı olması gereken öğe türleri (web araması, görsel, alt ajan).
+CODEX_FORBIDDEN_ITEMS = ("web_search", "image_generation", "collab_tool_call")
 # Claude Code'un `init` olayında bildirdiği kimlik kaynağı: OAuth (abonelik) için `none`.
 AUTH_SOURCE: dict[Auth, str] = {"subscription": "none", "api-key": "ANTHROPIC_API_KEY"}
 # Sınır ya da aşırı yük hatası ajanın başarısızlığı değildir: koşu kaydedilmez, ölçüm durur.
@@ -97,7 +102,9 @@ class Settings:
     auth: Auth
     max_budget_usd: float
     timeout_s: int
-    claude_bin: Path
+    agent: AgentName
+    agent_bin: Path
+    codex_home: Path | None
     ccm_bin_dir: Path
     ccm_model_dir: Path
     corpus_dir: Path
@@ -135,9 +142,10 @@ class Transcript:
     result_text: str
     subtype: str
     is_error: bool
-    num_turns: int
+    # Codex `exec` tur sayısı ve dolar maliyeti bildirmez: o ajanda ikisi de None'dır.
+    num_turns: int | None
     duration_ms: int
-    cost_usd: float
+    cost_usd: float | None
     usage: Usage
     tool_calls: dict[str, int]
     mcp_status: str
@@ -286,19 +294,24 @@ def index_workspace(settings: Settings, workspace: Path, env: dict[str, str]) ->
     return time.monotonic() - started
 
 
-def mcp_config(settings: Settings, workspace: Path, env: dict[str, str]) -> dict[str, JsonValue]:
-    """`--mcp-config` dosyasının içeriği: yalnız CCM sunucusu."""
-    server_env: dict[str, JsonValue] = {
+def ccm_server_env(workspace: Path, env: dict[str, str]) -> dict[str, str]:
+    """CCM MCP sunucusunun ortamı: tek kök çalışma kopyası, indeks onun `.git` dizininde."""
+    return {
         **env,
         "CCM_PROJECT_ROOT": str(workspace),
         "CCM_ALLOWED_ROOTS": str(workspace),
         "CCM_DB_PATH": str(index_db_path(workspace)),
     }
+
+
+def mcp_config(settings: Settings, server_env: dict[str, str]) -> dict[str, JsonValue]:
+    """Claude Code'un `--mcp-config` dosyasının içeriği: yalnız CCM sunucusu."""
+    environment: dict[str, JsonValue] = {key: value for key, value in server_env.items()}
     server: dict[str, JsonValue] = {
         "type": "stdio",
         "command": str(settings.ccm_bin_dir / "ccm-mcp"),
         "args": [],
-        "env": server_env,
+        "env": environment,
     }
     return {"mcpServers": {SERVER: server}}
 
@@ -313,7 +326,7 @@ def write_private(path: Path, text: str) -> None:
 def claude_command(settings: Settings, task: Task, arm: Arm, config_path: Path) -> list[str]:
     """Kolun `claude -p` komutu; kollar yalnız MCP araçları ve proje notunda ayrışır."""
     command = [
-        str(settings.claude_bin),
+        str(settings.agent_bin),
         "-p",
         prompt_for(task),
         "--output-format",
@@ -382,7 +395,7 @@ def stop_group(pid: int) -> None:
         return
 
 
-def run_claude(
+def run_agent(
     command: list[str],
     workspace: Path,
     env: dict[str, str],
@@ -390,12 +403,21 @@ def run_claude(
     transcript: Path,
     stderr: Path,
 ) -> float:
-    """Ajanı çalıştırır, dökümü dosyaya yazar ve duvar saatini döner."""
+    """Ajanı çalıştırır, dökümü dosyaya yazar ve duvar saatini döner.
+
+    stdin kapalıdır: Codex boru olan stdin'i isteme ekler, Claude Code da okuyabilir.
+    """
     transcript.parent.mkdir(parents=True, exist_ok=True)
     started = time.monotonic()
     with transcript.open("w") as out, stderr.open("w") as err:
         process = subprocess.Popen(
-            command, cwd=workspace, env=env, stdout=out, stderr=err, start_new_session=True
+            command,
+            cwd=workspace,
+            env=env,
+            stdin=subprocess.DEVNULL,
+            stdout=out,
+            stderr=err,
+            start_new_session=True,
         )
         try:
             process.wait(timeout=timeout_s)
@@ -403,7 +425,7 @@ def run_claude(
             stop_group(process.pid)
             process.wait()
             raise RunError(
-                f"claude did not finish within {timeout_s} s; see {transcript}"
+                f"the agent did not finish within {timeout_s} s; see {transcript}"
             ) from error
     stop_group(process.pid)
     return time.monotonic() - started
@@ -525,6 +547,100 @@ def write_record(path: Path, record: RunRecord) -> None:
     temporary.replace(path)
 
 
+def agent_invocation(
+    settings: Settings,
+    task: Task,
+    arm: Arm,
+    work: Path,
+    workspace: Path,
+    home: Path,
+    secrets: Secrets,
+    server_env: dict[str, str] | None,
+) -> tuple[list[str], dict[str, str]]:
+    """Seçilen ajanın komutu ve ortamı; CCM sunucusu yalnız B ve C kollarında verilir."""
+    if settings.agent == "claude":
+        config_path = work / "mcp.json"
+        if server_env is not None:
+            write_private(config_path, json.dumps(mcp_config(settings, server_env), indent=2))
+        return claude_command(settings, task, arm, config_path), claude_env(
+            home, settings.auth, secrets
+        )
+    if settings.codex_home is None:
+        raise RunError("--agent codex needs --codex-home")
+    server = (
+        None
+        if server_env is None
+        else codex.McpServer(
+            name=SERVER,
+            command=settings.ccm_bin_dir / "ccm-mcp",
+            env=server_env,
+            enabled_tools=None if arm == "B" else granted_tools(arm),
+            instructions=GRAPH_NOTE if arm == "B" else SEARCH_NOTE,
+        )
+    )
+    return (
+        codex.command(
+            settings.agent_bin, settings.model, settings.effort, workspace, prompt_for(task), server
+        ),
+        codex.environment(settings.agent_bin, home, settings.codex_home),
+    )
+
+
+def codex_transcript(result: codex.CodexResult, wall_s: float) -> Transcript:
+    """Codex sonucunu ortak döküm biçimine çevirir.
+
+    ChatGPT aboneliğinde dolar maliyeti, `exec` kipinde tur sayısı yoktur; kota ölçüsü
+    token'lardır. Codex'in `input_tokens` değeri önbellekten okunanları da içerdiği için
+    önbelleksiz kısım ayrıştırılır.
+    """
+    return Transcript(
+        result_text=result.result_text if result.failure is None else result.failure,
+        subtype="completed" if result.failure is None else "failed",
+        is_error=result.failure is not None,
+        num_turns=None,
+        duration_ms=round(wall_s * 1000),
+        cost_usd=None,
+        usage=Usage(
+            input_tokens=result.input_tokens - result.cached_input_tokens,
+            output_tokens=result.output_tokens,
+            cache_creation_input_tokens=0,
+            cache_read_input_tokens=result.cached_input_tokens,
+        ),
+        tool_calls=result.tool_calls,
+        mcp_status="unreported",
+        api_key_source="chatgpt",
+        tools=(),
+    )
+
+
+def verify_codex(transcript: Transcript, arm: Arm) -> None:
+    """Codex kolun dışındaki bir aracı kullandıysa ölçümü durdurur.
+
+    Codex `exec` araç listesini bildirmediği için denetim kullanılan araçlar üzerindendir.
+    """
+    allowed = {mcp_tool(tool) for tool in granted_tools(arm)}
+    used = {name for name in transcript.tool_calls if name.startswith("mcp__")}
+    banned = {name for name in transcript.tool_calls if name in CODEX_FORBIDDEN_ITEMS}
+    outside = sorted((used - allowed) | banned)
+    if outside:
+        raise IsolationError(f"arm {arm} used tools outside its set: {outside}")
+
+
+def read_transcript(settings: Settings, arm: Arm, lines: list[str], wall_s: float) -> Transcript:
+    """Ajanın dökümünü ortak biçime çevirir ve yalıtımı doğrular."""
+    if settings.agent == "claude":
+        transcript = parse_transcript(lines)
+        verify_isolation(transcript, arm, settings.auth)
+        return transcript
+    try:
+        result = codex.parse(lines)
+    except codex.CodexOutputError as error:
+        raise TranscriptError(str(error)) from error
+    transcript = codex_transcript(result, wall_s)
+    verify_codex(transcript, arm)
+    return transcript
+
+
 def run_one(settings: Settings, task: Task, arm: Arm, rep: int, secrets: Secrets) -> RunRecord:
     """Bir koşuyu yürütür; ajan/ürün hataları da tamamlanmış kayıt olarak saklanır."""
     name = run_id(task, arm, rep)
@@ -546,27 +662,30 @@ def run_one(settings: Settings, task: Task, arm: Arm, rep: int, secrets: Secrets
     agent_started: float | None = None
     try:
         prepare_workspace(settings.corpus_dir / task.repo, workspace)
-        config_path = work / "mcp.json"
+        server_env: dict[str, str] | None = None
         if arm != "A":
             env = ccm_env(settings, home, secrets)
             index_s = index_workspace(settings, workspace, env)
-            write_private(config_path, json.dumps(mcp_config(settings, workspace, env), indent=2))
+            server_env = ccm_server_env(workspace, env)
+        command, agent_env = agent_invocation(
+            settings, task, arm, work, workspace, home, secrets, server_env
+        )
         agent_started = time.monotonic()
-        wall_s = run_claude(
-            claude_command(settings, task, arm, config_path),
+        wall_s = run_agent(
+            command,
             workspace,
-            claude_env(home, settings.auth, secrets),
+            agent_env,
             settings.timeout_s,
             transcript_path,
             transcript_path.with_suffix(".stderr"),
         )
-        transcript = parse_transcript(transcript_path.read_text().splitlines())
-        verify_isolation(transcript, arm, settings.auth)
+        lines = transcript_path.read_text().splitlines()
+        transcript = read_transcript(settings, arm, lines, wall_s)
         if hit_quota(transcript):
             raise QuotaError(f"{name}: {transcript.result_text[:300]}")
         if transcript.is_error:
-            failure = f"claude result error ({transcript.subtype})"
-        if arm != "A" and transcript.mcp_status != "connected":
+            failure = f"{settings.agent} result error ({transcript.subtype})"
+        if settings.agent == "claude" and arm != "A" and transcript.mcp_status != "connected":
             mcp_failure = (
                 f"CCM MCP server did not connect (status {transcript.mcp_status}); "
                 f"see {transcript_path.with_suffix('.stderr')}"

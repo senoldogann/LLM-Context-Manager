@@ -10,9 +10,11 @@ import subprocess
 import sys
 from pathlib import Path
 
+from agent import codex
 from agent.check import check_tasks
 from agent.report import ReportError, read_outcomes, render
 from agent.run import (
+    AgentName,
     Arm,
     Auth,
     Embedding,
@@ -102,6 +104,7 @@ def settings_json(
         "effort": settings.effort,
         "embedding": settings.embedding,
         "auth": settings.auth,
+        "agent": settings.agent,
         "max_budget_usd": settings.max_budget_usd,
         "timeout_s": settings.timeout_s,
         "repetitions": repetitions,
@@ -111,12 +114,13 @@ def settings_json(
 
 
 def environment_json(settings: Settings, revision: str) -> dict[str, JsonValue]:
-    """Ölçümde kullanılan iki çalıştırılabilir dosya ve kaynak revizyonu."""
+    """Ajan ve CCM sürümleri, CCM ikili dosyalarının özetleri ve kaynak revizyonu."""
     root = repository_root()
     cli = settings.ccm_bin_dir / "ccm-cli"
     mcp = settings.ccm_bin_dir / "ccm-mcp"
     return {
-        "claude_version": command_text((str(settings.claude_bin), "--version")),
+        "agent_version": command_text((str(settings.agent_bin), "--version")),
+        "agent_login": codex_login(settings) if settings.agent == "codex" else "environment",
         "ccm_version": command_text((str(cli), "--version")),
         "ccm_commit": revision,
         "ccm_dirty": ccm_dirty(root),
@@ -177,12 +181,18 @@ def selected_tasks(raw: str) -> tuple[Task, ...]:
 def validate_paths(settings: Settings) -> None:
     """Pahalı ilk çağrıdan önce tüm yerel girdileri doğrular."""
     for binary in (
-        settings.claude_bin,
+        settings.agent_bin,
         settings.ccm_bin_dir / "ccm-cli",
         settings.ccm_bin_dir / "ccm-mcp",
     ):
         if not binary.is_file() or not os.access(binary, os.X_OK):
             raise HarnessError(f"executable not found: {binary}")
+    if settings.agent == "codex" and (
+        settings.codex_home is None or not settings.codex_home.is_dir()
+    ):
+        raise HarnessError(
+            "--agent codex needs --codex-home, a directory logged in with codex login"
+        )
     if not settings.corpus_dir.is_dir():
         raise HarnessError(f"corpus directory not found: {settings.corpus_dir}")
     if settings.embedding == "local" and not settings.ccm_model_dir.is_dir():
@@ -197,17 +207,38 @@ def required_env(name: str, reason: str) -> str:
     return value
 
 
-def secrets_from_env(embedding: Embedding, auth: Auth) -> Secrets:
-    """Yalnız seçilen kipin kimlik bilgilerini ortamdan alır; hiçbir dosyaya yazmaz."""
+def codex_login(settings: Settings) -> str:
+    """Deneye özel CODEX_HOME'un ChatGPT ile giriş yaptığını model çağırmadan doğrular."""
+    if settings.auth != "subscription":
+        raise HarnessError(
+            "--agent codex runs on the ChatGPT subscription; use --auth subscription"
+        )
+    if settings.codex_home is None:
+        raise HarnessError("--agent codex needs --codex-home")
+    status = codex.login_status(settings.agent_bin, settings.codex_home)
+    if "ChatGPT" not in status:
+        raise HarnessError(
+            f"{settings.codex_home} is not logged in with ChatGPT ({status!r}); "
+            f"run: CODEX_HOME={settings.codex_home} codex login"
+        )
+    return status
+
+
+def secrets_from_env(agent: AgentName, embedding: Embedding, auth: Auth) -> Secrets:
+    """Yalnız seçilen ajan ve kipin kimlik bilgilerini ortamdan alır; hiçbir dosyaya yazmaz.
+
+    Codex kimliğini deneye özel CODEX_HOME'dan kendisi okur; harness ona anahtar geçirmez.
+    """
+    claude = agent == "claude"
     return Secrets(
         claude_oauth_token=(
             required_env("CLAUDE_CODE_OAUTH_TOKEN", "create one with `claude setup-token`")
-            if auth == "subscription"
+            if claude and auth == "subscription"
             else None
         ),
         anthropic_api_key=(
             required_env("ANTHROPIC_API_KEY", "--auth api-key bills the API key")
-            if auth == "api-key"
+            if claude and auth == "api-key"
             else None
         ),
         openai_api_key=(
@@ -266,7 +297,7 @@ def command_run(
     revision = harness_revision()
     setup = setup_json(settings, repetitions, tasks, revision)
     write_or_verify_setup(settings.out_dir / "settings.json", setup)
-    secrets = secrets_from_env(settings.embedding, settings.auth)
+    secrets = secrets_from_env(settings.agent, settings.embedding, settings.auth)
 
     total = len(tasks) * len(ARMS) * repetitions
     completed = 0
@@ -297,15 +328,15 @@ def command_run(
                     print(f"stopping at {name}: isolation check failed: {error}", flush=True)
                     return 5
                 completed += 1
-                if record.transcript is not None:
-                    spent += record.transcript.cost_usd
+                known_cost = None if record.transcript is None else record.transcript.cost_usd
+                if known_cost is not None:
+                    spent += known_cost
                 success = (
                     record.failure is None and record.score is not None and record.score.success
                 )
-                cost = (
-                    "unknown" if record.transcript is None else f"{record.transcript.cost_usd:.4f}"
-                )
-                turns = "unknown" if record.transcript is None else str(record.transcript.num_turns)
+                cost = "unknown" if known_cost is None else f"{known_cost:.4f}"
+                known_turns = None if record.transcript is None else record.transcript.num_turns
+                turns = "unknown" if known_turns is None else str(known_turns)
                 wall = "unknown" if record.wall_s is None else f"{record.wall_s:.1f}s"
                 print(
                     f"  success={success} cost_usd={cost} turns={turns} wall={wall}",
@@ -364,7 +395,18 @@ def build_parser() -> argparse.ArgumentParser:
     run.add_argument("--timeout-s", type=int, required=True)
     run.add_argument("--repetitions", type=int, required=True)
     run.add_argument("--tasks", required=True, help="'all' or comma-separated task ids")
-    run.add_argument("--claude-bin", type=Path, required=True)
+    run.add_argument("--agent", choices=("claude", "codex"), required=True)
+    run.add_argument(
+        "--agent-bin",
+        type=Path,
+        required=True,
+        help="claude executable, or the native codex binary (vendor/<triple>/bin/codex)",
+    )
+    run.add_argument(
+        "--codex-home",
+        type=Path,
+        help="dedicated CODEX_HOME logged in once with `CODEX_HOME=<dir> codex login`",
+    )
     run.add_argument("--ccm-bin-dir", type=Path, required=True)
     run.add_argument("--ccm-model-dir", type=Path, required=True)
     run.add_argument("--corpus-dir", type=Path, required=True)
@@ -385,6 +427,8 @@ def main() -> int:
         return command_report(namespace.out_dir, namespace.out)
     embedding: Embedding = namespace.embedding
     auth: Auth = namespace.auth
+    agent: AgentName = namespace.agent
+    codex_home: Path | None = namespace.codex_home
     settings = Settings(
         model=namespace.model,
         effort=namespace.effort,
@@ -392,7 +436,9 @@ def main() -> int:
         auth=auth,
         max_budget_usd=namespace.max_budget_usd,
         timeout_s=namespace.timeout_s,
-        claude_bin=namespace.claude_bin.resolve(),
+        agent=agent,
+        agent_bin=namespace.agent_bin.expanduser().resolve(),
+        codex_home=None if codex_home is None else codex_home.expanduser().resolve(),
         ccm_bin_dir=namespace.ccm_bin_dir.resolve(),
         ccm_model_dir=namespace.ccm_model_dir.resolve(),
         corpus_dir=namespace.corpus_dir.resolve(),

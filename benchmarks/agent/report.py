@@ -53,6 +53,16 @@ class Outcome:
 Metric = Callable[[Outcome], float | None]
 
 
+def optional_float(value: JsonValue, context: str) -> float | None:
+    """Bildirilmeyen ölçü (Codex'te dolar maliyeti) `null`dır."""
+    return None if value is None else as_float(value, context, ReportError)
+
+
+def optional_int(value: JsonValue, context: str) -> int | None:
+    """Bildirilmeyen ölçü (Codex'te tur sayısı) `null`dır."""
+    return None if value is None else as_int(value, context, ReportError)
+
+
 def strings(value: JsonValue, context: str) -> tuple[str, ...]:
     """JSON dizisini metin demetine daraltır."""
     return tuple(
@@ -131,12 +141,12 @@ def read_outcome(path: Path) -> Outcome:
         missing=strings(result.get("missing"), f"{path}: missing"),
         extra=strings(result.get("extra"), f"{path}: extra"),
         failure=failure,
-        cost_usd=as_float(transcript.get("cost_usd"), f"{path}: cost_usd", ReportError),
+        cost_usd=optional_float(transcript.get("cost_usd"), f"{path}: cost_usd"),
         input_tokens=sum(
             as_int(usage.get(field), f"{path}: {field}", ReportError) for field in input_fields
         ),
         output_tokens=as_int(usage.get("output_tokens"), f"{path}: output_tokens", ReportError),
-        turns=as_int(transcript.get("num_turns"), f"{path}: num_turns", ReportError),
+        turns=optional_int(transcript.get("num_turns"), f"{path}: num_turns"),
         wall_s=wall_s,
         index_s=(
             None
@@ -389,9 +399,10 @@ def header(setup: JsonValue, outcomes: list[Outcome]) -> list[str]:
         "",
         f"Scope: {design}; {progress}.",
         "",
-        f"Model `{settings.get('model')}` at effort `{settings.get('effort')}`, embeddings "
-        f"`{settings.get('embedding')}`, per-run budget ${settings.get('max_budget_usd')}. "
-        f"Claude Code {environment.get('claude_version')}; {environment.get('ccm_version')} at "
+        f"Agent `{settings.get('agent')}` ({environment.get('agent_version')}, auth "
+        f"`{settings.get('auth')}`), model `{settings.get('model')}` at effort "
+        f"`{settings.get('effort')}`, embeddings `{settings.get('embedding')}`, per-run budget "
+        f"${settings.get('max_budget_usd')}; {environment.get('ccm_version')} at "
         f"`{commit[:7]}`{' (uncommitted changes)' if dirty else ''}.",
     ]
 
