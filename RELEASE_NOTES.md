@@ -1,5 +1,23 @@
 # Release Notes
 
+## Unreleased
+
+**Single-entry agent context**
+
+- Add `context {query, max_tokens?}` as the recommended agent-facing entry
+  point. Exact symbols/files/`path:line` are resolved through the graph;
+  natural-language tasks use hybrid retrieval and the best match is enriched
+  with definition/body/members/callers/callees/tests in the same server call.
+- Default `tools/list` now exposes only `context` and `index_project` to
+  cut fixed schema overhead. Existing structural tools remain directly callable;
+  set `CCM_MCP_LEGACY_TOOLS=1` to expose the full compatibility surface.
+  This is a product hypothesis, not proof of end-to-end savings: the
+  2026-10-02 Claude pilot showed that the previous full tool surface was ignored
+  by the agent and increased input-token use.
+- Agent guidance no longer recommends a project-wide `map` at session start;
+  startup context and additional public tools must justify their fixed token
+  cost in agent benchmarks.
+
 ## v0.4.0 - Token-Efficient Answers, Python Syntax Graph and Live Index
 
 **Breaking changes**

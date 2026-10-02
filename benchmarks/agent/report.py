@@ -402,19 +402,30 @@ def header(setup: JsonValue, outcomes: list[Outcome]) -> list[str]:
     dirty = as_bool(environment.get("ccm_dirty"), "settings.json: ccm_dirty", ReportError)
     tasks = as_list(settings.get("tasks"), "settings.json: tasks", ReportError)
     repetitions = as_int(settings.get("repetitions"), "settings.json: repetitions", ReportError)
+    profile_value = settings.get("profile")
+    profile = profile_value if isinstance(profile_value, str) else "preregistered"
     planned = len(tasks) * len(ARMS) * repetitions
     design = (
-        "preregistered final design" if len(tasks) == 24 and repetitions == 3 else "pilot design"
+        "preregistered final design"
+        if profile == "preregistered" and len(tasks) == 24 and repetitions == 3
+        else "pilot design"
     )
     progress = (
         f"complete ({len(outcomes)}/{planned} runs)"
         if len(outcomes) == planned
         else f"partial ({len(outcomes)}/{planned} runs)"
     )
+    arms = (
+        "A=built-ins; B=default context+index_project with context note; "
+        "C=legacy full surface with legacy navigation note"
+        if profile == "context-first-pilot"
+        else "A=built-ins; B=preregistered full CCM surface; C=preregistered search_code only"
+    )
     return [
         "# L3 agent benchmark",
         "",
         f"Scope: {design}; {progress}.",
+        f"Product profile: `{profile}`. Arms: {arms}.",
         "",
         f"Agent `{settings.get('agent')}` ({environment.get('agent_version')}, auth "
         f"`{settings.get('auth')}`), model `{settings.get('model')}` at effort "

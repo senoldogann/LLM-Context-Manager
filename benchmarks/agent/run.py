@@ -1,12 +1,11 @@
-"""Bir görevi bir kolda çalıştırır: çalışma kopyası, CCM indeksi, `claude -p`, puan ve kayıt.
+"""Bir görevi bir kolda çalıştırır: çalışma kopyası, CCM indeksi, ajan, puan ve kayıt.
 
-Kollar aynı modeli, aynı istemi ve aynı yerleşik araçları kullanır:
-A yalnız yerleşik araçlar, B ek olarak CCM'in tüm MCP araçları, C ek olarak yalnız `search_code`.
-Ajan normal Claude Code kipinde, repo ve ev dizini dışındaki geçici bir dizinde, geçici HOME ve
-CLAUDE_CONFIG_DIR ile çalışır: kullanıcının ayarları, kancaları, eklentileri, MCP sunucuları ve
-CLAUDE.md dosyaları yüklenmez. `--bare` kullanılmaz; o kip yalnız Bash, Edit ve Read araçlarını
-açtığı için temel kolu gerçek kullanımdan zayıf yapardı. Her koşuda Claude Code'un bildirdiği
-kimlik kaynağı ve araç kümesi doğrulanır; sapma deneyi durdurur.
+Kollar aynı modeli, aynı istemi ve aynı yerleşik araçları kullanır. Varsayılan
+`preregistered` profil final A/B/C tasarımını korur; `context-first-pilot` yalnız ürün
+pilotunda B'yi küçük varsayılan context yüzeyi, C'yi eski full yüzey olarak karşılaştırır.
+Ajan repo ve ev dizini dışındaki geçici bir dizinde, geçici HOME/konfigürasyonla çalışır;
+kullanıcının ayarları, kancaları, eklentileri, MCP sunucuları ve CLAUDE.md dosyaları yüklenmez.
+Her koşuda kimlik kaynağı ve izin verilen araç kümesi doğrulanır; sapma deneyi durdurur.
 """
 
 from __future__ import annotations
@@ -51,8 +50,10 @@ AUTH_MARKERS = (
     "not logged in",
 )
 
+ProductProfile = Literal["preregistered", "context-first-pilot"]
+
 SERVER = "context-manager"
-CCM_TOOLS = (
+LEGACY_CCM_TOOLS = (
     "map",
     "explain",
     "find_usages",
@@ -64,10 +65,12 @@ CCM_TOOLS = (
     "index_project",
     "index_now",
 )
+ALL_CCM_TOOLS = ("context", *LEGACY_CCM_TOOLS)
+CONTEXT_DEFAULT_TOOLS = ("context", "index_project")
 BUILTIN_TOOLS = ("Read", "Grep", "Glob", "Edit", "Write", "Bash")
 SYSTEM_PATH = "/usr/bin:/bin:/usr/sbin:/sbin"
 OPENAI_EMBEDDING_MODEL = "text-embedding-3-small"
-# B kolu ürünün önerdiği kurulumla çalışır: SKILL.md'nin projeye eklenmesini önerdiği not.
+# Preregistered B kolunun kısa navigation notu. Final tasarımda anlamı değişmez.
 GRAPH_NOTE = (
     "## Code navigation\n"
     "Use the context-manager MCP tools before reading files: `map` once, then `explain` or "
@@ -78,6 +81,11 @@ SEARCH_NOTE = (
     "## Code search\n"
     "Use the context-manager `search_code` MCP tool to find code before reading files. Read "
     "only the lines you need."
+)
+CONTEXT_NOTE = (
+    "## Code navigation\n"
+    "Use the context-manager `context` MCP tool before broad grep/read exploration. Give it "
+    "the coding task, symbol, or path:line directly; then read only source lines you still need."
 )
 
 
@@ -113,6 +121,7 @@ class Settings:
     effort: str
     embedding: Embedding
     auth: Auth
+    profile: ProductProfile
     max_budget_usd: float
     timeout_s: int
     agent: AgentName
@@ -210,20 +219,42 @@ def mcp_tool(name: str) -> str:
     return f"mcp__{SERVER}__{name}"
 
 
-def granted_tools(arm: Arm) -> tuple[str, ...]:
-    """Kolun ajana açtığı CCM araçları."""
+def granted_tools(profile: ProductProfile, arm: Arm) -> tuple[str, ...]:
+    """Ürün profili ve kola göre ajana açılan CCM araçları."""
     if arm == "A":
         return ()
-    return CCM_TOOLS if arm == "B" else ("search_code",)
+    if profile == "context-first-pilot":
+        return CONTEXT_DEFAULT_TOOLS if arm == "B" else LEGACY_CCM_TOOLS
+    return LEGACY_CCM_TOOLS if arm == "B" else ("search_code",)
 
 
-def expected_tools(arm: Arm, connected: bool) -> tuple[str, ...]:
+def uses_legacy_discovery(profile: ProductProfile, arm: Arm) -> bool:
+    """Bu kol eski yapısal araçların tools/list içinde görünmesini gerektiriyor mu."""
+    if arm == "A":
+        return False
+    return profile == "preregistered" or arm == "C"
+
+
+def arm_note(profile: ProductProfile, arm: Arm) -> str:
+    """Kolun ürün yönlendirme notu; baseline not eklemez."""
+    if arm == "A":
+        return ""
+    if profile == "context-first-pilot":
+        return CONTEXT_NOTE if arm == "B" else GRAPH_NOTE
+    return GRAPH_NOTE if arm == "B" else SEARCH_NOTE
+
+
+def expected_tools(
+    profile: ProductProfile, arm: Arm, connected: bool
+) -> tuple[str, ...]:
     """Ajanın görmesi gereken araç kümesi; MCP bağlanmadıysa yalnız yerleşik araçlar."""
-    granted = granted_tools(arm) if connected else ()
+    granted = granted_tools(profile, arm) if connected else ()
     return tuple(sorted((*BUILTIN_TOOLS, *(mcp_tool(tool) for tool in granted))))
 
 
-def verify_isolation(transcript: Transcript, arm: Arm, auth: Auth) -> None:
+def verify_isolation(
+    transcript: Transcript, profile: ProductProfile, arm: Arm, auth: Auth
+) -> None:
     """Kimlik kaynağı ya da araç kümesi deney tanımına uymuyorsa ölçümü durdurur."""
     expected_source = AUTH_SOURCE[auth]
     if transcript.api_key_source != expected_source:
@@ -232,7 +263,7 @@ def verify_isolation(transcript: Transcript, arm: Arm, auth: Auth) -> None:
             f"expected {expected_source!r} for --auth {auth}; stopping before more runs use "
             "the wrong account"
         )
-    expected = expected_tools(arm, transcript.mcp_status == "connected")
+    expected = expected_tools(profile, arm, transcript.mcp_status == "connected")
     if transcript.tools != expected:
         raise IsolationError(
             f"arm {arm} exposed tools {list(transcript.tools)}, expected {list(expected)}"
@@ -313,14 +344,19 @@ def index_workspace(settings: Settings, workspace: Path, env: dict[str, str]) ->
     return time.monotonic() - started
 
 
-def ccm_server_env(workspace: Path, env: dict[str, str]) -> dict[str, str]:
-    """CCM MCP sunucusunun ortamı: tek kök çalışma kopyası, indeks onun `.git` dizininde."""
-    return {
+def ccm_server_env(
+    workspace: Path, env: dict[str, str], expose_legacy: bool
+) -> dict[str, str]:
+    """CCM MCP ortamı: tek kök, repo içi indeks ve gerektiğinde legacy discovery."""
+    server_env = {
         **env,
         "CCM_PROJECT_ROOT": str(workspace),
         "CCM_ALLOWED_ROOTS": str(workspace),
         "CCM_DB_PATH": str(index_db_path(workspace)),
     }
+    if expose_legacy:
+        server_env["CCM_MCP_LEGACY_TOOLS"] = "1"
+    return server_env
 
 
 def mcp_config(settings: Settings, server_env: dict[str, str]) -> dict[str, JsonValue]:
@@ -368,13 +404,13 @@ def claude_command(settings: Settings, task: Task, arm: Arm, config_path: Path) 
     ]
     if arm == "A":
         return [*command, "--allowedTools", ",".join(BUILTIN_TOOLS)]
-    granted = granted_tools(arm)
-    denied = [mcp_tool(tool) for tool in CCM_TOOLS if tool not in granted]
+    granted = granted_tools(settings.profile, arm)
+    denied = [mcp_tool(tool) for tool in ALL_CCM_TOOLS if tool not in granted]
     command += [
         "--mcp-config",
         str(config_path),
         "--append-system-prompt",
-        GRAPH_NOTE if arm == "B" else SEARCH_NOTE,
+        arm_note(settings.profile, arm),
         "--allowedTools",
         ",".join([*BUILTIN_TOOLS, *(mcp_tool(tool) for tool in granted)]),
     ]
@@ -593,8 +629,8 @@ def agent_invocation(
             name=SERVER,
             command=settings.ccm_bin_dir / "ccm-mcp",
             env=server_env,
-            enabled_tools=None if arm == "B" else granted_tools(arm),
-            instructions=GRAPH_NOTE if arm == "B" else SEARCH_NOTE,
+            enabled_tools=granted_tools(settings.profile, arm),
+            instructions=arm_note(settings.profile, arm),
         )
     )
     return (
@@ -632,12 +668,12 @@ def codex_transcript(result: codex.CodexResult, wall_s: float) -> Transcript:
     )
 
 
-def verify_codex(transcript: Transcript, arm: Arm) -> None:
+def verify_codex(transcript: Transcript, profile: ProductProfile, arm: Arm) -> None:
     """Codex kolun dışındaki bir aracı kullandıysa ölçümü durdurur.
 
     Codex `exec` araç listesini bildirmediği için denetim kullanılan araçlar üzerindendir.
     """
-    allowed = {mcp_tool(tool) for tool in granted_tools(arm)}
+    allowed = {mcp_tool(tool) for tool in granted_tools(profile, arm)}
     used = {name for name in transcript.tool_calls if name.startswith("mcp__")}
     banned = {name for name in transcript.tool_calls if name in CODEX_FORBIDDEN_ITEMS}
     outside = sorted((used - allowed) | banned)
@@ -649,14 +685,14 @@ def read_transcript(settings: Settings, arm: Arm, lines: list[str], wall_s: floa
     """Ajanın dökümünü ortak biçime çevirir ve yalıtımı doğrular."""
     if settings.agent == "claude":
         transcript = parse_transcript(lines)
-        verify_isolation(transcript, arm, settings.auth)
+        verify_isolation(transcript, settings.profile, arm, settings.auth)
         return transcript
     try:
         result = codex.parse(lines)
     except codex.CodexOutputError as error:
         raise TranscriptError(str(error)) from error
     transcript = codex_transcript(result, wall_s)
-    verify_codex(transcript, arm)
+    verify_codex(transcript, settings.profile, arm)
     return transcript
 
 
@@ -685,7 +721,9 @@ def run_one(settings: Settings, task: Task, arm: Arm, rep: int, secrets: Secrets
         if arm != "A":
             env = ccm_env(settings, home, secrets)
             index_s = index_workspace(settings, workspace, env)
-            server_env = ccm_server_env(workspace, env)
+            server_env = ccm_server_env(
+                workspace, env, uses_legacy_discovery(settings.profile, arm)
+            )
         command, agent_env = agent_invocation(
             settings, task, arm, work, workspace, home, secrets, server_env
         )

@@ -1077,6 +1077,105 @@ pub async fn find_usages(engine: &Arc<RetrievalEngine>, args: &Value) -> Result<
     })
 }
 
+/// Tool: context
+/// Ajanın araç seçmesini istemeden tek sorgudan yeterli görev bağlamı üretir.
+/// Kesin hedefler doğrudan graf açıklamasına gider; doğal dil sorguları hibrit
+/// aramayla en iyi düğümü bulur ve aynı çağrıda yapısal açıklamayla zenginleşir.
+pub async fn context(engine: &Arc<RetrievalEngine>, args: &Value) -> Result<ToolResult> {
+    let query = args
+        .get("query")
+        .and_then(Value::as_str)
+        .ok_or_else(|| input_error("Missing 'query' argument"))?
+        .trim();
+    if query.is_empty() {
+        return Ok(tool_error("'query' cannot be empty".to_string()));
+    }
+
+    let max_tokens = max_tokens_from_args(args)?;
+    let budget_chars = max_tokens.saturating_mul(CHARS_PER_TOKEN);
+
+    // Önce aynı metni hedef gibi çözmeyi dene. Bu; sembol, dosya, path:line ve
+    // node ID girişlerini semantik arama yapmadan deterministik olarak cevaplar.
+    // Yalnızca bulunamayan ad doğal dil aramasına düşer; belirsiz hedef sessizce
+    // seçilmez.
+    match engine
+        .resolve_target(target_form(args, "query", "target")?)
+        .await
+    {
+        Ok(node_id) => {
+            let explanation = match engine.explain(&node_id).await {
+                Ok(explanation) => explanation,
+                Err(error) => return Ok(tool_error(error.to_string())),
+            };
+            return Ok(ToolResult {
+                content: vec![ToolResultContent {
+                    content_type: "text".to_string(),
+                    text: format_explanation(&explanation, true, max_tokens),
+                }],
+                is_error: None,
+            });
+        }
+        Err(ccm_core::engine::TargetError::NotFound(_)) => {}
+        Err(error) => return Ok(tool_error(error.to_string())),
+    }
+
+    let hits = engine.search_code_hybrid(query, 5).await?;
+    if hits.is_empty() {
+        return Ok(ToolResult {
+            content: vec![ToolResultContent {
+                content_type: "text".to_string(),
+                text: format!("No context found for query: '{query}'"),
+            }],
+            is_error: None,
+        });
+    }
+
+    // En iyi arama sonucu graf düğümüyse asıl değeri arama listesinden değil,
+    // yapısal açıklamadan üret: gövde + üyeler + callers/callees + testler.
+    let mut output = if let Some(node_id) = hits[0].node_id.as_deref() {
+        match engine.explain(node_id).await {
+            Ok(explanation) => {
+                let primary_tokens = max_tokens.saturating_mul(3).saturating_div(4).max(1);
+                format_explanation(&explanation, true, primary_tokens)
+            }
+            Err(_) => format_suggestions_output(&hits, false, max_tokens, max_tokens),
+        }
+    } else {
+        format_suggestions_output(&hits, false, max_tokens, max_tokens)
+    };
+
+    // Kalan bütçe varsa alternatifleri de kısa handle'lar olarak ver. Ajanın
+    // ikinci bir search çağrısı yapmadan belirsizliği görmesini sağlar.
+    if hits.len() > 1 && char_count(&output) < budget_chars {
+        let header = "related matches:\n";
+        let remaining_chars = budget_chars
+            .saturating_sub(char_count(&output))
+            .saturating_sub(char_count(header));
+        let remaining_tokens = remaining_chars / CHARS_PER_TOKEN;
+        if remaining_tokens > 0 {
+            output.push_str(header);
+            output.push_str(&format_suggestions_output(
+                &hits[1..],
+                false,
+                remaining_tokens,
+                remaining_tokens,
+            ));
+        }
+    }
+
+    if char_count(&output) > budget_chars {
+        output = clip(&output, budget_chars);
+    }
+
+    Ok(ToolResult {
+        content: vec![ToolResultContent {
+            content_type: "text".to_string(),
+            text: output,
+        }],
+        is_error: None,
+    })
+}
+
 /// Tool: map
 /// Projenin haritası: dosyalar diğer dosyalardan kullanımlarına göre sıralı.
 pub async fn project_map(engine: &Arc<RetrievalEngine>, args: &Value) -> Result<ToolResult> {

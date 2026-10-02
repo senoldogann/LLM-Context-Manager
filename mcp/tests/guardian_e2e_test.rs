@@ -71,6 +71,7 @@ fn guardian_mcp_all_tools_e2e() {
     let mut child = Command::new(assert_cmd::cargo::cargo_bin!("ccm-mcp"))
         .env("CCM_DISABLE_EMBEDDER", "1") // no OpenAI key needed
         .env("CCM_MCP_DEBUG", "0")
+        .env("CCM_MCP_LEGACY_TOOLS", "1")
         .env("CCM_ALLOWED_ROOTS", guardian_root())
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
@@ -107,7 +108,7 @@ fn guardian_mcp_all_tools_e2e() {
     println!("  ✓ tools capability present");
 
     // =======================================================================
-    // STEP 1 — tools/list: all 9 tools must be registered
+    // STEP 1 — tools/list: compatibility mode exposes the full surface
     // =======================================================================
     println!("\n── STEP 1: tools/list ──────────────────────────────────────");
     let resp = send(
@@ -125,6 +126,7 @@ fn guardian_mcp_all_tools_e2e() {
         .collect();
 
     let required_tools = [
+        "context",
         "map",
         "explain",
         "search_code",

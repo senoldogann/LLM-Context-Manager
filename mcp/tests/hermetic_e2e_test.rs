@@ -86,6 +86,7 @@ fn hermetic_mcp_all_tools_e2e_on_synthetic_repo() {
     let mut child = Command::new(assert_cmd::cargo::cargo_bin!("ccm-mcp"))
         .env("CCM_DISABLE_EMBEDDER", "1")
         .env("CCM_MCP_DEBUG", "0")
+        .env("CCM_MCP_LEGACY_TOOLS", "1")
         .env("CCM_ALLOWED_ROOTS", &repo_a)
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
@@ -97,7 +98,7 @@ fn hermetic_mcp_all_tools_e2e_on_synthetic_repo() {
     let stdout = child.stdout.take().unwrap();
     let mut reader = BufReader::new(stdout);
 
-    // 3. initialize + resource keşfi + tools/list: Codex akışı ve 9 araç.
+    // 3. initialize + resource keşfi + tools/list: compatibility yüzeyi.
     let resp = send(
         &mut stdin,
         &mut reader,
@@ -139,6 +140,7 @@ fn hermetic_mcp_all_tools_e2e_on_synthetic_repo() {
         .filter_map(|t| t["name"].as_str().map(str::to_string))
         .collect();
     for name in [
+        "context",
         "map",
         "explain",
         "search_code",

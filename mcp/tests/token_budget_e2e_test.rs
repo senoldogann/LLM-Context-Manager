@@ -38,6 +38,10 @@ fn fixture_files() -> Vec<(String, String)> {
             "from app.core import run\n\n\ndef main():\n    return run()\n".into(),
         ),
         (
+            "app/auth.py".into(),
+            "def authorize(token):\n    \"\"\"Validate bearer token for incoming requests.\"\"\"\n    return token == \"secret\"\n".into(),
+        ),
+        (
             "app/models.py".into(),
             "class Base:\n    def save(self):\n        return 1\n\n\nclass User(Base):\n    def save(self):\n        return super().save()\n".into(),
         ),
@@ -89,6 +93,10 @@ struct Server {
 
 impl Server {
     fn start() -> Self {
+        Self::start_with_legacy(false)
+    }
+
+    fn start_with_legacy(expose_legacy: bool) -> Self {
         std::env::set_var("CCM_DISABLE_EMBEDDER", "1");
         let dir = tempfile::tempdir().expect("tempdir");
         for (path, content) in fixture_files() {
@@ -106,11 +114,16 @@ impl Server {
             .await
             .expect("index fixture");
         });
-        let mut child = Command::new(assert_cmd::cargo::cargo_bin!("ccm-mcp"))
+        let mut command = Command::new(assert_cmd::cargo::cargo_bin!("ccm-mcp"));
+        command
             .env("CCM_DISABLE_EMBEDDER", "1")
             .env("CCM_MCP_DEBUG", "0")
             .env("CCM_AUTO_REFRESH", "0")
-            .env("CCM_ALLOWED_ROOTS", dir.path())
+            .env("CCM_ALLOWED_ROOTS", dir.path());
+        if expose_legacy {
+            command.env("CCM_MCP_LEGACY_TOOLS", "1");
+        }
+        let mut child = command
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .stderr(Stdio::null())
@@ -315,6 +328,54 @@ fn explain_returns_definition_callers_callees_and_tests_in_one_call() {
 }
 
 #[test]
+fn context_explains_an_exact_symbol_in_one_call() {
+    let mut server = Server::start();
+    let (text, is_error) = server.call("context", json!({"query": "run"}));
+    assert!(!is_error, "{text}");
+    for expected in [
+        "Function `run` · app/core.py:13-17",
+        "def run():",
+        "callers:",
+        "main · app/cli.py",
+        "tests:",
+        "test_run · tests/test_core.py",
+    ] {
+        assert!(text.contains(expected), "missing {expected:?}: {text}");
+    }
+}
+
+#[test]
+fn context_respects_one_answer_budget() {
+    let mut server = Server::start();
+    let (text, is_error) = server.call("context", json!({"query": "hub", "max_tokens": 200}));
+    assert!(!is_error, "{text}");
+    assert!(
+        text.chars().count() <= 1_000,
+        "200-token context packet plus freshness line is too large: {} chars\n{text}",
+        text.chars().count()
+    );
+    assert!(
+        text.contains("more (raise max_tokens)"),
+        "the packet should report callers that did not fit: {text}"
+    );
+}
+
+#[test]
+fn context_routes_natural_language_and_enriches_the_best_match() {
+    let mut server = Server::start();
+    let (text, is_error) = server.call(
+        "context",
+        json!({"query": "validate bearer token for incoming requests"}),
+    );
+    assert!(!is_error, "{text}");
+    assert!(
+        text.contains("Function `authorize` · app/auth.py:1-3"),
+        "natural-language retrieval should be enriched with a structural explanation: {text}"
+    );
+    assert!(text.contains("Validate bearer token"), "{text}");
+}
+
+#[test]
 fn explain_handles_a_symbol_without_callers() {
     let mut server = Server::start();
     // `app.util.helper` import edildiği için `app/other.py` içindeki `helper`'ı kimse çağırmaz.
@@ -380,7 +441,29 @@ fn tool_list_is_lean() {
     let bytes = serde_json::to_string(&response["result"])
         .expect("serialize tools/list")
         .len();
-    assert!(bytes <= 6_500, "tools/list is {bytes} bytes");
+    assert!(bytes <= 2_200, "default tools/list is {bytes} bytes");
+    let mut names: Vec<&str> = tools
+        .iter()
+        .map(|tool| tool["name"].as_str().expect("name"))
+        .collect();
+    names.sort_unstable();
+    assert_eq!(names, ["context", "index_project"]);
+    for tool in tools {
+        let description = tool["description"].as_str().unwrap_or_default();
+        assert!(
+            description.chars().count() <= 220,
+            "{} description has {} chars",
+            tool["name"],
+            description.chars().count()
+        );
+    }
+}
+
+#[test]
+fn legacy_tool_surface_is_explicit_but_still_available() {
+    let mut server = Server::start_with_legacy(true);
+    let response = server.request("tools/list", json!({}));
+    let tools = response["result"]["tools"].as_array().expect("tools");
     let mut names: Vec<&str> = tools
         .iter()
         .map(|tool| tool["name"].as_str().expect("name"))
@@ -389,6 +472,7 @@ fn tool_list_is_lean() {
     assert_eq!(
         names,
         [
+            "context",
             "diff_context",
             "explain",
             "find_nodes",
@@ -401,15 +485,6 @@ fn tool_list_is_lean() {
             "trace_call_chain"
         ]
     );
-    for tool in tools {
-        let description = tool["description"].as_str().unwrap_or_default();
-        assert!(
-            description.chars().count() <= 220,
-            "{} description has {} chars",
-            tool["name"],
-            description.chars().count()
-        );
-    }
 }
 
 #[test]

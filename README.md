@@ -10,8 +10,11 @@ English | [Turkce](./README.tr.md)
 
 > CCM parses your project with tree-sitter (13 languages), keeps a call and
 > import graph plus an optional semantic index on disk, and serves them to
-> agents such as Claude Code, Codex and Cursor through 10 MCP tools. On Django
-> 5.1 (6,670 files) a saved change shows up in graph results after a median of
+> agents such as Claude Code, Codex and Cursor through MCP. The recommended
+> agent entry point is `context`: give it a symbol, `path:line`, or a natural-
+> language coding task and CCM chooses structural graph lookup or hybrid search
+> server-side. On Django 5.1 (6,670 files) a saved change shows up in graph
+> results after a median of
 > about 0.6 s ([measurement](https://github.com/senoldogann/LLM-Context-Manager/pull/5):
 > release build, embedder off). Query responses start with the index state
 > (`fresh`, `stale · …` while a registered change is pending, or
@@ -25,12 +28,14 @@ English | [Turkce](./README.tr.md)
 
 > **Status:** search quality has a 35-task pilot benchmark. In an LLM-free
 > benchmark of 24 fixed questions on Flask and Django, the 0.4.0 tools answer
-> with 74% fewer response bytes and a third fewer calls than the 0.3 tools. No
-> caller was lost from the graph; 13 of 164 are outside the default answers (12
-> past the result limit of 20, one behind an ambiguous name)
-> ([token cost](./benchmarks/README.md#token-cost-of-answers-m2)). Whether
-> agents finish tasks faster or with fewer tokens is not measured yet. What is
-> and is not measured: [`benchmarks/`](./benchmarks/README.md).
+> with 74% fewer response bytes and a third fewer calls than the 0.3 tools
+> ([token cost](./benchmarks/README.md#token-cost-of-answers-m2)). A 2026-10-02
+> Claude Code pilot then showed the product-level gap: on three small/medium
+> tasks the agent never called CCM, while merely exposing CCM increased input
+> tokens. The active work therefore moves tool selection into the new one-call
+> `context` entry point. That change has not yet been shown to reduce end-to-end
+> agent tokens; the pilot and its negative result remain published under
+> [`benchmarks/results/agent/pilot-claude/`](./benchmarks/results/agent/pilot-claude/).
 
 [![Rust](https://img.shields.io/badge/Built%20With-Rust-orange.svg?style=flat-square&logo=rust)](https://www.rust-lang.org/)
 [![MCP Ready](https://img.shields.io/badge/MCP-Compatible-blue.svg?style=flat-square&logo=google-cloud)](https://modelcontextprotocol.io/)
@@ -149,7 +154,7 @@ If your editor is not auto-detected, use the manual MCP config printed by the in
 
 ### 🤖 Agent Skill
 
-CCM ships a [`SKILL.md`](SKILL.md) (about 4 KB) in both the source repository and the npm tarball. It tells an agent which of the 10 MCP tools answers which question, the `map` → `explain` → `impact_of_change` workflow and the answer budgets, and it includes a `CLAUDE.md` snippet and a SessionStart hook that loads the project map.
+CCM ships a [`SKILL.md`](SKILL.md) in both the source repository and the npm tarball. It teaches one default workflow: call `context` with the task or code question and let CCM choose graph/search operations server-side. The older structural tools remain documented as explicit compatibility and diagnostic primitives; the skill no longer recommends injecting a project map at session start.
 
 Copy it into your agent's skill directory and it becomes a first-class tool reference:
 ```bash
@@ -333,8 +338,15 @@ ccm-cli eval --tasks eval/golden_tasks.v3.ccm.json
 
 ### MCP Tools
 
+By default, MCP discovery exposes only `context` and `index_project`; this is
+intentional so unused schemas do not consume every agent session's input budget.
+The specialized tools below remain directly callable for compatibility. Set
+`CCM_MCP_LEGACY_TOOLS=1` only when a client needs the full legacy surface in
+`tools/list`.
+
 | Tool | Answers | Example |
 |------|---------|---------|
+| `context` | Default one-call task context; CCM chooses exact graph lookup or hybrid retrieval and enriches the best match | `context {query:"change auth timeout safely"}` |
 | `map` | What is in this project and what matters most | `map {path:"src"}`: files by cross-file use, with their top symbols |
 | `explain` | Everything about one symbol in one call | `explain {target:"Engine.start"}`: definition, body, members, callers, callees, tests |
 | `find_usages` | Who uses a symbol, and how | "Who calls this function?" |
@@ -346,11 +358,12 @@ ccm-cli eval --tasks eval/golden_tasks.v3.ccm.json
 | `index_project` | Refresh the project index | Incremental; `mode:"quick"` skips embeddings and upgrades them in the background |
 | `index_now` | Index and wait for the final stats | `mode:"quick"`, `"full"` or `"upgrade"` |
 
-Results are one line each: `- Kind: name · path:start-end · relation`. `target`
-accepts a name (`run`, `Engine.start`), a file path, `path:line` (a result's
-`path:start-end` works too) or a node ID; an ambiguous name returns its
-candidates. Every graph tool takes `max_tokens` (default 1500,
-`map` 1000) and says how many results did not fit.
+Use `context` first for normal agent work. Its packet may include the selected
+definition/body plus members, callers, callees, tests and short related matches
+inside one `max_tokens` budget. The specialized list tools keep the compact
+`- Kind: name · path:start-end · relation` format. `target` accepts a name
+(`run`, `Engine.start`), file path, `path:line` or node ID; ambiguous exact
+targets are reported rather than silently chosen.
 
 > **0.4.0 (breaking):** `get_context` and `read_graph` were replaced by
 > `explain`. Graph tools return compact one-line results without node IDs and

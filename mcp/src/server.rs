@@ -1298,7 +1298,22 @@ fn index_mode_property() -> Value {
 }
 
 fn handle_list_tools(id: Option<Value>) -> JsonRpcResponse {
-    let tools_list = vec![
+    let mut tools_list = vec![
+        ToolDefinition {
+            name: "context".to_string(),
+            title: "Get Task Context".to_string(),
+            description: Some("One-call code context. Give a symbol, path:line, or natural-language task; CCM chooses structural explain or hybrid search and returns a compact task packet.".to_string()),
+            input_schema: json!({
+                "type": "object",
+                "properties": {
+                    "query": { "type": "string", "description": "Symbol, path:line, or natural-language code question/task." },
+                    "max_tokens": max_tokens_property(tools::DEFAULT_MAX_TOKENS),
+                    "project_path": project_path_property()
+                },
+                "required": ["query"]
+            }),
+            annotations: READ_ONLY_TOOL,
+        },
         ToolDefinition {
             name: "map".to_string(),
             title: "Project Map".to_string(),
@@ -1462,6 +1477,16 @@ fn handle_list_tools(id: Option<Value>) -> JsonRpcResponse {
         },
     ];
 
+    // Varsayılan yüzey kasıtlı olarak küçüktür: pilotta kullanılmayan araç
+    // şemaları bile modelin input token bütçesini büyüttü. Eski araçlar doğrudan
+    // çağrılabilir kalır; yalnızca açık compatibility modunda keşfedilir.
+    let expose_legacy = std::env::var("CCM_MCP_LEGACY_TOOLS")
+        .ok()
+        .is_some_and(|value| value == "1");
+    if !expose_legacy {
+        tools_list.retain(|tool| matches!(tool.name.as_str(), "context" | "index_project"));
+    }
+
     create_success_response(id, json!({ "tools": tools_list }))
 }
 
@@ -1574,6 +1599,7 @@ async fn run_tool(
     let engine = loaded.engine.clone();
 
     let result = match tool_name {
+        "context" => tools::context(&engine, arguments).await?,
         "search_code" => tools::search_code(&engine, arguments).await?,
         "find_nodes" => tools::find_nodes(&engine, arguments).await?,
         "find_usages" => tools::find_usages(&engine, arguments).await?,
@@ -1670,7 +1696,8 @@ fn engine_error_result(tool_name: &str, error: &anyhow::Error) -> ToolResult {
 fn is_known_tool(tool_name: &str) -> bool {
     matches!(
         tool_name,
-        "search_code"
+        "context"
+            | "search_code"
             | "find_nodes"
             | "index_project"
             | "index_now"
@@ -1686,7 +1713,7 @@ fn is_known_tool(tool_name: &str) -> bool {
 fn validate_tool_arguments(tool_name: &str, arguments: &Value) -> std::result::Result<(), String> {
     // Her iç dizi tek bir zorunlu argümanın kabul edilen adlarıdır (yeni ad, eski ad).
     let required: &[&[&str]] = match tool_name {
-        "search_code" | "find_nodes" => &[&["query"]],
+        "context" | "search_code" | "find_nodes" => &[&["query"]],
         "find_usages" | "explain" => &[&["target", "node_id"]],
         "map" => &[],
         "trace_call_chain" => &[&["from", "from_id"], &["to", "to_id"]],

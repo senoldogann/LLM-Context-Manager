@@ -238,9 +238,11 @@ schema-7 indexes of the same corpus commits. Both runs are in
 ### Limits
 
 - Bytes, not tokens: bytes / 4 is an estimate, and tokenizers differ.
-- Not an agent benchmark: the tool plans are scripted. Whether a model asks
-  fewer questions, finishes tasks with fewer tokens or makes fewer mistakes is
-  the L3 agent benchmark, which has not run yet.
+- Not an agent benchmark: the tool plans are scripted. Agent behavior belongs
+  to L3. A 3-task Claude pilot has run and is published under
+  `results/agent/pilot-claude/`; it is a pilot, not the preregistered final L3
+  result. The follow-up `context-first-pilot` profile is documented in
+  `agent/PREREGISTRATION.md`.
 - Two Python repositories and 24 questions fixed before the run. Other
   languages are matched by name and were not measured.
 - Both versions include symbol bodies in `explain` answers (v1 through

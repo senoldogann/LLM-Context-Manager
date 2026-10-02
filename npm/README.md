@@ -191,13 +191,15 @@ Advanced overrides:
 
 ## 🤖 Usage in AI
 
-Once configured, ask your AI agent:
+Once configured, ask your AI agent to use CCM's single task-context entry point:
 
-> "Map this project with context-manager, then explain `UserService`."
+> "Use context-manager context to explain `UserService`."
 
-> "Who calls `parse_config`, and what breaks if I change `config.py`?"
+> "Use context-manager context: I need to change `parse_config`; give me the implementation, important callers and relevant tests."
 
-> "Search for the authentication flow in this codebase."
+> "Use context-manager context to find and explain the authentication flow."
+
+`context` accepts a symbol, `path:line`, or a natural-language coding task. CCM chooses graph lookup or hybrid retrieval server-side. Default MCP discovery exposes only `context` and `index_project` to reduce fixed schema cost; older structural tools remain directly callable, and advanced/legacy clients can expose them in `tools/list` with `CCM_MCP_LEGACY_TOOLS=1`.
 
 ## 🧠 Self-Improving Retrieval (v0.3.2+)
 

@@ -10,8 +10,11 @@
 
 > CCM projenizi tree-sitter ile (13 dil) ayrıştırır, diskte bir çağrı ve import
 > grafı ile isteğe bağlı bir anlamsal indeks tutar ve bunları Claude Code, Codex
-> ve Cursor gibi ajanlara 10 MCP aracıyla sunar. Django 5.1'de (6.670 dosya)
-> kaydedilen bir değişiklik graf sonuçlarında medyan yaklaşık 0,6 sn sonra
+> ve Cursor gibi ajanlara MCP üzerinden sunar. Önerilen ajan giriş noktası
+> `context` aracıdır: sembol, `yol:satır` ya da doğal dilli kodlama görevi
+> verilir; CCM yapısal graf çözümünü veya hibrit aramayı sunucu tarafında seçer.
+> Django 5.1'de (6.670 dosya) kaydedilen bir değişiklik graf sonuçlarında medyan
+> yaklaşık 0,6 sn sonra
 > görünür ([ölçüm](https://github.com/senoldogann/LLM-Context-Manager/pull/5):
 > release derleme, embedder kapalı). Sorgu yanıtları indeksin durumuyla başlar
 > (`fresh`, kaydedilmiş bir değişiklik beklerken `stale · …` ya da
@@ -24,15 +27,16 @@
 > cevap döndürdü ([benchmarks/](./benchmarks/README.md)).
 
 > **Durum:** arama kalitesi için 35 görevlik bir pilot benchmark var. Flask ve
-> Django üzerinde 24 sabit soruluk, LLM kullanmayan bir benchmark'ta 0.4.0
-> araçları 0.3 araçlarına göre %74 daha az cevap baytı ve üçte bir daha az
-> çağrıyla cevap veriyor. Graftan hiçbir çağıran kaybolmadı; 164 çağırandan 13'ü
-> varsayılan cevapların dışında kalıyor (12'si 20 sonuçluk sınırın ötesinde, biri
-> belirsiz bir adın arkasında)
-> ([token maliyeti](./benchmarks/README.md#token-cost-of-answers-m2)).
-> Ajanların görevleri daha hızlı ya da daha az tokenla bitirip bitirmediği henüz
-> ölçülmedi. Neyin ölçülüp neyin ölçülmediği:
-> [`benchmarks/`](./benchmarks/README.md).
+> Django üzerinde 24 sabit soruluk, LLM kullanmayan benchmark'ta 0.4.0 araçları
+> 0.3 araçlarına göre %74 daha az cevap baytı ve üçte bir daha az çağrı kullandı
+> ([token maliyeti](./benchmarks/README.md#token-cost-of-answers-m2)). Ancak
+> 2 Ekim 2026 Claude Code pilotunda ajan üç küçük/orta görevde CCM'yi hiç
+> çağırmadı ve CCM araçlarını yalnızca görünür kılmak bile input token kullanımını
+> artırdı. Bu nedenle aktif çalışma, araç seçimini yeni tek çağrılı `context`
+> giriş noktasının içine taşıyor. Bu değişikliğin uçtan uca ajan tokenlarını
+> azalttığı henüz gösterilmedi; negatif pilot sonucu
+> [`benchmarks/results/agent/pilot-claude/`](./benchmarks/results/agent/pilot-claude/)
+> altında yayınlanmış durumda.
 
 [![Rust](https://img.shields.io/badge/Built%20With-Rust-orange.svg?style=flat-square&logo=rust)](https://www.rust-lang.org/)
 [![MCP Ready](https://img.shields.io/badge/MCP-Compatible-blue.svg?style=flat-square&logo=google-cloud)](https://modelcontextprotocol.io/)
@@ -150,7 +154,7 @@ Editor otomatik tespit edilmezse installer'in verdigi manuel MCP config'i kullan
 
 ### 🤖 Ajan Skill'i
 
-CCM, kaynak repoda ve npm paketinde yaklaşık 4 KB'lık bir [`SKILL.md`](SKILL.md) ile gelir. Dosya, 10 MCP aracından hangisinin hangi soruyu cevapladığını, `map` → `explain` → `impact_of_change` akışını ve cevap bütçelerini anlatır; bir `CLAUDE.md` parçası ve proje haritasını yükleyen bir SessionStart hook örneği içerir.
+CCM, kaynak repoda ve npm paketinde bir [`SKILL.md`](SKILL.md) ile gelir. Dosya tek varsayılan akışı öğretir: görevi ya da kod sorusunu `context` aracına verin, graf/arama seçimini CCM sunucu tarafında yapsın. Eski yapısal araçlar uyumluluk ve tanılama için belgelenmeye devam eder; skill artık oturum başında proje haritası enjekte edilmesini önermiyor.
 
 Ajan skill dizininize kopyalayin, birinci sinif arac referansi olarak kullanin:
 ```bash
@@ -331,8 +335,15 @@ ccm-cli eval --tasks eval/golden_tasks.v3.ccm.json
 
 ### MCP Tool'lari
 
+Varsayılan MCP keşfi yalnızca `context` ve `index_project` araçlarını gösterir;
+bu kasıtlıdır, böylece kullanılmayan şemalar her ajan oturumunun input bütçesini
+tüketmez. Aşağıdaki uzman araçlar uyumluluk için doğrudan çağrılabilir kalır.
+Bir istemcinin tam eski yüzeyi `tools/list` içinde görmesi gerekiyorsa
+`CCM_MCP_LEGACY_TOOLS=1` ayarlayın.
+
 | Araç | Cevapladığı soru | Örnek |
 |------|------------------|-------|
+| `context` | Varsayılan tek çağrılık görev bağlamı; CCM kesin graf çözümü veya hibrit retrieval seçip en iyi sonucu zenginleştirir | `context {query:"auth timeout değişikliğini güvenle yap"}` |
 | `map` | Projede ne var, en önemlisi hangisi | `map {path:"src"}`: dosyalar diğer dosyalardaki kullanımlarına göre, en çok kullanılan sembolleriyle |
 | `explain` | Bir sembol hakkında her şey, tek çağrıda | `explain {target:"Engine.start"}`: tanım, gövde, üyeler, çağıranlar, çağrılanlar, testler |
 | `find_usages` | Bir sembolü kim, nasıl kullanıyor | "Bu fonksiyonu kim çağırıyor?" |
@@ -344,11 +355,12 @@ ccm-cli eval --tasks eval/golden_tasks.v3.ccm.json
 | `index_project` | Proje indeksini yenile | Artımlı; `mode:"quick"` embedding'leri arka plana bırakır |
 | `index_now` | İndeksle ve son istatistikleri bekle | `mode:"quick"`, `"full"` ya da `"upgrade"` |
 
-Her sonuç tek satırdır: `- Tür: ad · yol:başlangıç-bitiş · ilişki`. `target` bir
-ad (`run`, `Engine.start`), dosya yolu, `yol:satır` (sonuçtaki
-`yol:başlangıç-bitiş` de olur) ya da düğüm kimliği alır; belirsiz bir ad
-adaylarını döndürür. Her graf aracı `max_tokens` alır (varsayılan 1500, `map`
-için 1000) ve sığmayan sonuç sayısını söyler.
+Normal ajan işinde önce `context` kullanın. Tek `max_tokens` bütçesindeki
+paket, seçilen tanım/gövdeyle birlikte üyeler, çağıranlar, çağrılanlar, testler
+ve kısa ilgili eşleşmeler içerebilir. Uzman liste araçları kompakt
+`- Tür: ad · yol:başlangıç-bitiş · ilişki` biçimini korur. `target`; ad
+(`run`, `Engine.start`), dosya yolu, `yol:satır` veya düğüm kimliği alır;
+belirsiz kesin hedefler sessizce seçilmek yerine açıkça bildirilir.
 
 > **0.4.0 (uyumsuz değişiklik):** `get_context` ve `read_graph` yerini
 > `explain`'e bıraktı. Graf araçları düğüm kimliği içermeyen kompakt tek satırlık

@@ -14,16 +14,7 @@ use std::time::{Duration, Instant};
 use tempfile::tempdir;
 
 /// Salt okunur araçlar ve beklenen davranış ipuçları.
-const READ_TOOLS: [&str; 8] = [
-    "search_code",
-    "find_nodes",
-    "find_usages",
-    "explain",
-    "map",
-    "trace_call_chain",
-    "impact_of_change",
-    "diff_context",
-];
+const READ_TOOLS: [&str; 1] = ["context"];
 
 #[test]
 fn slow_tool_call_does_not_delay_concurrent_requests() -> TestResult<()> {
@@ -250,7 +241,7 @@ fn tools_list_exposes_titles_and_annotations() -> TestResult<()> {
         .collect();
     names.sort_unstable();
     let mut expected_names: Vec<&str> = READ_TOOLS.to_vec();
-    expected_names.extend(["index_project", "index_now"]);
+    expected_names.push("index_project");
     expected_names.sort_unstable();
     assert_eq!(names, expected_names);
 

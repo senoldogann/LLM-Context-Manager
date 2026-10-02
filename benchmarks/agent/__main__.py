@@ -20,6 +20,7 @@ from agent.run import (
     AuthError,
     Embedding,
     IsolationError,
+    ProductProfile,
     QuotaError,
     Secrets,
     Settings,
@@ -105,6 +106,7 @@ def settings_json(
         "effort": settings.effort,
         "embedding": settings.embedding,
         "auth": settings.auth,
+        "profile": settings.profile,
         "agent": settings.agent,
         "max_budget_usd": settings.max_budget_usd,
         "timeout_s": settings.timeout_s,
@@ -384,6 +386,13 @@ def build_parser() -> argparse.ArgumentParser:
     run.add_argument("--effort", required=True)
     run.add_argument("--embedding", choices=("local", "openai"), required=True)
     run.add_argument(
+        "--profile",
+        choices=("preregistered", "context-first-pilot"),
+        default="preregistered",
+        help="preregistered keeps the final A/B/C design; context-first-pilot compares the new "
+        "default context surface against the legacy full surface",
+    )
+    run.add_argument(
         "--auth",
         choices=("subscription", "api-key"),
         required=True,
@@ -432,6 +441,7 @@ def main() -> int:
         return command_report(namespace.out_dir, namespace.out)
     embedding: Embedding = namespace.embedding
     auth: Auth = namespace.auth
+    profile: ProductProfile = namespace.profile
     agent: AgentName = namespace.agent
     codex_home: Path | None = namespace.codex_home
     settings = Settings(
@@ -439,6 +449,7 @@ def main() -> int:
         effort=namespace.effort,
         embedding=embedding,
         auth=auth,
+        profile=profile,
         max_budget_usd=namespace.max_budget_usd,
         timeout_s=namespace.timeout_s,
         agent=agent,

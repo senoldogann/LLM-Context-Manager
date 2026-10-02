@@ -4,14 +4,23 @@ The current state of CCM and the next steps, for the owner and for any agent tha
 work. Keep it current: replace lines that stop being true instead of appending history (git log is
 the history).
 
-Last updated: 2026-10-02. Where work stopped: the Claude pilot ran (see "Claude pilot result"):
-the harness works, but the agent never used CCM and CCM's tools made sessions cost more. The next
-agent starts with "First: make CCM worth reaching for". The Codex pilot waits for the owner's
-ChatGPT limit to reset.
+Last updated: 2026-10-02. Where work stopped: the Claude pilot ran (see "Claude pilot result")
+and showed that the model ignored CCM while still paying its fixed tool-schema cost. The accepted
+product direction is now a single obvious `context` entry point: the agent states what it needs,
+and CCM chooses graph/search operations and composes the smallest useful task packet server-side.
+The first implementation slice is implemented and verified locally: `context` owns exact-vs-hybrid
+routing, default MCP discovery is `context + index_project`, and the legacy surface is opt-in but
+still directly callable. The harness now has a separate `context-first-pilot` product profile;
+Python compilation, profile assertions and all 24 task anchors pass. Ruff/mypy are not verified
+in this lease because `uv` is outside the command allowlist and system Python does not provide
+those modules. The next evidence step is a fresh Claude pilot after the profile is committed and
+the release binaries are rebuilt. The harness does not copy or persist the owner's Claude
+credentials. The Codex pilot also waits for the owner's ChatGPT limit to reset.
 
-**Owner's direction (2026-10-02):** keep developing CCM until it is visibly usage-friendly and
-indispensable in real systems; try every approach that might get there, and measure each change
-before claiming it.
+**Owner's direction (2026-10-02):** optimize for end-to-end agent token use without sacrificing
+answer quality, independent of model/provider/effort. Move retrieval/tool-selection decisions from
+the model into CCM where possible, keep claims measurement-backed, and do not expand the public
+surface unless an experiment justifies the fixed context cost.
 
 ## Goal
 
@@ -37,8 +46,9 @@ are parked. The owner's strategy notes are `docs/productization-plan.md`,
 | Rust | resolved through modules, `use` paths, workspace crates and impl blocks | `benchmarks/README.md`, "Rust edges (M3)" |
 | Other languages | matched by name and labelled `calls (inferred …)` or `may call` | `core/tests/lexical_labels_test.rs` |
 | Freshness after an edit (L1) | measured | `benchmarks/README.md`, "Level 1" |
-| Token cost of answers (M2) | measured | `benchmarks/README.md`, "Token cost of answers" |
-| Agent experiment (L3) | harness ready for Claude Code and Codex, checked without spending; not run | `benchmarks/agent/PREREGISTRATION.md` |
+| Token cost of answers (M2) | measured; compact answers cut scripted response bytes 74% | `benchmarks/README.md`, "Token cost of answers" |
+| Agent interface | default discovery: `context + index_project`; legacy structural tools remain callable and are discoverable with `CCM_MCP_LEGACY_TOOLS=1` | `mcp/src/server.rs`, `mcp/tests/token_budget_e2e_test.rs` |
+| Agent experiment (L3) | Claude 3-task pilot complete: B/C used no CCM and paid more input tokens; Codex pilot pending | `benchmarks/results/agent/pilot-claude/`, `benchmarks/agent/PREREGISTRATION.md` |
 
 ## What the measurements cover
 
@@ -71,71 +81,54 @@ showed:
 As configured, CCM is overhead on small repositories and the agent does not reach for it. That is
 the first problem to solve.
 
-## First: make CCM worth reaching for
+## First: one obvious entry point
 
-Measure each change against `pilot-claude` by re-running the same 9-run pilot into a new
-`--out-dir` and comparing input tokens, CCM calls and success.
+The pilot says the first product problem is not another ranking tweak: the model did not choose CCM
+at all, while merely exposing the tools cost input tokens. The working design is therefore:
 
-1. Cut the fixed cost: measure the tokens CCM adds to every session (tool list, descriptions,
-   schemas, note) and shrink them: fewer tools by default (`map`, `explain`, `find_usages`,
-   `impact_of_change`), shorter descriptions and schemas.
-2. Give the agent a reason to choose CCM: tool descriptions that say when CCM beats grep (common
-   names, cross-file impact, large repositories, answers after edits), then check what the agent
-   does with them.
-3. Test where grep gets expensive: a Django pilot (500 thousand lines) and multi-file changes.
-   Add index reuse first; one index per run already takes 114 s on serde.
-4. Keep the preregistered design for the final run, and run it only after B uses CCM where CCM
-   should help; record every product change with its commit.
+```text
+context({ query: "what I need to understand or change", max_tokens?: 1500 })
+```
+
+CCM owns the routing. Exact symbols/paths go to structural explanation; natural-language tasks go
+through hybrid retrieval and the best result is enriched with graph context in the same server
+call. The legacy tools remain callable during migration, but they are primitives/diagnostics rather
+than the workflow the model must learn.
+
+The first slice is now implemented. Exact targets go directly to graph explanation; natural-language
+requests use hybrid retrieval and enrich the best graph node in the same call. The default
+`tools/list` serializes to 1,105 bytes in a direct MCP measurement, versus 6,854 bytes when
+`CCM_MCP_LEGACY_TOOLS=1` exposes the compatibility surface. This is a fixed-schema measurement,
+not evidence of lower end-to-end agent tokens.
+
+Verification on the current worktree: all `ccm-mcp` tests passed (with the opt-in local-model and
+external guardian tests skipped as designed), including exact-target, natural-language, answer-budget,
+default-surface and legacy-compatibility coverage. `cargo clippy --workspace --all-targets -- -D
+warnings`, `cargo fmt --all -- --check` and `git diff --check` also passed.
+
+The next gate is behavioral: re-run the same Claude pilot. CCM is not ready for the preregistered
+final L3 run until the agent actually chooses `context` where it helps, with no success regression
+and a lower or defensible total-token cost. After that, add reusable indexes and test Django and
+multi-file edits where grep/read loops are expensive.
 
 ## Next steps, in order
 
-1. **L3 pilots** (the owner starts them; they use the subscriptions): 3 tasks × 3 arms × 1
-   repetition per agent, to check the harness on real runs and measure what one run uses. Pilot
-   results are not reported as the L3 result.
-   - Claude Code: the owner starts it in a terminal where `CLAUDE_CODE_OAUTH_TOKEN` (from `claude
-     setup-token`) is exported; the token never enters the repository or a chat. The measured
-     subscription is the account that created the exported token, not necessarily the account
-     running the agent session.
-   - Codex: the dedicated login exists (`~/.ccm-bench/codex-home`, ChatGPT, done 2026-10-02), so an
-     agent session can start the Codex pilot itself once the owner's ChatGPT limit has reset.
-   - Model: Claude Opus 5.5 and Codex `gpt-6.1-sol` for the pilots; confirm the final-run models
-     and the total budget with the owner after the pilots.
-   - More than one Claude account can share the work: run `claude setup-token` while signed in to
-     the account (the browser's claude.ai login decides which one), export that token and rerun
-     the same command with the same `--out-dir`; completed runs are skipped, and a usage-limit
-     stop (exit 4) is where the next account takes over. Records do not name the account.
-2. **L3 final run:** 24 tasks × 3 arms × 3 repetitions = 216 runs, sequential, about 8–18 hours
-   unattended. A usage-limit stop is expected on a subscription; rerun the same command after the
-   limit resets.
-3. **L3 report:** `python -m agent report` per run set, then a "Level 3: agents with and without
-   CCM" section in `benchmarks/README.md` with the run's commit, the arm tables, a failure ledger
-   written from the transcripts and a data-based proposal for the README headline. Raw records stay
-   in `benchmarks/results/agent/<run>/`. Publish negative or mixed results too.
-4. **Codex results:** the Codex agent is implemented (`benchmarks/agent/codex.py`, configuration
-   in the preregistration). Its zero-cost start without a login accepted every flag; the event
-   parsing and the run-level isolation check have not seen real output yet, so read the first
-   pilot transcripts before the final Codex run. The dedicated `CODEX_HOME` keeps the owner's
-   `~/.codex` login, memories, skills and global AGENTS.md out of the runs; never link or copy
-   `~/.codex/auth.json` (a token refresh could break the owner's login).
-5. **L3 extensions, after the core runs** (the owner asked to record them for later; each runs
-   the same three arms on both agents). The owner's original goal is quota savings without losing
-   quality on projects of any size during real development, and the core 24 tasks cover only
-   small and medium repositories (17–41 thousand lines) and short tasks:
-   - Large repository: Django 5.1 (2,899 files, about 500 thousand lines, already in
-     `corpus.json`), about 8 tasks. Indexing it for every B/C run is too slow: add a reusable
-     per-repository index (restore a prebuilt workspace and index at a fixed path) first.
-   - Development tasks: about 6 multi-file changes (change a signature and update every caller,
-     rename, move a function, fix a bug), judged by deterministic checks and, where they run
-     offline, the repository's own tests.
-   - TypeScript: one popular repository; CCM matches names only there today, so the result also
-     shows whether TS syntax-level resolution is worth building.
-   - Real-use diary for the owner's thesis: the owner's own tasks, alternating with and without
-     CCM, with a small script that sums tokens from Claude Code and Codex session logs.
-   - Codex quota share: Codex keeps 5-hour and weekly `rate_limits` (`used_percent`) in its
-     internal token events, not in `exec --json`; after the Codex pilot, decide whether to keep
-     session rollouts to record the quota share each run used.
-6. Later, only if the L3 result supports it: TypeScript/JavaScript syntax-level resolution, then
-   edge accuracy against language servers (L2).
+1. **Re-run the 3-task Claude pilot** into a new output directory using the verified
+   `context`-first/default-small-surface configuration. Compare success, CCM calls, input/output
+   tokens, turns and wall time with `pilot-claude`; inspect transcripts to see whether and why the
+   model selects `context`.
+2. **Run the Codex pilot** once the owner's ChatGPT limit allows it. The dedicated
+   `~/.ccm-bench/codex-home` login already exists; inspect the first real transcript before any
+   final run because the parser/isolation path has not yet seen real Codex output.
+3. **If agents use `context` but task packets are insufficient, improve server-side routing or
+   composition from transcript evidence**, not by adding default tools back speculatively.
+4. **Add reusable per-repository indexes**, then run large-repository (Django) and multi-file edit
+   extensions. These are the cases most likely to separate CCM from grep/read loops.
+5. **Only after the product configuration is stable, run the preregistered L3 final experiment:**
+   24 tasks × 3 arms × 3 repetitions per agent. Publish negative or mixed results and keep the
+   preregistration/failure ledger intact.
+6. Later, only if L3 evidence supports it: TypeScript/JavaScript syntax-level resolution, then edge
+   accuracy against language servers (L2).
 
 ## Running the L3 experiment
 
@@ -151,13 +144,14 @@ export CLAUDE_CODE_OAUTH_TOKEN=...      # in the terminal that runs the benchmar
 cd benchmarks
 uv run python -m agent check --corpus-dir corpus
 uv run python -m agent run --agent claude --agent-bin ~/.local/bin/claude --auth subscription \
+  --profile context-first-pilot \
   --model claude-opus-5-5 --effort high --embedding local --max-budget-usd 2 \
   --max-total-usd 15 --timeout-s 1800 --repetitions 1 \
   --tasks flask-callers-ensure-sync,express-trap-req-get,serde-edit-with-bound \
   --ccm-bin-dir ../target/release --ccm-model-dir ~/.ccm/models --corpus-dir corpus \
-  --out-dir results/agent/pilot-claude
-uv run python -m agent report --out-dir results/agent/pilot-claude \
-  --out results/agent/pilot-claude/report.md
+  --out-dir results/agent/pilot-claude-context-first
+uv run python -m agent report --out-dir results/agent/pilot-claude-context-first \
+  --out results/agent/pilot-claude-context-first/report.md
 ```
 
 Codex, on the ChatGPT subscription (pass the native binary; the npm wrapper needs Node on `PATH`):
@@ -167,17 +161,20 @@ mkdir -p ~/.ccm-bench/codex-home && CODEX_HOME=~/.ccm-bench/codex-home codex log
 cd benchmarks
 CODEX_BIN="$(npm root -g)/@openai/codex/node_modules/@openai/codex-darwin-arm64/vendor/aarch64-apple-darwin/bin/codex"
 uv run python -m agent run --agent codex --agent-bin "$CODEX_BIN" \
-  --codex-home ~/.ccm-bench/codex-home --auth subscription --model gpt-6.1-sol --effort high \
-  --embedding local --max-budget-usd 2 --max-total-usd 15 --timeout-s 1800 --repetitions 1 \
+  --codex-home ~/.ccm-bench/codex-home --auth subscription --profile context-first-pilot \
+  --model gpt-6.1-sol --effort high --embedding local --max-budget-usd 2 \
+  --max-total-usd 15 --timeout-s 1800 --repetitions 1 \
   --tasks flask-callers-ensure-sync,express-trap-req-get,serde-edit-with-bound \
   --ccm-bin-dir ../target/release --ccm-model-dir ~/.ccm/models --corpus-dir corpus \
-  --out-dir results/agent/pilot-codex
+  --out-dir results/agent/pilot-codex-context-first
 ```
 
 Use the newest model each agent offers when a run set starts (`~/.codex/models_cache.json` lists
 Codex's) and keep it for the whole set. The budget flags do not limit Codex, which reports no
-cost; its usage limit stops the run instead. For a final run use `--tasks all --repetitions 3`, a
-new `--out-dir` and a total cap that fits the plan. Exit codes: 3 total cap reached, 4 usage or
+cost; its usage limit stops the run instead. `--profile context-first-pilot` is only for the
+follow-up product pilots. For the preregistered final run, omit that flag (the default profile is
+`preregistered`), use `--tasks all --repetitions 3`, a new `--out-dir` and a total cap that
+fits the plan. Exit codes: 3 total cap reached, 4 usage or
 rate limit (rerun later), 5 isolation check failed (fix before continuing), 6 authentication
 failed (export a new token; give it only through `read -s`, never on a command line). A measured run refuses
 to start with uncommitted changes under `benchmarks/agent`. `--embedding openai` needs

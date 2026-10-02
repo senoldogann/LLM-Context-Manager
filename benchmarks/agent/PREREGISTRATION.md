@@ -155,3 +155,10 @@ the final run is complete.
 5. 2026-10-02: at the owner's request the report estimates Codex's cost from the official API
    price list, so that readers can weigh CCM in dollars as well as in tokens. Run records keep
    the raw token counts; the estimate is computed when the report is written.
+6. 2026-10-02: after the first Claude pilot showed that the agent never selected CCM while paying
+   the full tool-schema cost, a separate `context-first-pilot` product profile was added for
+   follow-up pilots only. In that profile A remains built-ins, B exposes the new default
+   `context` + `index_project` surface with a one-call context note, and C exposes the legacy full
+   structural surface with the previous navigation note. The default `preregistered` profile and
+   the final 24-task A/B/C design above are unchanged; results from the product pilot are not the
+   preregistered final L3 result.
