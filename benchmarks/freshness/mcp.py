@@ -205,6 +205,11 @@ class McpClient:
         version = as_str(info.get("version"), "serverInfo.version", McpProtocolError)
         return f"{name} {version}"
 
+    def list_tools(self, timeout_s: float) -> str:
+        """`tools/list` cevabını JSON metni olarak döndürür (boyut ölçümü için)."""
+        result = self._request("tools/list", {}, timeout_s)
+        return json.dumps(result, ensure_ascii=False)
+
     def call_tool(
         self, name: str, arguments: dict[str, JsonValue], timeout_s: float
     ) -> ToolResponse:
