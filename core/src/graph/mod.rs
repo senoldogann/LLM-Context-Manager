@@ -317,23 +317,25 @@ impl CodeGraph {
                 _ => (same_file, true),
             };
 
+            // Ad eşleşmesi kapsam çözümü değildir: tek aday çıkarımdır
+            // (`CallInferred`), aynı dosyadaki birden çok aday belirsiz çağrıdır.
+            // Türün çağrılmadan anılması referanstır, import değildir; belirsiz
+            // anım hiçbir kenar üretmez.
             for target_idx in resolved {
                 let target = &self.graph[target_idx];
                 let edge_type = if call_like {
                     if ambiguous {
                         EdgeType::CallAmbiguous
                     } else {
-                        EdgeType::Calls
+                        EdgeType::CallInferred
                     }
-                } else if matches!(
-                    target.node_type,
-                    NodeType::Class | NodeType::Struct | NodeType::Module
-                ) {
-                    if ambiguous {
-                        EdgeType::ImportAmbiguous
-                    } else {
-                        EdgeType::Imports
-                    }
+                } else if !ambiguous
+                    && matches!(
+                        target.node_type,
+                        NodeType::Class | NodeType::Struct | NodeType::Module
+                    )
+                {
+                    EdgeType::References
                 } else {
                     continue;
                 };
@@ -1306,14 +1308,15 @@ mod tests {
 
         graph.rebuild_reference_edges();
 
+        // Sözcüksel olgular: anım referanstır, tek tanımlı ada çağrı çıkarımdır (D1).
         assert!(graph
             .graph
             .edges_connecting(import_idx, class_idx)
-            .any(|edge| matches!(edge.weight(), EdgeType::Imports)));
+            .any(|edge| matches!(edge.weight(), EdgeType::References)));
         assert!(graph
             .graph
             .edges_connecting(function_idx, class_idx)
-            .any(|edge| matches!(edge.weight(), EdgeType::Calls)));
+            .any(|edge| matches!(edge.weight(), EdgeType::CallInferred)));
     }
 
     #[test]

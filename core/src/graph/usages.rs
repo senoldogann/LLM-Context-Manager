@@ -13,7 +13,8 @@ use super::{graph_node_file_path, CodeGraph, CodeNode, EdgeType, NodeType};
 pub enum UsageRelation {
     /// Çağrı hedefi kapsam kurallarıyla (import, yerel tanım, self/super) çözüldü.
     Calls,
-    /// Import edilmemiş tek proje tanımına bağlandı.
+    /// Kapsam kuralıyla değil, adın projedeki tek tanımı olduğu için bağlandı
+    /// (Python'da import edilmemiş tek tanım, sözcüksel dillerde ad eşleşmesi).
     CallsInferred,
     /// Alıcı türü bilinmiyor ya da birden çok aday var.
     MayCall,
@@ -32,7 +33,7 @@ impl UsageRelation {
     pub fn label(self) -> &'static str {
         match self {
             UsageRelation::Calls => "calls",
-            UsageRelation::CallsInferred => "calls (inferred: unique name, not imported)",
+            UsageRelation::CallsInferred => "calls (inferred: the only definition with that name)",
             UsageRelation::MayCall => "may call (receiver type unknown or several candidates)",
             UsageRelation::References => "references (uses without calling)",
             UsageRelation::Imports => "imports",

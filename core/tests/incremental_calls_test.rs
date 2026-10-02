@@ -50,7 +50,8 @@ async fn incremental_index_adds_call_edges() -> Result<()> {
     assert!(edge_idx.is_some(), "call edge not found");
 
     let edge_weight = graph.graph.edge_weight(edge_idx.unwrap()).unwrap();
-    assert!(matches!(edge_weight, EdgeType::Calls));
+    // Rust sözdizimi çözümü gelene kadar ad eşleşmesi çıkarımdır (D1).
+    assert!(matches!(edge_weight, EdgeType::CallInferred));
 
     Ok(())
 }

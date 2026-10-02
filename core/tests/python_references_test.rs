@@ -325,14 +325,14 @@ async fn python_calls_resolve_through_scopes_and_imports() -> Result<()> {
         edge_types(&graph, file_node(&graph, "app/cli.py"), run),
         vec![EdgeType::Imports]
     );
-    // Python dışı diller değişmez.
+    // Sözdizimi çıkarıcısı olmayan dil: ad eşleşmesi çıkarımdır (D1).
     assert_eq!(
         edge_types(
             &graph,
             node(&graph, "lib.rs", "foo"),
             node(&graph, "lib.rs", "bar")
         ),
-        calls
+        vec![EdgeType::CallInferred]
     );
     Ok(())
 }

@@ -928,7 +928,12 @@ final class HomeView {
             .edge_indices()
             .filter_map(|edge_idx| {
                 let (a, b) = graph.graph.edge_endpoints(edge_idx)?;
-                if graph.graph[edge_idx] == EdgeType::Calls {
+                // Her kesinlikteki çağrı kenarı: Swift sözcükseldir, ad eşleşmesi
+                // `CallInferred` ya da `CallAmbiguous` olur (D1).
+                if matches!(
+                    graph.graph[edge_idx],
+                    EdgeType::Calls | EdgeType::CallInferred | EdgeType::CallAmbiguous
+                ) {
                     Some(format!(
                         "{} -> {}",
                         graph.graph[a].name, graph.graph[b].name
@@ -981,7 +986,12 @@ final class HomeView {
             .edge_indices()
             .filter_map(|edge_idx| {
                 let (a, b) = graph.graph.edge_endpoints(edge_idx)?;
-                if graph.graph[edge_idx] == EdgeType::Calls {
+                // Her kesinlikteki çağrı kenarı: Swift sözcükseldir, ad eşleşmesi
+                // `CallInferred` ya da `CallAmbiguous` olur (D1).
+                if matches!(
+                    graph.graph[edge_idx],
+                    EdgeType::Calls | EdgeType::CallInferred | EdgeType::CallAmbiguous
+                ) {
                     Some((graph.graph[a].name.clone(), graph.graph[b].name.clone()))
                 } else {
                     None
@@ -1032,7 +1042,12 @@ final class HomeView {
             .edge_indices()
             .filter_map(|edge_idx| {
                 let (a, b) = graph.graph.edge_endpoints(edge_idx)?;
-                if graph.graph[edge_idx] == EdgeType::Calls {
+                // Her kesinlikteki çağrı kenarı: Swift sözcükseldir, ad eşleşmesi
+                // `CallInferred` ya da `CallAmbiguous` olur (D1).
+                if matches!(
+                    graph.graph[edge_idx],
+                    EdgeType::Calls | EdgeType::CallInferred | EdgeType::CallAmbiguous
+                ) {
                     Some((graph.graph[a].name.clone(), graph.graph[b].name.clone()))
                 } else {
                     None

@@ -163,12 +163,16 @@ impl HybridScorer {
 pub(crate) fn default_edge_weights() -> Vec<(EdgeType, f32)> {
     vec![
         (EdgeType::Calls, 1.00),
+        // Ad eşleşmesi kenarları eski `Calls`/`Imports` ağırlıklarını taşır;
+        // sözcüksel dillerin sıralaması değişmez, Python'un bu kenarları da sayılır.
+        (EdgeType::CallInferred, 1.00),
         (EdgeType::Inherits, 0.90),
         (EdgeType::Defines, 0.85),
         (EdgeType::Contains, 0.80),
         (EdgeType::Reads, 0.70),
         (EdgeType::Writes, 0.70),
         (EdgeType::Imports, 0.60),
+        (EdgeType::References, 0.60),
     ]
 }
 
