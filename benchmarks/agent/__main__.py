@@ -206,14 +206,29 @@ def command_check(corpus_dir: Path) -> int:
     return 0
 
 
+def spent_usd(out_dir: Path) -> float:
+    """Sonuç dizinindeki tamamlanmış koşuların bilinen toplam maliyeti."""
+    return sum(
+        outcome.cost_usd for outcome in read_outcomes(out_dir) if outcome.cost_usd is not None
+    )
+
+
 def command_run(
     settings: Settings,
     repetitions: int,
     raw_tasks: str,
+    max_total_usd: float,
 ) -> int:
-    """Eksik koşuları yürütür; tamamlanmış kayıtları resume sırasında atlar."""
+    """Eksik koşuları yürütür; tamamlanmış kayıtları atlar, toplam bütçeyi aşmadan durur.
+
+    Bir koşu en çok `--max-budget-usd` harcayabildiği için, harcanan tutara bu eklendiğinde
+    `--max-total-usd` aşılacaksa yeni koşu başlatılmaz (çıkış kodu 3); aynı komut daha yüksek
+    bir sınırla yeniden çalıştırılırsa kaldığı yerden sürer.
+    """
     if repetitions < 1:
         raise HarnessError("--repetitions must be at least 1")
+    if max_total_usd < settings.max_budget_usd:
+        raise HarnessError("--max-total-usd must be at least --max-budget-usd")
     tasks = selected_tasks(raw_tasks)
     validate_paths(settings)
     problems = check_tasks(tasks, settings.corpus_dir)
@@ -226,6 +241,7 @@ def command_run(
 
     total = len(tasks) * len(ARMS) * repetitions
     completed = 0
+    spent = spent_usd(settings.out_dir)
     for repetition in range(1, repetitions + 1):
         for task_index, task in enumerate(tasks):
             for arm in arm_order(task_index, repetition):
@@ -234,9 +250,18 @@ def command_run(
                     completed += 1
                     print(f"[{completed}/{total}] skip {name}")
                     continue
-                print(f"[{completed + 1}/{total}] run {name}", flush=True)
+                if spent + settings.max_budget_usd > max_total_usd:
+                    print(
+                        f"stopping before {name}: spent ${spent:.2f}; one more run could "
+                        f"exceed --max-total-usd {max_total_usd:.2f}",
+                        flush=True,
+                    )
+                    return 3
+                print(f"[{completed + 1}/{total}] run {name} (spent ${spent:.2f})", flush=True)
                 record = run_one(settings, task, arm, repetition, secrets)
                 completed += 1
+                if record.transcript is not None:
+                    spent += record.transcript.cost_usd
                 success = (
                     record.failure is None and record.score is not None and record.score.success
                 )
@@ -285,7 +310,13 @@ def build_parser() -> argparse.ArgumentParser:
     run.add_argument("--model", required=True)
     run.add_argument("--effort", required=True)
     run.add_argument("--embedding", choices=("local", "openai"), required=True)
-    run.add_argument("--max-budget-usd", type=float, required=True)
+    run.add_argument("--max-budget-usd", type=float, required=True, help="cap per agent run")
+    run.add_argument(
+        "--max-total-usd",
+        type=float,
+        required=True,
+        help="no new run starts if it could push the total over this amount",
+    )
     run.add_argument("--timeout-s", type=int, required=True)
     run.add_argument("--repetitions", type=int, required=True)
     run.add_argument("--tasks", required=True, help="'all' or comma-separated task ids")
@@ -321,7 +352,7 @@ def main() -> int:
         corpus_dir=namespace.corpus_dir.resolve(),
         out_dir=namespace.out_dir.resolve(),
     )
-    return command_run(settings, namespace.repetitions, namespace.tasks)
+    return command_run(settings, namespace.repetitions, namespace.tasks, namespace.max_total_usd)
 
 
 if __name__ == "__main__":

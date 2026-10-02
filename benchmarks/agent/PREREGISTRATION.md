@@ -89,8 +89,13 @@ remain visible. They are not discarded to improve an arm's rate.
 
 ## Isolation and fairness
 
-Each run gets a fresh exported corpus copy, a fresh temporary HOME and no user Claude settings,
-hooks, plugins or CLAUDE.md. Authentication comes only from environment variables.
+Each run gets a fresh exported corpus copy in a temporary directory outside the repository and the
+home directory, and a fresh temporary HOME and CLAUDE_CONFIG_DIR, so no user Claude settings,
+hooks, plugins, MCP servers or CLAUDE.md files are loaded. Claude Code runs in its normal mode,
+not `--bare`. Authentication comes only from `ANTHROPIC_API_KEY`. The harness stops the
+measurement, without recording the run, if Claude Code reports another authentication source, if
+the tools it exposes differ from the arm's tool set, or if a CLAUDE.md file sits above the
+workspace.
 
 CCM artifacts are placed under the temporary repository's `.git/ccm-bench/` directory, not in
 the source tree, so normal source discovery cannot benefit from or be polluted by index files.
@@ -105,3 +110,13 @@ A measured run refuses to start while `benchmarks/agent`, `benchmarks/pyproject.
 The result may support only what it measures. A negative or mixed result is retained and
 published. No headline claim about agent success, token savings or cost savings is made before
 the final run is complete.
+
+## Amendments before the first measured run
+
+1. 2026-10-02: `--bare` was dropped. A zero-cost smoke test (an invalid API key, so no model call
+   succeeded) showed that `--bare` exposes only Bash, Edit and Read even when Grep, Glob and Write
+   are requested, which would have made every arm, and the baseline above all, weaker than normal
+   Claude Code use. Isolation now relies on the temporary HOME, CLAUDE_CONFIG_DIR and workspace
+   location, and every run checks the reported authentication source and tool set.
+2. 2026-10-02: `--max-total-usd` stops the harness before a run that could push the total cost
+   over the given amount. It limits spending and does not change what is measured.

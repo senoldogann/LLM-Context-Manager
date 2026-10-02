@@ -2,8 +2,11 @@
 
 Kollar aynı modeli, aynı istemi ve aynı yerleşik araçları kullanır:
 A yalnız yerleşik araçlar, B ek olarak CCM'in tüm MCP araçları, C ek olarak yalnız `search_code`.
-Ajan `--bare` kipinde, geçici bir HOME ile çalışır: kullanıcının ayarları, kancaları,
-eklentileri ve CLAUDE.md dosyaları yüklenmez; kimlik doğrulama yalnız ANTHROPIC_API_KEY'dir.
+Ajan normal Claude Code kipinde, repo ve ev dizini dışındaki geçici bir dizinde, geçici HOME ve
+CLAUDE_CONFIG_DIR ile çalışır: kullanıcının ayarları, kancaları, eklentileri, MCP sunucuları ve
+CLAUDE.md dosyaları yüklenmez. `--bare` kullanılmaz; o kip yalnız Bash, Edit ve Read araçlarını
+açtığı için temel kolu gerçek kullanımdan zayıf yapardı. Her koşuda Claude Code'un bildirdiği
+kimlik kaynağı ve araç kümesi doğrulanır; sapma deneyi durdurur.
 """
 
 from __future__ import annotations
@@ -13,6 +16,7 @@ import os
 import shutil
 import signal
 import subprocess
+import tempfile
 import time
 from dataclasses import asdict, dataclass
 from pathlib import Path
@@ -63,6 +67,14 @@ class RunError(RuntimeError):
 
 class TranscriptError(RunError):
     """stream-json çıktısı beklenen biçimde değil."""
+
+
+class IsolationError(RuntimeError):
+    """Koşu deneyin yalıtım koşullarını bozdu; kayıt yazılmaz ve ölçüm durur.
+
+    Kimlik kaynağı ANTHROPIC_API_KEY değilse ücret kullanıcının abonelik kotasına yazılabilir;
+    araç kümesi kolunkiyle aynı değilse ya da üst dizinde CLAUDE.md varsa kollar karşılaştırılamaz.
+    """
 
 
 @dataclass(frozen=True)
@@ -116,6 +128,17 @@ class Transcript:
     usage: Usage
     tool_calls: dict[str, int]
     mcp_status: str
+    api_key_source: str
+    tools: tuple[str, ...]
+
+
+@dataclass(frozen=True)
+class Init:
+    """`init` olayından yalıtım denetimi için gerekenler."""
+
+    mcp_status: str
+    api_key_source: str
+    tools: tuple[str, ...]
 
 
 @dataclass(frozen=True)
@@ -151,6 +174,43 @@ def record_path(out_dir: Path, name: str) -> Path:
 def mcp_tool(name: str) -> str:
     """CCM aracının Claude Code'daki adı."""
     return f"mcp__{SERVER}__{name}"
+
+
+def granted_tools(arm: Arm) -> tuple[str, ...]:
+    """Kolun ajana açtığı CCM araçları."""
+    if arm == "A":
+        return ()
+    return CCM_TOOLS if arm == "B" else ("search_code",)
+
+
+def expected_tools(arm: Arm, connected: bool) -> tuple[str, ...]:
+    """Ajanın görmesi gereken araç kümesi; MCP bağlanmadıysa yalnız yerleşik araçlar."""
+    granted = granted_tools(arm) if connected else ()
+    return tuple(sorted((*BUILTIN_TOOLS, *(mcp_tool(tool) for tool in granted))))
+
+
+def verify_isolation(transcript: Transcript, arm: Arm) -> None:
+    """Kimlik kaynağı ya da araç kümesi deney tanımına uymuyorsa ölçümü durdurur."""
+    if transcript.api_key_source != "ANTHROPIC_API_KEY":
+        raise IsolationError(
+            f"Claude Code authenticated with {transcript.api_key_source!r}, not "
+            "ANTHROPIC_API_KEY; stopping so that no subscription quota is used"
+        )
+    expected = expected_tools(arm, transcript.mcp_status == "connected")
+    if transcript.tools != expected:
+        raise IsolationError(
+            f"arm {arm} exposed tools {list(transcript.tools)}, expected {list(expected)}"
+        )
+
+
+def memory_files_above(workspace: Path) -> list[Path]:
+    """Claude Code'un üst dizinlerden yükleyeceği CLAUDE.md dosyaları; boş olmalıdır."""
+    return [
+        parent / name
+        for parent in workspace.parents
+        for name in ("CLAUDE.md", "CLAUDE.local.md")
+        if (parent / name).is_file()
+    ]
 
 
 def prepare_workspace(corpus: Path, workspace: Path) -> None:
@@ -235,7 +295,6 @@ def claude_command(settings: Settings, task: Task, arm: Arm, config_path: Path) 
         str(settings.claude_bin),
         "-p",
         prompt_for(task),
-        "--bare",
         "--output-format",
         "stream-json",
         "--verbose",
@@ -256,7 +315,7 @@ def claude_command(settings: Settings, task: Task, arm: Arm, config_path: Path) 
     ]
     if arm == "A":
         return [*command, "--allowedTools", ",".join(BUILTIN_TOOLS)]
-    granted = CCM_TOOLS if arm == "B" else ("search_code",)
+    granted = granted_tools(arm)
     denied = [mcp_tool(tool) for tool in CCM_TOOLS if tool not in granted]
     command += [
         "--mcp-config",
@@ -339,6 +398,19 @@ def server_status(event: dict[str, JsonValue]) -> str:
     return "none"
 
 
+def init_from(event: dict[str, JsonValue]) -> Init:
+    """`init` olayını okur; kimlik kaynağı bildirilmemişse `missing` olur ve denetim durdurur."""
+    source = event.get("apiKeySource")
+    tools = as_list(event.get("tools"), "init.tools", TranscriptError)
+    return Init(
+        mcp_status=server_status(event),
+        api_key_source=(
+            "missing" if source is None else as_str(source, "init.apiKeySource", TranscriptError)
+        ),
+        tools=tuple(sorted(as_str(tool, "init.tools[]", TranscriptError) for tool in tools)),
+    )
+
+
 def tool_uses(event: dict[str, JsonValue]) -> list[str]:
     """Asistan mesajındaki araç çağrılarının adları."""
     message = as_object(event.get("message"), "assistant.message", TranscriptError)
@@ -354,7 +426,7 @@ def tool_uses(event: dict[str, JsonValue]) -> list[str]:
 
 
 def transcript_from(
-    result: dict[str, JsonValue], tool_calls: dict[str, int], mcp_status: str
+    result: dict[str, JsonValue], tool_calls: dict[str, int], init: Init
 ) -> Transcript:
     """Sonuç olayını ölçülere çevirir; eksik alan biçim hatasıdır."""
     usage = as_object(result.get("usage"), "result.usage", TranscriptError)
@@ -383,14 +455,16 @@ def transcript_from(
             ),
         ),
         tool_calls=dict(sorted(tool_calls.items())),
-        mcp_status=mcp_status,
+        mcp_status=init.mcp_status,
+        api_key_source=init.api_key_source,
+        tools=init.tools,
     )
 
 
 def parse_transcript(lines: list[str]) -> Transcript:
-    """stream-json dökümünü okur; sonuç olayı yoksa koşu geçersizdir."""
+    """stream-json dökümünü okur; `init` ya da sonuç olayı yoksa koşu geçersizdir."""
     tool_calls: dict[str, int] = {}
-    mcp_status = "none"
+    init: Init | None = None
     result: dict[str, JsonValue] | None = None
     for number, line in enumerate(lines, 1):
         if not line.strip():
@@ -398,15 +472,17 @@ def parse_transcript(lines: list[str]) -> Transcript:
         event = as_object(json_line(line, number), f"transcript line {number}", TranscriptError)
         kind = event.get("type")
         if kind == "system" and event.get("subtype") == "init":
-            mcp_status = server_status(event)
+            init = init_from(event)
         elif kind == "assistant":
             for name in tool_uses(event):
                 tool_calls[name] = tool_calls.get(name, 0) + 1
         elif kind == "result":
             result = event
+    if init is None:
+        raise TranscriptError("the transcript has no init event")
     if result is None:
         raise TranscriptError("the transcript has no result event")
-    return transcript_from(result, tool_calls, mcp_status)
+    return transcript_from(result, tool_calls, init)
 
 
 def write_record(path: Path, record: RunRecord) -> None:
@@ -420,13 +496,15 @@ def write_record(path: Path, record: RunRecord) -> None:
 def run_one(settings: Settings, task: Task, arm: Arm, rep: int, secrets: Secrets) -> RunRecord:
     """Bir koşuyu yürütür; ajan/ürün hataları da tamamlanmış kayıt olarak saklanır."""
     name = run_id(task, arm, rep)
-    work = settings.out_dir / "work" / name
-    if work.exists():
-        # Yarıda kalmış önceki denemenin kalıntısı; kaydı olmadığı için yeniden koşulur.
-        shutil.rmtree(work)
+    # Repo ve ev dizini dışında: Claude Code üst dizinlerdeki CLAUDE.md dosyalarını da yükler.
+    work = Path(tempfile.mkdtemp(prefix="ccm-l3-"))
     home = work / "home"
-    home.mkdir(parents=True)
+    home.mkdir()
     workspace = work / f"ws-{name}"
+    memory = memory_files_above(workspace)
+    if memory:
+        shutil.rmtree(work)
+        raise IsolationError(f"Claude Code would load {memory}; set TMPDIR to another directory")
     transcript_path = settings.out_dir / "transcripts" / f"{name}.jsonl"
     index_s: float | None = None
     wall_s: float | None = None
@@ -451,6 +529,7 @@ def run_one(settings: Settings, task: Task, arm: Arm, rep: int, secrets: Secrets
             transcript_path.with_suffix(".stderr"),
         )
         transcript = parse_transcript(transcript_path.read_text().splitlines())
+        verify_isolation(transcript, arm)
         if transcript.is_error:
             failure = f"claude result error ({transcript.subtype})"
         if arm != "A" and transcript.mcp_status != "connected":
