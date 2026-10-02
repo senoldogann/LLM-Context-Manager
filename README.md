@@ -139,7 +139,7 @@ If your editor is not auto-detected, use the manual MCP config printed by the in
 
 ### 🤖 Agent Skill
 
-CCM ships a [`SKILL.md`](SKILL.md) in both the source repository and npm tarball. AI agents can load it to understand all 10 MCP tools, stable node IDs, recommended flow, and common pitfalls.
+CCM ships a [`SKILL.md`](SKILL.md) (about 4 KB) in both the source repository and the npm tarball. It tells an agent which of the 10 MCP tools answers which question, the `map` → `explain` → `impact_of_change` workflow and the answer budgets, and it includes a `CLAUDE.md` snippet and a SessionStart hook that loads the project map.
 
 Copy it into your agent's skill directory and it becomes a first-class tool reference:
 ```bash
@@ -299,6 +299,9 @@ it sends a real probe request.
 # Index a project
 ccm-cli index --path .
 
+# Project map: files ordered by how much other files use them
+ccm-cli map --path .
+
 # Search semantically
 ccm-cli query --text "authentication logic"
 
@@ -320,18 +323,28 @@ ccm-cli eval --tasks eval/golden_tasks.v3.ccm.json
 
 ### MCP Tools
 
-| Tool | Purpose | Example |
+| Tool | Answers | Example |
 |------|---------|---------|
-| `search_code` | Hybrid semantic + graph search | "Find auth handling" |
-| `get_context` | Cursor-based retrieval | Context at file:line |
-| `find_nodes` | Find nodes by name or path | "find_nodes query=UserService" |
-| `read_graph` | Inspect a specific node by ID | Node details + graph connections |
-| `index_project` | Refresh the project index | Incremental re-index; `mode:"quick"` skips embeddings and upgrades them in the background |
-| `index_now` | Synchronously index and return final stats | `mode:"quick"`, `"full"`, or `"upgrade"` |
-| `find_usages` | Find all callers of a node | "Who calls this function?" |
-| `trace_call_chain` | BFS call chain between two nodes | from_id → to_id path |
-| `impact_of_change` | Blast radius of a file change | Dependents across codebase |
+| `map` | What is in this project and what matters most | `map {path:"src"}`: files by cross-file use, with their top symbols |
+| `explain` | Everything about one symbol in one call | `explain {target:"Engine.start"}`: definition, body, members, callers, callees, tests |
+| `find_usages` | Who uses a symbol, and how | "Who calls this function?" |
+| `impact_of_change` | What may break if a file changes | Dependents across the codebase |
+| `search_code` | Code by meaning or name | "Find auth handling" |
+| `find_nodes` | Symbols by name or path | `find_nodes {query:"UserService"}` |
+| `trace_call_chain` | How one symbol reaches another | `from` → `to` path |
 | `diff_context` | Recently changed code via git | Last N days of changes |
+| `index_project` | Refresh the project index | Incremental; `mode:"quick"` skips embeddings and upgrades them in the background |
+| `index_now` | Index and wait for the final stats | `mode:"quick"`, `"full"` or `"upgrade"` |
+
+Results are one line each: `- Kind: name · path:start-end · relation`. `target`
+accepts a name (`run`, `Engine.start`), `path:line` or a node ID; an ambiguous
+name returns its candidates. Every graph tool takes `max_tokens` (default 1500,
+`map` 1000) and says how many results did not fit.
+
+> **0.4.0 (breaking):** `get_context` and `read_graph` were replaced by
+> `explain`. Graph tools return compact one-line results without node IDs and
+> take a `max_tokens` budget instead of `max_chars` (still accepted as
+> characters / 4); pass `path:line` as `target`.
 
 ### Incremental indexing behavior
 

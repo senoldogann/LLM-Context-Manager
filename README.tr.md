@@ -138,7 +138,7 @@ Editor otomatik tespit edilmezse installer'in verdigi manuel MCP config'i kullan
 
 ### 🤖 Ajan Skill'i
 
-CCM, tum 9 MCP aracini, stable node ID formatini, onerilen akisi ve yaygin hatalari anlatan bir [`SKILL.md`](SKILL.md) ile geliyor. Dosya hem kaynak repoda hem npm paketinde bulunur.
+CCM, kaynak repoda ve npm paketinde yaklaşık 4 KB'lık bir [`SKILL.md`](SKILL.md) ile gelir. Dosya, 10 MCP aracından hangisinin hangi soruyu cevapladığını, `map` → `explain` → `impact_of_change` akışını ve cevap bütçelerini anlatır; bir `CLAUDE.md` parçası ve proje haritasını yükleyen bir SessionStart hook örneği içerir.
 
 Ajan skill dizininize kopyalayin, birinci sinif arac referansi olarak kullanin:
 ```bash
@@ -295,6 +295,9 @@ deneme isteği gönderir.
 # Projeyi indexle
 ccm-cli index --path .
 
+# Proje haritası: dosyalar, diğer dosyaların onları ne kadar kullandığına göre
+ccm-cli map --path .
+
 # Semantik arama
 ccm-cli query --text "authentication logic"
 
@@ -316,17 +319,28 @@ ccm-cli eval --tasks eval/golden_tasks.v3.ccm.json
 
 ### MCP Tool'lari
 
-| Tool | Amac | Ornek |
-|------|------|-------|
-| `search_code` | Hibrit semantik + graf arama | "Auth handling'i bul" |
-| `get_context` | Dosya ve satira gore baglam | file:line baglami |
-| `find_nodes` | Isim veya yola gore node bul | "find_nodes query=UserService" |
-| `read_graph` | Belirli bir node'u incele | Node detaylari + graf baglantilari |
-| `index_project` | Proje indexini yenile | Arttirmali yeniden indexleme |
-| `find_usages` | Bir node'un tum kullanimlarini bul | "Bu fonksiyonu kim cagiriyor?" |
-| `trace_call_chain` | Iki node arasi BFS cagri zinciri | from_id → to_id yolu |
-| `impact_of_change` | Bir dosya degisikliginin etki alani | Kod tabanindaki bagimlilar |
-| `diff_context` | Git'ten son degisiklikler | Son N gunun degisiklikleri |
+| Araç | Cevapladığı soru | Örnek |
+|------|------------------|-------|
+| `map` | Projede ne var, en önemlisi hangisi | `map {path:"src"}`: dosyalar diğer dosyalardaki kullanımlarına göre, en çok kullanılan sembolleriyle |
+| `explain` | Bir sembol hakkında her şey, tek çağrıda | `explain {target:"Engine.start"}`: tanım, gövde, üyeler, çağıranlar, çağrılanlar, testler |
+| `find_usages` | Bir sembolü kim, nasıl kullanıyor | "Bu fonksiyonu kim çağırıyor?" |
+| `impact_of_change` | Bir dosya değişirse ne bozulabilir | Kod tabanındaki bağımlılar |
+| `search_code` | Anlama ya da ada göre kod | "Auth handling'i bul" |
+| `find_nodes` | Ada ya da yola göre semboller | `find_nodes {query:"UserService"}` |
+| `trace_call_chain` | Bir sembol diğerine nasıl ulaşıyor | `from` → `to` yolu |
+| `diff_context` | Git'e göre son değişen kod | Son N günün değişiklikleri |
+| `index_project` | Proje indeksini yenile | Artımlı; `mode:"quick"` embedding'leri arka plana bırakır |
+| `index_now` | İndeksle ve son istatistikleri bekle | `mode:"quick"`, `"full"` ya da `"upgrade"` |
+
+Her sonuç tek satırdır: `- Tür: ad · yol:başlangıç-bitiş · ilişki`. `target` bir
+ad (`run`, `Engine.start`), `yol:satır` ya da düğüm kimliği alır; belirsiz bir ad
+adaylarını döndürür. Her graf aracı `max_tokens` alır (varsayılan 1500, `map`
+için 1000) ve sığmayan sonuç sayısını söyler.
+
+> **0.4.0 (uyumsuz değişiklik):** `get_context` ve `read_graph` yerini
+> `explain`'e bıraktı. Graf araçları düğüm kimliği içermeyen kompakt tek satırlık
+> sonuçlar döndürür ve `max_chars` yerine `max_tokens` bütçesi alır (`max_chars`
+> hâlâ karakter / 4 olarak kabul edilir); hedef olarak `yol:satır` verin.
 
 ### Arttirmali indexleme davranisi
 

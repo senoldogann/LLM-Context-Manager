@@ -554,24 +554,6 @@ impl CodeGraph {
         None
     }
 
-    /// Retrieves outgoing edges for a given node ID.
-    /// Returns Vec<(TargetID, EdgeType)>.
-    pub fn get_outgoing_edges(&self, id: &str) -> Vec<(String, EdgeType)> {
-        let mut edges = Vec::new();
-
-        if let Some(idx) = self.find_node_index_by_id(id) {
-            for edge in self
-                .graph
-                .edges_directed(idx, petgraph::Direction::Outgoing)
-            {
-                let target_node = &self.graph[edge.target()];
-                edges.push((target_node.id.clone(), edge.weight().clone()));
-            }
-        }
-
-        edges
-    }
-
     pub fn find_node_index_by_id(&self, id: &str) -> Option<NodeIndex> {
         self.id_index.get(id).cloned()
     }

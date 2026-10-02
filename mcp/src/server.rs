@@ -1271,37 +1271,110 @@ fn negotiate_protocol_version(params: Option<&Value>) -> &'static str {
     }
 }
 
+/// Araç şemalarında tekrarlanan özellikler. tools/list her oturumda modele
+/// gönderildiği için açıklamalar kısa tutulur.
+fn project_path_property() -> Value {
+    json!({ "type": "string" })
+}
+
+fn target_property() -> Value {
+    json!({ "type": "string", "description": "Name (`run`, `Engine.start`), `path:line` or node ID." })
+}
+
+fn limit_property(default: usize) -> Value {
+    json!({ "type": "integer", "description": format!("Max results, default {default}.") })
+}
+
+fn include_body_property(default: bool) -> Value {
+    json!({ "type": "boolean", "description": format!("Default {default}.") })
+}
+
+fn max_tokens_property(default: usize) -> Value {
+    json!({ "type": "integer", "description": format!("Answer budget in tokens, default {default}.") })
+}
+
+fn index_mode_property() -> Value {
+    json!({ "type": "string", "enum": ["full", "quick", "upgrade"] })
+}
+
 fn handle_list_tools(id: Option<Value>) -> JsonRpcResponse {
     let tools_list = vec![
         ToolDefinition {
-            name: "get_context".to_string(),
-            title: "Get Code Context".to_string(),
-            description: Some("Get code context for a given file and line.".to_string()),
+            name: "map".to_string(),
+            title: "Project Map".to_string(),
+            description: Some("Project overview in one call: code files ordered by how much other files use them, each with its most-used symbols. Call once at the start of a task.".to_string()),
             input_schema: json!({
                 "type": "object",
                 "properties": {
-                    "file": { "type": "string", "description": "The file path" },
-                    "line": { "type": "integer", "minimum": 1, "description": "The line number" },
-                    "project_path": { "type": "string", "description": "Optional absolute path to the project root. If provided, uses the index in that project." },
-                    "include_body": { "type": "boolean", "description": "Include node body snippets. Defaults to false (metadata only)." },
-                    "max_tokens": { "type": "integer", "minimum": 1, "maximum": 20000, "description": "Answer budget in estimated tokens (about 4 characters each). Defaults to 1500." }
+                    "path": { "type": "string", "description": "Only files under this directory." },
+                    "max_tokens": max_tokens_property(tools::DEFAULT_MAP_TOKENS),
+                    "project_path": project_path_property()
+                }
+            }),
+            annotations: READ_ONLY_TOOL,
+        },
+        ToolDefinition {
+            name: "explain".to_string(),
+            title: "Explain Symbol".to_string(),
+            description: Some("Everything about one symbol in one call: definition, body, members, callers, callees and tests as `path:line` lines. Use it before reading or editing a symbol.".to_string()),
+            input_schema: json!({
+                "type": "object",
+                "properties": {
+                    "target": target_property(),
+                    "include_body": include_body_property(true),
+                    "max_tokens": max_tokens_property(tools::DEFAULT_MAX_TOKENS),
+                    "project_path": project_path_property()
                 },
-                "required": ["file", "line"]
+                "required": ["target"]
+            }),
+            annotations: READ_ONLY_TOOL,
+        },
+        ToolDefinition {
+            name: "find_usages".to_string(),
+            title: "Find Usages".to_string(),
+            description: Some("Who uses a symbol. Each usage is labeled calls, calls (inferred), may call, references, imports, may import or inherits. An unknown target is an error, never an empty list.".to_string()),
+            input_schema: json!({
+                "type": "object",
+                "properties": {
+                    "target": target_property(),
+                    "limit": limit_property(20),
+                    "include_body": include_body_property(false),
+                    "max_tokens": max_tokens_property(tools::DEFAULT_MAX_TOKENS),
+                    "project_path": project_path_property()
+                },
+                "required": ["target"]
+            }),
+            annotations: READ_ONLY_TOOL,
+        },
+        ToolDefinition {
+            name: "impact_of_change".to_string(),
+            title: "Impact of Change".to_string(),
+            description: Some("What may break if a file changes: its dependents across the codebase, each with the relation that links it. Call it before editing.".to_string()),
+            input_schema: json!({
+                "type": "object",
+                "properties": {
+                    "file": { "type": "string", "description": "File path relative to the project root." },
+                    "limit": limit_property(30),
+                    "include_body": include_body_property(false),
+                    "max_tokens": max_tokens_property(tools::DEFAULT_MAX_TOKENS),
+                    "project_path": project_path_property()
+                },
+                "required": ["file"]
             }),
             annotations: READ_ONLY_TOOL,
         },
         ToolDefinition {
             name: "search_code".to_string(),
             title: "Search Code".to_string(),
-            description: Some("Search the codebase using hybrid semantic and graph-aware ranking. Returns node IDs and location metadata so results can be chained into read_graph.".to_string()),
-            input_schema: serde_json::json!({
+            description: Some("Find code by meaning or name when you do not know the symbol (hybrid semantic and graph ranking). One `path:line` line per result.".to_string()),
+            input_schema: json!({
                 "type": "object",
                 "properties": {
-                    "query": { "type": "string", "description": "The search query (e.g. 'how does authentication work?')" },
-                    "limit": { "type": "integer", "minimum": 1, "maximum": 50, "description": "Optional maximum number of results to return. Defaults to 5." },
-                    "project_path": { "type": "string", "description": "Optional absolute path to the project root. If provided, uses the index in that project." },
-                    "include_body": { "type": "boolean", "description": "Include node body snippets. Defaults to false (metadata only)." },
-                    "max_tokens": { "type": "integer", "minimum": 1, "maximum": 20000, "description": "Answer budget in estimated tokens (about 4 characters each). Defaults to 1500." }
+                    "query": { "type": "string" },
+                    "limit": limit_property(5),
+                    "include_body": include_body_property(false),
+                    "max_tokens": max_tokens_property(tools::DEFAULT_MAX_TOKENS),
+                    "project_path": project_path_property()
                 },
                 "required": ["query"]
             }),
@@ -1309,46 +1382,65 @@ fn handle_list_tools(id: Option<Value>) -> JsonRpcResponse {
         },
         ToolDefinition {
             name: "find_nodes".to_string(),
-            title: "Find Graph Nodes".to_string(),
-            description: Some("Find graph nodes by name, file path, or node ID fragment. Use this before read_graph when you do not already know the node ID.".to_string()),
-            input_schema: serde_json::json!({
+            title: "Find Symbols".to_string(),
+            description: Some("Find symbols by name, path or ID fragment. One `path:line` line per match.".to_string()),
+            input_schema: json!({
                 "type": "object",
                 "properties": {
-                    "query": { "type": "string", "description": "A node name, file path fragment, or node ID fragment to search for." },
-                    "limit": { "type": "integer", "minimum": 1, "maximum": 50, "description": "Optional maximum number of matches to return. Defaults to 10." },
-                    "project_path": { "type": "string", "description": "Optional absolute path to the project root. If provided, uses the index in that project." },
-                    "include_body": { "type": "boolean", "description": "Include node body snippets. Defaults to false (metadata only)." },
-                    "max_tokens": { "type": "integer", "minimum": 1, "maximum": 20000, "description": "Answer budget in estimated tokens (about 4 characters each). Defaults to 1500." }
+                    "query": { "type": "string" },
+                    "limit": limit_property(10),
+                    "include_body": include_body_property(false),
+                    "max_tokens": max_tokens_property(tools::DEFAULT_MAX_TOKENS),
+                    "project_path": project_path_property()
                 },
                 "required": ["query"]
             }),
             annotations: READ_ONLY_TOOL,
         },
         ToolDefinition {
-            name: "read_graph".to_string(),
-            title: "Read Graph Node".to_string(),
-            description: Some("Get details of a specific code node by ID.".to_string()),
-            input_schema: serde_json::json!({
+            name: "trace_call_chain".to_string(),
+            title: "Trace Call Chain".to_string(),
+            description: Some("Shortest call chain from one symbol to another.".to_string()),
+            input_schema: json!({
                 "type": "object",
                 "properties": {
-                    "node_id": { "type": "string", "description": "The ID of the node to retrieve." },
-                    "project_path": { "type": "string", "description": "Optional absolute path to the project root. If provided, uses the index in that project." },
-                    "include_body": { "type": "boolean", "description": "Include node body snippets. Defaults to false (metadata only)." },
-                    "max_tokens": { "type": "integer", "minimum": 1, "maximum": 20000, "description": "Answer budget in estimated tokens (about 4 characters each). Defaults to 1500." }
+                    "from": target_property(),
+                    "to": target_property(),
+                    "max_depth": { "type": "integer", "description": "Max hops, default 8." },
+                    "include_body": include_body_property(false),
+                    "max_tokens": max_tokens_property(tools::DEFAULT_MAX_TOKENS),
+                    "project_path": project_path_property()
                 },
-                "required": ["node_id"]
+                "required": ["from", "to"]
+            }),
+            annotations: READ_ONLY_TOOL,
+        },
+        ToolDefinition {
+            name: "diff_context".to_string(),
+            title: "Recently Changed Code".to_string(),
+            description: Some("Symbols in files changed in git during the last N days.".to_string()),
+            input_schema: json!({
+                "type": "object",
+                "properties": {
+                    "project_path": project_path_property(),
+                    "days": { "type": "integer", "description": "Days of git history, default 7." },
+                    "limit": limit_property(30),
+                    "include_body": include_body_property(false),
+                    "max_tokens": max_tokens_property(tools::DEFAULT_MAX_TOKENS)
+                },
+                "required": ["project_path"]
             }),
             annotations: READ_ONLY_TOOL,
         },
         ToolDefinition {
             name: "index_project".to_string(),
             title: "Index Project".to_string(),
-            description: Some("Refresh the project index. Usually performs an incremental update and reports when the existing index is already up to date. Use mode:'quick' for a fast graph-only index with deferred background semantic embeddings.".to_string()),
-            input_schema: serde_json::json!({
+            description: Some("Refresh the index in the background (incremental). Modes: full (default), quick (graph now, semantics later), upgrade (fill missing semantics).".to_string()),
+            input_schema: json!({
                 "type": "object",
                 "properties": {
-                    "project_path": { "type": "string", "description": "Absolute path to the project root to index." },
-                    "mode": { "type": "string", "enum": ["full", "quick", "upgrade"], "description": "Index mode. 'full' (default) embeds semantics inline, 'quick' builds graph only and upgrades semantics in the background, 'upgrade' fills missing semantics for the active index." }
+                    "project_path": project_path_property(),
+                    "mode": index_mode_property()
                 },
                 "required": ["project_path"]
             }),
@@ -1357,115 +1449,16 @@ fn handle_list_tools(id: Option<Value>) -> JsonRpcResponse {
         ToolDefinition {
             name: "index_now".to_string(),
             title: "Index Project and Wait".to_string(),
-            description: Some("Synchronously index the project and return the final stats when complete. Use mode:'quick' to return after graph-only indexing, or 'full' to wait for semantic embeddings.".to_string()),
-            input_schema: serde_json::json!({
+            description: Some("Index the project and wait for the final stats. Same modes as index_project.".to_string()),
+            input_schema: json!({
                 "type": "object",
                 "properties": {
-                    "project_path": { "type": "string", "description": "Absolute path to the project root to index." },
-                    "mode": { "type": "string", "enum": ["full", "quick", "upgrade"], "description": "Index mode. 'full' (default), 'quick' graph-only, 'upgrade' semantic-only." }
+                    "project_path": project_path_property(),
+                    "mode": index_mode_property()
                 },
                 "required": ["project_path"]
             }),
             annotations: INDEXING_TOOL,
-        },
-        ToolDefinition {
-            name: "find_usages".to_string(),
-            title: "Find Usages".to_string(),
-            description: Some("Find all nodes that call or reference a given node. Answers 'who calls this function?'. Each usage is labeled calls, calls (inferred), may call, references, imports, may import or inherits; an unknown node ID is an error, not an empty result.".to_string()),
-            input_schema: serde_json::json!({
-                "type": "object",
-                "properties": {
-                    "target": { "type": "string", "description": "Symbol to find usages for: a name (`run`, `Engine.start`), `path:line`, or a node ID." },
-                    "limit": { "type": "integer", "minimum": 1, "maximum": 50, "description": "Max usages to return. Defaults to 20." },
-                    "project_path": { "type": "string", "description": "Optional absolute path to the project root." },
-                    "include_body": { "type": "boolean", "description": "Include node body snippets. Defaults to false (metadata only)." },
-                    "max_tokens": { "type": "integer", "minimum": 1, "maximum": 20000, "description": "Answer budget in estimated tokens (about 4 characters each). Defaults to 1500." }
-                },
-                "required": ["target"]
-            }),
-            annotations: READ_ONLY_TOOL,
-        },
-        ToolDefinition {
-            name: "map".to_string(),
-            title: "Project Map".to_string(),
-            description: Some("Map the project in one call: files ordered by how much other files use them, each with its most-used symbols. Start here, then explain a symbol.".to_string()),
-            input_schema: serde_json::json!({
-                "type": "object",
-                "properties": {
-                    "path": { "type": "string", "description": "Only files under this directory, relative to the project root." },
-                    "project_path": { "type": "string", "description": "Optional absolute path to the project root." },
-                    "max_tokens": { "type": "integer", "minimum": 1, "maximum": 20000, "description": "Answer budget in estimated tokens (about 4 characters each). Defaults to 1000." }
-                }
-            }),
-            annotations: READ_ONLY_TOOL,
-        },
-        ToolDefinition {
-            name: "explain".to_string(),
-            title: "Explain Symbol".to_string(),
-            description: Some("Explain a symbol in one call: definition with body, members, callers, callees and tests, each as `path:line` lines within max_tokens.".to_string()),
-            input_schema: serde_json::json!({
-                "type": "object",
-                "properties": {
-                    "target": { "type": "string", "description": "Symbol: a name (`run`, `Engine.start`), `path:line`, or a node ID." },
-                    "project_path": { "type": "string", "description": "Optional absolute path to the project root." },
-                    "include_body": { "type": "boolean", "description": "Include the definition body. Defaults to true." },
-                    "max_tokens": { "type": "integer", "minimum": 1, "maximum": 20000, "description": "Answer budget in estimated tokens (about 4 characters each). Defaults to 1500." }
-                },
-                "required": ["target"]
-            }),
-            annotations: READ_ONLY_TOOL,
-        },
-        ToolDefinition {
-            name: "trace_call_chain".to_string(),
-            title: "Trace Call Chain".to_string(),
-            description: Some("Find the BFS call chain between two nodes. Shows how execution flows from one function to another.".to_string()),
-            input_schema: serde_json::json!({
-                "type": "object",
-                "properties": {
-                    "from": { "type": "string", "description": "Start symbol: name, `path:line` or node ID." },
-                    "to": { "type": "string", "description": "End symbol: name, `path:line` or node ID." },
-                    "max_depth": { "type": "integer", "minimum": 1, "maximum": 32, "description": "Max hops to search. Defaults to 8." },
-                    "project_path": { "type": "string", "description": "Optional absolute path to the project root." },
-                    "include_body": { "type": "boolean", "description": "Include node body snippets. Defaults to false (metadata only)." },
-                    "max_tokens": { "type": "integer", "minimum": 1, "maximum": 20000, "description": "Answer budget in estimated tokens (about 4 characters each). Defaults to 1500." }
-                },
-                "required": ["from", "to"]
-            }),
-            annotations: READ_ONLY_TOOL,
-        },
-        ToolDefinition {
-            name: "impact_of_change".to_string(),
-            title: "Impact of Change".to_string(),
-            description: Some("Analyze the blast radius of changing a file. Returns all dependents across the codebase. Essential for safe refactoring.".to_string()),
-            input_schema: serde_json::json!({
-                "type": "object",
-                "properties": {
-                    "file": { "type": "string", "description": "Relative path of the file to analyze (e.g. 'src/engine.rs')." },
-                    "limit": { "type": "integer", "minimum": 1, "maximum": 50, "description": "Max dependents to return. Defaults to 30." },
-                    "project_path": { "type": "string", "description": "Optional absolute path to the project root." },
-                    "include_body": { "type": "boolean", "description": "Include node body snippets. Defaults to false (metadata only)." },
-                    "max_tokens": { "type": "integer", "minimum": 1, "maximum": 20000, "description": "Answer budget in estimated tokens (about 4 characters each). Defaults to 1500." }
-                },
-                "required": ["file"]
-            }),
-            annotations: READ_ONLY_TOOL,
-        },
-        ToolDefinition {
-            name: "diff_context".to_string(),
-            title: "Recently Changed Code".to_string(),
-            description: Some("Get graph nodes for recently changed files based on git history. Shows what code has changed in the last N days.".to_string()),
-            input_schema: serde_json::json!({
-                "type": "object",
-                "properties": {
-                    "project_path": { "type": "string", "description": "Absolute path to the project root (must be a git repo)." },
-                    "days": { "type": "integer", "minimum": 1, "maximum": 3650, "description": "Days to look back in git history. Defaults to 7." },
-                    "limit": { "type": "integer", "minimum": 1, "maximum": 50, "description": "Max nodes to return. Defaults to 30." },
-                    "include_body": { "type": "boolean", "description": "Include node body snippets. Defaults to false (metadata only)." },
-                    "max_tokens": { "type": "integer", "minimum": 1, "maximum": 20000, "description": "Answer budget in estimated tokens (about 4 characters each). Defaults to 1500." }
-                },
-                "required": ["project_path"]
-            }),
-            annotations: READ_ONLY_TOOL,
         },
     ];
 
@@ -1581,10 +1574,8 @@ async fn run_tool(
     let engine = loaded.engine.clone();
 
     let result = match tool_name {
-        "get_context" => tools::get_context(&engine, arguments).await?,
         "search_code" => tools::search_code(&engine, arguments).await?,
         "find_nodes" => tools::find_nodes(&engine, arguments).await?,
-        "read_graph" => tools::read_graph(&engine, arguments).await?,
         "find_usages" => tools::find_usages(&engine, arguments).await?,
         "explain" => tools::explain(&engine, arguments).await?,
         "map" => tools::project_map(&engine, arguments).await?,
@@ -1679,10 +1670,8 @@ fn engine_error_result(tool_name: &str, error: &anyhow::Error) -> ToolResult {
 fn is_known_tool(tool_name: &str) -> bool {
     matches!(
         tool_name,
-        "get_context"
-            | "search_code"
+        "search_code"
             | "find_nodes"
-            | "read_graph"
             | "index_project"
             | "index_now"
             | "find_usages"
@@ -1697,9 +1686,7 @@ fn is_known_tool(tool_name: &str) -> bool {
 fn validate_tool_arguments(tool_name: &str, arguments: &Value) -> std::result::Result<(), String> {
     // Her iç dizi tek bir zorunlu argümanın kabul edilen adlarıdır (yeni ad, eski ad).
     let required: &[&[&str]] = match tool_name {
-        "get_context" => &[&["file"]],
         "search_code" | "find_nodes" => &[&["query"]],
-        "read_graph" => &[&["target", "node_id"]],
         "find_usages" | "explain" => &[&["target", "node_id"]],
         "map" => &[],
         "trace_call_chain" => &[&["from", "from_id"], &["to", "to_id"]],
@@ -1721,15 +1708,6 @@ fn validate_tool_arguments(tool_name: &str, arguments: &Value) -> std::result::R
                 names[0], tool_name
             ));
         }
-    }
-
-    if tool_name == "get_context"
-        && arguments
-            .get("line")
-            .and_then(Value::as_u64)
-            .is_none_or(|line| line == 0)
-    {
-        return Err("Missing or invalid 'line' argument for get_context".to_string());
     }
 
     Ok(())

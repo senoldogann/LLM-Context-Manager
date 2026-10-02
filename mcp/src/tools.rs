@@ -6,7 +6,7 @@ use std::path::{Component, Path};
 use std::sync::Arc;
 
 use crate::protocol::{ToolResult, ToolResultContent};
-use ccm_core::engine::{CursorPosition, RetrievalEngine, TargetForm};
+use ccm_core::engine::{RetrievalEngine, TargetForm};
 
 /// İstemci girdisinden kaynaklanan araç argüman hatası. MCP 2025-11-25 gereği
 /// araç yürütme hatası (`isError: true`) olarak döner; model argümanı düzeltip
@@ -28,9 +28,9 @@ pub(crate) fn input_error(message: impl Into<String>) -> anyhow::Error {
 
 const DEFAULT_MAX_LIMIT: usize = 50;
 /// Varsayılan cevap bütçesi (yaklaşık token; bir token ≈ dört karakter).
-const DEFAULT_MAX_TOKENS: usize = 1_500;
+pub(crate) const DEFAULT_MAX_TOKENS: usize = 1_500;
 /// `map` için varsayılan bütçe: bir oturumun başında tek seferlik genel bakış.
-const DEFAULT_MAP_TOKENS: usize = 1_000;
+pub(crate) const DEFAULT_MAP_TOKENS: usize = 1_000;
 const MAX_MAX_TOKENS: usize = 20_000;
 const CHARS_PER_TOKEN: usize = 4;
 const MAX_GRAPH_DEPTH: usize = 32;
@@ -137,67 +137,6 @@ fn include_body_from_args(args: &Value) -> bool {
         .unwrap_or(false)
 }
 
-/// Tool: get_context
-/// Returns context for a given file path and line number.
-pub async fn get_context(engine: &Arc<RetrievalEngine>, args: &Value) -> Result<ToolResult> {
-    // Input Validation
-    let file = args
-        .get("file")
-        .and_then(|v| v.as_str())
-        .ok_or_else(|| anyhow::anyhow!("Missing 'file' argument"))?;
-
-    if file.is_empty() {
-        return Ok(ToolResult {
-            content: vec![ToolResultContent {
-                content_type: "text".to_string(),
-                text: "Error: 'file' argument cannot be empty.".to_string(),
-            }],
-            is_error: Some(true),
-        });
-    }
-
-    let line = args.get("line").and_then(|v| v.as_u64()).ok_or_else(|| {
-        anyhow::anyhow!("Missing or invalid 'line' argument (must be a positive integer)")
-    })? as usize;
-
-    let project_path = args.get("project_path").and_then(|v| v.as_str());
-    let normalized_file = normalize_graph_path(file, project_path)?;
-
-    let cursor = CursorPosition {
-        file_path: normalized_file.clone(),
-        line,
-        column: 0,
-    };
-
-    let suggestions = engine.predict_context(&cursor).await?;
-
-    if suggestions.is_empty() {
-        return Ok(ToolResult {
-            content: vec![ToolResultContent {
-                content_type: "text".to_string(),
-                text: format!(
-                    "No context found for {}:{} (Normalized: {})\n\nThe code graph may not be indexed yet. Try indexing the project first.",
-                    file, line, normalized_file
-                ),
-            }],
-            is_error: None,
-        });
-    }
-
-    Ok(ToolResult {
-        content: vec![ToolResultContent {
-            content_type: "text".to_string(),
-            text: format_suggestions_output(
-                &suggestions,
-                include_body_from_args(args),
-                max_tokens_from_args(args),
-                max_tokens_from_args(args),
-            ),
-        }],
-        is_error: None,
-    })
-}
-
 /// Tool: search_code
 /// Performs semantic search in the codebase.
 pub async fn search_code(engine: &Arc<RetrievalEngine>, args: &Value) -> Result<ToolResult> {
@@ -288,79 +227,6 @@ pub async fn find_nodes(engine: &Arc<RetrievalEngine>, args: &Value) -> Result<T
         }],
         is_error: None,
     })
-}
-
-/// Tool: read_graph
-/// Retrieves details of a specific node in the code graph.
-pub async fn read_graph(engine: &Arc<RetrievalEngine>, args: &Value) -> Result<ToolResult> {
-    let normalized_id = match engine
-        .resolve_target(target_form(args, "target", "node_id")?)
-        .await
-    {
-        Ok(id) => id,
-        Err(error) => return Ok(tool_error(error.to_string())),
-    };
-
-    let node_opt = engine.get_node_by_id(&normalized_id).await;
-
-    if let Some(node) = node_opt {
-        let mut output = format!(
-            "## Node Details: {}\n\n**Type:** {:?}\n**ID:** {}\n**Range:** Lines {}-{}",
-            node.name, node.node_type, node.id, node.start_line, node.end_line
-        );
-        if include_body_from_args(args) && !node.content.is_empty() {
-            let body_chars = max_tokens_from_args(args) * CHARS_PER_TOKEN;
-            let body: String = node.content.chars().take(body_chars).collect();
-            output.push_str(&format!("\n\n```\n{}\n```", body));
-            if body.chars().count() < node.content.chars().count() {
-                output.push_str("\n*(body truncated by max_tokens)*");
-            }
-        }
-
-        // Append neighbors if available (Graph Navigator)
-        if let Some(neighbors) = engine.get_node_neighbors(&node.id).await {
-            output.push_str("\n\n### Graph Connections\n");
-
-            if !neighbors.calls.is_empty() {
-                output.push_str(&format!("**Calls:** {}\n", neighbors.calls.join(", ")));
-            }
-            if !neighbors.called_by.is_empty() {
-                output.push_str(&format!(
-                    "**Called By:** {}\n",
-                    neighbors.called_by.join(", ")
-                ));
-            }
-            if !neighbors.contains.is_empty() {
-                output.push_str(&format!(
-                    "**Contains:** {}\n",
-                    neighbors.contains.join(", ")
-                ));
-            }
-
-            if neighbors.calls.is_empty()
-                && neighbors.called_by.is_empty()
-                && neighbors.contains.is_empty()
-            {
-                output.push_str("_(No direct connections found)_");
-            }
-        }
-
-        Ok(ToolResult {
-            content: vec![ToolResultContent {
-                content_type: "text".to_string(),
-                text: output,
-            }],
-            is_error: None,
-        })
-    } else {
-        Ok(ToolResult {
-            content: vec![ToolResultContent {
-                content_type: "text".to_string(),
-                text: format!("Node not found with ID: {}", normalized_id),
-            }],
-            is_error: Some(true),
-        })
-    }
 }
 
 /// Helper: Normalizes a file path to match graph conventions (relative, starts with ./)
@@ -1011,7 +877,7 @@ fn format_index_stats_result(stats: ccm_core::IndexStats, mode: IndexModeArg) ->
     // yalnızca sözcüksel sonuç döndürmesinin nedeni görünmez kalır.
     let semantic_notice = stats.semantic_unavailable.as_ref().map(|reason| {
         format!(
-            "Semantic search is unavailable: {}. Graph tools (find_usages, impact_of_change, trace_call_chain, get_context, read_graph) work normally; call index_project again once that is resolved.",
+            "Semantic search is unavailable: {}. Graph tools (map, explain, find_usages, impact_of_change, trace_call_chain) work normally; call index_project again once that is resolved.",
             reason
         )
     });
@@ -1254,9 +1120,12 @@ fn format_explanation(
     let budget = max_tokens.saturating_mul(CHARS_PER_TOKEN);
     if include_body && !node.content.is_empty() {
         let limit = (budget / 2).saturating_sub(output.len() + 8);
-        output.push_str("```\n");
-        output.push_str(&clip(&node.content, limit));
-        output.push_str("\n```\n");
+        let body = clip(&node.content, limit);
+        if !body.is_empty() {
+            output.push_str("```\n");
+            output.push_str(&body);
+            output.push_str("\n```\n");
+        }
         if node.content.chars().count() > limit {
             output.push_str("… body clipped (raise max_tokens)\n");
         }

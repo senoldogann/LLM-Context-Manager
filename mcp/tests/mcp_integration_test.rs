@@ -108,10 +108,9 @@ fn mcp_large_index_returns_before_client_timeout_and_supports_polling(
             "id":2,
             "method":"tools/call",
             "params":{
-                "name":"get_context",
+                "name":"explain",
                 "arguments":{
-                    "file":"src/module_0.rs",
-                    "line":1
+                    "target":"src/module_0.rs:1"
                 }
             }
         }),
@@ -180,7 +179,7 @@ fn mcp_index_worker_timeout_releases_the_job_for_retry() -> Result<(), Box<dyn s
 }
 
 #[test]
-fn mcp_index_project_then_get_context() -> Result<(), Box<dyn std::error::Error>> {
+fn mcp_index_project_then_explain() -> Result<(), Box<dyn std::error::Error>> {
     let dir = tempdir()?;
     let project_root = dir.path();
 
@@ -232,24 +231,23 @@ fn mcp_index_project_then_get_context() -> Result<(), Box<dyn std::error::Error>
     assert!(line.contains("Project index refreshed successfully"));
     line.clear();
 
-    let context_req = json!({
+    let explain_req = json!({
         "jsonrpc": "2.0",
         "id": 3,
         "method": "tools/call",
         "params": {
-            "name": "get_context",
+            "name": "explain",
             "arguments": {
-                "file": "main.rs",
-                "line": 1,
+                "target": "main.rs:1",
                 "project_path": project_root.to_string_lossy()
             }
         }
     });
-    writeln!(stdin, "{}", context_req)?;
+    writeln!(stdin, "{}", explain_req)?;
     stdin.flush()?;
 
     reader.read_line(&mut line)?;
-    assert!(line.contains("Current:"));
+    assert!(line.contains("Function `foo` · main.rs:1-1"), "{line}");
 
     let _ = child.kill();
 
@@ -677,7 +675,7 @@ fn mcp_implicit_default_path_obeys_strict_allowlist() -> Result<(), Box<dyn std:
         &mut reader,
         json!({
             "jsonrpc":"2.0","id":1,"method":"tools/call",
-            "params":{"name":"get_context","arguments":{"file":"main.rs","line":1}}
+            "params":{"name":"explain","arguments":{"target":"main.rs:1"}}
         }),
     )?;
     assert_tool_error(&denied, "not allowed");
@@ -711,7 +709,7 @@ fn mcp_strict_mode_without_default_root_rejects_implicit_retrieval(
         &mut reader,
         json!({
             "jsonrpc":"2.0","id":1,"method":"tools/call",
-            "params":{"name":"get_context","arguments":{"file":"main.rs","line":1}}
+            "params":{"name":"explain","arguments":{"target":"main.rs:1"}}
         }),
     )?;
     assert_tool_error(&denied, "No default project root");
@@ -824,11 +822,11 @@ fn mcp_rejects_invalid_tools_before_lazy_indexing() -> Result<(), Box<dyn std::e
         &mut reader,
         json!({
             "jsonrpc":"2.0","id":2,"method":"tools/call",
-            "params":{"name":"get_context","arguments":{"project_path":project.path()}}
+            "params":{"name":"explain","arguments":{"project_path":project.path()}}
         }),
     )?;
     // Argüman doğrulama hatası araç yürütme hatasıdır (MCP 2025-11-25).
-    assert_tool_error(&malformed, "Missing or invalid 'file' argument");
+    assert_tool_error(&malformed, "Missing or invalid 'target' argument");
     assert!(!project.path().join("data").exists());
 
     let _ = child.kill();
@@ -866,8 +864,8 @@ fn mcp_missing_index_fails_fast_without_hidden_rebuild() -> Result<(), Box<dyn s
         &mut reader,
         json!({
             "jsonrpc":"2.0","id":1,"method":"tools/call",
-            "params":{"name":"get_context","arguments":{
-                "file":"main.rs","line":1,"project_path":project.path()
+            "params":{"name":"explain","arguments":{
+                "target":"main.rs:1","project_path":project.path()
             }}
         }),
     )?;
@@ -926,10 +924,13 @@ fn mcp_custom_db_path_is_used_for_index_and_retrieval() -> Result<(), Box<dyn st
         &mut reader,
         json!({
             "jsonrpc":"2.0","id":2,"method":"tools/call",
-            "params":{"name":"get_context","arguments":{"file":"main.rs","line":1}}
+            "params":{"name":"explain","arguments":{"target":"main.rs:1"}}
         }),
     )?;
-    assert!(tool_text(&context).contains("Current: custom_location"));
+    assert!(
+        tool_text(&context).contains("Function `custom_location`"),
+        "{context}"
+    );
 
     let _ = child.kill();
     Ok(())
@@ -967,7 +968,7 @@ fn mcp_default_corrupt_graph_requires_and_accepts_rebuild() -> Result<(), Box<dy
         &mut reader,
         json!({
             "jsonrpc":"2.0","id":1,"method":"tools/call",
-            "params":{"name":"get_context","arguments":{"file":"main.rs","line":1}}
+            "params":{"name":"explain","arguments":{"target":"main.rs:1"}}
         }),
     )?;
     // Asıl sebep ve düzeltme yolu modele gösterilir.
@@ -992,10 +993,13 @@ fn mcp_default_corrupt_graph_requires_and_accepts_rebuild() -> Result<(), Box<dy
         &mut reader,
         json!({
             "jsonrpc":"2.0","id":3,"method":"tools/call",
-            "params":{"name":"get_context","arguments":{"file":"main.rs","line":1}}
+            "params":{"name":"explain","arguments":{"target":"main.rs:1"}}
         }),
     )?;
-    assert!(tool_text(&recovered).contains("Current: repaired"));
+    assert!(
+        tool_text(&recovered).contains("Function `repaired`"),
+        "{recovered}"
+    );
 
     let _ = child.kill();
     Ok(())
@@ -1046,10 +1050,13 @@ fn mcp_broken_generation_pointer_can_be_repaired_with_index_project(
         &mut reader,
         json!({
             "jsonrpc":"2.0","id":3,"method":"tools/call",
-            "params":{"name":"get_context","arguments":{"file":"main.rs","line":1}}
+            "params":{"name":"explain","arguments":{"target":"main.rs:1"}}
         }),
     )?;
-    assert!(tool_text(&recovered).contains("Current: pointer_repaired"));
+    assert!(
+        tool_text(&recovered).contains("Function `pointer_repaired`"),
+        "{recovered}"
+    );
 
     let _ = child.kill();
     Ok(())
@@ -1317,64 +1324,68 @@ fn mcp_resolves_class_import_constructor_context_and_impact(
     assert!(usages_text.contains("- File · camera.py:"), "{usages_text}");
     assert!(usages_text.contains("open_camera"), "{usages_text}");
 
-    let context = send_request(
+    // explain: konumdaki sembol, varsayılan olarak gövdesi ve çağıranlarıyla.
+    let explained = send_request(
         &mut stdin,
         &mut reader,
         json!({
             "jsonrpc":"2.0","id":5,"method":"tools/call",
-            "params":{"name":"get_context","arguments":{
-                "file":"camera.py","line":4,"project_path":project_root,
-                "include_body":true
+            "params":{"name":"explain","arguments":{
+                "target":"camera.py:4","project_path":project_root
             }}
         }),
     )?;
-    let context_text = tool_text(&context);
-    assert!(context_text.contains("Current: open_camera"));
-    assert!(context_text.contains("def open_camera"));
+    let explained_text = tool_text(&explained);
+    assert!(
+        explained_text.contains("Function `open_camera` · camera.py:"),
+        "{explained_text}"
+    );
+    assert!(
+        explained_text.contains("def open_camera"),
+        "{explained_text}"
+    );
+    assert!(
+        explained_text.contains("boot · camera.py:"),
+        "boot calls open_camera: {explained_text}"
+    );
 
-    // Varsayılan (metadata-only) çıktı body içermez ama node kimliği taşır.
-    let context_meta = send_request(
+    let without_body = send_request(
         &mut stdin,
         &mut reader,
         json!({
             "jsonrpc":"2.0","id":6,"method":"tools/call",
-            "params":{"name":"get_context","arguments":{
-                "file":"camera.py","line":4,"project_path":project_root
+            "params":{"name":"explain","arguments":{
+                "target":node_id,"project_path":project_root,"include_body":false
             }}
         }),
     )?;
-    let context_meta_text = tool_text(&context_meta);
-    assert!(context_meta_text.contains("Current: open_camera"));
-    assert!(!context_meta_text.contains("def open_camera"));
+    let without_body_text = tool_text(&without_body);
+    assert!(
+        without_body_text.contains("Class `YoloDetector`"),
+        "{without_body_text}"
+    );
+    assert!(
+        !without_body_text.contains("class YoloDetector:"),
+        "{without_body_text}"
+    );
 
-    let graph = send_request(
+    // Başlık bütçenin yarısını doldurunca gövde yerine kırpılma notu kalır.
+    let clipped = send_request(
         &mut stdin,
         &mut reader,
         json!({
             "jsonrpc":"2.0","id":7,"method":"tools/call",
-            "params":{"name":"read_graph","arguments":{
-                "node_id":node_id,"project_path":project_root
+            "params":{"name":"explain","arguments":{
+                "target":node_id,"project_path":project_root,"max_tokens":30
             }}
         }),
     )?;
-    let graph_text = tool_text(&graph);
-    assert!(graph_text.contains("Node Details: YoloDetector"));
-    assert!(!graph_text.contains("class YoloDetector"));
-
-    let graph_with_body = send_request(
-        &mut stdin,
-        &mut reader,
-        json!({
-            "jsonrpc":"2.0","id":8,"method":"tools/call",
-            "params":{"name":"read_graph","arguments":{
-                "node_id":node_id,"project_path":project_root,
-                "include_body":true,"max_chars":8
-            }}
-        }),
-    )?;
-    let graph_with_body_text = tool_text(&graph_with_body);
-    assert!(graph_with_body_text.contains("class Yo"));
-    assert!(graph_with_body_text.contains("body truncated by max_tokens"));
+    let clipped_text = tool_text(&clipped);
+    assert!(clipped_text.contains("body clipped"), "{clipped_text}");
+    assert!(
+        !clipped_text.contains("```"),
+        "no empty code fence: {clipped_text}"
+    );
 
     let impact = send_request(
         &mut stdin,
@@ -1487,7 +1498,7 @@ fn mcp_client_roots_select_and_allow_the_workspace() -> Result<(), Box<dyn std::
         &mut stdin,
         &mut reader,
         json!({"jsonrpc":"2.0","id":3,"method":"tools/call",
-               "params":{"name":"get_context","arguments":{"file":"main.rs","line":1}}}),
+               "params":{"name":"explain","arguments":{"target":"main.rs:1"}}}),
     )?;
     assert!(
         tool_text(&context).contains("workspace_only"),

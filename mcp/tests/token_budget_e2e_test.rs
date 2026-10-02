@@ -126,7 +126,7 @@ impl Server {
             response.get("error").is_none(),
             "{tool} JSON-RPC error: {response}"
         );
-        // Tazelik satırı ayrı bir içerik öğesidir; tüm metinler birleştirilir.
+        // Metin tazelik satırıyla başlar; birden çok içerik öğesi birleştirilir.
         let text = response["result"]["content"]
             .as_array()
             .map(|items| {
@@ -280,4 +280,44 @@ fn map_with_an_unknown_prefix_says_so() {
     let (text, is_error) = server.call("map", json!({"path": "nope"}));
     assert!(is_error, "{text}");
     assert!(text.contains("no indexed code under nope"), "{text}");
+}
+
+#[test]
+fn tool_list_is_lean() {
+    let mut server = Server::start();
+    let response = server.request("tools/list", json!({}));
+    let tools = response["result"]["tools"].as_array().expect("tools");
+    let bytes = serde_json::to_string(&response["result"])
+        .expect("serialize tools/list")
+        .len();
+    assert!(bytes <= 6_500, "tools/list is {bytes} bytes");
+    let mut names: Vec<&str> = tools
+        .iter()
+        .map(|tool| tool["name"].as_str().expect("name"))
+        .collect();
+    names.sort_unstable();
+    assert_eq!(
+        names,
+        [
+            "diff_context",
+            "explain",
+            "find_nodes",
+            "find_usages",
+            "impact_of_change",
+            "index_now",
+            "index_project",
+            "map",
+            "search_code",
+            "trace_call_chain"
+        ]
+    );
+    for tool in tools {
+        let description = tool["description"].as_str().unwrap_or_default();
+        assert!(
+            description.chars().count() <= 220,
+            "{} description has {} chars",
+            tool["name"],
+            description.chars().count()
+        );
+    }
 }

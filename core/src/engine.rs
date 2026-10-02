@@ -108,14 +108,6 @@ impl std::fmt::Display for TargetError {
 
 impl std::error::Error for TargetError {}
 
-/// Neighbors of a node in the code graph, categorized by relationship.
-#[derive(Debug, Clone, Default)]
-pub struct NodeNeighbors {
-    pub calls: Vec<String>,     // Functions this node calls
-    pub called_by: Vec<String>, // Functions that call this node
-    pub contains: Vec<String>,  // Child nodes (for files/classes)
-}
-
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -1302,66 +1294,6 @@ impl RetrievalEngine {
         }
 
         results
-    }
-
-    /// Retrieves neighbors of a node, categorized by relationship type.
-    /// Returns (calls: nodes this function calls, called_by: nodes that call this function)
-    pub async fn get_node_neighbors(&self, id: &str) -> Option<NodeNeighbors> {
-        use crate::graph::EdgeType;
-        use petgraph::visit::EdgeRef;
-        use petgraph::Direction;
-
-        let mut calls = Vec::new();
-        let mut called_by = Vec::new();
-        let mut contains = Vec::new();
-
-        let graph = self.graph.read().await;
-
-        // Use the index directly if it exists in RAM graph
-        if let Some(idx) = graph.find_node_index_by_id(id) {
-            // Outgoing edges
-            for edge in graph.graph.edges_directed(idx, Direction::Outgoing) {
-                let target_node = &graph.graph[edge.target()];
-                match edge.weight() {
-                    EdgeType::Calls | EdgeType::CallAmbiguous | EdgeType::CallInferred => {
-                        calls.push(target_node.name.clone())
-                    }
-                    EdgeType::Contains => contains.push(target_node.name.clone()),
-                    _ => {}
-                }
-            }
-
-            // Incoming edges
-            for edge in graph.graph.edges_directed(idx, Direction::Incoming) {
-                let source_node = &graph.graph[edge.source()];
-                if matches!(
-                    edge.weight(),
-                    EdgeType::Calls | EdgeType::CallAmbiguous | EdgeType::CallInferred
-                ) {
-                    called_by.push(source_node.name.clone());
-                }
-            }
-        } else {
-            // Fallback to storage-based edges if not in RAM
-            let outgoing = graph.get_outgoing_edges(id);
-            for (target_id, weight) in outgoing {
-                if let Some(node) = graph.find_node_by_id(&target_id) {
-                    match weight {
-                        EdgeType::Calls | EdgeType::CallAmbiguous | EdgeType::CallInferred => {
-                            calls.push(node.name.clone())
-                        }
-                        EdgeType::Contains => contains.push(node.name.clone()),
-                        _ => {}
-                    }
-                }
-            }
-        }
-
-        Some(NodeNeighbors {
-            calls,
-            called_by,
-            contains,
-        })
     }
 
     pub async fn find_graph_nodes(&self, query: &str, limit: usize) -> Vec<ContextSuggestion> {

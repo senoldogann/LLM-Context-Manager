@@ -139,11 +139,12 @@ fn hermetic_mcp_all_tools_e2e_on_synthetic_repo() {
         .filter_map(|t| t["name"].as_str().map(str::to_string))
         .collect();
     for name in [
+        "map",
+        "explain",
         "search_code",
-        "get_context",
         "find_nodes",
-        "read_graph",
         "index_project",
+        "index_now",
         "find_usages",
         "trace_call_chain",
         "impact_of_change",
@@ -207,37 +208,58 @@ fn hermetic_mcp_all_tools_e2e_on_synthetic_repo() {
         "varsayılan body içermemeli"
     );
 
-    // 7. read_graph: find_nodes çıktısındaki ilk sonucun `yol:satır` hedefi.
+    // 7. explain (gövdesiz): find_nodes çıktısındaki ilk sonucun `yol:satır` hedefi.
     let node_id = first_location(&find_text).expect("find_nodes must return a path:line handle");
     let resp = send(
         &mut stdin,
         &mut reader,
         json!({
             "jsonrpc":"2.0","id":5,"method":"tools/call",
-            "params":{"name":"read_graph","arguments":{
-                "node_id": node_id, "project_path": repo_a.to_string_lossy()
+            "params":{"name":"explain","arguments":{
+                "target": node_id, "include_body": false,
+                "project_path": repo_a.to_string_lossy()
             }}
         }),
     );
-    assert_no_error(&resp, "5 read_graph");
-    let graph_text = text_of(&resp);
-    assert!(graph_text.contains("Node Details: compute_tax"));
-    assert!(!graph_text.contains("fn compute_tax"));
+    assert_no_error(&resp, "5 explain");
+    let explain_text = text_of(&resp);
+    assert!(
+        explain_text.contains("Function `compute_tax`"),
+        "{explain_text}"
+    );
+    assert!(!explain_text.contains("fn compute_tax"), "{explain_text}");
 
-    // 8. get_context: tax.rs'de compute_tax satırı.
+    // 8. explain (gövdeli) ve map: aynı sembol konumundan, sonra proje haritası.
     let resp = send(
         &mut stdin,
         &mut reader,
         json!({
             "jsonrpc":"2.0","id":6,"method":"tools/call",
-            "params":{"name":"get_context","arguments":{
-                "file":"src/tax.rs","line":3,"project_path": repo_a.to_string_lossy(),
-                "include_body":true
+            "params":{"name":"explain","arguments":{
+                "target":"src/tax.rs:3","project_path": repo_a.to_string_lossy()
             }}
         }),
     );
-    assert_no_error(&resp, "6 get_context");
-    assert!(text_of(&resp).contains("compute_tax"));
+    assert_no_error(&resp, "6 explain");
+    assert!(
+        text_of(&resp).contains("fn compute_tax"),
+        "{}",
+        text_of(&resp)
+    );
+    let resp = send(
+        &mut stdin,
+        &mut reader,
+        json!({
+            "jsonrpc":"2.0","id":61,"method":"tools/call",
+            "params":{"name":"map","arguments":{"project_path": repo_a.to_string_lossy()}}
+        }),
+    );
+    assert_no_error(&resp, "6 map");
+    assert!(
+        text_of(&resp).contains("src/tax.rs — compute_tax("),
+        "{}",
+        text_of(&resp)
+    );
 
     // 9. find_usages: compute_tax'ı kim çağırıyor → pricing.rs.
     let resp = send(

@@ -125,10 +125,10 @@ fn guardian_mcp_all_tools_e2e() {
         .collect();
 
     let required_tools = [
+        "map",
+        "explain",
         "search_code",
-        "get_context",
         "find_nodes",
-        "read_graph",
         "index_project",
         "find_usages",
         "trace_call_chain",
@@ -209,9 +209,9 @@ fn guardian_mcp_all_tools_e2e() {
     );
 
     // =======================================================================
-    // STEP 4 — get_context: file + line lookup into ai_client.rs
+    // STEP 4 — map: most-used files under src-tauri/src
     // =======================================================================
-    println!("\n── STEP 4: get_context (src-tauri/src/ai_client.rs:1) ─────");
+    println!("\n── STEP 4: map (src-tauri/src) ─────");
     let resp = send(
         &mut stdin,
         &mut reader,
@@ -219,18 +219,20 @@ fn guardian_mcp_all_tools_e2e() {
             "jsonrpc": "2.0", "id": 4,
             "method": "tools/call",
             "params": {
-                "name": "get_context",
+                "name": "map",
                 "arguments": {
-                    "file": "src-tauri/src/ai_client.rs",
-                    "line": 1,
+                    "path": "src-tauri/src",
                     "project_path": guardian_root()
                 }
             }
         }),
     );
-    assert_no_error(&resp, "4 get_context");
+    assert_no_error(&resp, "4 map");
     let text = text_of(&resp);
-    assert!(!text.is_empty(), "get_context must return content");
+    assert!(
+        text.contains("files,"),
+        "map must start with its header: {text}"
+    );
     println!(
         "  ✓ {} chars — {}",
         text.len(),
@@ -261,7 +263,7 @@ fn guardian_mcp_all_tools_e2e() {
     assert!(!text.is_empty(), "find_nodes must return content");
     let lower = text.to_lowercase();
     assert!(
-        lower.contains("aiclient") || lower.contains("ai_client") || lower.contains("node id"),
+        lower.contains("aiclient") || lower.contains("ai_client"),
         "find_nodes must locate AiClient, got: {}",
         &text[..text.len().min(400)]
     );
@@ -271,20 +273,22 @@ fn guardian_mcp_all_tools_e2e() {
         text.lines().next().unwrap_or("").trim()
     );
 
-    // Extract a real node ID from the find_nodes result for the next steps
+    // İlk kompakt satırın `yol:başlangıç` konumu sonraki adımların hedefidir.
     let node_id = text
         .lines()
-        .find(|l| l.contains("**Node ID:**"))
-        .and_then(|l| l.split("**Node ID:**").nth(1))
-        .map(|s| s.trim().to_string())
-        .unwrap_or_else(|| "./src-tauri/src/ai_client.rs::AiClient".to_string());
-    println!("  ✓ using node_id: {}", node_id);
+        .find_map(|line| {
+            let location = line.strip_prefix("- ")?.split(" · ").nth(1)?;
+            let (path, range) = location.rsplit_once(':')?;
+            Some(format!("{path}:{}", range.split('-').next()?))
+        })
+        .expect("find_nodes must return a path:line handle");
+    println!("  ✓ using target: {}", node_id);
 
     // =======================================================================
-    // STEP 6 — read_graph: inspect the node in detail
+    // STEP 6 — explain: inspect the symbol in one call
     // =======================================================================
     println!(
-        "\n── STEP 6: read_graph ({}) ─",
+        "\n── STEP 6: explain ({}) ─",
         &node_id[..node_id.len().min(40)]
     );
     let resp = send(
@@ -294,17 +298,17 @@ fn guardian_mcp_all_tools_e2e() {
             "jsonrpc": "2.0", "id": 6,
             "method": "tools/call",
             "params": {
-                "name": "read_graph",
+                "name": "explain",
                 "arguments": {
-                    "node_id": &node_id,
+                    "target": &node_id,
                     "project_path": guardian_root()
                 }
             }
         }),
     );
-    assert_no_error(&resp, "6 read_graph");
+    assert_no_error(&resp, "6 explain");
     let text = text_of(&resp);
-    assert!(!text.is_empty(), "read_graph must return content");
+    assert!(!text.is_empty(), "explain must return content");
     println!(
         "  ✓ {} chars — {}",
         text.len(),
