@@ -14,6 +14,10 @@ and `context` caller lines include Contains-based qualified/enclosing scopes whi
 semantic IDs and relation labels. The graph schema and legacy rendering are unchanged. Next:
 review/refine the implementation, then run full local gates and rebuild/verify the changed MCP
 release binary against pinned corpus packets.
+An additional alias/non-code boundary regression compiled and ran at `6ed2690`, then failed
+(exit 101, 0 passed, 1 failed): the request packet retained the canonical call but missed a call
+through the same assignment's proven alias. Next: retain that entire callable binding's aliases
+in receiver evidence and rerun the context target before the full gates.
 No new external AI quota use is authorized by this local continuation.
 
 The owner-approved **Codex context-first pilot is complete**, measured at clean commit `4185640`

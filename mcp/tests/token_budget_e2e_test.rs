@@ -66,6 +66,10 @@ fn fixture_files() -> Vec<(String, String)> {
             "var res = {};\n\nres.get = function get(field) {\n  return field;\n};\n\nres.location = function location(url) {\n  return this.req.get('Referrer') || url;\n};\n\nfunction noisy(app) {\n  return app.get('env');\n}\n".into(),
         ),
         (
+            "extra/alias_calls.js".into(),
+            "function actual_alias() {\n  return req.header('X');\n}\n\nfunction canonical_alias() {\n  return req.get('X');\n}\n\nfunction quoted() {\n  return \"req.get('X')\";\n}\n\nfunction commented() {\n  // req.get('X')\n  return 0;\n}\n\nfunction identifier_suffix() {\n  return otherreq.get('X');\n}\n".into(),
+        ),
+        (
             "serde_derive/src/lib.rs".into(),
             "mod bound;\nmod de;\nmod ser;\n".into(),
         ),
@@ -542,6 +546,37 @@ fn context_reports_ambiguous_plain_member_targets() {
         text.contains("ambiguous") && text.contains("req.get") && text.contains("req.other"),
         "{text}"
     );
+}
+
+#[test]
+fn context_receiver_packets_include_proven_alias_calls_and_ignore_non_code() {
+    let mut server = Server::start();
+    for target in ["req.get", "req.header"] {
+        let (text, is_error) = server.call(
+            "context",
+            json!({
+                "query": format!("İncele: extra/; {target}; lib/request.js."),
+                "max_tokens": 1500
+            }),
+        );
+        assert!(!is_error, "{target}: {text}");
+        assert!(
+            text.contains("2 callers"),
+            "both proven assignment aliases must count: {target}: {text}"
+        );
+        for caller in ["actual_alias", "canonical_alias"] {
+            assert!(
+                text.contains(&format!("Function: {caller} · extra/alias_calls.js")),
+                "{target}: {text}"
+            );
+        }
+        for excluded in ["quoted", "commented", "identifier_suffix"] {
+            assert!(
+                !text.contains(&format!("Function: {excluded} ·")),
+                "non-call evidence {excluded}: {text}"
+            );
+        }
+    }
 }
 
 #[test]
