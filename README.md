@@ -341,8 +341,9 @@ ccm-cli eval --tasks eval/golden_tasks.v3.ccm.json
 | `index_now` | Index and wait for the final stats | `mode:"quick"`, `"full"` or `"upgrade"` |
 
 Results are one line each: `- Kind: name · path:start-end · relation`. `target`
-accepts a name (`run`, `Engine.start`), `path:line` or a node ID; an ambiguous
-name returns its candidates. Every graph tool takes `max_tokens` (default 1500,
+accepts a name (`run`, `Engine.start`), a file path, `path:line` (a result's
+`path:start-end` works too) or a node ID; an ambiguous name returns its
+candidates. Every graph tool takes `max_tokens` (default 1500,
 `map` 1000) and says how many results did not fit.
 
 > **0.4.0 (breaking):** `get_context` and `read_graph` were replaced by

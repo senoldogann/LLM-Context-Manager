@@ -681,16 +681,26 @@ impl CodeGraph {
                         .filter(|idx| {
                             let node = &self.graph[*idx];
                             node.name == member
-                                && matches!(node.node_type, NodeType::Function | NodeType::Method)
+                                && matches!(
+                                    node.node_type,
+                                    NodeType::Function
+                                        | NodeType::Method
+                                        | NodeType::Class
+                                        | NodeType::Struct
+                                )
                         })
                         .collect::<Vec<_>>()
                 })
                 .collect(),
+            // Rust impl blokları türün adını taşır; çıplak ad türün kendisidir.
             None => self
                 .find_nodes_by_name(name)
                 .iter()
                 .copied()
-                .filter(|idx| is_reference_target_type(&self.graph[*idx].node_type))
+                .filter(|idx| {
+                    let node = &self.graph[*idx];
+                    is_reference_target_type(&node.node_type) && !is_rust_impl_node(node)
+                })
                 .collect(),
         };
         found.sort_by(|left, right| {

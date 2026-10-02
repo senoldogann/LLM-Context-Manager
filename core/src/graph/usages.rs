@@ -6,7 +6,7 @@ use petgraph::graph::NodeIndex;
 use petgraph::visit::EdgeRef;
 use petgraph::Direction;
 
-use super::{CodeGraph, CodeNode, EdgeType};
+use super::{graph_node_file_path, CodeGraph, CodeNode, EdgeType, NodeType};
 
 /// Kullanımın türü; sıra kesinlik sırasıdır (en kesin önce).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -123,11 +123,20 @@ pub fn explanation_of(graph: &CodeGraph, node_id: &str) -> Result<Explanation, U
             .edges_directed(idx, Direction::Outgoing)
             .map(|edge| (edge.weight(), edge.target())),
     );
+    // Fonksiyonun yerel değişkenleri ve importları üye değildir; sınıf
+    // değişkenleri (ör. model alanları) sınıfın üyesidir.
+    let is_callable = matches!(
+        graph.graph[idx].node_type,
+        NodeType::Function | NodeType::Method
+    );
     let mut members: Vec<CodeNode> = graph
         .graph
         .edges_directed(idx, Direction::Outgoing)
         .filter(|edge| matches!(edge.weight(), EdgeType::Contains))
         .map(|edge| graph.graph[edge.target()].clone())
+        .filter(|member| {
+            !(is_callable && matches!(member.node_type, NodeType::Variable | NodeType::Import))
+        })
         .collect();
     members.sort_by(|left, right| (left.start_line, &left.id).cmp(&(right.start_line, &right.id)));
     members.dedup_by(|left, right| left.id == right.id);
@@ -150,7 +159,8 @@ fn incoming_usages(graph: &CodeGraph, idx: NodeIndex) -> Vec<Usage> {
 }
 
 /// (kenar türü, karşı düğüm) çiftlerinden kullanım listesi: kullanım olmayan
-/// kenarlar atlanır; ilişkiye, sonra kimliğe göre sıralı ve tekrarsız.
+/// kenarlar atlanır; ilişkiye, sonra konuma (dosya, satır) göre sıralı ve
+/// tekrarsız. Kararlı kimlikler özet taşıdığından kimlik sırası rastgeledir.
 fn collect_usages<'g>(
     graph: &'g CodeGraph,
     links: impl Iterator<Item = (&'g EdgeType, NodeIndex)>,
@@ -164,7 +174,18 @@ fn collect_usages<'g>(
         })
         .collect();
     usages.sort_by(|left, right| {
-        (left.relation, &left.node.id).cmp(&(right.relation, &right.node.id))
+        (
+            left.relation,
+            graph_node_file_path(&left.node.id),
+            left.node.start_line,
+            &left.node.id,
+        )
+            .cmp(&(
+                right.relation,
+                graph_node_file_path(&right.node.id),
+                right.node.start_line,
+                &right.node.id,
+            ))
     });
     usages.dedup_by(|left, right| left.relation == right.relation && left.node.id == right.node.id);
     usages

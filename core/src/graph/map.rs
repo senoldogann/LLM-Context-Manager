@@ -7,7 +7,10 @@ use petgraph::graph::NodeIndex;
 use petgraph::visit::EdgeRef;
 use petgraph::Direction;
 
-use super::{graph_node_file_path, is_reference_target_type, CodeGraph, EdgeType, NodeType};
+use super::{
+    graph_node_file_path, is_reference_target_type, is_rust_impl_node, CodeGraph, EdgeType,
+    NodeType,
+};
 
 /// Bir dosya satırında gösterilen en çok sembol sayısı.
 const SYMBOLS_PER_FILE: usize = 5;
@@ -97,10 +100,13 @@ pub fn project_map(graph: &CodeGraph, prefix: &str, max_tokens: usize) -> Result
         "{} files, {symbols} symbols, {references} cross-file references; most used first.\n",
         files.len()
     );
+    // Bütçe karakterle ölçülür (bir token ≈ dört karakter), bayt değil.
     let budget = max_tokens.saturating_mul(CHARS_PER_TOKEN);
+    let mut used = output.chars().count();
     for (index, file) in files.iter().enumerate() {
         let line = file_line(file);
-        if output.len() + line.len() + 1 > budget {
+        let line_chars = line.chars().count() + 1;
+        if used + line_chars > budget {
             output.push_str(&format!(
                 "… {} more files (raise max_tokens or pass path)\n",
                 files.len() - index
@@ -109,6 +115,7 @@ pub fn project_map(graph: &CodeGraph, prefix: &str, max_tokens: usize) -> Result
         }
         output.push_str(&line);
         output.push('\n');
+        used += line_chars;
     }
     Ok(output)
 }
@@ -126,7 +133,12 @@ fn rank_file(graph: &CodeGraph, file_id: &str, nodes: &[NodeIndex]) -> RankedFil
     let mut symbols: Vec<RankedSymbol> = nodes
         .iter()
         .copied()
-        .filter(|idx| is_reference_target_type(&graph.graph[*idx].node_type))
+        // Rust impl blokları tür adını taşıyan ayrı düğümlerdir; tür bir kez
+        // listelenir, metotları `Tür.metot` olarak görünür.
+        .filter(|idx| {
+            let node = &graph.graph[*idx];
+            is_reference_target_type(&node.node_type) && !is_rust_impl_node(node)
+        })
         .map(|idx| RankedSymbol {
             name: qualified_name(graph, idx),
             uses: uses_from_other_files(graph, idx, file_id),

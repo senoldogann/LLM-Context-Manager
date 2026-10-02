@@ -46,6 +46,24 @@ fn fixture_files() -> Vec<(String, String)> {
             "from app.core import run\n\n\ndef test_run():\n    assert run() is not None\n".into(),
         ),
     ];
+    // Çok baytlı gövde: bütçe karakterle ölçülmeli, bayt değil.
+    files.push((
+        "app/cjk.py".into(),
+        "def cjk():\n    # 这是一个很长的中文注释，用来测试预算按字符计算。\n    # 这是一个很长的中文注释，用来测试预算按字符计算。\n    # 这是一个很长的中文注释，用来测试预算按字符计算。\n    # 这是一个很长的中文注释，用来测试预算按字符计算。\n    # 这是一个很长的中文注释，用来测试预算按字符计算。\n    # 这是一个很长的中文注释，用来测试预算按字符计算。\n    # 这是一个很长的中文注释，用来测试预算按字符计算。\n    # 这是一个很长的中文注释，用来测试预算按字符计算。\n    # 这是一个很长的中文注释，用来测试预算按字符计算。\n    # 这是一个很长的中文注释，用来测试预算按字符计算。\n    # 这是一个很长的中文注释，用来测试预算按字符计算。\n    # 这是一个很长的中文注释，用来测试预算按字符计算。\n    return 1\n".into(),
+    ));
+    files.push((
+        "app/cjk_users.py".into(),
+        "from app.cjk import cjk\n\n\ndef use_1():\n    return cjk()\n\n\ndef use_2():\n    return cjk()\n\n\ndef use_3():\n    return cjk()\n".into(),
+    ));
+    files.push((
+        "app/nested.py".into(),
+        "class Outer:\n    class Inner:\n        def go(self):\n            return 1\n".into(),
+    ));
+    // Rust: `impl Foo` ayrı bir düğümdür; çıplak `Foo` yapının kendisidir.
+    files.push((
+        "src/lib.rs".into(),
+        "pub struct Foo;\n\nimpl Foo {\n    pub fn new() -> Self {\n        Foo\n    }\n}\n".into(),
+    ));
     let mut hub = String::from("def hub():\n    return 0\n");
     for index in 0..30 {
         hub.push_str(&format!("\n\ndef caller_{index:02}():\n    return hub()\n"));
@@ -207,6 +225,65 @@ fn max_tokens_caps_output_and_reports_the_rest() {
         text.len()
     );
     assert!(text.contains("more not shown (max_tokens=200)"), "{text}");
+    assert!(
+        text.contains("- Function: caller_00 · app/hub.py:"),
+        "usages follow file position, so the budget keeps the first ones: {text}"
+    );
+
+    let (text, is_error) =
+        server.call("find_usages", json!({"target": "hub", "max_tokens": "200"}));
+    assert!(
+        is_error,
+        "a string budget is an input error, not the default: {text}"
+    );
+    assert!(
+        text.contains("'max_tokens' must be a positive integer"),
+        "{text}"
+    );
+}
+
+#[test]
+fn printed_locations_files_and_nested_members_work_as_targets() {
+    let mut server = Server::start();
+    for (target, expected) in [
+        ("app/core.py:13-17", "Function `run`"),
+        ("app/other.py:1 Function helper", "Function `helper`"),
+        ("app/cli.py", "File · app/cli.py:"),
+        ("Outer.Inner", "Class `Inner`"),
+        ("Foo", "Struct `Foo`"),
+    ] {
+        let (text, is_error) = server.call("explain", json!({"target": target}));
+        assert!(!is_error, "{target}: {text}");
+        assert!(text.contains(expected), "{target}: {text}");
+    }
+    let (text, _) = server.call("explain", json!({"target": "app/cli.py"}));
+    assert!(
+        text.contains("- Function: main · app/cli.py:4-5"),
+        "a file lists its top-level symbols: {text}"
+    );
+
+    let (text, is_error) = server.call(
+        "trace_call_chain",
+        json!({"from": "./app/core.py:function_definition:symbol:0000000000000000:0", "to": "app/util.py:1"}),
+    );
+    assert!(is_error, "an unknown node ID is an error: {text}");
+    assert!(text.contains("is not in the current index"), "{text}");
+}
+
+#[test]
+fn budget_counts_characters_not_bytes() {
+    let mut server = Server::start();
+    let (text, is_error) = server.call("explain", json!({"target": "cjk", "max_tokens": 300}));
+    assert!(!is_error, "{text}");
+    assert!(
+        text.len() > text.chars().count() + 500,
+        "the body is multi-byte: {text}"
+    );
+    assert!(
+        text.contains("- Function: use_3 · app/cjk_users.py:"),
+        "callers fit a 1,200-character budget: {text}"
+    );
+    assert!(!text.contains("more (raise max_tokens)"), "{text}");
 }
 
 #[test]
@@ -214,6 +291,10 @@ fn explain_returns_definition_callers_callees_and_tests_in_one_call() {
     let mut server = Server::start();
     let (text, is_error) = server.call("explain", json!({"target": "run"}));
     assert!(!is_error, "{text}");
+    assert!(
+        !text.contains("members:"),
+        "local variables are not members: {text}"
+    );
     for expected in [
         "Function `run` · app/core.py:13-17",
         "def run():",
@@ -280,6 +361,10 @@ fn map_with_an_unknown_prefix_says_so() {
     let (text, is_error) = server.call("map", json!({"path": "nope"}));
     assert!(is_error, "{text}");
     assert!(text.contains("no indexed code under nope"), "{text}");
+
+    let (text, is_error) = server.call("map", json!({"path": "."}));
+    assert!(!is_error, "`.` is the whole project: {text}");
+    assert!(text.contains("app/core.py — run("), "{text}");
 }
 
 #[test]

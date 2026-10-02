@@ -54,6 +54,12 @@ fn suggestion_line(suggestion: &ccm_core::engine::ContextSuggestion) -> String {
     line
 }
 
+/// Bütçenin birimi karakterdir (bir token ≈ dört karakter), bayt değil: çok
+/// baytlı metin (`·`, CJK yorumlar) bütçeyi erken tüketmemeli.
+fn char_count(text: &str) -> usize {
+    text.chars().count()
+}
+
 /// Sonuçları bütçe içinde tek satır olarak listeler. Gövdeler istenirse bütçeye
 /// dahildir ve sığmayan kısmı kesilir; sığmayan sonuçlar sonda sayılır.
 fn format_suggestions_output(
@@ -64,21 +70,24 @@ fn format_suggestions_output(
 ) -> String {
     let budget = list_tokens.saturating_mul(CHARS_PER_TOKEN);
     let mut output = String::new();
+    let mut used = 0;
     for (index, suggestion) in suggestions.iter().enumerate() {
         let line = suggestion_line(suggestion);
-        if output.len() + line.len() + 1 > budget {
+        let line_chars = char_count(&line) + 1;
+        if used + line_chars > budget {
             output.push_str(&omitted_footer(suggestions.len() - index, requested_tokens));
             return output;
         }
         output.push_str(&line);
         output.push('\n');
+        used += line_chars;
         if include_body && !suggestion.content.is_empty() {
-            let remaining = budget.saturating_sub(output.len() + 8);
-            let body = clip(&suggestion.content, remaining);
+            let body = clip(&suggestion.content, budget.saturating_sub(used + 8));
             if !body.is_empty() {
                 output.push_str("```\n");
                 output.push_str(&body);
                 output.push_str("\n```\n");
+                used += char_count(&body) + 8;
             }
         }
     }
@@ -112,23 +121,39 @@ fn limit_from_args(args: &Value, default: usize) -> usize {
 }
 
 /// Cevap bütçesi: `max_tokens`; yoksa eski `max_chars` / 4; yoksa varsayılan.
-fn max_tokens_from_args(args: &Value) -> usize {
-    requested_tokens(args).unwrap_or(DEFAULT_MAX_TOKENS)
+fn max_tokens_from_args(args: &Value) -> Result<usize> {
+    Ok(requested_tokens(args)?.unwrap_or(DEFAULT_MAX_TOKENS))
 }
 
-/// İstenen bütçe: `max_tokens` ya da eski `max_chars` / 4; ikisi de yoksa `None`.
-fn requested_tokens(args: &Value) -> Option<usize> {
-    if let Some(value) = args.get("max_tokens").and_then(Value::as_u64) {
-        return Some(
-            usize::try_from(value)
-                .unwrap_or(MAX_MAX_TOKENS)
-                .clamp(1, MAX_MAX_TOKENS),
-        );
+/// İstenen bütçe: `max_tokens` ya da eski `max_chars` / 4, en çok
+/// `MAX_MAX_TOKENS`; ikisi de yoksa `None`. Pozitif tam sayı olmayan değer
+/// varsayılana düşmez, girdi hatası olur.
+fn requested_tokens(args: &Value) -> Result<Option<usize>> {
+    if let Some(value) = present_argument(args, "max_tokens") {
+        return Ok(Some(
+            positive_integer(value, "max_tokens")?.min(MAX_MAX_TOKENS),
+        ));
     }
-    args.get("max_chars").and_then(Value::as_u64).map(|value| {
-        let chars = usize::try_from(value).unwrap_or(MAX_MAX_TOKENS * CHARS_PER_TOKEN);
-        (chars / CHARS_PER_TOKEN).clamp(1, MAX_MAX_TOKENS)
-    })
+    match present_argument(args, "max_chars") {
+        Some(value) => Ok(Some(
+            (positive_integer(value, "max_chars")? / CHARS_PER_TOKEN).clamp(1, MAX_MAX_TOKENS),
+        )),
+        None => Ok(None),
+    }
+}
+
+/// Argüman verilmiş mi; `null` verilmemiş sayılır.
+fn present_argument<'a>(args: &'a Value, key: &str) -> Option<&'a Value> {
+    args.get(key).filter(|value| !value.is_null())
+}
+
+/// Pozitif tam sayı argümanı; metin, sıfır ya da negatif değer hatadır.
+fn positive_integer(value: &Value, key: &str) -> Result<usize> {
+    value
+        .as_u64()
+        .filter(|number| *number > 0)
+        .and_then(|number| usize::try_from(number).ok())
+        .ok_or_else(|| input_error(format!("'{key}' must be a positive integer, got {value}")))
 }
 
 fn include_body_from_args(args: &Value) -> bool {
@@ -176,8 +201,8 @@ pub async fn search_code(engine: &Arc<RetrievalEngine>, args: &Value) -> Result<
             text: format_suggestions_output(
                 &hits,
                 include_body_from_args(args),
-                max_tokens_from_args(args),
-                max_tokens_from_args(args),
+                max_tokens_from_args(args)?,
+                max_tokens_from_args(args)?,
             ),
         }],
         is_error: None,
@@ -221,8 +246,8 @@ pub async fn find_nodes(engine: &Arc<RetrievalEngine>, args: &Value) -> Result<T
             text: format_suggestions_output(
                 &matches,
                 include_body_from_args(args),
-                max_tokens_from_args(args),
-                max_tokens_from_args(args),
+                max_tokens_from_args(args)?,
+                max_tokens_from_args(args)?,
             ),
         }],
         is_error: None,
@@ -254,26 +279,28 @@ fn normalize_graph_path(path_str: &str, project_path: Option<&str>) -> Result<St
     normalize_relative_graph_path(path)
 }
 
-/// Hedef argümanını (`key`, yoksa eski `legacy_key`) biçimine göre ayırır:
-/// `:symbol:` taşıyan ya da en az üç `:` içeren değer düğüm kimliğidir,
-/// `yol:satır` konumdur, diğer her şey sembol adıdır (`Sınıf.üye` dahil).
+/// Hedef argümanını (`key`, boşsa eski `legacy_key`) biçimine göre ayırır. İlk
+/// boşluksuz parça `yol:satır` ya da `yol:başlangıç-bitiş` ise konumdur; böylece
+/// sonuç satırlarındaki ve aday listelerindeki konumlar olduğu gibi geri
+/// verilebilir. `:symbol:` taşıyan ya da en az üç `:` içeren değer düğüm
+/// kimliğidir; diğer her şey sembol ya da dosya adıdır (`Sınıf.üye`, `app/core.py`).
 fn target_form(args: &Value, key: &str, legacy_key: &str) -> Result<TargetForm> {
-    let raw = args
-        .get(key)
-        .or_else(|| args.get(legacy_key))
-        .and_then(Value::as_str)
+    let raw = [key, legacy_key]
+        .iter()
+        .filter_map(|name| args.get(*name).and_then(Value::as_str))
         .map(str::trim)
-        .filter(|value| !value.is_empty())
+        .find(|value| !value.is_empty())
         .ok_or_else(|| input_error(format!("Missing '{key}' argument")))?;
     let project_path = args.get("project_path").and_then(|v| v.as_str());
-    if raw.contains(":symbol:") || raw.matches(':').count() >= 3 {
+    let token = raw.split_whitespace().next().unwrap_or(raw);
+    if token.contains(":symbol:") || token.matches(':').count() >= 3 {
         return Ok(TargetForm::NodeId(normalize_graph_node_id(
-            raw,
+            token,
             project_path,
         )?));
     }
-    if let Some((path, line)) = raw.rsplit_once(':') {
-        if let Ok(line) = line.parse::<usize>() {
+    if let Some((path, range)) = token.rsplit_once(':') {
+        if let Some(line) = range_start(range) {
             return Ok(TargetForm::Location {
                 file: normalize_graph_path(path, project_path)?,
                 line,
@@ -281,6 +308,19 @@ fn target_form(args: &Value, key: &str, legacy_key: &str) -> Result<TargetForm> 
         }
     }
     Ok(TargetForm::Name(raw.to_string()))
+}
+
+/// `13` ya da `13-17` biçimindeki aralığın başlangıç satırı.
+fn range_start(range: &str) -> Option<usize> {
+    let (start, end) = match range.split_once('-') {
+        Some((start, end)) => (start, Some(end)),
+        None => (range, None),
+    };
+    let start = start.parse::<usize>().ok()?;
+    match end {
+        Some(end) => end.parse::<usize>().ok().map(|_| start),
+        None => Some(start),
+    }
 }
 
 /// Ajana okunur bir hata metniyle `isError` sonucu.
@@ -1016,15 +1056,15 @@ pub async fn find_usages(engine: &Arc<RetrievalEngine>, args: &Value) -> Result<
     }
     if !shown.is_empty() {
         // Özet satırı da bütçeden düşer; liste kalan bütçeyle biçimlenir.
-        let list_budget = max_tokens_from_args(args)
-            .saturating_sub(text.len() / CHARS_PER_TOKEN + 1)
+        let list_budget = max_tokens_from_args(args)?
+            .saturating_sub(char_count(&text) / CHARS_PER_TOKEN + 1)
             .max(1);
         text.push_str("\n\n");
         text.push_str(&format_suggestions_output(
             &shown,
             include_body_from_args(args),
             list_budget,
-            max_tokens_from_args(args),
+            max_tokens_from_args(args)?,
         ));
     }
 
@@ -1037,15 +1077,20 @@ pub async fn find_usages(engine: &Arc<RetrievalEngine>, args: &Value) -> Result<
     })
 }
 
-/// `find_usages` özet satırı: ilişki başına kullanım sayısı.
 /// Tool: map
 /// Projenin haritası: dosyalar diğer dosyalardan kullanımlarına göre sıralı.
 pub async fn project_map(engine: &Arc<RetrievalEngine>, args: &Value) -> Result<ToolResult> {
-    let prefix = match args.get("path").and_then(Value::as_str) {
-        Some(path) => normalize_graph_path(path, args.get("project_path").and_then(Value::as_str))?,
+    // `.` ve boş yol tüm projedir; metin olmayan yol sessizce yok sayılmaz.
+    let prefix = match present_argument(args, "path") {
         None => String::new(),
+        Some(Value::String(path)) if matches!(path.trim(), "" | "." | "./") => String::new(),
+        Some(Value::String(path)) => normalize_graph_path(
+            path.trim(),
+            args.get("project_path").and_then(Value::as_str),
+        )?,
+        Some(other) => return Err(input_error(format!("'path' must be a string, got {other}"))),
     };
-    let max_tokens = requested_tokens(args).unwrap_or(DEFAULT_MAP_TOKENS);
+    let max_tokens = requested_tokens(args)?.unwrap_or(DEFAULT_MAP_TOKENS);
     match engine.project_map(&prefix, max_tokens).await {
         Ok(text) => Ok(ToolResult {
             content: vec![ToolResultContent {
@@ -1080,7 +1125,7 @@ pub async fn explain(engine: &Arc<RetrievalEngine>, args: &Value) -> Result<Tool
     Ok(ToolResult {
         content: vec![ToolResultContent {
             content_type: "text".to_string(),
-            text: format_explanation(&explanation, include_body, max_tokens_from_args(args)),
+            text: format_explanation(&explanation, include_body, max_tokens_from_args(args)?),
         }],
         is_error: None,
     })
@@ -1101,10 +1146,13 @@ fn format_explanation(
             .usages
             .iter()
             .partition(|usage| is_test_path(&extract_file_path(&usage.node.id)));
+    // Dosya düğümünün adı yolun kendisidir; başlıkta yol bir kez yazılır.
+    let title = match node.node_type {
+        ccm_core::graph::NodeType::File => "File".to_string(),
+        _ => format!("{:?} `{}`", node.node_type, node.name),
+    };
     let mut output = format!(
-        "{:?} `{}` · {}:{}-{} · {} callers, {} callees, {} tests",
-        node.node_type,
-        node.name,
+        "{title} · {}:{}-{} · {} callers, {} callees, {} tests",
         extract_file_path(&node.id).trim_start_matches("./"),
         node.start_line,
         node.end_line,
@@ -1118,16 +1166,20 @@ fn format_explanation(
     output.push('\n');
 
     let budget = max_tokens.saturating_mul(CHARS_PER_TOKEN);
+    let mut used = char_count(&output);
     if include_body && !node.content.is_empty() {
-        let limit = (budget / 2).saturating_sub(output.len() + 8);
+        let limit = (budget / 2).saturating_sub(used + 8);
         let body = clip(&node.content, limit);
         if !body.is_empty() {
             output.push_str("```\n");
             output.push_str(&body);
             output.push_str("\n```\n");
+            used += char_count(&body) + 8;
         }
-        if node.content.chars().count() > limit {
-            output.push_str("… body clipped (raise max_tokens)\n");
+        if char_count(&node.content) > limit {
+            let notice = "… body clipped (raise max_tokens)\n";
+            output.push_str(notice);
+            used += char_count(notice);
         }
     }
 
@@ -1168,8 +1220,10 @@ fn format_explanation(
         .filter(|(_, lines)| !lines.is_empty())
         .collect();
     for (index, (title, lines)) in filled.iter().enumerate() {
-        let share = budget.saturating_sub(output.len()) / (filled.len() - index);
-        output.push_str(&section_text(title, lines, share));
+        let share = budget.saturating_sub(used) / (filled.len() - index);
+        let section = section_text(title, lines, share);
+        used += char_count(&section);
+        output.push_str(&section);
     }
     output
 }
@@ -1177,8 +1231,10 @@ fn format_explanation(
 /// `başlık:` ve `budget` karaktere sığan satırlar; sığmayanlar `… n more` ile sayılır.
 fn section_text(title: &str, lines: &[String], budget: usize) -> String {
     let mut text = format!("{title}:\n");
+    let mut used = char_count(&text);
     for (index, line) in lines.iter().enumerate() {
-        if text.len() + line.len() + 1 > budget {
+        let line_chars = char_count(line) + 1;
+        if used + line_chars > budget {
             text.push_str(&format!(
                 "… {} more (raise max_tokens)\n",
                 lines.len() - index
@@ -1187,25 +1243,29 @@ fn section_text(title: &str, lines: &[String], budget: usize) -> String {
         }
         text.push_str(line);
         text.push('\n');
+        used += line_chars;
     }
     text
 }
 
-/// Test dosyası mı: `/tests/` ya da `/test/` altında, adı `test_` ile başlıyor ya
-/// da `_test.`, `.test.` veya `.spec.` içeriyor.
+/// Test dosyası mı (büyük-küçük harf duyarsız): `tests/`, `test/`, `__tests__/`
+/// ya da `spec/` altında, adı `test_` ile başlıyor ya da `_test.`, `.test.`,
+/// `.spec.` veya `_spec.` içeriyor.
 fn is_test_path(path: &str) -> bool {
-    let rooted = format!("/{}", path.trim_start_matches("./"));
+    let rooted = format!("/{}", path.trim_start_matches("./")).to_lowercase();
     let name = rooted
         .rsplit_once('/')
         .map_or(rooted.as_str(), |(_, name)| name);
-    rooted.contains("/tests/")
-        || rooted.contains("/test/")
+    ["/tests/", "/test/", "/__tests__/", "/spec/"]
+        .iter()
+        .any(|directory| rooted.contains(directory))
         || name.starts_with("test_")
-        || name.contains("_test.")
-        || name.contains(".test.")
-        || name.contains(".spec.")
+        || ["_test.", ".test.", ".spec.", "_spec."]
+            .iter()
+            .any(|part| name.contains(part))
 }
 
+/// `find_usages` özet satırı: ilişki başına kullanım sayısı.
 fn usage_summary(target_name: &str, usages: &[ccm_core::graph::Usage]) -> String {
     use ccm_core::graph::UsageRelation;
     let count = |relation: UsageRelation| {
@@ -1256,14 +1316,15 @@ pub async fn trace_call_chain(engine: &Arc<RetrievalEngine>, args: &Value) -> Re
     let chain = engine
         .trace_call_chain(&normalized_from, &normalized_to, max_depth)
         .await;
+    let from_label = node_label(engine, &normalized_from).await?;
+    let to_label = node_label(engine, &normalized_to).await?;
 
     if chain.is_empty() {
         return Ok(ToolResult {
             content: vec![ToolResultContent {
                 content_type: "text".to_string(),
                 text: format!(
-                    "No call chain found from '{}' to '{}' within {} hops.",
-                    normalized_from, normalized_to, max_depth
+                    "No call chain from {from_label} to {to_label} within {max_depth} hops."
                 ),
             }],
             is_error: None,
@@ -1274,20 +1335,32 @@ pub async fn trace_call_chain(engine: &Arc<RetrievalEngine>, args: &Value) -> Re
         content: vec![ToolResultContent {
             content_type: "text".to_string(),
             text: format!(
-                "## Call Chain: {} → {} ({} steps)\n\n{}",
-                normalized_from,
-                normalized_to,
+                "Call chain {from_label} → {to_label}, {} steps:\n\n{}",
                 chain.len(),
                 format_suggestions_output(
                     &chain,
                     include_body_from_args(args),
-                    max_tokens_from_args(args),
-                    max_tokens_from_args(args),
+                    max_tokens_from_args(args)?,
+                    max_tokens_from_args(args)?,
                 )
             ),
         }],
         is_error: None,
     })
+}
+
+/// Düğümün kısa etiketi: `ad · yol:satır`. Çözülmüş kimlik indeksten düşmüşse
+/// (bu arada yeni indeks yüklendiyse) açık hatadır.
+async fn node_label(engine: &Arc<RetrievalEngine>, node_id: &str) -> Result<String> {
+    let node = engine.get_node_by_id(node_id).await.ok_or_else(|| {
+        anyhow::anyhow!("node '{node_id}' left the index while answering; ask again")
+    })?;
+    Ok(format!(
+        "{} · {}:{}",
+        node.name,
+        ccm_core::engine::extract_file_path(&node.id).trim_start_matches("./"),
+        node.start_line
+    ))
 }
 
 /// Tool: impact_of_change
@@ -1336,8 +1409,8 @@ pub async fn impact_of_change(engine: &Arc<RetrievalEngine>, args: &Value) -> Re
                 format_suggestions_output(
                     &impacted,
                     include_body_from_args(args),
-                    max_tokens_from_args(args),
-                    max_tokens_from_args(args),
+                    max_tokens_from_args(args)?,
+                    max_tokens_from_args(args)?,
                 )
             ),
         }],
@@ -1384,8 +1457,8 @@ pub async fn diff_context(engine: &Arc<RetrievalEngine>, args: &Value) -> Result
                 format_suggestions_output(
                     &nodes,
                     include_body_from_args(args),
-                    max_tokens_from_args(args),
-                    max_tokens_from_args(args),
+                    max_tokens_from_args(args)?,
+                    max_tokens_from_args(args)?,
                 )
             ),
         }],

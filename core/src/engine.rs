@@ -59,6 +59,8 @@ pub enum TargetForm {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum TargetError {
     NotFound(String),
+    /// Düğüm kimliği güncel indekste yok.
+    UnknownNode(String),
     NoSymbolAt {
         file: String,
         line: usize,
@@ -79,9 +81,15 @@ impl std::fmt::Display for TargetError {
                 formatter,
                 "no symbol named '{target}' in the index; check the spelling or pass path:line"
             ),
+            TargetError::UnknownNode(id) => write!(
+                formatter,
+                "node '{id}' is not in the current index; its file may have changed. \
+                 Pass a name or path:line instead"
+            ),
             TargetError::NoSymbolAt { file, line } => write!(
                 formatter,
-                "no symbol at {}:{line}; pass a line inside a function or class",
+                "no symbol at {}:{line}; pass a line inside a function or class, or the \
+                 file path alone for the whole file",
                 file.trim_start_matches("./")
             ),
             TargetError::Ambiguous { target, candidates } => {
@@ -918,18 +926,34 @@ impl RetrievalEngine {
         self.graph.read().await.find_node_fuzzy_by_id(id)
     }
 
-    /// Hedefi düğüm kimliğine çözer. Kimlik olduğu gibi döner (varlığı kullanan
-    /// araç denetler); `yol:satır` satırı kapsayan en dar sembole, ad tek bir
-    /// sembole çözülmeli. Belirsiz ad sessizce seçilmez: adaylar hata olarak döner.
+    /// Hedefi düğüm kimliğine çözer: kimlik indekste olmalı; `yol:satır` satırı
+    /// kapsayan en dar sembole, yol biçimindeki ad dosyaya, diğer ad tek bir
+    /// sembole çözülür. Belirsiz ad sessizce seçilmez: adaylar hata olarak döner.
     pub async fn resolve_target(&self, form: TargetForm) -> Result<String, TargetError> {
         let graph = self.graph.read().await;
         match form {
-            TargetForm::NodeId(id) => Ok(id),
+            // Eski satır tabanlı kimlikler bulanık eşleşir; kararlı kimlikler tam.
+            TargetForm::NodeId(id) => graph
+                .find_node_index_by_id(&id)
+                .map(|idx| graph.graph[idx].id.clone())
+                .or_else(|| {
+                    (!id.contains(":symbol:"))
+                        .then(|| graph.find_node_fuzzy_by_id(&id))
+                        .flatten()
+                        .map(|node| node.id)
+                })
+                .ok_or(TargetError::UnknownNode(id)),
             TargetForm::Location { file, line } => graph
                 .symbol_at(&file, line)
                 .map(|idx| graph.graph[idx].id.clone())
                 .ok_or(TargetError::NoSymbolAt { file, line }),
             TargetForm::Name(name) => {
+                // Yol biçimindeki ad (`app/core.py`) dosyanın kendisidir.
+                if let Some(idx) =
+                    graph.find_file_node(&format!("./{}", name.trim_start_matches("./")))
+                {
+                    return Ok(graph.graph[idx].id.clone());
+                }
                 let found = graph.symbols_named(&name);
                 match found.as_slice() {
                     [] => Err(TargetError::NotFound(name)),

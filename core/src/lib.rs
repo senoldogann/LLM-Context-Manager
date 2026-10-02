@@ -170,8 +170,6 @@ pub use watch_filter::{
     build_watch_filter, is_watch_relevant_dir, is_watch_relevant_path, WatchFilter,
 };
 
-/// Run a semantic search query against the index.
-/// Returns a list of context suggestions.
 /// Projenin haritası (`graph::project_map`); etkin indeksin grafını okur.
 pub fn project_map_for(project_path: &str, prefix: &str, max_tokens: usize) -> Result<String> {
     let artifacts = resolve_index_artifacts(project_path, None)?;
@@ -186,6 +184,8 @@ pub fn project_map_for(project_path: &str, prefix: &str, max_tokens: usize) -> R
     Ok(graph::project_map(&graph, prefix, max_tokens)?)
 }
 
+/// Run a semantic search query against the index.
+/// Returns a list of context suggestions.
 pub async fn run_query(query: &str, project_path: &str) -> Result<Vec<ContextSuggestion>> {
     tracing::info!(
         query = query,

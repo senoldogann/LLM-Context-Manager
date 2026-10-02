@@ -37,9 +37,10 @@ as a `target`.
 | What changed recently? | `diff_context {days}` |
 | The index is missing or stale | `index_project` (background) or `index_now` (waits) |
 
-`target` is a name (`run`, `Engine.start`), `path:line`, or a node ID. An
-ambiguous name returns up to 10 candidates as `path:line Kind name`; pass one
-back. An unknown target is an error, never an empty result.
+`target` is a name (`run`, `Engine.start`), a file path, `path:line` (a
+result's `path:start-end` works too) or a node ID. An ambiguous name returns up
+to 10 candidates as `path:line Kind name`; pass one back as it is. An unknown
+target is an error, never an empty result.
 
 ## Relations
 

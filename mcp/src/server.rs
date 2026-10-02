@@ -1278,7 +1278,7 @@ fn project_path_property() -> Value {
 }
 
 fn target_property() -> Value {
-    json!({ "type": "string", "description": "Name (`run`, `Engine.start`), `path:line` or node ID." })
+    json!({ "type": "string", "description": "Name (`run`, `Engine.start`), file path, `path:line` or node ID." })
 }
 
 fn limit_property(default: usize) -> Value {

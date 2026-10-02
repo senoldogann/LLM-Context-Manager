@@ -338,7 +338,8 @@ ccm-cli eval --tasks eval/golden_tasks.v3.ccm.json
 | `index_now` | İndeksle ve son istatistikleri bekle | `mode:"quick"`, `"full"` ya da `"upgrade"` |
 
 Her sonuç tek satırdır: `- Tür: ad · yol:başlangıç-bitiş · ilişki`. `target` bir
-ad (`run`, `Engine.start`), `yol:satır` ya da düğüm kimliği alır; belirsiz bir ad
+ad (`run`, `Engine.start`), dosya yolu, `yol:satır` (sonuçtaki
+`yol:başlangıç-bitiş` de olur) ya da düğüm kimliği alır; belirsiz bir ad
 adaylarını döndürür. Her graf aracı `max_tokens` alır (varsayılan 1500, `map`
 için 1000) ve sığmayan sonuç sayısını söyler.
 
