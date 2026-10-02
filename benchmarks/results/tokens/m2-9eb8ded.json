@@ -1,0 +1,1064 @@
+{
+ "schema_version": 1,
+ "version": "v2",
+ "harness_revision": "9eb8ded652fbb1db29cc15cebc06370bf995934a",
+ "started_at": "2026-10-02T04:45:27+00:00",
+ "skill_bytes": 3990,
+ "repos": [
+  {
+   "repo": "flask",
+   "tools_list_bytes": 6596,
+   "questions": [
+    {
+     "kind": "callers",
+     "subject": "url_for",
+     "calls": [
+      {
+       "tool": "find_usages",
+       "arguments": "{\"target\": \"url_for\"}",
+       "response_bytes": 186,
+       "is_error": true
+      },
+      {
+       "tool": "find_usages",
+       "arguments": "{\"target\": \"src/flask/app.py:966\"}",
+       "response_bytes": 122,
+       "is_error": false
+      },
+      {
+       "tool": "find_usages",
+       "arguments": "{\"target\": \"src/flask/helpers.py:176\"}",
+       "response_bytes": 1766,
+       "is_error": false
+      }
+     ],
+     "locations": [
+      "examples/tutorial/flaskr/auth.py:47",
+      "examples/tutorial/flaskr/auth.py:113",
+      "examples/tutorial/flaskr/auth.py:23",
+      "examples/tutorial/flaskr/auth.py:85",
+      "examples/tutorial/flaskr/blog.py:115",
+      "examples/tutorial/flaskr/blog.py:88",
+      "examples/tutorial/flaskr/blog.py:62",
+      "tests/test_appctx.py:8",
+      "tests/test_appctx.py:21",
+      "tests/test_appctx.py:27",
+      "tests/test_basic.py:1318",
+      "tests/test_basic.py:1575",
+      "tests/test_basic.py:1659",
+      "tests/test_basic.py:1583",
+      "tests/test_basic.py:1355",
+      "tests/test_basic.py:1435",
+      "tests/test_basic.py:1379",
+      "tests/test_basic.py:1306",
+      "tests/test_basic.py:1390",
+      "tests/test_basic.py:1591"
+     ]
+    },
+    {
+     "kind": "explain",
+     "subject": "url_for",
+     "calls": [
+      {
+       "tool": "explain",
+       "arguments": "{\"target\": \"url_for\"}",
+       "response_bytes": 186,
+       "is_error": true
+      },
+      {
+       "tool": "explain",
+       "arguments": "{\"target\": \"src/flask/app.py:966\"}",
+       "response_bytes": 4110,
+       "is_error": false
+      },
+      {
+       "tool": "explain",
+       "arguments": "{\"target\": \"src/flask/helpers.py:176\"}",
+       "response_bytes": 5251,
+       "is_error": false
+      }
+     ],
+     "locations": []
+    },
+    {
+     "kind": "callers",
+     "subject": "Flask",
+     "calls": [
+      {
+       "tool": "find_usages",
+       "arguments": "{\"target\": \"Flask\"}",
+       "response_bytes": 173,
+       "is_error": true
+      },
+      {
+       "tool": "find_usages",
+       "arguments": "{\"target\": \"src/flask/app.py:79\"}",
+       "response_bytes": 1598,
+       "is_error": false
+      },
+      {
+       "tool": "find_usages",
+       "arguments": "{\"target\": \"tests/test_config.py:202\"}",
+       "response_bytes": 200,
+       "is_error": false
+      }
+     ],
+     "locations": [
+      "examples/celery/src/task_app/__init__.py:7",
+      "examples/javascript/js_example/__init__.py:1",
+      "examples/tutorial/flaskr/__init__.py:6",
+      "tests/conftest.py:46",
+      "tests/test_apps/blueprintapp/__init__.py:1",
+      "tests/test_apps/cliapp/app.py:1",
+      "tests/test_apps/cliapp/factory.py:4",
+      "tests/test_apps/cliapp/factory.py:8",
+      "tests/test_apps/cliapp/importerrorapp.py:1",
+      "tests/test_apps/cliapp/inner1/__init__.py:1",
+      "tests/test_apps/cliapp/inner1/inner2/flask.py:1",
+      "tests/test_apps/cliapp/multiapp.py:1",
+      "tests/test_apps/helloworld/hello.py:1",
+      "tests/test_async.py:41",
+      "tests/test_async.py:97",
+      "tests/test_basic.py:1700",
+      "tests/test_basic.py:1747",
+      "tests/test_basic.py:1183",
+      "tests/test_basic.py:1878",
+      "tests/test_basic.py:1435",
+      "tests/test_config.py:198"
+     ]
+    },
+    {
+     "kind": "explain",
+     "subject": "Flask",
+     "calls": [
+      {
+       "tool": "explain",
+       "arguments": "{\"target\": \"Flask\"}",
+       "response_bytes": 173,
+       "is_error": true
+      },
+      {
+       "tool": "explain",
+       "arguments": "{\"target\": \"src/flask/app.py:79\"}",
+       "response_bytes": 5996,
+       "is_error": false
+      },
+      {
+       "tool": "explain",
+       "arguments": "{\"target\": \"tests/test_config.py:202\"}",
+       "response_bytes": 499,
+       "is_error": false
+      }
+     ],
+     "locations": []
+    },
+    {
+     "kind": "callers",
+     "subject": "add_url_rule",
+     "calls": [
+      {
+       "tool": "find_usages",
+       "arguments": "{\"target\": \"add_url_rule\"}",
+       "response_bytes": 333,
+       "is_error": true
+      },
+      {
+       "tool": "find_usages",
+       "arguments": "{\"target\": \"src/flask/sansio/app.py:605\"}",
+       "response_bytes": 2605,
+       "is_error": false
+      },
+      {
+       "tool": "find_usages",
+       "arguments": "{\"target\": \"src/flask/sansio/blueprints.py:87\"}",
+       "response_bytes": 2674,
+       "is_error": false
+      },
+      {
+       "tool": "find_usages",
+       "arguments": "{\"target\": \"src/flask/sansio/blueprints.py:413\"}",
+       "response_bytes": 2673,
+       "is_error": false
+      },
+      {
+       "tool": "find_usages",
+       "arguments": "{\"target\": \"src/flask/sansio/scaffold.py:368\"}",
+       "response_bytes": 2618,
+       "is_error": false
+      }
+     ],
+     "locations": [
+      "src/flask/app.py:218",
+      "examples/tutorial/flaskr/__init__.py:6",
+      "src/flask/sansio/blueprints.py:413",
+      "src/flask/sansio/blueprints.py:87",
+      "src/flask/sansio/blueprints.py:273",
+      "tests/test_async.py:41",
+      "tests/test_basic.py:90",
+      "tests/test_basic.py:1624",
+      "tests/test_basic.py:1784",
+      "tests/test_basic.py:155",
+      "tests/test_basic.py:150",
+      "tests/test_blueprints.py:327",
+      "tests/test_cli.py:432",
+      "tests/test_cli.py:486",
+      "tests/test_cli.py:495",
+      "tests/test_helpers.py:120",
+      "tests/test_helpers.py:143",
+      "tests/test_json.py:70",
+      "tests/test_json.py:176",
+      "tests/test_views.py:189",
+      "examples/tutorial/flaskr/__init__.py:6",
+      "src/flask/sansio/blueprints.py:413",
+      "src/flask/sansio/blueprints.py:273",
+      "tests/test_async.py:41",
+      "tests/test_basic.py:90",
+      "tests/test_basic.py:1624",
+      "tests/test_basic.py:1784",
+      "tests/test_basic.py:155",
+      "tests/test_basic.py:150",
+      "tests/test_blueprints.py:327",
+      "tests/test_cli.py:432",
+      "tests/test_cli.py:486",
+      "tests/test_cli.py:495",
+      "tests/test_helpers.py:120",
+      "tests/test_helpers.py:143",
+      "tests/test_json.py:70",
+      "tests/test_json.py:176",
+      "tests/test_views.py:189",
+      "tests/test_views.py:207",
+      "tests/test_views.py:171",
+      "examples/tutorial/flaskr/__init__.py:6",
+      "src/flask/sansio/blueprints.py:87",
+      "src/flask/sansio/blueprints.py:273",
+      "tests/test_async.py:41",
+      "tests/test_basic.py:90",
+      "tests/test_basic.py:1624",
+      "tests/test_basic.py:1784",
+      "tests/test_basic.py:155",
+      "tests/test_basic.py:150",
+      "tests/test_blueprints.py:327",
+      "tests/test_cli.py:432",
+      "tests/test_cli.py:486",
+      "tests/test_cli.py:495",
+      "tests/test_helpers.py:120",
+      "tests/test_helpers.py:143",
+      "tests/test_json.py:70",
+      "tests/test_json.py:176",
+      "tests/test_views.py:189",
+      "tests/test_views.py:207",
+      "tests/test_views.py:171",
+      "src/flask/sansio/scaffold.py:360",
+      "examples/tutorial/flaskr/__init__.py:6",
+      "src/flask/sansio/blueprints.py:413",
+      "src/flask/sansio/blueprints.py:87",
+      "src/flask/sansio/blueprints.py:273",
+      "tests/test_async.py:41",
+      "tests/test_basic.py:90",
+      "tests/test_basic.py:1624",
+      "tests/test_basic.py:1784",
+      "tests/test_basic.py:155",
+      "tests/test_basic.py:150",
+      "tests/test_blueprints.py:327",
+      "tests/test_cli.py:432",
+      "tests/test_cli.py:486",
+      "tests/test_cli.py:495",
+      "tests/test_helpers.py:120",
+      "tests/test_helpers.py:143",
+      "tests/test_json.py:70",
+      "tests/test_json.py:176",
+      "tests/test_views.py:189"
+     ]
+    },
+    {
+     "kind": "explain",
+     "subject": "add_url_rule",
+     "calls": [
+      {
+       "tool": "explain",
+       "arguments": "{\"target\": \"add_url_rule\"}",
+       "response_bytes": 333,
+       "is_error": true
+      },
+      {
+       "tool": "explain",
+       "arguments": "{\"target\": \"src/flask/sansio/app.py:605\"}",
+       "response_bytes": 5994,
+       "is_error": false
+      },
+      {
+       "tool": "explain",
+       "arguments": "{\"target\": \"src/flask/sansio/blueprints.py:87\"}",
+       "response_bytes": 6071,
+       "is_error": false
+      },
+      {
+       "tool": "explain",
+       "arguments": "{\"target\": \"src/flask/sansio/blueprints.py:413\"}",
+       "response_bytes": 5584,
+       "is_error": false
+      },
+      {
+       "tool": "explain",
+       "arguments": "{\"target\": \"src/flask/sansio/scaffold.py:368\"}",
+       "response_bytes": 5983,
+       "is_error": false
+      }
+     ],
+     "locations": []
+    },
+    {
+     "kind": "callers",
+     "subject": "dispatch_request",
+     "calls": [
+      {
+       "tool": "find_usages",
+       "arguments": "{\"target\": \"dispatch_request\"}",
+       "response_bytes": 638,
+       "is_error": true
+      },
+      {
+       "tool": "find_usages",
+       "arguments": "{\"target\": \"src/flask/app.py:842\"}",
+       "response_bytes": 204,
+       "is_error": false
+      },
+      {
+       "tool": "find_usages",
+       "arguments": "{\"target\": \"src/flask/views.py:78\"}",
+       "response_bytes": 131,
+       "is_error": false
+      },
+      {
+       "tool": "find_usages",
+       "arguments": "{\"target\": \"src/flask/views.py:182\"}",
+       "response_bytes": 131,
+       "is_error": false
+      },
+      {
+       "tool": "find_usages",
+       "arguments": "{\"target\": \"tests/test_async.py:25\"}",
+       "response_bytes": 131,
+       "is_error": false
+      },
+      {
+       "tool": "find_usages",
+       "arguments": "{\"target\": \"tests/test_views.py:21\"}",
+       "response_bytes": 131,
+       "is_error": false
+      },
+      {
+       "tool": "find_usages",
+       "arguments": "{\"target\": \"tests/test_views.py:92\"}",
+       "response_bytes": 131,
+       "is_error": false
+      },
+      {
+       "tool": "find_usages",
+       "arguments": "{\"target\": \"tests/test_views.py:107\"}",
+       "response_bytes": 131,
+       "is_error": false
+      },
+      {
+       "tool": "find_usages",
+       "arguments": "{\"target\": \"tests/test_views.py:121\"}",
+       "response_bytes": 131,
+       "is_error": false
+      },
+      {
+       "tool": "find_usages",
+       "arguments": "{\"target\": \"tests/test_views.py:132\"}",
+       "response_bytes": 131,
+       "is_error": false
+      },
+      {
+       "tool": "find_usages",
+       "arguments": "{\"target\": \"tests/test_views.py:177\"}",
+       "response_bytes": 131,
+       "is_error": false
+      }
+     ],
+     "locations": [
+      "src/flask/app.py:867"
+     ]
+    },
+    {
+     "kind": "explain",
+     "subject": "dispatch_request",
+     "calls": [
+      {
+       "tool": "explain",
+       "arguments": "{\"target\": \"dispatch_request\"}",
+       "response_bytes": 638,
+       "is_error": true
+      },
+      {
+       "tool": "explain",
+       "arguments": "{\"target\": \"src/flask/app.py:842\"}",
+       "response_bytes": 1866,
+       "is_error": false
+      },
+      {
+       "tool": "explain",
+       "arguments": "{\"target\": \"src/flask/views.py:78\"}",
+       "response_bytes": 430,
+       "is_error": false
+      },
+      {
+       "tool": "explain",
+       "arguments": "{\"target\": \"src/flask/views.py:182\"}",
+       "response_bytes": 753,
+       "is_error": false
+      },
+      {
+       "tool": "explain",
+       "arguments": "{\"target\": \"tests/test_async.py:25\"}",
+       "response_bytes": 238,
+       "is_error": false
+      },
+      {
+       "tool": "explain",
+       "arguments": "{\"target\": \"tests/test_views.py:21\"}",
+       "response_bytes": 211,
+       "is_error": false
+      },
+      {
+       "tool": "explain",
+       "arguments": "{\"target\": \"tests/test_views.py:92\"}",
+       "response_bytes": 200,
+       "is_error": false
+      },
+      {
+       "tool": "explain",
+       "arguments": "{\"target\": \"tests/test_views.py:107\"}",
+       "response_bytes": 207,
+       "is_error": false
+      },
+      {
+       "tool": "explain",
+       "arguments": "{\"target\": \"tests/test_views.py:121\"}",
+       "response_bytes": 207,
+       "is_error": false
+      },
+      {
+       "tool": "explain",
+       "arguments": "{\"target\": \"tests/test_views.py:132\"}",
+       "response_bytes": 207,
+       "is_error": false
+      },
+      {
+       "tool": "explain",
+       "arguments": "{\"target\": \"tests/test_views.py:177\"}",
+       "response_bytes": 213,
+       "is_error": false
+      }
+     ],
+     "locations": []
+    },
+    {
+     "kind": "callers",
+     "subject": "jsonify",
+     "calls": [
+      {
+       "tool": "find_usages",
+       "arguments": "{\"target\": \"jsonify\"}",
+       "response_bytes": 1452,
+       "is_error": false
+      }
+     ],
+     "locations": [
+      "examples/javascript/js_example/views.py:15",
+      "tests/test_appctx.py:104",
+      "tests/test_basic.py:1284",
+      "tests/test_basic.py:1254",
+      "tests/test_basic.py:1300",
+      "tests/test_json.py:70",
+      "tests/test_json.py:120",
+      "tests/test_json.py:32",
+      "tests/test_json.py:96",
+      "tests/test_json.py:276",
+      "tests/test_json.py:92",
+      "tests/test_json.py:138",
+      "tests/test_json.py:124",
+      "tests/test_json.py:176",
+      "tests/test_testing.py:265",
+      "tests/typing/typing_route.py:27",
+      "examples/javascript/js_example/views.py:1",
+      "src/flask/__init__.py:1",
+      "tests/test_testing.py:1",
+      "tests/typing/typing_route.py:1"
+     ]
+    },
+    {
+     "kind": "explain",
+     "subject": "jsonify",
+     "calls": [
+      {
+       "tool": "explain",
+       "arguments": "{\"target\": \"jsonify\"}",
+       "response_bytes": 2879,
+       "is_error": false
+      }
+     ],
+     "locations": []
+    },
+    {
+     "kind": "impact",
+     "subject": "src/flask/wrappers.py",
+     "calls": [
+      {
+       "tool": "impact_of_change",
+       "arguments": "{\"file\": \"src/flask/wrappers.py\"}",
+       "response_bytes": 3332,
+       "is_error": false
+      }
+     ],
+     "locations": []
+    },
+    {
+     "kind": "impact",
+     "subject": "src/flask/helpers.py",
+     "calls": [
+      {
+       "tool": "impact_of_change",
+       "arguments": "{\"file\": \"src/flask/helpers.py\"}",
+       "response_bytes": 3582,
+       "is_error": false
+      }
+     ],
+     "locations": []
+    },
+    {
+     "kind": "map",
+     "subject": "",
+     "calls": [
+      {
+       "tool": "map",
+       "arguments": "{}",
+       "response_bytes": 4075,
+       "is_error": false
+      }
+     ],
+     "locations": []
+    }
+   ]
+  },
+  {
+   "repo": "django",
+   "tools_list_bytes": 6596,
+   "questions": [
+    {
+     "kind": "callers",
+     "subject": "reverse",
+     "calls": [
+      {
+       "tool": "find_usages",
+       "arguments": "{\"target\": \"reverse\"}",
+       "response_bytes": 305,
+       "is_error": true
+      },
+      {
+       "tool": "find_usages",
+       "arguments": "{\"target\": \"django/contrib/gis/geos/mutable_list.py:211\"}",
+       "response_bytes": 2820,
+       "is_error": false
+      },
+      {
+       "tool": "find_usages",
+       "arguments": "{\"target\": \"django/db/models/query.py:1734\"}",
+       "response_bytes": 2710,
+       "is_error": false
+      },
+      {
+       "tool": "find_usages",
+       "arguments": "{\"target\": \"django/urls/base.py:27\"}",
+       "response_bytes": 1766,
+       "is_error": false
+      },
+      {
+       "tool": "find_usages",
+       "arguments": "{\"target\": \"django/urls/resolvers.py:741\"}",
+       "response_bytes": 2820,
+       "is_error": false
+      }
+     ],
+     "locations": [
+      "django/contrib/contenttypes/fields.py:405",
+      "django/core/serializers/__init__.py:167",
+      "django/db/models/deletion.py:432",
+      "django/db/models/options.py:770",
+      "django/urls/base.py:27",
+      "django/utils/termcolors.py:143",
+      "tests/gis_tests/geoapp/test_functions.py:606",
+      "tests/gis_tests/geos_tests/test_geos.py:466",
+      "tests/gis_tests/geos_tests/test_geos.py:458",
+      "tests/gis_tests/geos_tests/test_geos.py:370",
+      "tests/gis_tests/geos_tests/test_mutable_list.py:244",
+      "tests/model_fields/test_jsonfield.py:699",
+      "tests/ordering/tests.py:306",
+      "tests/ordering/tests.py:141",
+      "tests/ordering/tests.py:330",
+      "tests/ordering/tests.py:282",
+      "tests/queries/tests.py:883",
+      "tests/queries/tests.py:465",
+      "tests/urlpatterns_reverse/tests.py:547",
+      "tests/urlpatterns_reverse/tests.py:559",
+      "django/db/models/query.py:1103",
+      "django/db/models/query.py:1078",
+      "django/contrib/contenttypes/fields.py:405",
+      "django/core/serializers/__init__.py:167",
+      "django/db/models/deletion.py:432",
+      "django/db/models/options.py:770",
+      "django/urls/base.py:27",
+      "django/utils/termcolors.py:143",
+      "tests/gis_tests/geoapp/test_functions.py:606",
+      "tests/gis_tests/geos_tests/test_geos.py:466",
+      "tests/gis_tests/geos_tests/test_geos.py:458",
+      "tests/gis_tests/geos_tests/test_geos.py:370",
+      "tests/gis_tests/geos_tests/test_mutable_list.py:244",
+      "tests/model_fields/test_jsonfield.py:699",
+      "tests/ordering/tests.py:306",
+      "tests/ordering/tests.py:141",
+      "tests/ordering/tests.py:330",
+      "tests/ordering/tests.py:282",
+      "tests/queries/tests.py:883",
+      "tests/queries/tests.py:465",
+      "django/contrib/admin/helpers.py:251",
+      "django/contrib/admin/models.py:233",
+      "django/contrib/admin/options.py:1680",
+      "django/contrib/admin/options.py:358",
+      "django/contrib/admin/options.py:1583",
+      "django/contrib/admin/options.py:1492",
+      "django/contrib/admin/options.py:1804",
+      "django/contrib/admin/options.py:1392",
+      "django/contrib/admin/sites.py:409",
+      "django/contrib/admin/sites.py:228",
+      "django/contrib/admin/sites.py:464",
+      "django/contrib/admin/sites.py:344",
+      "django/contrib/admin/utils.py:141",
+      "django/contrib/admin/views/main.py:625",
+      "django/contrib/admin/widgets.py:308",
+      "django/contrib/admin/widgets.py:146",
+      "django/contrib/admin/widgets.py:505",
+      "django/contrib/admin/widgets.py:193",
+      "django/contrib/admindocs/utils.py:59",
+      "django/contrib/auth/admin.py:152",
+      "django/contrib/contenttypes/fields.py:405",
+      "django/core/serializers/__init__.py:167",
+      "django/db/models/deletion.py:432",
+      "django/db/models/options.py:770",
+      "django/urls/base.py:27",
+      "django/utils/termcolors.py:143",
+      "tests/gis_tests/geoapp/test_functions.py:606",
+      "tests/gis_tests/geos_tests/test_geos.py:466",
+      "tests/gis_tests/geos_tests/test_geos.py:458",
+      "tests/gis_tests/geos_tests/test_geos.py:370",
+      "tests/gis_tests/geos_tests/test_mutable_list.py:244",
+      "tests/model_fields/test_jsonfield.py:699",
+      "tests/ordering/tests.py:306",
+      "tests/ordering/tests.py:141",
+      "tests/ordering/tests.py:330",
+      "tests/ordering/tests.py:282",
+      "tests/queries/tests.py:883",
+      "tests/queries/tests.py:465",
+      "tests/urlpatterns_reverse/tests.py:547",
+      "tests/urlpatterns_reverse/tests.py:559"
+     ]
+    },
+    {
+     "kind": "explain",
+     "subject": "reverse",
+     "calls": [
+      {
+       "tool": "explain",
+       "arguments": "{\"target\": \"reverse\"}",
+       "response_bytes": 305,
+       "is_error": true
+      },
+      {
+       "tool": "explain",
+       "arguments": "{\"target\": \"django/contrib/gis/geos/mutable_list.py:211\"}",
+       "response_bytes": 3047,
+       "is_error": false
+      },
+      {
+       "tool": "explain",
+       "arguments": "{\"target\": \"django/db/models/query.py:1734\"}",
+       "response_bytes": 3533,
+       "is_error": false
+      },
+      {
+       "tool": "explain",
+       "arguments": "{\"target\": \"django/urls/base.py:27\"}",
+       "response_bytes": 6033,
+       "is_error": false
+      },
+      {
+       "tool": "explain",
+       "arguments": "{\"target\": \"django/urls/resolvers.py:741\"}",
+       "response_bytes": 3063,
+       "is_error": false
+      }
+     ],
+     "locations": []
+    },
+    {
+     "kind": "callers",
+     "subject": "get_object_or_404",
+     "calls": [
+      {
+       "tool": "find_usages",
+       "arguments": "{\"target\": \"get_object_or_404\"}",
+       "response_bytes": 723,
+       "is_error": false
+      }
+     ],
+     "locations": [
+      "django/contrib/flatpages/views.py:22",
+      "tests/get_object_or_404/tests.py:88",
+      "tests/get_object_or_404/tests.py:10",
+      "tests/get_object_or_404/tests.py:116",
+      "tests/test_utils/views.py:8",
+      "django/contrib/flatpages/views.py:1",
+      "tests/get_object_or_404/tests.py:1",
+      "tests/test_utils/views.py:1"
+     ]
+    },
+    {
+     "kind": "explain",
+     "subject": "get_object_or_404",
+     "calls": [
+      {
+       "tool": "explain",
+       "arguments": "{\"target\": \"get_object_or_404\"}",
+       "response_bytes": 1973,
+       "is_error": false
+      }
+     ],
+     "locations": []
+    },
+    {
+     "kind": "callers",
+     "subject": "slugify",
+     "calls": [
+      {
+       "tool": "find_usages",
+       "arguments": "{\"target\": \"slugify\"}",
+       "response_bytes": 203,
+       "is_error": true
+      },
+      {
+       "tool": "find_usages",
+       "arguments": "{\"target\": \"django/template/defaultfilters.py:267\"}",
+       "response_bytes": 593,
+       "is_error": false
+      },
+      {
+       "tool": "find_usages",
+       "arguments": "{\"target\": \"django/utils/text.py:452\"}",
+       "response_bytes": 335,
+       "is_error": false
+      }
+     ],
+     "locations": [
+      "tests/template_tests/filter_tests/test_slugify.py:54",
+      "tests/template_tests/filter_tests/test_slugify.py:45",
+      "tests/template_tests/filter_tests/test_slugify.py:51",
+      "tests/template_tests/filter_tests/test_slugify.py:37",
+      "tests/template_tests/filter_tests/test_slugify.py:1",
+      "django/template/defaultfilters.py:267",
+      "tests/utils_tests/test_text.py:376",
+      "django/template/defaultfilters.py:1"
+     ]
+    },
+    {
+     "kind": "explain",
+     "subject": "slugify",
+     "calls": [
+      {
+       "tool": "explain",
+       "arguments": "{\"target\": \"slugify\"}",
+       "response_bytes": 203,
+       "is_error": true
+      },
+      {
+       "tool": "explain",
+       "arguments": "{\"target\": \"django/template/defaultfilters.py:267\"}",
+       "response_bytes": 1029,
+       "is_error": false
+      },
+      {
+       "tool": "explain",
+       "arguments": "{\"target\": \"django/utils/text.py:452\"}",
+       "response_bytes": 1477,
+       "is_error": false
+      }
+     ],
+     "locations": []
+    },
+    {
+     "kind": "callers",
+     "subject": "Paginator",
+     "calls": [
+      {
+       "tool": "find_usages",
+       "arguments": "{\"target\": \"Paginator\"}",
+       "response_bytes": 1889,
+       "is_error": false
+      }
+     ],
+     "locations": [
+      "django/contrib/sitemaps/__init__.py:72",
+      "tests/pagination/tests.py:570",
+      "tests/pagination/tests.py:117",
+      "tests/pagination/tests.py:530",
+      "tests/pagination/tests.py:502",
+      "tests/pagination/tests.py:554",
+      "tests/pagination/tests.py:326",
+      "tests/pagination/tests.py:280",
+      "tests/pagination/tests.py:565",
+      "tests/pagination/tests.py:516",
+      "tests/pagination/tests.py:159",
+      "tests/pagination/tests.py:24",
+      "tests/pagination/tests.py:306",
+      "tests/pagination/tests.py:163",
+      "tests/pagination/tests.py:205",
+      "tests/pagination/tests.py:131",
+      "tests/pagination/tests.py:312",
+      "tests/pagination/tests.py:344",
+      "tests/pagination/tests.py:335",
+      "tests/pagination/tests.py:168"
+     ]
+    },
+    {
+     "kind": "explain",
+     "subject": "Paginator",
+     "calls": [
+      {
+       "tool": "explain",
+       "arguments": "{\"target\": \"Paginator\"}",
+       "response_bytes": 6060,
+       "is_error": false
+      }
+     ],
+     "locations": []
+    },
+    {
+     "kind": "callers",
+     "subject": "render",
+     "calls": [
+      {
+       "tool": "find_usages",
+       "arguments": "{\"target\": \"render\"}",
+       "response_bytes": 642,
+       "is_error": true
+      },
+      {
+       "tool": "find_usages",
+       "arguments": "{\"target\": \"django/contrib/admin/templatetags/base.py:32\"}",
+       "response_bytes": 121,
+       "is_error": false
+      },
+      {
+       "tool": "find_usages",
+       "arguments": "{\"target\": \"django/contrib/admin/templatetags/log.py:15\"}",
+       "response_bytes": 121,
+       "is_error": false
+      },
+      {
+       "tool": "find_usages",
+       "arguments": "{\"target\": \"django/contrib/flatpages/templatetags/flatpages.py:21\"}",
+       "response_bytes": 121,
+       "is_error": false
+      },
+      {
+       "tool": "find_usages",
+       "arguments": "{\"target\": \"django/db/migrations/state.py:934\"}",
+       "response_bytes": 121,
+       "is_error": false
+      },
+      {
+       "tool": "find_usages",
+       "arguments": "{\"target\": \"django/db/migrations/writer.py:114\"}",
+       "response_bytes": 195,
+       "is_error": false
+      },
+      {
+       "tool": "find_usages",
+       "arguments": "{\"target\": \"django/forms/renderers.py:27\"}",
+       "response_bytes": 121,
+       "is_error": false
+      },
+      {
+       "tool": "find_usages",
+       "arguments": "{\"target\": \"django/forms/utils.py:51\"}",
+       "response_bytes": 547,
+       "is_error": false
+      },
+      {
+       "tool": "find_usages",
+       "arguments": "{\"target\": \"django/forms/widgets.py:93\"}",
+       "response_bytes": 185,
+       "is_error": false
+      },
+      {
+       "tool": "find_usages",
+       "arguments": "{\"target\": \"django/forms/widgets.py:276\"}",
+       "response_bytes": 121,
+       "is_error": false
+      },
+      {
+       "tool": "find_usages",
+       "arguments": "{\"target\": \"django/shortcuts.py:18\"}",
+       "response_bytes": 1800,
+       "is_error": false
+      }
+     ],
+     "locations": [
+      "django/db/migrations/writer.py:24",
+      "django/forms/utils.py:85",
+      "django/forms/utils.py:89",
+      "django/forms/utils.py:97",
+      "django/forms/utils.py:106",
+      "django/forms/utils.py:109",
+      "django/forms/utils.py:62",
+      "django/forms/utils.py:93",
+      "django/forms/widgets.py:78",
+      "tests/auth_tests/urls.py:55",
+      "tests/auth_tests/urls.py:46",
+      "tests/auth_tests/urls.py:63",
+      "tests/auth_tests/urls.py:59",
+      "tests/auth_tests/urls.py:67",
+      "tests/auth_tests/urls.py:36",
+      "tests/context_processors/views.py:6",
+      "tests/context_processors/views.py:10",
+      "tests/shortcuts/views.py:15",
+      "tests/shortcuts/views.py:4",
+      "tests/shortcuts/views.py:29",
+      "tests/shortcuts/views.py:53",
+      "tests/shortcuts/views.py:41",
+      "tests/test_client/views.py:251",
+      "tests/test_client_regress/views.py:65",
+      "tests/test_client_regress/views.py:162",
+      "tests/test_client_regress/views.py:104",
+      "tests/test_client_regress/views.py:37",
+      "tests/view_tests/tests/test_debug.py:1298",
+      "tests/view_tests/views.py:111"
+     ]
+    },
+    {
+     "kind": "explain",
+     "subject": "render",
+     "calls": [
+      {
+       "tool": "explain",
+       "arguments": "{\"target\": \"render\"}",
+       "response_bytes": 642,
+       "is_error": true
+      },
+      {
+       "tool": "explain",
+       "arguments": "{\"target\": \"django/contrib/admin/templatetags/base.py:32\"}",
+       "response_bytes": 1513,
+       "is_error": false
+      },
+      {
+       "tool": "explain",
+       "arguments": "{\"target\": \"django/contrib/admin/templatetags/log.py:15\"}",
+       "response_bytes": 890,
+       "is_error": false
+      },
+      {
+       "tool": "explain",
+       "arguments": "{\"target\": \"django/contrib/flatpages/templatetags/flatpages.py:21\"}",
+       "response_bytes": 1939,
+       "is_error": false
+      },
+      {
+       "tool": "explain",
+       "arguments": "{\"target\": \"django/db/migrations/state.py:934\"}",
+       "response_bytes": 1965,
+       "is_error": false
+      },
+      {
+       "tool": "explain",
+       "arguments": "{\"target\": \"django/db/migrations/writer.py:114\"}",
+       "response_bytes": 655,
+       "is_error": false
+      },
+      {
+       "tool": "explain",
+       "arguments": "{\"target\": \"django/forms/renderers.py:27\"}",
+       "response_bytes": 466,
+       "is_error": false
+      },
+      {
+       "tool": "explain",
+       "arguments": "{\"target\": \"django/forms/utils.py:51\"}",
+       "response_bytes": 1159,
+       "is_error": false
+      },
+      {
+       "tool": "explain",
+       "arguments": "{\"target\": \"django/forms/widgets.py:93\"}",
+       "response_bytes": 874,
+       "is_error": false
+      },
+      {
+       "tool": "explain",
+       "arguments": "{\"target\": \"django/forms/widgets.py:276\"}",
+       "response_bytes": 586,
+       "is_error": false
+      },
+      {
+       "tool": "explain",
+       "arguments": "{\"target\": \"django/shortcuts.py:18\"}",
+       "response_bytes": 3090,
+       "is_error": false
+      }
+     ],
+     "locations": []
+    },
+    {
+     "kind": "impact",
+     "subject": "django/utils/text.py",
+     "calls": [
+      {
+       "tool": "impact_of_change",
+       "arguments": "{\"file\": \"django/utils/text.py\"}",
+       "response_bytes": 3719,
+       "is_error": false
+      }
+     ],
+     "locations": []
+    },
+    {
+     "kind": "impact",
+     "subject": "django/shortcuts.py",
+     "calls": [
+      {
+       "tool": "impact_of_change",
+       "arguments": "{\"file\": \"django/shortcuts.py\"}",
+       "response_bytes": 3730,
+       "is_error": false
+      }
+     ],
+     "locations": []
+    },
+    {
+     "kind": "map",
+     "subject": "",
+     "calls": [
+      {
+       "tool": "map",
+       "arguments": "{}",
+       "response_bytes": 4007,
+       "is_error": false
+      }
+     ],
+     "locations": []
+    }
+   ]
+  }
+ ]
+}

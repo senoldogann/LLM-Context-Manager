@@ -18,6 +18,9 @@ against the actual source) covering CCM's three retrieval modes:
 | `read_graph` | "what does this function call / who calls it?" (node → neighbors) | graph only |
 | `get_context` | "what is at this cursor position?" (file+line → node) | graph only |
 
+`read_graph` and `get_context` are evaluation query types; since 0.4.0 agents
+reach the same graph data through the `explain` tool.
+
 `search_code` is evaluated **twice**: once with pure vector search
 (`--compare` "structural" mode) and once with the hybrid graph+semantic scorer.
 The other two task types exercise the graph directly.
@@ -143,7 +146,8 @@ state was preserved in 21/21 probes, silently (`PRESERVED_SILENT`).
   Flask's were not. Django probes take ~0.19 s against Flask's ~0.01 s, so the
   harness cannot tell whether the watcher had reacted before the question
   arrived; per-repo timing differences are descriptive, not evidence.
-- Not measured here: agent outcomes, token cost, edge accuracy (Level 2),
+- Not measured here: agent outcomes, token cost (see
+  [Token cost of answers](#token-cost-of-answers-m2)), edge accuracy (Level 2),
   platforms other than macOS.
 - Conflict of interest: the benchmark was written for the CCM maintainer, and
   CCM is the system under test. Safeguards are listed in the pre-registration;
@@ -182,6 +186,76 @@ The work directory must be empty; the harness refuses to run while
 `benchmarks/freshness`, `benchmarks/pyproject.toml` or `benchmarks/uv.lock`
 have uncommitted changes. Level 2 (CCM's call edges against language servers)
 is a separate, not-yet-run benchmark.
+
+## Token cost of answers (M2)
+
+How many tool calls and response bytes an agent spends to get the same
+structural answers from CCM before (v1 = `fd9af8b`: the 0.3.13 tools plus the
+Python syntax graph) and after (v2 = `9eb8ded`) the token-efficient answer
+work: compact one-line results with a `max_tokens` budget, `target` as a name
+or `path:line`, `explain` and `map`. Pre-registered in
+[`tokens/PREREGISTRATION.md`](tokens/PREREGISTRATION.md) before the first run;
+no deviations.
+
+Method: 12 fixed questions per repository on Flask 3.0.3 and Django 5.1 (5
+callers, 5 explain, 2 impact; [`tokens/questions.json`](tokens/questions.json)),
+graph only (`CCM_DISABLE_EMBEDDER=1`), auto-refresh off, the same schema-6
+indexes for both versions, and every argument not named in the pre-registered
+tool plan at its default. Each version runs the scripted plan an agent would
+follow with that version's tools, including one follow-up call per listed
+candidate (at most 10) when a name is ambiguous. Estimated tokens = bytes / 4;
+no model or tokenizer is involved.
+
+### Results (2026-10-02, macOS arm64)
+
+| Questions (both repos) | v1 calls | v2 calls | v1 bytes | v2 bytes | Change |
+|---|---|---|---|---|---|
+| callers (10) | 48 | 44 | 199,853 | 36,680 | −82% |
+| explain (10) | 86 | 44 | 293,784 | 88,731 | −70% |
+| impact (4) | 4 | 4 | 33,275 | 14,363 | −57% |
+| **all 24** | **138** | **92** | **526,912** | **139,774** | **−73%** |
+| map (2, v2 only) | — | 2 | — | 8,082 | — |
+
+Fixed cost per session: `tools/list` 9,333 → 6,596 bytes (−29%) and `SKILL.md`
+25,993 → 3,990 bytes (−85%).
+
+Parity (honesty check): the v2 answers contain all 85 Flask and 78 of the 79
+Django caller locations that v1 returned. The missing one calls a test-local
+`render` function: Django has 68 definitions named `render`, both versions
+follow at most 10 of them, and v2's path-ordered candidate list did not include
+that one. The budget did not cut any caller.
+
+Raw results: [`results/tokens/`](results/tokens/) (`baseline-fd9af8b`,
+`m2-9eb8ded`).
+
+### Limits
+
+- Bytes, not tokens: bytes / 4 is an estimate, and tokenizers differ.
+- Not an agent benchmark: the tool plans are scripted. Whether a model asks
+  fewer questions, finishes tasks with fewer tokens or makes fewer mistakes is
+  the L3 agent benchmark, which has not run yet.
+- Two Python repositories and 24 questions fixed before the run. Other
+  languages are matched by name and were not measured.
+- Both versions include symbol bodies in `explain` answers (v1 through
+  `get_context`); v2 caps a body at half of the budget.
+- One run on one machine. Byte counts are deterministic for a given index.
+
+### Reproducing
+
+```bash
+cd benchmarks
+PYTHONDONTWRITEBYTECODE=1 uv run --frozen python -m tokens run --version v2 \
+  --bin-dir ../target/debug --corpus-dir corpus --questions tokens/questions.json \
+  --skill ../SKILL.md --home <empty-dir> --log-dir <log-dir> \
+  --out results/tokens/m2-9eb8ded.json
+PYTHONDONTWRITEBYTECODE=1 uv run --frozen python -m tokens report \
+  --results results/tokens/baseline-fd9af8b.json \
+  --results results/tokens/m2-9eb8ded.json --out results/tokens/m2-9eb8ded.md
+```
+
+The corpus comes from `scripts/fetch_corpus.sh`, indexed with `ccm-cli index`;
+`--version v1` with binaries built from `fd9af8b` reproduces the baseline. The
+harness refuses to run while `benchmarks/tokens` has uncommitted changes.
 
 ## Results (2026-08-21, Ollama mxbai-embed-large)
 

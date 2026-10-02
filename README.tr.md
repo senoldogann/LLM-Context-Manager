@@ -23,9 +23,14 @@
 > hâlâ `fresh` etiketli düzenleme öncesi cevabı, 4'ü de kısmi ya da boş bir
 > cevap döndürdü ([benchmarks/](./benchmarks/README.md)).
 
-> **Durum, v0.3.13:** arama kalitesi için 35 görevlik bir pilot benchmark var;
-> grafın ajanlara zaman ya da token kazandırıp kazandırmadığı henüz ölçülmedi.
-> Neyin ölçülüp neyin ölçülmediği: [`benchmarks/`](./benchmarks/README.md).
+> **Durum:** arama kalitesi için 35 görevlik bir pilot benchmark var. Flask ve
+> Django üzerinde 24 sabit soruluk, LLM kullanmayan bir benchmark'ta 0.4.0
+> araçları 0.3 araçlarına göre %73 daha az cevap baytı ve üçte bir daha az
+> çağrıyla cevap veriyor; 164 çağıran konumunun 163'ünü koruyor
+> ([token maliyeti](./benchmarks/README.md#token-cost-of-answers-m2)).
+> Ajanların görevleri daha hızlı ya da daha az tokenla bitirip bitirmediği henüz
+> ölçülmedi. Neyin ölçülüp neyin ölçülmediği:
+> [`benchmarks/`](./benchmarks/README.md).
 
 [![Rust](https://img.shields.io/badge/Built%20With-Rust-orange.svg?style=flat-square&logo=rust)](https://www.rust-lang.org/)
 [![MCP Ready](https://img.shields.io/badge/MCP-Compatible-blue.svg?style=flat-square&logo=google-cloud)](https://modelcontextprotocol.io/)

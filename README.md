@@ -23,9 +23,13 @@ English | [Turkce](./README.tr.md)
 > still labeled `fresh`, and 4 more a partial or empty one
 > ([benchmarks/](./benchmarks/README.md)).
 
-> **Status, v0.3.13:** search quality has a 35-task pilot benchmark; whether the
-> graph saves agents time or tokens is not measured yet. What is and is not
-> measured: [`benchmarks/`](./benchmarks/README.md).
+> **Status:** search quality has a 35-task pilot benchmark. In an LLM-free
+> benchmark of 24 fixed questions on Flask and Django, the 0.4.0 tools answer
+> with 73% fewer response bytes and a third fewer calls than the 0.3 tools, and
+> keep 163 of the 164 caller locations
+> ([token cost](./benchmarks/README.md#token-cost-of-answers-m2)). Whether agents
+> finish tasks faster or with fewer tokens is not measured yet. What is and is
+> not measured: [`benchmarks/`](./benchmarks/README.md).
 
 [![Rust](https://img.shields.io/badge/Built%20With-Rust-orange.svg?style=flat-square&logo=rust)](https://www.rust-lang.org/)
 [![MCP Ready](https://img.shields.io/badge/MCP-Compatible-blue.svg?style=flat-square&logo=google-cloud)](https://modelcontextprotocol.io/)
