@@ -1386,6 +1386,20 @@ fn handle_list_tools(id: Option<Value>) -> JsonRpcResponse {
             annotations: READ_ONLY_TOOL,
         },
         ToolDefinition {
+            name: "map".to_string(),
+            title: "Project Map".to_string(),
+            description: Some("Map the project in one call: files ordered by how much other files use them, each with its most-used symbols. Start here, then explain a symbol.".to_string()),
+            input_schema: serde_json::json!({
+                "type": "object",
+                "properties": {
+                    "path": { "type": "string", "description": "Only files under this directory, relative to the project root." },
+                    "project_path": { "type": "string", "description": "Optional absolute path to the project root." },
+                    "max_tokens": { "type": "integer", "minimum": 1, "maximum": 20000, "description": "Answer budget in estimated tokens (about 4 characters each). Defaults to 1000." }
+                }
+            }),
+            annotations: READ_ONLY_TOOL,
+        },
+        ToolDefinition {
             name: "explain".to_string(),
             title: "Explain Symbol".to_string(),
             description: Some("Explain a symbol in one call: definition with body, members, callers, callees and tests, each as `path:line` lines within max_tokens.".to_string()),
@@ -1573,6 +1587,7 @@ async fn run_tool(
         "read_graph" => tools::read_graph(&engine, arguments).await?,
         "find_usages" => tools::find_usages(&engine, arguments).await?,
         "explain" => tools::explain(&engine, arguments).await?,
+        "map" => tools::project_map(&engine, arguments).await?,
         "trace_call_chain" => tools::trace_call_chain(&engine, arguments).await?,
         "impact_of_change" => tools::impact_of_change(&engine, arguments).await?,
         "diff_context" => tools::diff_context(&engine, arguments).await?,
@@ -1672,6 +1687,7 @@ fn is_known_tool(tool_name: &str) -> bool {
             | "index_now"
             | "find_usages"
             | "explain"
+            | "map"
             | "trace_call_chain"
             | "impact_of_change"
             | "diff_context"
@@ -1685,6 +1701,7 @@ fn validate_tool_arguments(tool_name: &str, arguments: &Value) -> std::result::R
         "search_code" | "find_nodes" => &[&["query"]],
         "read_graph" => &[&["target", "node_id"]],
         "find_usages" | "explain" => &[&["target", "node_id"]],
+        "map" => &[],
         "trace_call_chain" => &[&["from", "from_id"], &["to", "to_id"]],
         "impact_of_change" => &[&["file"]],
         "diff_context" | "index_project" | "index_now" => &[&["project_path"]],

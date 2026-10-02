@@ -169,6 +169,20 @@ pub use watch_filter::{
 
 /// Run a semantic search query against the index.
 /// Returns a list of context suggestions.
+/// Projenin haritası (`graph::project_map`); etkin indeksin grafını okur.
+pub fn project_map_for(project_path: &str, prefix: &str, max_tokens: usize) -> Result<String> {
+    let artifacts = resolve_index_artifacts(project_path, None)?;
+    if !artifacts.graph_path.exists() {
+        return Err(anyhow::anyhow!(
+            "Index not found at '{}'. Run: ccm-cli index --path {}",
+            artifacts.graph_path.display(),
+            project_path
+        ));
+    }
+    let graph = CodeGraph::from_file(&artifacts.graph_path.to_string_lossy())?;
+    Ok(graph::project_map(&graph, prefix, max_tokens)?)
+}
+
 pub async fn run_query(query: &str, project_path: &str) -> Result<Vec<ContextSuggestion>> {
     tracing::info!(
         query = query,

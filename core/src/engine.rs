@@ -982,6 +982,16 @@ impl RetrievalEngine {
         crate::graph::explanation_of(&graph, node_id)
     }
 
+    /// Projenin haritası; bkz. `graph::project_map`.
+    pub async fn project_map(
+        &self,
+        prefix: &str,
+        max_tokens: usize,
+    ) -> Result<String, crate::graph::MapError> {
+        let graph = self.graph.read().await;
+        crate::graph::project_map(&graph, prefix, max_tokens)
+    }
+
     /// from_id'den to_id'ye giden çağrı zincirini BFS ile bulur.
     pub async fn trace_call_chain(
         &self,

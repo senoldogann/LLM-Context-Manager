@@ -252,3 +252,32 @@ fn explain_lists_class_members() {
         "{text}"
     );
 }
+
+#[test]
+fn map_lists_files_by_their_most_used_symbols_within_budget() {
+    let mut server = Server::start();
+    let (text, is_error) = server.call("map", json!({"max_tokens": 300}));
+    assert!(!is_error, "{text}");
+    let header = text
+        .lines()
+        .find(|line| !line.is_empty() && !line.starts_with("_Index"))
+        .expect("map header");
+    assert!(header.contains("files,"), "{text}");
+    // `run` diğer dosyalardan çağrılır ve import edilir; `hub`'ın çağıranları kendi dosyasında.
+    let core = text
+        .find("app/core.py — run(")
+        .unwrap_or_else(|| panic!("run is used from other files: {text}"));
+    let other = text
+        .find("app/other.py")
+        .unwrap_or_else(|| panic!("every file is listed: {text}"));
+    assert!(core < other, "most used first: {text}");
+    assert!(text.len() <= 1_500, "{} chars: {text}", text.len());
+}
+
+#[test]
+fn map_with_an_unknown_prefix_says_so() {
+    let mut server = Server::start();
+    let (text, is_error) = server.call("map", json!({"path": "nope"}));
+    assert!(is_error, "{text}");
+    assert!(text.contains("no indexed code under nope"), "{text}");
+}

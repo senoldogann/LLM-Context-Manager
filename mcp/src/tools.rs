@@ -29,6 +29,8 @@ pub(crate) fn input_error(message: impl Into<String>) -> anyhow::Error {
 const DEFAULT_MAX_LIMIT: usize = 50;
 /// Varsayılan cevap bütçesi (yaklaşık token; bir token ≈ dört karakter).
 const DEFAULT_MAX_TOKENS: usize = 1_500;
+/// `map` için varsayılan bütçe: bir oturumun başında tek seferlik genel bakış.
+const DEFAULT_MAP_TOKENS: usize = 1_000;
 const MAX_MAX_TOKENS: usize = 20_000;
 const CHARS_PER_TOKEN: usize = 4;
 const MAX_GRAPH_DEPTH: usize = 32;
@@ -111,16 +113,22 @@ fn limit_from_args(args: &Value, default: usize) -> usize {
 
 /// Cevap bütçesi: `max_tokens`; yoksa eski `max_chars` / 4; yoksa varsayılan.
 fn max_tokens_from_args(args: &Value) -> usize {
+    requested_tokens(args).unwrap_or(DEFAULT_MAX_TOKENS)
+}
+
+/// İstenen bütçe: `max_tokens` ya da eski `max_chars` / 4; ikisi de yoksa `None`.
+fn requested_tokens(args: &Value) -> Option<usize> {
     if let Some(value) = args.get("max_tokens").and_then(Value::as_u64) {
-        return usize::try_from(value)
-            .unwrap_or(MAX_MAX_TOKENS)
-            .clamp(1, MAX_MAX_TOKENS);
+        return Some(
+            usize::try_from(value)
+                .unwrap_or(MAX_MAX_TOKENS)
+                .clamp(1, MAX_MAX_TOKENS),
+        );
     }
-    if let Some(value) = args.get("max_chars").and_then(Value::as_u64) {
+    args.get("max_chars").and_then(Value::as_u64).map(|value| {
         let chars = usize::try_from(value).unwrap_or(MAX_MAX_TOKENS * CHARS_PER_TOKEN);
-        return (chars / CHARS_PER_TOKEN).clamp(1, MAX_MAX_TOKENS);
-    }
-    DEFAULT_MAX_TOKENS
+        (chars / CHARS_PER_TOKEN).clamp(1, MAX_MAX_TOKENS)
+    })
 }
 
 fn include_body_from_args(args: &Value) -> bool {
@@ -1164,6 +1172,26 @@ pub async fn find_usages(engine: &Arc<RetrievalEngine>, args: &Value) -> Result<
 }
 
 /// `find_usages` özet satırı: ilişki başına kullanım sayısı.
+/// Tool: map
+/// Projenin haritası: dosyalar diğer dosyalardan kullanımlarına göre sıralı.
+pub async fn project_map(engine: &Arc<RetrievalEngine>, args: &Value) -> Result<ToolResult> {
+    let prefix = match args.get("path").and_then(Value::as_str) {
+        Some(path) => normalize_graph_path(path, args.get("project_path").and_then(Value::as_str))?,
+        None => String::new(),
+    };
+    let max_tokens = requested_tokens(args).unwrap_or(DEFAULT_MAP_TOKENS);
+    match engine.project_map(&prefix, max_tokens).await {
+        Ok(text) => Ok(ToolResult {
+            content: vec![ToolResultContent {
+                content_type: "text".to_string(),
+                text,
+            }],
+            is_error: None,
+        }),
+        Err(error) => Ok(tool_error(error.to_string())),
+    }
+}
+
 /// Tool: explain
 /// Sembolü tek çağrıda açıklar: tanım, gövde, üyeler, çağıranlar, çağrılanlar ve testler.
 pub async fn explain(engine: &Arc<RetrievalEngine>, args: &Value) -> Result<ToolResult> {

@@ -4,9 +4,12 @@ use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
+pub mod map;
 pub mod references;
 mod resolve;
 pub mod usages;
+
+pub use map::{project_map, MapError};
 
 pub use usages::{
     explanation_of, usages_of, Explanation, Usage, UsageError, UsageRelation, UsageReport,

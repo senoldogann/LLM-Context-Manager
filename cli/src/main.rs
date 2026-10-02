@@ -66,6 +66,20 @@ enum Commands {
         #[command(subcommand)]
         command: LearnCommand,
     },
+    /// Summarise a project: files ordered by how much other files use them
+    Map {
+        /// Project root
+        #[arg(short, long)]
+        path: PathBuf,
+
+        /// Only files under this directory, relative to the project root
+        #[arg(long)]
+        prefix: Option<String>,
+
+        /// Answer budget in estimated tokens (about 4 characters each)
+        #[arg(long, default_value_t = 1000)]
+        max_tokens: usize,
+    },
     /// Diagnose installation, index compatibility, and provider configuration
     Doctor {
         /// Project root to inspect
@@ -480,6 +494,18 @@ async fn main() -> anyhow::Result<()> {
                 }
             }
         },
+        Commands::Map {
+            path,
+            prefix,
+            max_tokens,
+        } => print!(
+            "{}",
+            ccm_core::project_map_for(
+                &path.to_string_lossy(),
+                prefix.as_deref().unwrap_or(""),
+                max_tokens
+            )?
+        ),
         Commands::Doctor { path, json } => run_doctor(&path, json).await?,
         Commands::Models { command } => match command {
             ModelsCommand::Pull => pull_local_model().await?,

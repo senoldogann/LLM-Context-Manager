@@ -336,3 +336,43 @@ fn local_model_indexes_and_searches_without_embedding_configuration(
     );
     Ok(())
 }
+
+#[test]
+fn cli_map_lists_the_most_used_files() -> Result<(), Box<dyn std::error::Error>> {
+    let dir = tempdir()?;
+    let project_root = dir.path();
+    fs::create_dir_all(project_root.join("app"))?;
+    fs::write(
+        project_root.join("app/hub.py"),
+        "def hub():\n    return 0\n",
+    )?;
+    fs::write(
+        project_root.join("app/main.py"),
+        "from app.hub import hub\n\n\ndef main():\n    return hub()\n",
+    )?;
+    let project = project_root.to_string_lossy().to_string();
+    // HOME geçici dizindir: CLI kullanıcının ~/.ccm/.env dosyasını okumaz.
+    let ccm = |args: &[&str]| {
+        Command::new(assert_cmd::cargo::cargo_bin!("ccm-cli"))
+            .env("CCM_DISABLE_EMBEDDER", "1")
+            .env("HOME", project_root)
+            .args(args)
+            .output()
+    };
+    let indexed = ccm(&["index", "--path", &project])?;
+    assert!(
+        indexed.status.success(),
+        "{}",
+        String::from_utf8_lossy(&indexed.stderr)
+    );
+
+    let output = ccm(&["map", "--path", &project, "--max-tokens", "300"])?;
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("app/hub.py — hub("), "{stdout}");
+    Ok(())
+}

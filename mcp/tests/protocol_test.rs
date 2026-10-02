@@ -14,13 +14,14 @@ use std::time::{Duration, Instant};
 use tempfile::tempdir;
 
 /// Salt okunur araçlar ve beklenen davranış ipuçları.
-const READ_TOOLS: [&str; 9] = [
+const READ_TOOLS: [&str; 10] = [
     "get_context",
     "search_code",
     "find_nodes",
     "read_graph",
     "find_usages",
     "explain",
+    "map",
     "trace_call_chain",
     "impact_of_change",
     "diff_context",
