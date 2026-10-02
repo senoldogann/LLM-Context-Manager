@@ -4,7 +4,9 @@ The current state of CCM and the next steps, for the owner and for any agent tha
 work. Keep it current: replace lines that stop being true instead of appending history (git log is
 the history).
 
-Last updated: 2026-10-02.
+Last updated: 2026-10-02. Where work stopped: the L3 harness is finished for both agents and
+checked without spending; both pilots wait for the owner's subscription limits to reset. Nothing
+in L3 has been measured yet.
 
 ## Goal
 
@@ -33,17 +35,38 @@ are parked. The owner's strategy notes are `docs/productization-plan.md`,
 | Token cost of answers (M2) | measured | `benchmarks/README.md`, "Token cost of answers" |
 | Agent experiment (L3) | harness ready for Claude Code and Codex, checked without spending; not run | `benchmarks/agent/PREREGISTRATION.md` |
 
+## What the measurements cover
+
+| Level | Question | Measures | Does not cover |
+|---|---|---|---|
+| L1 freshness | After an edit, does a tool answer from the new code? | each tool's answers after scripted edits | agent behaviour |
+| M2 answer cost | How many tokens does a CCM answer cost? | response bytes and calls per question, before and after M2 | whether an agent reads less overall |
+| L3 agents | Does the same agent finish real tasks better or with less quota with CCM? | success, recall and precision, tokens, turns, time, cost (Claude), stale answers after edits; arms A/B/C for Claude Code and Codex | large repositories (Django is not in L3), open-ended feature work and debugging, long sessions, languages other than Python, JavaScript and Rust |
+| L2 edge accuracy | Are the graph's edges right against a language server? | not run | — |
+
+L3 has 24 tasks × 3 repetitions per arm and agent: the report gives intervals, and differences
+inside them are not evidence either way.
+
 ## Next steps, in order
 
 1. **L3 pilots** (the owner starts them; they use the subscriptions): 3 tasks × 3 arms × 1
    repetition per agent, to check the harness on real runs and measure what one run uses. Pilot
-   results are not reported as the L3 result. Claude Code waits for its subscription limit to
-   reset; Codex needs its dedicated login first (see below).
+   results are not reported as the L3 result.
+   - Claude Code: the owner starts it in a terminal where `CLAUDE_CODE_OAUTH_TOKEN` (from `claude
+     setup-token`) is exported; the token never enters the repository or a chat. The measured
+     subscription is the account that created the exported token, not necessarily the account
+     running the agent session.
+   - Codex: the dedicated login exists (`~/.ccm-bench/codex-home`, ChatGPT, done 2026-10-02), so an
+     agent session can start the Codex pilot itself once the owner's ChatGPT limit has reset.
+   - Model: Claude Opus 5.5 and Codex `gpt-6.1-sol` for the pilots; confirm the final-run models
+     and the total budget with the owner after the pilots.
 2. **L3 final run:** 24 tasks × 3 arms × 3 repetitions = 216 runs, sequential, about 8–18 hours
    unattended. A usage-limit stop is expected on a subscription; rerun the same command after the
    limit resets.
-3. **L3 report:** `python -m agent report`, a failure ledger written from the transcripts, then a
-   data-based proposal for the README headline. Publish negative or mixed results too.
+3. **L3 report:** `python -m agent report` per run set, then a "Level 3: agents with and without
+   CCM" section in `benchmarks/README.md` with the run's commit, the arm tables, a failure ledger
+   written from the transcripts and a data-based proposal for the README headline. Raw records stay
+   in `benchmarks/results/agent/<run>/`. Publish negative or mixed results too.
 4. **Codex results:** the Codex agent is implemented (`benchmarks/agent/codex.py`, configuration
    in the preregistration). Its zero-cost start without a login accepted every flag; the event
    parsing and the run-level isolation check have not seen real output yet, so read the first
