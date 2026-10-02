@@ -7,6 +7,7 @@ use std::sync::Arc;
 pub mod map;
 pub mod references;
 mod resolve;
+mod rust_modules;
 pub mod usages;
 
 pub use map::{project_map, MapError};
