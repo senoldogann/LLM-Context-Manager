@@ -6,6 +6,7 @@ pub mod local;
 pub mod local_model;
 pub mod python_facts;
 pub mod remote;
+pub mod rust_facts;
 pub mod store;
 
 pub use extractor::*;

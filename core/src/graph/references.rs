@@ -11,6 +11,7 @@ use serde::{Deserialize, Serialize};
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum SyntaxLanguage {
     Python,
+    Rust,
 }
 
 /// Çağrılan ya da miras alınan ifadenin kaynakta yazıldığı biçim.

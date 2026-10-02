@@ -233,6 +233,19 @@ impl Extractor {
                 let name = self.find_child_text(node, "type_identifier")?;
                 Some((NodeType::Struct, name))
             }
+            "enum_item" => {
+                let name = self.find_child_text(node, "type_identifier")?;
+                Some((NodeType::Enum, name))
+            }
+            "trait_item" => {
+                let name = self.find_child_text(node, "type_identifier")?;
+                Some((NodeType::Trait, name))
+            }
+            // Gövdesiz trait metodu (`fn run(&self) -> u32;`): trait'in üyesi.
+            "function_signature_item" => {
+                let name = self.find_child_text(node, "identifier")?;
+                Some((NodeType::Function, name))
+            }
             "impl_item" => {
                 // Uygulanan tip `type` alanındadır; `impl Display for Foo` → "Foo"
                 let name = node

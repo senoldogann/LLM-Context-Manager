@@ -31,6 +31,10 @@ pub enum NodeType {
     Variable,
     Import,
     Struct,
+    /// Rust `enum`.
+    Enum,
+    /// Rust `trait`.
+    Trait,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -245,6 +249,11 @@ impl CodeGraph {
                         *source_idx,
                         facts,
                     )),
+                    // Rust olguları çözümleyiciyle birlikte düğümlere bağlanır; o
+                    // zamana kadar Rust kaynağı sözcüksel çözülür.
+                    SyntaxLanguage::Rust => {
+                        self.resolve_source_references(*source_idx, &mut symbols, &mut references)
+                    }
                 },
             }
         }
@@ -332,7 +341,11 @@ impl CodeGraph {
                 } else if !ambiguous
                     && matches!(
                         target.node_type,
-                        NodeType::Class | NodeType::Struct | NodeType::Module
+                        NodeType::Class
+                            | NodeType::Struct
+                            | NodeType::Enum
+                            | NodeType::Trait
+                            | NodeType::Module
                     )
                 {
                     EdgeType::References
@@ -902,6 +915,8 @@ fn is_reference_target_type(node_type: &NodeType) -> bool {
             | NodeType::Method
             | NodeType::Class
             | NodeType::Struct
+            | NodeType::Enum
+            | NodeType::Trait
             | NodeType::Module
     )
 }

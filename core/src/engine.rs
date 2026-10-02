@@ -1623,6 +1623,8 @@ pub(crate) fn build_embedding_text(node: &CodeNode) -> String {
         NodeType::Import => "import",
         NodeType::DataFile => "file",
         NodeType::File => "file",
+        NodeType::Enum => "enum",
+        NodeType::Trait => "trait",
     };
     let file_path = extract_file_path(&node.id);
     let label = match rust_trait_impl_declaration(node) {

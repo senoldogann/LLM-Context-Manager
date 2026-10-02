@@ -31,9 +31,9 @@ use std::path::{Path, PathBuf};
 use std::time::UNIX_EPOCH;
 
 /// İndeks biçimi ya da kenar anlamı değişince artar; eşleşmeyen indeks tam
-/// yeniden kurulur. 7: alıcısı bilinmeyen öznitelik çağrıları yalnız sınıf
-/// metotlarına `may call` kenarı üretir (eski indekslerde yanlış kenarlar kalırdı).
-pub const INDEX_SCHEMA_VERSION: u32 = 7;
+/// yeniden kurulur. 8: Rust `enum`/`trait` düğümleri ve ad eşleşmesinin dürüst
+/// etiketleri (`CallInferred`, `References`).
+pub const INDEX_SCHEMA_VERSION: u32 = 8;
 const GENERATIONS_DIRECTORY: &str = ".ccm-generations";
 const CURRENT_GENERATION_FILE: &str = "ccm_current";
 /// Etkinleştirme kilidinin taşıyıcı dosyası (bkz. `ActivationLock`). Eski
