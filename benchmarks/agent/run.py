@@ -41,6 +41,15 @@ CODEX_FORBIDDEN_ITEMS = ("web_search", "image_generation", "collab_tool_call")
 AUTH_SOURCE: dict[Auth, str] = {"subscription": "none", "api-key": "ANTHROPIC_API_KEY"}
 # Sınır ya da aşırı yük hatası ajanın başarısızlığı değildir: koşu kaydedilmez, ölçüm durur.
 QUOTA_MARKERS = ("usage limit", "rate limit", "rate_limit", "limit reached", "overloaded")
+# Kimlik doğrulama hatası da (geçersiz ya da iptal edilmiş jeton) ajanın başarısızlığı değildir.
+AUTH_MARKERS = (
+    "failed to authenticate",
+    "invalid bearer token",
+    "401 unauthorized",
+    "authentication_failed",
+    "api key is invalid",
+    "not logged in",
+)
 
 SERVER = "context-manager"
 CCM_TOOLS = (
@@ -82,6 +91,10 @@ class TranscriptError(RunError):
 
 class QuotaError(RuntimeError):
     """Abonelik ya da hız sınırı: koşu kaydedilmez; sınır sıfırlanınca aynı komut sürdürür."""
+
+
+class AuthError(RuntimeError):
+    """Kimlik doğrulanamadı (geçersiz ya da iptal edilmiş jeton): koşu kaydedilmez, ölçüm durur."""
 
 
 class IsolationError(RuntimeError):
@@ -230,6 +243,12 @@ def hit_quota(transcript: Transcript) -> bool:
     """Sonuç bir kullanım ya da hız sınırı veya aşırı yük hatası mı."""
     text = transcript.result_text.lower()
     return transcript.is_error and any(marker in text for marker in QUOTA_MARKERS)
+
+
+def hit_auth_failure(transcript: Transcript) -> bool:
+    """Sonuç bir kimlik doğrulama hatası mı (geçersiz, eksik ya da iptal edilmiş jeton)."""
+    text = transcript.result_text.lower()
+    return transcript.is_error and any(marker in text for marker in AUTH_MARKERS)
 
 
 def memory_files_above(workspace: Path) -> list[Path]:
@@ -681,6 +700,8 @@ def run_one(settings: Settings, task: Task, arm: Arm, rep: int, secrets: Secrets
         )
         lines = transcript_path.read_text().splitlines()
         transcript = read_transcript(settings, arm, lines, wall_s)
+        if hit_auth_failure(transcript):
+            raise AuthError(f"{name}: {transcript.result_text[:300]}")
         if hit_quota(transcript):
             raise QuotaError(f"{name}: {transcript.result_text[:300]}")
         if transcript.is_error:

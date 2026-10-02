@@ -17,6 +17,7 @@ from agent.run import (
     AgentName,
     Arm,
     Auth,
+    AuthError,
     Embedding,
     IsolationError,
     QuotaError,
@@ -327,6 +328,10 @@ def command_run(
                 except IsolationError as error:
                     print(f"stopping at {name}: isolation check failed: {error}", flush=True)
                     return 5
+                except AuthError as error:
+                    print(f"stopping at {name}: authentication failed ({error}).", flush=True)
+                    print("Create a new token with `claude setup-token` (or log in again).")
+                    return 6
                 completed += 1
                 known_cost = None if record.transcript is None else record.transcript.cost_usd
                 if known_cost is not None:
