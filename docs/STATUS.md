@@ -4,7 +4,7 @@ The current state of CCM and the next steps, for the owner and for any agent tha
 work. Keep it current: replace lines that stop being true instead of appending history (git log is
 the history).
 
-Last updated: 2026-10-02. Where work stopped: the Claude pilot ran (see "Claude pilot result")
+Last updated: 2026-10-03. Where work stopped: the Claude pilot ran (see "Claude pilot result")
 and showed that the model ignored CCM while still paying its fixed tool-schema cost. The accepted
 product direction is now a single obvious `context` entry point: the agent states what it needs,
 and CCM chooses graph/search operations and composes the smallest useful task packet server-side.
@@ -122,8 +122,10 @@ tests (1 opt-in local-model test ignored), 5 protocol tests and the hermetic E2E
 Guardian fixture ignored as designed). `cargo clippy --workspace --all-targets -- -D warnings`,
 `cargo fmt --all -- --check` and `git diff --check` also pass. `ccm-cli` is unchanged at SHA-256
 `72e84aea…47090703`; the optimized `ccm-mcp` rebuilt after the caller-render dedupe is
-`37be6d90…71c094d`. `python -m agent preflight-context` rebuilds graph-only indexes from the pinned
-corpus and verifies the three packets against task ground truth; that exact release pair scores
+`b44d580e…ea4970a`. `python -m agent preflight-context` verifies the selected corpus repos are
+clean and at the commits pinned in `benchmarks/corpus.json`, rejects task paths that escape the repo
+root, rebuilds graph-only indexes from isolated temporary workspaces, and checks the three packets
+against task ground truth; that exact release pair scores
 Flask 12/12, Express 5/5 with no extra caller, and Serde 2/2 after the scripted edit, all at
 recall=1.000 and precision=1.000. Duplicate occurrence IDs for one semantic caller are collapsed
 only in the `context` rendering; graph call sites remain intact.

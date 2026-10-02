@@ -20,12 +20,14 @@ from typing import cast
 from agent.check import apply_steps, check_tasks
 from agent.run import SYSTEM_PATH, index_db_path, prepare_workspace
 from agent.tasks import TASKS, Item, Task, label
+from freshness.repos import run_git
 
 PILOT_TASK_IDS = (
     "flask-callers-ensure-sync",
     "express-trap-req-get",
     "serde-edit-with-bound",
 )
+CORPUS_MANIFEST = Path(__file__).resolve().parents[1] / "corpus.json"
 
 
 class PreflightError(RuntimeError):
@@ -57,6 +59,71 @@ def pilot_tasks() -> tuple[Task, ...]:
         missing = [task_id for task_id in PILOT_TASK_IDS if task_id not in found]
         raise PreflightError("pilot tasks missing from agent.tasks: " + ", ".join(missing))
     return selected
+
+
+def task_file_paths(task: Task) -> tuple[str, ...]:
+    """Task doğrulama/edit akışının erişebileceği repo-içi dosyalar."""
+    paths = [item.path for item in task.expected]
+    if task.edit is not None:
+        paths.extend(step.file for step in task.edit.steps)
+        paths.extend(marker.file for marker in (*task.edit.present, *task.edit.absent))
+        paths.extend(item.path for item in (*task.edit.added, *task.edit.removed))
+    return tuple(dict.fromkeys(paths))
+
+
+def confined_path(root: Path, relative: str, context: str, *, directory: bool = False) -> Path:
+    """Relative path'i canonical root içinde tut; symlink/.. escape'ini reddet."""
+    rel = Path(relative)
+    if rel.is_absolute() or ".." in rel.parts:
+        raise PreflightError(f"{context}: unsafe relative path {relative!r}")
+    resolved_root = root.resolve()
+    candidate = (resolved_root / rel).resolve()
+    try:
+        candidate.relative_to(resolved_root)
+    except ValueError as error:
+        raise PreflightError(f"{context}: path escapes root: {relative!r}") from error
+    exists = candidate.is_dir() if directory else candidate.is_file()
+    if not exists:
+        kind = "directory" if directory else "file"
+        raise PreflightError(f"{context}: {kind} not found: {relative!r}")
+    return candidate
+
+
+def verify_pinned_corpus(tasks: tuple[Task, ...], corpus: Path) -> None:
+    """Pilot repolarını resmi corpus manifest pinlerine ve clean HEAD'e sabitle."""
+    try:
+        manifest: object = json.loads(CORPUS_MANIFEST.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as error:
+        raise PreflightError(f"cannot read corpus manifest {CORPUS_MANIFEST}: {error}") from error
+    if not isinstance(manifest, dict) or not isinstance(manifest.get("repos"), list):
+        raise PreflightError(f"invalid corpus manifest: {CORPUS_MANIFEST}")
+
+    pins: dict[str, str] = {}
+    for entry in cast(list[object], manifest["repos"]):
+        if not isinstance(entry, dict):
+            continue
+        name = entry.get("name")
+        commit = entry.get("commit")
+        if isinstance(name, str) and isinstance(commit, str):
+            pins[name] = commit
+
+    for task in tasks:
+        expected_commit = pins.get(task.repo)
+        if expected_commit is None:
+            raise PreflightError(
+                f"{task.id}: repo {task.repo!r} is not pinned in {CORPUS_MANIFEST}"
+            )
+        repo = confined_path(corpus, task.repo, task.id, directory=True)
+        actual_commit = run_git(repo, ("rev-parse", "HEAD")).strip()
+        if actual_commit != expected_commit:
+            raise PreflightError(
+                f"{task.id}: corpus HEAD mismatch for {task.repo}: "
+                f"expected {expected_commit}, got {actual_commit}"
+            )
+        if run_git(repo, ("status", "--porcelain")).strip():
+            raise PreflightError(f"{task.id}: corpus repo is dirty: {repo}")
+        for relative in task_file_paths(task):
+            confined_path(repo, relative, task.id)
 
 
 def parse_callers(text: str) -> list[tuple[str, str]]:
@@ -272,7 +339,10 @@ def run_task(
 ) -> PacketScore:
     """Workspace hazırla, varsa referans edit'i uygula, indeksle ve context'i puanla."""
     workspace = scratch / task.id
-    prepare_workspace(corpus_dir / task.repo, workspace)
+    repo = confined_path(corpus_dir, task.repo, task.id, directory=True)
+    prepare_workspace(repo, workspace)
+    for relative in task_file_paths(task):
+        confined_path(workspace, relative, task.id)
     edit_problems = apply_steps(task, workspace)
     if edit_problems:
         raise PreflightError("\n".join(edit_problems))
@@ -291,6 +361,7 @@ def command_preflight(ccm_bin_dir: Path, corpus_dir: Path) -> int:
         raise PreflightError(f"corpus directory not found: {corpus}")
 
     tasks = pilot_tasks()
+    verify_pinned_corpus(tasks, corpus)
     problems = check_tasks(tasks, corpus)
     if problems:
         raise PreflightError("task validation failed:\n" + "\n".join(problems))
@@ -306,7 +377,8 @@ def command_preflight(ccm_bin_dir: Path, corpus_dir: Path) -> int:
             precision = result.found / precision_denominator if precision_denominator else 1.0
             recall = result.found / result.expected if result.expected else 1.0
             print(
-                f"{result.task_id}: recall={recall:.3f} precision={precision:.3f} "
+                f"{result.task_id}: callers={result.found}/{result.expected} "
+                f"recall={recall:.3f} precision={precision:.3f} "
                 f"index_s={result.index_s:.2f}"
             )
             if result.missing:
