@@ -1,0 +1,45 @@
+{
+  "run_id": "flask-callers-ensure-sync__B__1",
+  "task_id": "flask-callers-ensure-sync",
+  "repo": "flask",
+  "category": "callers",
+  "arm": "B",
+  "rep": 1,
+  "model": "gpt-6.1-sol",
+  "effort": "high",
+  "embedding": "local",
+  "index_s": 26.856832707999274,
+  "wall_s": 49.394363083003554,
+  "transcript": {
+    "result_text": "```json\n{\n  \"answer\": [\n    \"src/flask/app.py:Flask.dispatch_request\",\n    \"src/flask/app.py:Flask.do_teardown_appcontext\",\n    \"src/flask/app.py:Flask.do_teardown_request\",\n    \"src/flask/app.py:Flask.handle_exception\",\n    \"src/flask/app.py:Flask.handle_http_exception\",\n    \"src/flask/app.py:Flask.handle_user_exception\",\n    \"src/flask/app.py:Flask.preprocess_request\",\n    \"src/flask/app.py:Flask.process_response\",\n    \"src/flask/app.py:Flask.update_template_context\",\n    \"src/flask/ctx.py:copy_current_request_context\",\n    \"src/flask/views.py:MethodView.dispatch_request\",\n    \"src/flask/views.py:View.as_view\"\n  ]\n}\n```",
+    "subtype": "completed",
+    "is_error": false,
+    "num_turns": null,
+    "duration_ms": 49394,
+    "cost_usd": null,
+    "usage": {
+      "input_tokens": 17347,
+      "output_tokens": 1120,
+      "cache_creation_input_tokens": 0,
+      "cache_read_input_tokens": 65024
+    },
+    "tool_calls": {
+      "command_execution": 4,
+      "mcp__context-manager__context": 1
+    },
+    "mcp_status": "unreported",
+    "api_key_source": "chatgpt",
+    "tools": []
+  },
+  "score": {
+    "answered": true,
+    "recall": 1.0,
+    "precision": 1.0,
+    "missing": [],
+    "extra": [],
+    "edit_applied": null,
+    "stale": [],
+    "success": true
+  },
+  "failure": null
+}

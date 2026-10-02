@@ -1,0 +1,35 @@
+{
+  "schema_version": 1,
+  "harness_revision": "4185640e67b1d6e80c82e9c27cb9d9ca6b5a36d2",
+  "preregistration": "benchmarks/agent/PREREGISTRATION.md",
+  "settings": {
+    "model": "gpt-6.1-sol",
+    "effort": "high",
+    "embedding": "local",
+    "auth": "subscription",
+    "profile": "context-first-pilot",
+    "agent": "codex",
+    "max_budget_usd": 2.0,
+    "timeout_s": 1800,
+    "repetitions": 1,
+    "arms": [
+      "A",
+      "B",
+      "C"
+    ],
+    "tasks": [
+      "flask-callers-ensure-sync",
+      "express-trap-req-get",
+      "serde-edit-with-bound"
+    ]
+  },
+  "environment": {
+    "agent_version": "codex-cli 0.160.0",
+    "agent_login": "Logged in using ChatGPT",
+    "ccm_version": "ccm-cli 0.4.0",
+    "ccm_commit": "4185640e67b1d6e80c82e9c27cb9d9ca6b5a36d2",
+    "ccm_dirty": false,
+    "ccm_cli_sha256": "72e84aea16b1cac9aca39dd10f08fa7ba1130f7814f1120a4b31d44d47090703",
+    "ccm_mcp_sha256": "b44d580e78a81f1145b2df20c1ab5cdaf324fae4731204402f8eb0c61ea4970a"
+  }
+}

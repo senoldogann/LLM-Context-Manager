@@ -1,0 +1,49 @@
+{
+  "run_id": "serde-edit-with-bound__C__1",
+  "task_id": "serde-edit-with-bound",
+  "repo": "serde",
+  "category": "edit",
+  "arm": "C",
+  "rep": 1,
+  "model": "gpt-6.1-sol",
+  "effort": "high",
+  "embedding": "local",
+  "index_s": 45.33575900000142,
+  "wall_s": 43.352087416998984,
+  "transcript": {
+    "result_text": "Applied the exact change. The direct callers are:\n\n```json\n{\"answer\":[\"serde_derive/src/de.rs:build_generics\",\"serde_derive/src/ser.rs:with_serialize_bound\"]}\n```",
+    "subtype": "completed",
+    "is_error": false,
+    "num_turns": null,
+    "duration_ms": 43352,
+    "cost_usd": null,
+    "usage": {
+      "input_tokens": 36609,
+      "output_tokens": 847,
+      "cache_creation_input_tokens": 0,
+      "cache_read_input_tokens": 69376
+    },
+    "tool_calls": {
+      "command_execution": 5,
+      "file_change": 1,
+      "mcp__context-manager__explain": 2,
+      "mcp__context-manager__find_usages": 3,
+      "mcp__context-manager__impact_of_change": 1,
+      "mcp__context-manager__map": 1
+    },
+    "mcp_status": "unreported",
+    "api_key_source": "chatgpt",
+    "tools": []
+  },
+  "score": {
+    "answered": true,
+    "recall": 1.0,
+    "precision": 1.0,
+    "missing": [],
+    "extra": [],
+    "edit_applied": true,
+    "stale": [],
+    "success": true
+  },
+  "failure": null
+}

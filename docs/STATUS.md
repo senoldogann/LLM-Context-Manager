@@ -4,26 +4,28 @@ The current state of CCM and the next steps, for the owner and for any agent tha
 work. Keep it current: replace lines that stop being true instead of appending history (git log is
 the history).
 
-Last updated: 2026-10-03. Where work stopped: the Claude pilot ran (see "Claude pilot result")
-and showed that the model ignored CCM while still paying its fixed tool-schema cost. The accepted
-product direction is now a single obvious `context` entry point: the agent states what it needs,
-and CCM chooses graph/search operations and composes the smallest useful task packet server-side.
-The first implementation slice is implemented and verified locally: `context` owns exact-vs-hybrid
-routing, default MCP discovery is `context + index_project`, and the legacy surface is opt-in but
-still directly callable. The harness has a separate `context-first-pilot` product profile without
-changing the preregistered final profile; Ruff, strict mypy, profile assertions and all 24 task
-anchors pass. Model-free audits on the three pilot tasks now show that one `context` call contains
-the expected answer set for Flask (12/12), the Express receiver trap (5/5, with no `app.get`
-false positive), and the edited Serde task (2/2, with the removed caller absent). These are packet
-quality checks, not agent-token evidence. A Codex smoke attempt stopped with exit 4 before any run
-record because the subscription usage limit was already exhausted; the CLI reported a reset around
-2026-10-07 02:17. Claude cannot be rerun from this environment until the owner supplies
-`CLAUDE_CODE_OAUTH_TOKEN`. The post-build release verification was refreshed on 2026-10-03 from
-base commit `9c3845d` (the Rust product tree is unchanged since `5615c30`), together with the Python
-formatting/typing corrections recorded in this status update. The existing optimized binaries pass
-all three pilot packets at recall=1.000 and precision=1.000 without an agent, API call or embedding
-model. Local validation is complete; any external AI pilot or publishing operation requires the
-owner's separate explicit approval.
+Last updated: 2026-10-03. Where work stopped: the owner-approved **Codex context-first pilot is
+complete**, measured at clean commit `4185640` (see "Codex context-first pilot result"). All nine
+final answers passed, and B called `context` once in each task. B still used additional source
+inspection and its summed input+output tokens were 29.65% above A across these three tasks.
+Real-query inspection found two concrete packet gaps: unqualified/enclosing caller names in
+Flask, and receiver false positives/missing evidence when the Express query omitted backticks.
+The next work is local regression coverage and general server routing/composition fixes before
+another agent experiment. The accepted product direction remains a single `context` entry point:
+the agent states what it needs, and CCM chooses graph/search operations and composes the smallest
+useful task packet server-side. Default discovery is `context + index_project`; legacy tools are
+opt-in but directly callable. The separate `context-first-pilot` profile leaves the preregistered
+final design intact.
+
+The existing optimized binaries again passed the **model-free packet quality preflight** before
+the Codex pilot: Flask 12/12, Express 5/5 with no extra caller, edited Serde 2/2 with the removed
+caller absent; recall=precision=1.000. These canonical preflight queries do not cover every query
+an agent can produce. The release pair is unchanged from the full local verification accompanying
+`4185640`, and was not rebuilt. Ruff format/lint, strict mypy across 28 files and all 24 task anchors
+passed after the pilot. Claude remains unavailable in this session without an owner-supplied
+`CLAUDE_CODE_OAUTH_TOKEN`; the owner selected dedicated Codex only. The earlier Codex limit failure
+is retained as prior evidence, but this nine-run attempt was accepted and completed. Any further
+external AI run or publishing operation requires the owner's separate explicit approval.
 
 **Owner's direction (2026-10-02):** optimize for end-to-end agent token use without sacrificing
 answer quality, independent of model/provider/effort. Move retrieval/tool-selection decisions from
@@ -56,7 +58,7 @@ are parked. The owner's strategy notes are `docs/productization-plan.md`,
 | Freshness after an edit (L1) | measured | `benchmarks/README.md`, "Level 1" |
 | Token cost of answers (M2) | measured; compact answers cut scripted response bytes 74% | `benchmarks/README.md`, "Token cost of answers" |
 | Agent interface | default discovery: `context + index_project`; legacy structural tools remain callable and are discoverable with `CCM_MCP_LEGACY_TOOLS=1` | `mcp/src/server.rs`, `mcp/tests/token_budget_e2e_test.rs` |
-| Agent experiment (L3) | Claude 3-task pilot complete: B/C used no CCM and paid more input tokens; Codex pilot pending | `benchmarks/results/agent/pilot-claude/`, `benchmarks/agent/PREREGISTRATION.md` |
+| Agent experiment (L3) | Claude legacy pilot: no CCM use; Codex context-first pilot: all 9 answers correct, B/C used CCM, no aggregate token saving in this 3-task sample; final L3 pending | `benchmarks/results/agent/pilot-claude/`, `benchmarks/results/agent/pilot-codex-context-first-20261003/`, `benchmarks/agent/PREREGISTRATION.md` |
 
 ## What the measurements cover
 
@@ -88,6 +90,63 @@ showed:
 
 As configured, CCM is overhead on small repositories and the agent does not reach for it. That is
 the first problem to solve.
+
+## Codex context-first pilot result (2026-10-03)
+
+Measured at `4185640e67b1d6e80c82e9c27cb9d9ca6b5a36d2` on Codex CLI 0.160.0,
+`gpt-6.1-sol`, effort high, dedicated ChatGPT subscription and local embeddings. The owner
+approved this bounded quota use and selected Codex only. Results, settings, exact Serde patches,
+the generated report and the real-query audit are recorded under
+`benchmarks/results/agent/pilot-codex-context-first-20261003/`; full transcripts stay local.
+
+- 3 tasks × 3 arms × 1 repetition completed, harness exit 0. All 9 final answers have
+  recall=precision=1.000, no missing/extra/stale caller and no run failure. Each Serde edit was
+  applied; the three saved edit diffs are byte-identical. Corpus Rust compilation was not part
+  of the agent pilot's edit validation.
+- A used built-ins only; B had `context + index_project` and the context note; C had legacy
+  full discovery and its navigation note. B made one `context` call per task plus 4/3/4 shell
+  calls for Flask/Express/Serde. C used CCM on all three tasks (5/4/7 CCM calls). This proves
+  Codex chose CCM in this configuration; it does not isolate the surface effect on Claude.
+- Input+output tokens, cached input included once:
+
+  | Task | A | B | C | B versus A |
+  |---|---:|---:|---:|---:|
+  | Flask | 46,481 | 83,491 | 55,267 | +79.62% |
+  | Express | 68,406 | 66,063 | 54,175 | −3.43% |
+  | Serde | 49,015 | 62,944 | 106,832 | +28.42% |
+  | Sum | 163,902 | 212,498 | 216,274 | +29.65% |
+
+- The generated paired input-token ratios have wide intervals: B/A 1.29 (0.96–1.82), C/A
+  1.21 (0.79–2.19). Three tasks and one repetition do not establish general token savings or
+  quality equivalence. Codex reports no dollar cost or turn count; the report's cost columns
+  are estimates from the committed API price table, not subscription charges. The dollar
+  flags did not cap Codex; console `spent $0.00` is unknown cost, not zero quota use.
+- Pre-index cost remains separate from agent wall time: B totaled 76.8 s and C 76.4 s, versus
+  no pre-index for A. Raw usage, tool counts and final text match all nine saved records;
+  isolation/tool-grant checks and manual command inspection passed. No credential file was
+  inspected/copied by the supervising agent, and no Claude run, download or publication ran.
+
+**Packet failures are retained despite correct final answers.** Flask's B packet had 12 callers
+but omitted enclosing/class-qualified names; Codex used source reads and an AST traversal to
+answer the task. Both Flask A/B initially tried unavailable `python` (exit 127), then succeeded
+with `python3`; those retries remain in the measurements. Express B's plain-text query named
+`req.get`, `req.header`, `app.get`, `res.get` and the definition path **without backticks**. The
+server returned four correct callers, three extras (`ip`, `ips`, `subdomains` from
+`this.app.get`) and missed `res.location` through `this.req.get`: that packet scored recall 4/5,
+precision 4/7. Source inspection confirms the explicit receiver routing accepts backtick hints
+only; the canonical preflight's query passes, while this natural agent query fell through to
+hybrid retrieval/lexical graph output. The agent corrected its final answer by reading sources.
+
+Serde B called `context` only before its edit, then answered from sources. Its final 2/2 answer
+does not test post-edit CCM freshness; C did query `find_usages` after editing and got only
+`de::build_generics` and `ser::with_serialize_bound`. The audit records C's unsupported
+`path:symbol` attempts and their explicit errors as well. No routing, framework-specific rule,
+prompt, scorer or preregistration was changed during this pilot.
+
+The first staged whitespace check flagged the mandatory single-space empty context line in
+each archived Serde unified diff. A scoped `.gitattributes` rule disables end-of-line whitespace
+checks only for `benchmarks/results/agent/*/diffs/*.diff`; the exact measured patch bytes and
+checks on source/docs/JSON are preserved.
 
 ## First: one obvious entry point
 
@@ -151,25 +210,27 @@ check found three annotation errors, corrected before the final 28-file pass. It
 and exit code match the base commit across all five existing comparison-report directories. Task
 ground truth, scoring calculations, preregistration and recorded benchmark outputs were unchanged.
 
-The next gate is behavioral, after explicit owner approval: re-run the same Claude pilot. CCM is
-not ready for the preregistered final L3 run until the agent actually chooses `context` where it
-helps, with no success regression
-and a lower or defensible total-token cost. After that, add reusable indexes and test Django and
-multi-file edits where grep/read loops are expensive.
+The Codex pilot cleared tool adoption for this configuration, but the next gate is packet
+sufficiency for real agent queries and measured total-token cost. CCM is not ready for the
+preregistered final L3 run: three correct final answers per arm do not establish quality
+equivalence, and source inspection still compensates for packet gaps. First cover and fix those
+general routing/composition gaps locally. Then, with a fresh approved quota scope, repeat a
+matched agent pilot; reusable indexes and Django/multi-file extensions remain later steps.
 
 ## Next steps, in order
 
-1. **Re-run the 3-task Claude pilot** only after separate explicit approval to spend external AI
-   quota and once the owner supplies `CLAUDE_CODE_OAUTH_TOKEN`. Use a new output directory, run
-   `preflight-context` first, then compare success, CCM calls, input/output tokens, turns and wall
-   time with `pilot-claude`; inspect transcripts to
-   see whether and why the model selects `context`.
-2. **Run the Codex pilot after the subscription limit resets and the owner explicitly approves
-   quota use.** The dedicated `~/.ccm-bench/codex-home` login exists; the 2026-10-02 smoke attempt
-   stopped before a run record
-   with exit 4, so the first successful transcript still needs isolation/parser inspection.
-3. **If agents use `context` but task packets are insufficient, improve server-side routing or
-   composition from transcript evidence**, not by adding default tools back speculatively.
+1. **Add local regressions from the actual Codex queries and fix general packet composition.**
+   Cover plain receiver/path hints plus negative receiver mentions without requiring English
+   caller prose, and include enough enclosing/class scope to identify callers from one packet.
+   Preserve uncertainty labels, semantic-family dedupe, strict root confinement, freshness and
+   legacy compatibility. No framework-specific rule or extra default tool is justified.
+2. **Revalidate changed code and the optimized release pair** with full local gates and the
+   existing pinned-corpus preflight. Rebuild only when changed product code makes it necessary.
+3. **Repeat a matched product pilot only after separate explicit approval for new AI quota use.**
+   Use a new output directory and compare against this Codex pilot; any Claude follow-up also
+   needs the owner to supply `CLAUDE_CODE_OAUTH_TOKEN` through the invoking environment. The
+   earlier Codex smoke exited 4 before records; the 2026-10-03 nine-run pilot completed, and
+   real transcript isolation/parser inspection is now complete.
 4. **Add reusable per-repository indexes**, then run large-repository (Django) and multi-file edit
    extensions. These are the cases most likely to separate CCM from grep/read loops.
 5. **Only after the product configuration is stable, run the preregistered L3 final experiment:**
@@ -215,7 +276,7 @@ Codex, on the ChatGPT subscription (pass the native binary; the npm wrapper need
 ```bash
 mkdir -p ~/.ccm-bench/codex-home && CODEX_HOME=~/.ccm-bench/codex-home codex login   # once
 cd benchmarks
-CODEX_BIN="$(npm root -g)/@openai/codex/node_modules/@openai/codex-darwin-arm64/vendor/aarch64-apple-darwin/bin/codex"
+CODEX_BIN="$HOME/.local/lib/node_modules/@openai/codex/node_modules/@openai/codex-darwin-arm64/vendor/aarch64-apple-darwin/bin/codex"
 uv run python -m agent run --agent codex --agent-bin "$CODEX_BIN" \
   --codex-home ~/.ccm-bench/codex-home --auth subscription --profile context-first-pilot \
   --model gpt-6.1-sol --effort high --embedding local --max-budget-usd 2 \
@@ -223,7 +284,14 @@ uv run python -m agent run --agent codex --agent-bin "$CODEX_BIN" \
   --tasks flask-callers-ensure-sync,express-trap-req-get,serde-edit-with-bound \
   --ccm-bin-dir ../target/release --ccm-model-dir ~/.ccm/models --corpus-dir corpus \
   --out-dir results/agent/pilot-codex-context-first
+uv run python -m agent report --out-dir results/agent/pilot-codex-context-first \
+  --out results/agent/pilot-codex-context-first/report.md
 ```
+
+The native path above is the active `~/.local/bin/codex` installation on this host.
+`npm root -g` currently points to a different Volta installation; resolve the active launcher's
+platform dependency before using that command on another installation. Do not reinstall or
+change the agent version during a measured run set.
 
 Use the newest model each agent offers when a run set starts (`~/.codex/models_cache.json` lists
 Codex's) and keep it for the whole set. The budget flags do not limit Codex, which reports no

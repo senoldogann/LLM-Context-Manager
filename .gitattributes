@@ -1,0 +1,2 @@
+# Arşivlenen unified diff'lerde boş context satırı tek boşluk taşır.
+benchmarks/results/agent/*/diffs/*.diff whitespace=-blank-at-eol

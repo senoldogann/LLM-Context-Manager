@@ -1,0 +1,44 @@
+{
+  "run_id": "express-trap-req-get__A__1",
+  "task_id": "express-trap-req-get",
+  "repo": "express",
+  "category": "trap",
+  "arm": "A",
+  "rep": 1,
+  "model": "gpt-6.1-sol",
+  "effort": "high",
+  "embedding": "local",
+  "index_s": null,
+  "wall_s": 22.6873719169962,
+  "transcript": {
+    "result_text": "```json\n{\"answer\":[\"lib/request.js:range\",\"lib/request.js:protocol\",\"lib/request.js:hostname\",\"lib/request.js:xhr\",\"lib/response.js:location\"]}\n```",
+    "subtype": "completed",
+    "is_error": false,
+    "num_turns": null,
+    "duration_ms": 22687,
+    "cost_usd": null,
+    "usage": {
+      "input_tokens": 17750,
+      "output_tokens": 352,
+      "cache_creation_input_tokens": 0,
+      "cache_read_input_tokens": 50304
+    },
+    "tool_calls": {
+      "command_execution": 6
+    },
+    "mcp_status": "unreported",
+    "api_key_source": "chatgpt",
+    "tools": []
+  },
+  "score": {
+    "answered": true,
+    "recall": 1.0,
+    "precision": 1.0,
+    "missing": [],
+    "extra": [],
+    "edit_applied": null,
+    "stale": [],
+    "success": true
+  },
+  "failure": null
+}
