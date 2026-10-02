@@ -60,6 +60,10 @@ inside them are not evidence either way.
      agent session can start the Codex pilot itself once the owner's ChatGPT limit has reset.
    - Model: Claude Opus 5.5 and Codex `gpt-6.1-sol` for the pilots; confirm the final-run models
      and the total budget with the owner after the pilots.
+   - More than one Claude account can share the work: run `claude setup-token` while signed in to
+     the account (the browser's claude.ai login decides which one), export that token and rerun
+     the same command with the same `--out-dir`; completed runs are skipped, and a usage-limit
+     stop (exit 4) is where the next account takes over. Records do not name the account.
 2. **L3 final run:** 24 tasks × 3 arms × 3 repetitions = 216 runs, sequential, about 8–18 hours
    unattended. A usage-limit stop is expected on a subscription; rerun the same command after the
    limit resets.
@@ -73,7 +77,24 @@ inside them are not evidence either way.
    pilot transcripts before the final Codex run. The dedicated `CODEX_HOME` keeps the owner's
    `~/.codex` login, memories, skills and global AGENTS.md out of the runs; never link or copy
    `~/.codex/auth.json` (a token refresh could break the owner's login).
-5. Later, only if the L3 result supports it: TypeScript/JavaScript syntax-level resolution, then
+5. **L3 extensions, after the core runs** (the owner asked to record them for later; each runs
+   the same three arms on both agents). The owner's original goal is quota savings without losing
+   quality on projects of any size during real development, and the core 24 tasks cover only
+   small and medium repositories (17–41 thousand lines) and short tasks:
+   - Large repository: Django 5.1 (2,899 files, about 500 thousand lines, already in
+     `corpus.json`), about 8 tasks. Indexing it for every B/C run is too slow: add a reusable
+     per-repository index (restore a prebuilt workspace and index at a fixed path) first.
+   - Development tasks: about 6 multi-file changes (change a signature and update every caller,
+     rename, move a function, fix a bug), judged by deterministic checks and, where they run
+     offline, the repository's own tests.
+   - TypeScript: one popular repository; CCM matches names only there today, so the result also
+     shows whether TS syntax-level resolution is worth building.
+   - Real-use diary for the owner's thesis: the owner's own tasks, alternating with and without
+     CCM, with a small script that sums tokens from Claude Code and Codex session logs.
+   - Codex quota share: Codex keeps 5-hour and weekly `rate_limits` (`used_percent`) in its
+     internal token events, not in `exec --json`; after the Codex pilot, decide whether to keep
+     session rollouts to record the quota share each run used.
+6. Later, only if the L3 result supports it: TypeScript/JavaScript syntax-level resolution, then
    edge accuracy against language servers (L2).
 
 ## Running the L3 experiment
