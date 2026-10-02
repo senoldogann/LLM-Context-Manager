@@ -1,0 +1,1286 @@
+{
+ "schema_version": 1,
+ "version": "v1",
+ "harness_revision": "4bc3145e77b8f2c185f893bb9befb0fa6c5c3045",
+ "started_at": "2026-10-02T03:26:36+00:00",
+ "skill_bytes": 25993,
+ "repos": [
+  {
+   "repo": "flask",
+   "tools_list_bytes": 9333,
+   "questions": [
+    {
+     "kind": "callers",
+     "subject": "url_for",
+     "calls": [
+      {
+       "tool": "find_nodes",
+       "arguments": "{\"limit\": 50, \"query\": \"url_for\"}",
+       "response_bytes": 13042,
+       "is_error": false
+      },
+      {
+       "tool": "find_usages",
+       "arguments": "{\"node_id\": \"./src/flask/app.py:function_definition:symbol:923583a307c94f07:0\"}",
+       "response_bytes": 122,
+       "is_error": false
+      },
+      {
+       "tool": "find_usages",
+       "arguments": "{\"node_id\": \"./src/flask/helpers.py:function_definition:symbol:0c9f2e6a2c8df9f2:0\"}",
+       "response_bytes": 5220,
+       "is_error": false
+      }
+     ],
+     "locations": [
+      "examples/tutorial/flaskr/auth.py:47",
+      "examples/tutorial/flaskr/auth.py:113",
+      "examples/tutorial/flaskr/auth.py:23",
+      "examples/tutorial/flaskr/auth.py:85",
+      "examples/tutorial/flaskr/blog.py:115",
+      "examples/tutorial/flaskr/blog.py:88",
+      "examples/tutorial/flaskr/blog.py:62",
+      "tests/test_appctx.py:8",
+      "tests/test_appctx.py:21",
+      "tests/test_appctx.py:27",
+      "tests/test_basic.py:1318",
+      "tests/test_basic.py:1575",
+      "tests/test_basic.py:1659",
+      "tests/test_basic.py:1583",
+      "tests/test_basic.py:1355",
+      "tests/test_basic.py:1435",
+      "tests/test_basic.py:1379",
+      "tests/test_basic.py:1306",
+      "tests/test_basic.py:1390",
+      "tests/test_basic.py:1591"
+     ]
+    },
+    {
+     "kind": "explain",
+     "subject": "url_for",
+     "calls": [
+      {
+       "tool": "find_nodes",
+       "arguments": "{\"limit\": 50, \"query\": \"url_for\"}",
+       "response_bytes": 13042,
+       "is_error": false
+      },
+      {
+       "tool": "read_graph",
+       "arguments": "{\"node_id\": \"./src/flask/app.py:function_definition:symbol:923583a307c94f07:0\"}",
+       "response_bytes": 440,
+       "is_error": false
+      },
+      {
+       "tool": "get_context",
+       "arguments": "{\"file\": \"src/flask/app.py\", \"include_body\": true, \"line\": 966}",
+       "response_bytes": 8174,
+       "is_error": false
+      },
+      {
+       "tool": "read_graph",
+       "arguments": "{\"node_id\": \"./src/flask/helpers.py:function_definition:symbol:0c9f2e6a2c8df9f2:0\"}",
+       "response_bytes": 1081,
+       "is_error": false
+      },
+      {
+       "tool": "get_context",
+       "arguments": "{\"file\": \"src/flask/helpers.py\", \"include_body\": true, \"line\": 176}",
+       "response_bytes": 2114,
+       "is_error": false
+      }
+     ],
+     "locations": []
+    },
+    {
+     "kind": "callers",
+     "subject": "Flask",
+     "calls": [
+      {
+       "tool": "find_nodes",
+       "arguments": "{\"limit\": 50, \"query\": \"Flask\"}",
+       "response_bytes": 12352,
+       "is_error": false
+      },
+      {
+       "tool": "find_usages",
+       "arguments": "{\"node_id\": \"./tests/test_config.py:class_definition:symbol:5dd2a571807d18cd:0\"}",
+       "response_bytes": 367,
+       "is_error": false
+      },
+      {
+       "tool": "find_usages",
+       "arguments": "{\"node_id\": \"./src/flask/app.py:class_definition:symbol:896b7aa6f54f6ce0:0\"}",
+       "response_bytes": 5074,
+       "is_error": false
+      }
+     ],
+     "locations": [
+      "tests/test_config.py:198",
+      "examples/celery/src/task_app/__init__.py:7",
+      "examples/javascript/js_example/__init__.py:1",
+      "examples/tutorial/flaskr/__init__.py:6",
+      "tests/conftest.py:46",
+      "tests/test_apps/blueprintapp/__init__.py:1",
+      "tests/test_apps/cliapp/app.py:1",
+      "tests/test_apps/cliapp/factory.py:4",
+      "tests/test_apps/cliapp/factory.py:8",
+      "tests/test_apps/cliapp/importerrorapp.py:1",
+      "tests/test_apps/cliapp/inner1/__init__.py:1",
+      "tests/test_apps/cliapp/inner1/inner2/flask.py:1",
+      "tests/test_apps/cliapp/multiapp.py:1",
+      "tests/test_apps/helloworld/hello.py:1",
+      "tests/test_async.py:41",
+      "tests/test_async.py:97",
+      "tests/test_basic.py:1700",
+      "tests/test_basic.py:1747",
+      "tests/test_basic.py:1183",
+      "tests/test_basic.py:1878",
+      "tests/test_basic.py:1435"
+     ]
+    },
+    {
+     "kind": "explain",
+     "subject": "Flask",
+     "calls": [
+      {
+       "tool": "find_nodes",
+       "arguments": "{\"limit\": 50, \"query\": \"Flask\"}",
+       "response_bytes": 12352,
+       "is_error": false
+      },
+      {
+       "tool": "read_graph",
+       "arguments": "{\"node_id\": \"./tests/test_config.py:class_definition:symbol:5dd2a571807d18cd:0\"}",
+       "response_bytes": 274,
+       "is_error": false
+      },
+      {
+       "tool": "get_context",
+       "arguments": "{\"file\": \"tests/test_config.py\", \"include_body\": true, \"line\": 202}",
+       "response_bytes": 4408,
+       "is_error": false
+      },
+      {
+       "tool": "read_graph",
+       "arguments": "{\"node_id\": \"./src/flask/app.py:class_definition:symbol:896b7aa6f54f6ce0:0\"}",
+       "response_bytes": 3244,
+       "is_error": false
+      },
+      {
+       "tool": "get_context",
+       "arguments": "{\"file\": \"src/flask/app.py\", \"include_body\": true, \"line\": 79}",
+       "response_bytes": 14318,
+       "is_error": false
+      }
+     ],
+     "locations": []
+    },
+    {
+     "kind": "callers",
+     "subject": "add_url_rule",
+     "calls": [
+      {
+       "tool": "find_nodes",
+       "arguments": "{\"limit\": 50, \"query\": \"add_url_rule\"}",
+       "response_bytes": 12648,
+       "is_error": false
+      },
+      {
+       "tool": "find_usages",
+       "arguments": "{\"node_id\": \"./src/flask/sansio/blueprints.py:function_definition:symbol:2b21797c50d44821:0\"}",
+       "response_bytes": 6174,
+       "is_error": false
+      },
+      {
+       "tool": "find_usages",
+       "arguments": "{\"node_id\": \"./src/flask/sansio/blueprints.py:function_definition:symbol:27cdaf28845eaabb:0\"}",
+       "response_bytes": 6173,
+       "is_error": false
+      },
+      {
+       "tool": "find_usages",
+       "arguments": "{\"node_id\": \"./src/flask/sansio/app.py:function_definition:symbol:0ec6d7744194f604:0\"}",
+       "response_bytes": 6113,
+       "is_error": false
+      },
+      {
+       "tool": "find_usages",
+       "arguments": "{\"node_id\": \"./src/flask/sansio/scaffold.py:function_definition:symbol:13f11471e2b0d830:0\"}",
+       "response_bytes": 6138,
+       "is_error": false
+      }
+     ],
+     "locations": [
+      "examples/tutorial/flaskr/__init__.py:6",
+      "src/flask/sansio/blueprints.py:413",
+      "src/flask/sansio/blueprints.py:273",
+      "tests/test_async.py:41",
+      "tests/test_basic.py:90",
+      "tests/test_basic.py:1624",
+      "tests/test_basic.py:1784",
+      "tests/test_basic.py:155",
+      "tests/test_basic.py:150",
+      "tests/test_blueprints.py:327",
+      "tests/test_cli.py:432",
+      "tests/test_cli.py:486",
+      "tests/test_cli.py:495",
+      "tests/test_helpers.py:120",
+      "tests/test_helpers.py:143",
+      "tests/test_json.py:70",
+      "tests/test_json.py:176",
+      "tests/test_views.py:189",
+      "tests/test_views.py:207",
+      "tests/test_views.py:171",
+      "examples/tutorial/flaskr/__init__.py:6",
+      "src/flask/sansio/blueprints.py:87",
+      "src/flask/sansio/blueprints.py:273",
+      "tests/test_async.py:41",
+      "tests/test_basic.py:90",
+      "tests/test_basic.py:1624",
+      "tests/test_basic.py:1784",
+      "tests/test_basic.py:155",
+      "tests/test_basic.py:150",
+      "tests/test_blueprints.py:327",
+      "tests/test_cli.py:432",
+      "tests/test_cli.py:486",
+      "tests/test_cli.py:495",
+      "tests/test_helpers.py:120",
+      "tests/test_helpers.py:143",
+      "tests/test_json.py:70",
+      "tests/test_json.py:176",
+      "tests/test_views.py:189",
+      "tests/test_views.py:207",
+      "tests/test_views.py:171",
+      "src/flask/app.py:218",
+      "examples/tutorial/flaskr/__init__.py:6",
+      "src/flask/sansio/blueprints.py:413",
+      "src/flask/sansio/blueprints.py:87",
+      "src/flask/sansio/blueprints.py:273",
+      "tests/test_async.py:41",
+      "tests/test_basic.py:90",
+      "tests/test_basic.py:1624",
+      "tests/test_basic.py:1784",
+      "tests/test_basic.py:155",
+      "tests/test_basic.py:150",
+      "tests/test_blueprints.py:327",
+      "tests/test_cli.py:432",
+      "tests/test_cli.py:486",
+      "tests/test_cli.py:495",
+      "tests/test_helpers.py:120",
+      "tests/test_helpers.py:143",
+      "tests/test_json.py:70",
+      "tests/test_json.py:176",
+      "tests/test_views.py:189",
+      "src/flask/sansio/scaffold.py:360",
+      "examples/tutorial/flaskr/__init__.py:6",
+      "src/flask/sansio/blueprints.py:413",
+      "src/flask/sansio/blueprints.py:87",
+      "src/flask/sansio/blueprints.py:273",
+      "tests/test_async.py:41",
+      "tests/test_basic.py:90",
+      "tests/test_basic.py:1624",
+      "tests/test_basic.py:1784",
+      "tests/test_basic.py:155",
+      "tests/test_basic.py:150",
+      "tests/test_blueprints.py:327",
+      "tests/test_cli.py:432",
+      "tests/test_cli.py:486",
+      "tests/test_cli.py:495",
+      "tests/test_helpers.py:120",
+      "tests/test_helpers.py:143",
+      "tests/test_json.py:70",
+      "tests/test_json.py:176",
+      "tests/test_views.py:189"
+     ]
+    },
+    {
+     "kind": "explain",
+     "subject": "add_url_rule",
+     "calls": [
+      {
+       "tool": "find_nodes",
+       "arguments": "{\"limit\": 50, \"query\": \"add_url_rule\"}",
+       "response_bytes": 12648,
+       "is_error": false
+      },
+      {
+       "tool": "read_graph",
+       "arguments": "{\"node_id\": \"./src/flask/sansio/blueprints.py:function_definition:symbol:2b21797c50d44821:0\"}",
+       "response_bytes": 1159,
+       "is_error": false
+      },
+      {
+       "tool": "get_context",
+       "arguments": "{\"file\": \"src/flask/sansio/blueprints.py\", \"include_body\": true, \"line\": 87}",
+       "response_bytes": 8001,
+       "is_error": false
+      },
+      {
+       "tool": "read_graph",
+       "arguments": "{\"node_id\": \"./src/flask/sansio/blueprints.py:function_definition:symbol:27cdaf28845eaabb:0\"}",
+       "response_bytes": 1049,
+       "is_error": false
+      },
+      {
+       "tool": "get_context",
+       "arguments": "{\"file\": \"src/flask/sansio/blueprints.py\", \"include_body\": true, \"line\": 413}",
+       "response_bytes": 5666,
+       "is_error": false
+      },
+      {
+       "tool": "read_graph",
+       "arguments": "{\"node_id\": \"./src/flask/sansio/app.py:function_definition:symbol:0ec6d7744194f604:0\"}",
+       "response_bytes": 1339,
+       "is_error": false
+      },
+      {
+       "tool": "get_context",
+       "arguments": "{\"file\": \"src/flask/sansio/app.py\", \"include_body\": true, \"line\": 605}",
+       "response_bytes": 9887,
+       "is_error": false
+      },
+      {
+       "tool": "read_graph",
+       "arguments": "{\"node_id\": \"./src/flask/sansio/scaffold.py:function_definition:symbol:13f11471e2b0d830:0\"}",
+       "response_bytes": 1022,
+       "is_error": false
+      },
+      {
+       "tool": "get_context",
+       "arguments": "{\"file\": \"src/flask/sansio/scaffold.py\", \"include_body\": true, \"line\": 368}",
+       "response_bytes": 3225,
+       "is_error": false
+      }
+     ],
+     "locations": []
+    },
+    {
+     "kind": "callers",
+     "subject": "dispatch_request",
+     "calls": [
+      {
+       "tool": "find_nodes",
+       "arguments": "{\"limit\": 50, \"query\": \"dispatch_request\"}",
+       "response_bytes": 10228,
+       "is_error": false
+      },
+      {
+       "tool": "find_usages",
+       "arguments": "{\"node_id\": \"./tests/test_async.py:function_definition:symbol:77ba93fddafa6dad:0\"}",
+       "response_bytes": 131,
+       "is_error": false
+      },
+      {
+       "tool": "find_usages",
+       "arguments": "{\"node_id\": \"./tests/test_views.py:function_definition:symbol:2336fc6d591d1747:0\"}",
+       "response_bytes": 131,
+       "is_error": false
+      },
+      {
+       "tool": "find_usages",
+       "arguments": "{\"node_id\": \"./tests/test_views.py:function_definition:symbol:3d64566d2470d1e7:0\"}",
+       "response_bytes": 131,
+       "is_error": false
+      },
+      {
+       "tool": "find_usages",
+       "arguments": "{\"node_id\": \"./tests/test_views.py:function_definition:symbol:93c72869e9d8009e:0\"}",
+       "response_bytes": 131,
+       "is_error": false
+      },
+      {
+       "tool": "find_usages",
+       "arguments": "{\"node_id\": \"./tests/test_views.py:function_definition:symbol:5e84e6389a647997:0\"}",
+       "response_bytes": 131,
+       "is_error": false
+      },
+      {
+       "tool": "find_usages",
+       "arguments": "{\"node_id\": \"./tests/test_views.py:function_definition:symbol:76b9e681ac889c04:0\"}",
+       "response_bytes": 131,
+       "is_error": false
+      },
+      {
+       "tool": "find_usages",
+       "arguments": "{\"node_id\": \"./tests/test_views.py:function_definition:symbol:c000da996e069579:0\"}",
+       "response_bytes": 131,
+       "is_error": false
+      },
+      {
+       "tool": "find_usages",
+       "arguments": "{\"node_id\": \"./tests/test_views.py:function_definition:symbol:0735d20c727b783c:0\"}",
+       "response_bytes": 131,
+       "is_error": false
+      },
+      {
+       "tool": "find_usages",
+       "arguments": "{\"node_id\": \"./tests/typing/typing_route.py:function_definition:symbol:cea163aaad1b4d0d:0\"}",
+       "response_bytes": 131,
+       "is_error": false
+      },
+      {
+       "tool": "find_usages",
+       "arguments": "{\"node_id\": \"./src/flask/app.py:function_definition:symbol:6498ce0ce328b31a:0\"}",
+       "response_bytes": 378,
+       "is_error": false
+      }
+     ],
+     "locations": [
+      "src/flask/app.py:867"
+     ]
+    },
+    {
+     "kind": "explain",
+     "subject": "dispatch_request",
+     "calls": [
+      {
+       "tool": "find_nodes",
+       "arguments": "{\"limit\": 50, \"query\": \"dispatch_request\"}",
+       "response_bytes": 10228,
+       "is_error": false
+      },
+      {
+       "tool": "read_graph",
+       "arguments": "{\"node_id\": \"./tests/test_async.py:function_definition:symbol:77ba93fddafa6dad:0\"}",
+       "response_bytes": 252,
+       "is_error": false
+      },
+      {
+       "tool": "get_context",
+       "arguments": "{\"file\": \"tests/test_async.py\", \"include_body\": true, \"line\": 25}",
+       "response_bytes": 388,
+       "is_error": false
+      },
+      {
+       "tool": "read_graph",
+       "arguments": "{\"node_id\": \"./tests/test_views.py:function_definition:symbol:2336fc6d591d1747:0\"}",
+       "response_bytes": 252,
+       "is_error": false
+      },
+      {
+       "tool": "get_context",
+       "arguments": "{\"file\": \"tests/test_views.py\", \"include_body\": true, \"line\": 21}",
+       "response_bytes": 361,
+       "is_error": false
+      },
+      {
+       "tool": "read_graph",
+       "arguments": "{\"node_id\": \"./tests/test_views.py:function_definition:symbol:3d64566d2470d1e7:0\"}",
+       "response_bytes": 252,
+       "is_error": false
+      },
+      {
+       "tool": "get_context",
+       "arguments": "{\"file\": \"tests/test_views.py\", \"include_body\": true, \"line\": 92}",
+       "response_bytes": 350,
+       "is_error": false
+      },
+      {
+       "tool": "read_graph",
+       "arguments": "{\"node_id\": \"./tests/test_views.py:function_definition:symbol:93c72869e9d8009e:0\"}",
+       "response_bytes": 254,
+       "is_error": false
+      },
+      {
+       "tool": "get_context",
+       "arguments": "{\"file\": \"tests/test_views.py\", \"include_body\": true, \"line\": 107}",
+       "response_bytes": 357,
+       "is_error": false
+      },
+      {
+       "tool": "read_graph",
+       "arguments": "{\"node_id\": \"./tests/test_views.py:function_definition:symbol:5e84e6389a647997:0\"}",
+       "response_bytes": 254,
+       "is_error": false
+      },
+      {
+       "tool": "get_context",
+       "arguments": "{\"file\": \"tests/test_views.py\", \"include_body\": true, \"line\": 121}",
+       "response_bytes": 357,
+       "is_error": false
+      },
+      {
+       "tool": "read_graph",
+       "arguments": "{\"node_id\": \"./tests/test_views.py:function_definition:symbol:76b9e681ac889c04:0\"}",
+       "response_bytes": 254,
+       "is_error": false
+      },
+      {
+       "tool": "get_context",
+       "arguments": "{\"file\": \"tests/test_views.py\", \"include_body\": true, \"line\": 132}",
+       "response_bytes": 357,
+       "is_error": false
+      },
+      {
+       "tool": "read_graph",
+       "arguments": "{\"node_id\": \"./tests/test_views.py:function_definition:symbol:c000da996e069579:0\"}",
+       "response_bytes": 254,
+       "is_error": false
+      },
+      {
+       "tool": "get_context",
+       "arguments": "{\"file\": \"tests/test_views.py\", \"include_body\": true, \"line\": 177}",
+       "response_bytes": 363,
+       "is_error": false
+      },
+      {
+       "tool": "read_graph",
+       "arguments": "{\"node_id\": \"./tests/test_views.py:function_definition:symbol:0735d20c727b783c:0\"}",
+       "response_bytes": 254,
+       "is_error": false
+      },
+      {
+       "tool": "get_context",
+       "arguments": "{\"file\": \"tests/test_views.py\", \"include_body\": true, \"line\": 255}",
+       "response_bytes": 349,
+       "is_error": false
+      },
+      {
+       "tool": "read_graph",
+       "arguments": "{\"node_id\": \"./tests/typing/typing_route.py:function_definition:symbol:cea163aaad1b4d0d:0\"}",
+       "response_bytes": 259,
+       "is_error": false
+      },
+      {
+       "tool": "get_context",
+       "arguments": "{\"file\": \"tests/typing/typing_route.py\", \"include_body\": true, \"line\": 105}",
+       "response_bytes": 1257,
+       "is_error": false
+      },
+      {
+       "tool": "read_graph",
+       "arguments": "{\"node_id\": \"./src/flask/app.py:function_definition:symbol:6498ce0ce328b31a:0\"}",
+       "response_bytes": 371,
+       "is_error": false
+      },
+      {
+       "tool": "get_context",
+       "arguments": "{\"file\": \"src/flask/app.py\", \"include_body\": true, \"line\": 842}",
+       "response_bytes": 4989,
+       "is_error": false
+      }
+     ],
+     "locations": []
+    },
+    {
+     "kind": "callers",
+     "subject": "jsonify",
+     "calls": [
+      {
+       "tool": "find_nodes",
+       "arguments": "{\"limit\": 50, \"query\": \"jsonify\"}",
+       "response_bytes": 11997,
+       "is_error": false
+      },
+      {
+       "tool": "find_usages",
+       "arguments": "{\"node_id\": \"./src/flask/json/__init__.py:function_definition:symbol:00924cffcf315523:0\"}",
+       "response_bytes": 4793,
+       "is_error": false
+      }
+     ],
+     "locations": [
+      "examples/javascript/js_example/views.py:15",
+      "tests/test_appctx.py:104",
+      "tests/test_basic.py:1284",
+      "tests/test_basic.py:1254",
+      "tests/test_basic.py:1300",
+      "tests/test_json.py:70",
+      "tests/test_json.py:120",
+      "tests/test_json.py:32",
+      "tests/test_json.py:96",
+      "tests/test_json.py:276",
+      "tests/test_json.py:92",
+      "tests/test_json.py:138",
+      "tests/test_json.py:124",
+      "tests/test_json.py:176",
+      "tests/test_testing.py:265",
+      "tests/typing/typing_route.py:27",
+      "examples/javascript/js_example/views.py:1",
+      "src/flask/__init__.py:1",
+      "tests/test_testing.py:1",
+      "tests/typing/typing_route.py:1"
+     ]
+    },
+    {
+     "kind": "explain",
+     "subject": "jsonify",
+     "calls": [
+      {
+       "tool": "find_nodes",
+       "arguments": "{\"limit\": 50, \"query\": \"jsonify\"}",
+       "response_bytes": 11997,
+       "is_error": false
+      },
+      {
+       "tool": "read_graph",
+       "arguments": "{\"node_id\": \"./src/flask/json/__init__.py:function_definition:symbol:00924cffcf315523:0\"}",
+       "response_bytes": 509,
+       "is_error": false
+      },
+      {
+       "tool": "get_context",
+       "arguments": "{\"file\": \"src/flask/json/__init__.py\", \"include_body\": true, \"line\": 138}",
+       "response_bytes": 1693,
+       "is_error": false
+      }
+     ],
+     "locations": []
+    },
+    {
+     "kind": "impact",
+     "subject": "src/flask/wrappers.py",
+     "calls": [
+      {
+       "tool": "impact_of_change",
+       "arguments": "{\"file\": \"src/flask/wrappers.py\"}",
+       "response_bytes": 7838,
+       "is_error": false
+      }
+     ],
+     "locations": []
+    },
+    {
+     "kind": "impact",
+     "subject": "src/flask/helpers.py",
+     "calls": [
+      {
+       "tool": "impact_of_change",
+       "arguments": "{\"file\": \"src/flask/helpers.py\"}",
+       "response_bytes": 8199,
+       "is_error": false
+      }
+     ],
+     "locations": []
+    }
+   ]
+  },
+  {
+   "repo": "django",
+   "tools_list_bytes": 9333,
+   "questions": [
+    {
+     "kind": "callers",
+     "subject": "reverse",
+     "calls": [
+      {
+       "tool": "find_nodes",
+       "arguments": "{\"limit\": 50, \"query\": \"reverse\"}",
+       "response_bytes": 13782,
+       "is_error": false
+      },
+      {
+       "tool": "find_usages",
+       "arguments": "{\"node_id\": \"./django/contrib/gis/geos/mutable_list.py:function_definition:symbol:3bd71079f2301d7c:0\"}",
+       "response_bytes": 6416,
+       "is_error": false
+      },
+      {
+       "tool": "find_usages",
+       "arguments": "{\"node_id\": \"./django/urls/resolvers.py:function_definition:symbol:968d223f7bd6fee8:0\"}",
+       "response_bytes": 6416,
+       "is_error": false
+      },
+      {
+       "tool": "find_usages",
+       "arguments": "{\"node_id\": \"./django/urls/base.py:function_definition:symbol:369108db30239e1b:0\"}",
+       "response_bytes": 5357,
+       "is_error": false
+      },
+      {
+       "tool": "find_usages",
+       "arguments": "{\"node_id\": \"./django/db/models/query.py:function_definition:symbol:c83539c60f47c6cf:0\"}",
+       "response_bytes": 6288,
+       "is_error": false
+      },
+      {
+       "tool": "find_usages",
+       "arguments": "{\"node_id\": \"./django/utils/datastructures.py:assignment:symbol:51639515d051c50e:0\"}",
+       "response_bytes": 122,
+       "is_error": false
+      }
+     ],
+     "locations": [
+      "django/contrib/contenttypes/fields.py:405",
+      "django/core/serializers/__init__.py:167",
+      "django/db/models/deletion.py:432",
+      "django/db/models/options.py:770",
+      "django/urls/base.py:27",
+      "django/utils/termcolors.py:143",
+      "tests/gis_tests/geoapp/test_functions.py:606",
+      "tests/gis_tests/geos_tests/test_geos.py:466",
+      "tests/gis_tests/geos_tests/test_geos.py:458",
+      "tests/gis_tests/geos_tests/test_geos.py:370",
+      "tests/gis_tests/geos_tests/test_mutable_list.py:244",
+      "tests/model_fields/test_jsonfield.py:699",
+      "tests/ordering/tests.py:306",
+      "tests/ordering/tests.py:141",
+      "tests/ordering/tests.py:330",
+      "tests/ordering/tests.py:282",
+      "tests/queries/tests.py:883",
+      "tests/queries/tests.py:465",
+      "tests/urlpatterns_reverse/tests.py:547",
+      "tests/urlpatterns_reverse/tests.py:559",
+      "django/contrib/contenttypes/fields.py:405",
+      "django/core/serializers/__init__.py:167",
+      "django/db/models/deletion.py:432",
+      "django/db/models/options.py:770",
+      "django/urls/base.py:27",
+      "django/utils/termcolors.py:143",
+      "tests/gis_tests/geoapp/test_functions.py:606",
+      "tests/gis_tests/geos_tests/test_geos.py:466",
+      "tests/gis_tests/geos_tests/test_geos.py:458",
+      "tests/gis_tests/geos_tests/test_geos.py:370",
+      "tests/gis_tests/geos_tests/test_mutable_list.py:244",
+      "tests/model_fields/test_jsonfield.py:699",
+      "tests/ordering/tests.py:306",
+      "tests/ordering/tests.py:141",
+      "tests/ordering/tests.py:330",
+      "tests/ordering/tests.py:282",
+      "tests/queries/tests.py:883",
+      "tests/queries/tests.py:465",
+      "tests/urlpatterns_reverse/tests.py:547",
+      "tests/urlpatterns_reverse/tests.py:559",
+      "django/contrib/admin/helpers.py:251",
+      "django/contrib/admin/models.py:233",
+      "django/contrib/admin/options.py:1680",
+      "django/contrib/admin/options.py:358",
+      "django/contrib/admin/options.py:1583",
+      "django/contrib/admin/options.py:1492",
+      "django/contrib/admin/options.py:1804",
+      "django/contrib/admin/options.py:1392",
+      "django/contrib/admin/sites.py:409",
+      "django/contrib/admin/sites.py:228",
+      "django/contrib/admin/sites.py:464",
+      "django/contrib/admin/sites.py:344",
+      "django/contrib/admin/utils.py:141",
+      "django/contrib/admin/views/main.py:625",
+      "django/contrib/admin/widgets.py:308",
+      "django/contrib/admin/widgets.py:146",
+      "django/contrib/admin/widgets.py:505",
+      "django/contrib/admin/widgets.py:193",
+      "django/contrib/admindocs/utils.py:59",
+      "django/contrib/auth/admin.py:152",
+      "django/db/models/query.py:1103",
+      "django/db/models/query.py:1078",
+      "django/contrib/contenttypes/fields.py:405",
+      "django/core/serializers/__init__.py:167",
+      "django/db/models/deletion.py:432",
+      "django/db/models/options.py:770",
+      "django/urls/base.py:27",
+      "django/utils/termcolors.py:143",
+      "tests/gis_tests/geoapp/test_functions.py:606",
+      "tests/gis_tests/geos_tests/test_geos.py:466",
+      "tests/gis_tests/geos_tests/test_geos.py:458",
+      "tests/gis_tests/geos_tests/test_geos.py:370",
+      "tests/gis_tests/geos_tests/test_mutable_list.py:244",
+      "tests/model_fields/test_jsonfield.py:699",
+      "tests/ordering/tests.py:306",
+      "tests/ordering/tests.py:141",
+      "tests/ordering/tests.py:330",
+      "tests/ordering/tests.py:282",
+      "tests/queries/tests.py:883",
+      "tests/queries/tests.py:465"
+     ]
+    },
+    {
+     "kind": "explain",
+     "subject": "reverse",
+     "calls": [
+      {
+       "tool": "find_nodes",
+       "arguments": "{\"limit\": 50, \"query\": \"reverse\"}",
+       "response_bytes": 13782,
+       "is_error": false
+      },
+      {
+       "tool": "read_graph",
+       "arguments": "{\"node_id\": \"./django/contrib/gis/geos/mutable_list.py:function_definition:symbol:3bd71079f2301d7c:0\"}",
+       "response_bytes": 730,
+       "is_error": false
+      },
+      {
+       "tool": "get_context",
+       "arguments": "{\"file\": \"django/contrib/gis/geos/mutable_list.py\", \"include_body\": true, \"line\": 211}",
+       "response_bytes": 705,
+       "is_error": false
+      },
+      {
+       "tool": "read_graph",
+       "arguments": "{\"node_id\": \"./django/urls/resolvers.py:function_definition:symbol:968d223f7bd6fee8:0\"}",
+       "response_bytes": 725,
+       "is_error": false
+      },
+      {
+       "tool": "get_context",
+       "arguments": "{\"file\": \"django/urls/resolvers.py\", \"include_body\": true, \"line\": 741}",
+       "response_bytes": 4534,
+       "is_error": false
+      },
+      {
+       "tool": "read_graph",
+       "arguments": "{\"node_id\": \"./django/urls/base.py:function_definition:symbol:369108db30239e1b:0\"}",
+       "response_bytes": 24455,
+       "is_error": false
+      },
+      {
+       "tool": "get_context",
+       "arguments": "{\"file\": \"django/urls/base.py\", \"include_body\": true, \"line\": 27}",
+       "response_bytes": 12714,
+       "is_error": false
+      },
+      {
+       "tool": "read_graph",
+       "arguments": "{\"node_id\": \"./django/db/models/query.py:function_definition:symbol:c83539c60f47c6cf:0\"}",
+       "response_bytes": 779,
+       "is_error": false
+      },
+      {
+       "tool": "get_context",
+       "arguments": "{\"file\": \"django/db/models/query.py\", \"include_body\": true, \"line\": 1734}",
+       "response_bytes": 1746,
+       "is_error": false
+      },
+      {
+       "tool": "read_graph",
+       "arguments": "{\"node_id\": \"./django/utils/datastructures.py:assignment:symbol:51639515d051c50e:0\"}",
+       "response_bytes": 247,
+       "is_error": false
+      },
+      {
+       "tool": "get_context",
+       "arguments": "{\"file\": \"django/utils/datastructures.py\", \"include_body\": true, \"line\": 254}",
+       "response_bytes": 5835,
+       "is_error": false
+      }
+     ],
+     "locations": []
+    },
+    {
+     "kind": "callers",
+     "subject": "get_object_or_404",
+     "calls": [
+      {
+       "tool": "find_nodes",
+       "arguments": "{\"limit\": 50, \"query\": \"get_object_or_404\"}",
+       "response_bytes": 13422,
+       "is_error": false
+      },
+      {
+       "tool": "find_usages",
+       "arguments": "{\"node_id\": \"./django/shortcuts.py:function_definition:symbol:94a047c0b4c26017:0\"}",
+       "response_bytes": 2191,
+       "is_error": false
+      }
+     ],
+     "locations": [
+      "django/contrib/flatpages/views.py:22",
+      "tests/get_object_or_404/tests.py:88",
+      "tests/get_object_or_404/tests.py:10",
+      "tests/get_object_or_404/tests.py:116",
+      "tests/test_utils/views.py:8",
+      "django/contrib/flatpages/views.py:1",
+      "tests/get_object_or_404/tests.py:1",
+      "tests/test_utils/views.py:1"
+     ]
+    },
+    {
+     "kind": "explain",
+     "subject": "get_object_or_404",
+     "calls": [
+      {
+       "tool": "find_nodes",
+       "arguments": "{\"limit\": 50, \"query\": \"get_object_or_404\"}",
+       "response_bytes": 13422,
+       "is_error": false
+      },
+      {
+       "tool": "read_graph",
+       "arguments": "{\"node_id\": \"./django/shortcuts.py:function_definition:symbol:94a047c0b4c26017:0\"}",
+       "response_bytes": 417,
+       "is_error": false
+      },
+      {
+       "tool": "get_context",
+       "arguments": "{\"file\": \"django/shortcuts.py\", \"include_body\": true, \"line\": 65}",
+       "response_bytes": 2776,
+       "is_error": false
+      }
+     ],
+     "locations": []
+    },
+    {
+     "kind": "callers",
+     "subject": "slugify",
+     "calls": [
+      {
+       "tool": "find_nodes",
+       "arguments": "{\"limit\": 50, \"query\": \"slugify\"}",
+       "response_bytes": 8296,
+       "is_error": false
+      },
+      {
+       "tool": "find_usages",
+       "arguments": "{\"node_id\": \"./django/template/defaultfilters.py:function_definition:symbol:1b9cbdb030e7ed49:0\"}",
+       "response_bytes": 1586,
+       "is_error": false
+      },
+      {
+       "tool": "find_usages",
+       "arguments": "{\"node_id\": \"./django/utils/text.py:function_definition:symbol:b5c0e5ba695ced8f:0\"}",
+       "response_bytes": 865,
+       "is_error": false
+      }
+     ],
+     "locations": [
+      "tests/template_tests/filter_tests/test_slugify.py:54",
+      "tests/template_tests/filter_tests/test_slugify.py:45",
+      "tests/template_tests/filter_tests/test_slugify.py:51",
+      "tests/template_tests/filter_tests/test_slugify.py:37",
+      "tests/template_tests/filter_tests/test_slugify.py:1",
+      "django/template/defaultfilters.py:267",
+      "tests/utils_tests/test_text.py:376",
+      "django/template/defaultfilters.py:1"
+     ]
+    },
+    {
+     "kind": "explain",
+     "subject": "slugify",
+     "calls": [
+      {
+       "tool": "find_nodes",
+       "arguments": "{\"limit\": 50, \"query\": \"slugify\"}",
+       "response_bytes": 8296,
+       "is_error": false
+      },
+      {
+       "tool": "read_graph",
+       "arguments": "{\"node_id\": \"./django/template/defaultfilters.py:function_definition:symbol:1b9cbdb030e7ed49:0\"}",
+       "response_bytes": 352,
+       "is_error": false
+      },
+      {
+       "tool": "get_context",
+       "arguments": "{\"file\": \"django/template/defaultfilters.py\", \"include_body\": true, \"line\": 267}",
+       "response_bytes": 2314,
+       "is_error": false
+      },
+      {
+       "tool": "read_graph",
+       "arguments": "{\"node_id\": \"./django/utils/text.py:function_definition:symbol:b5c0e5ba695ced8f:0\"}",
+       "response_bytes": 326,
+       "is_error": false
+      },
+      {
+       "tool": "get_context",
+       "arguments": "{\"file\": \"django/utils/text.py\", \"include_body\": true, \"line\": 452}",
+       "response_bytes": 2890,
+       "is_error": false
+      }
+     ],
+     "locations": []
+    },
+    {
+     "kind": "callers",
+     "subject": "Paginator",
+     "calls": [
+      {
+       "tool": "find_nodes",
+       "arguments": "{\"limit\": 50, \"query\": \"Paginator\"}",
+       "response_bytes": 13086,
+       "is_error": false
+      },
+      {
+       "tool": "find_usages",
+       "arguments": "{\"node_id\": \"./django/core/paginator.py:class_definition:symbol:2286c079a9344f05:0\"}",
+       "response_bytes": 5419,
+       "is_error": false
+      }
+     ],
+     "locations": [
+      "django/contrib/sitemaps/__init__.py:72",
+      "tests/pagination/tests.py:570",
+      "tests/pagination/tests.py:117",
+      "tests/pagination/tests.py:530",
+      "tests/pagination/tests.py:502",
+      "tests/pagination/tests.py:554",
+      "tests/pagination/tests.py:326",
+      "tests/pagination/tests.py:280",
+      "tests/pagination/tests.py:565",
+      "tests/pagination/tests.py:516",
+      "tests/pagination/tests.py:159",
+      "tests/pagination/tests.py:24",
+      "tests/pagination/tests.py:306",
+      "tests/pagination/tests.py:163",
+      "tests/pagination/tests.py:205",
+      "tests/pagination/tests.py:131",
+      "tests/pagination/tests.py:312",
+      "tests/pagination/tests.py:344",
+      "tests/pagination/tests.py:335",
+      "tests/pagination/tests.py:168"
+     ]
+    },
+    {
+     "kind": "explain",
+     "subject": "Paginator",
+     "calls": [
+      {
+       "tool": "find_nodes",
+       "arguments": "{\"limit\": 50, \"query\": \"Paginator\"}",
+       "response_bytes": 13086,
+       "is_error": false
+      },
+      {
+       "tool": "read_graph",
+       "arguments": "{\"node_id\": \"./django/core/paginator.py:class_definition:symbol:2286c079a9344f05:0\"}",
+       "response_bytes": 1108,
+       "is_error": false
+      },
+      {
+       "tool": "get_context",
+       "arguments": "{\"file\": \"django/core/paginator.py\", \"include_body\": true, \"line\": 27}",
+       "response_bytes": 7518,
+       "is_error": false
+      }
+     ],
+     "locations": []
+    },
+    {
+     "kind": "callers",
+     "subject": "render",
+     "calls": [
+      {
+       "tool": "find_nodes",
+       "arguments": "{\"limit\": 50, \"query\": \"render\"}",
+       "response_bytes": 13112,
+       "is_error": false
+      },
+      {
+       "tool": "find_usages",
+       "arguments": "{\"node_id\": \"./tests/flatpages_tests/test_templatetags.py:function_definition:symbol:f37188363b29ce5d:0\"}",
+       "response_bytes": 408,
+       "is_error": false
+      },
+      {
+       "tool": "find_usages",
+       "arguments": "{\"node_id\": \"./tests/middleware_exceptions/views.py:function_definition:symbol:05e21ff9b11971d5:0\"}",
+       "response_bytes": 121,
+       "is_error": false
+      },
+      {
+       "tool": "find_usages",
+       "arguments": "{\"node_id\": \"./tests/middleware_exceptions/views.py:function_definition:symbol:827e1962f640863a:0\"}",
+       "response_bytes": 121,
+       "is_error": false
+      },
+      {
+       "tool": "find_usages",
+       "arguments": "{\"node_id\": \"./tests/template_tests/templatetags/custom.py:function_definition:symbol:9b6ce4ccbfaa5bc9:0\"}",
+       "response_bytes": 121,
+       "is_error": false
+      },
+      {
+       "tool": "find_usages",
+       "arguments": "{\"node_id\": \"./tests/template_tests/templatetags/tag_27584.py:function_definition:symbol:e57a200e4cb9a64a:0\"}",
+       "response_bytes": 121,
+       "is_error": false
+      },
+      {
+       "tool": "find_usages",
+       "arguments": "{\"node_id\": \"./tests/template_tests/templatetags/testtags.py:function_definition:symbol:31f3f085a18db2dc:0\"}",
+       "response_bytes": 121,
+       "is_error": false
+      },
+      {
+       "tool": "find_usages",
+       "arguments": "{\"node_id\": \"./tests/forms_tests/templatetags/tags.py:function_definition:symbol:4974ef93565e527f:0\"}",
+       "response_bytes": 121,
+       "is_error": false
+      },
+      {
+       "tool": "find_usages",
+       "arguments": "{\"node_id\": \"./tests/admin_widgets/tests.py:function_definition:symbol:2bb59b55b50affd0:0\"}",
+       "response_bytes": 121,
+       "is_error": false
+      },
+      {
+       "tool": "find_usages",
+       "arguments": "{\"node_id\": \"./django/templatetags/l10n.py:function_definition:symbol:b7d973fcf6f4f1a7:0\"}",
+       "response_bytes": 121,
+       "is_error": false
+      },
+      {
+       "tool": "find_usages",
+       "arguments": "{\"node_id\": \"./django/templatetags/tz.py:function_definition:symbol:8c39f3b615c59777:0\"}",
+       "response_bytes": 121,
+       "is_error": false
+      }
+     ],
+     "locations": [
+      "tests/flatpages_tests/test_templatetags.py:142"
+     ]
+    },
+    {
+     "kind": "explain",
+     "subject": "render",
+     "calls": [
+      {
+       "tool": "find_nodes",
+       "arguments": "{\"limit\": 50, \"query\": \"render\"}",
+       "response_bytes": 13112,
+       "is_error": false
+      },
+      {
+       "tool": "read_graph",
+       "arguments": "{\"node_id\": \"./tests/flatpages_tests/test_templatetags.py:function_definition:symbol:f37188363b29ce5d:0\"}",
+       "response_bytes": 300,
+       "is_error": false
+      },
+      {
+       "tool": "get_context",
+       "arguments": "{\"file\": \"tests/flatpages_tests/test_templatetags.py\", \"include_body\": true, \"line\": 145}",
+       "response_bytes": 4889,
+       "is_error": false
+      },
+      {
+       "tool": "read_graph",
+       "arguments": "{\"node_id\": \"./tests/middleware_exceptions/views.py:function_definition:symbol:05e21ff9b11971d5:0\"}",
+       "response_bytes": 259,
+       "is_error": false
+      },
+      {
+       "tool": "get_context",
+       "arguments": "{\"file\": \"tests/middleware_exceptions/views.py\", \"include_body\": true, \"line\": 28}",
+       "response_bytes": 401,
+       "is_error": false
+      },
+      {
+       "tool": "read_graph",
+       "arguments": "{\"node_id\": \"./tests/middleware_exceptions/views.py:function_definition:symbol:827e1962f640863a:0\"}",
+       "response_bytes": 259,
+       "is_error": false
+      },
+      {
+       "tool": "get_context",
+       "arguments": "{\"file\": \"tests/middleware_exceptions/views.py\", \"include_body\": true, \"line\": 36}",
+       "response_bytes": 407,
+       "is_error": false
+      },
+      {
+       "tool": "read_graph",
+       "arguments": "{\"node_id\": \"./tests/template_tests/templatetags/custom.py:function_definition:symbol:9b6ce4ccbfaa5bc9:0\"}",
+       "response_bytes": 269,
+       "is_error": false
+      },
+      {
+       "tool": "get_context",
+       "arguments": "{\"file\": \"tests/template_tests/templatetags/custom.py\", \"include_body\": true, \"line\": 216}",
+       "response_bytes": 1037,
+       "is_error": false
+      },
+      {
+       "tool": "read_graph",
+       "arguments": "{\"node_id\": \"./tests/template_tests/templatetags/tag_27584.py:function_definition:symbol:e57a200e4cb9a64a:0\"}",
+       "response_bytes": 269,
+       "is_error": false
+      },
+      {
+       "tool": "get_context",
+       "arguments": "{\"file\": \"tests/template_tests/templatetags/tag_27584.py\", \"include_body\": true, \"line\": 14}",
+       "response_bytes": 810,
+       "is_error": false
+      },
+      {
+       "tool": "read_graph",
+       "arguments": "{\"node_id\": \"./tests/template_tests/templatetags/testtags.py:function_definition:symbol:31f3f085a18db2dc:0\"}",
+       "response_bytes": 265,
+       "is_error": false
+      },
+      {
+       "tool": "get_context",
+       "arguments": "{\"file\": \"tests/template_tests/templatetags/testtags.py\", \"include_body\": true, \"line\": 10}",
+       "response_bytes": 4018,
+       "is_error": false
+      },
+      {
+       "tool": "read_graph",
+       "arguments": "{\"node_id\": \"./tests/forms_tests/templatetags/tags.py:function_definition:symbol:4974ef93565e527f:0\"}",
+       "response_bytes": 307,
+       "is_error": false
+      },
+      {
+       "tool": "get_context",
+       "arguments": "{\"file\": \"tests/forms_tests/templatetags/tags.py\", \"include_body\": true, \"line\": 9}",
+       "response_bytes": 4324,
+       "is_error": false
+      },
+      {
+       "tool": "read_graph",
+       "arguments": "{\"node_id\": \"./tests/admin_widgets/tests.py:function_definition:symbol:2bb59b55b50affd0:0\"}",
+       "response_bytes": 253,
+       "is_error": false
+      },
+      {
+       "tool": "get_context",
+       "arguments": "{\"file\": \"tests/admin_widgets/tests.py\", \"include_body\": true, \"line\": 896}",
+       "response_bytes": 384,
+       "is_error": false
+      },
+      {
+       "tool": "read_graph",
+       "arguments": "{\"node_id\": \"./django/templatetags/l10n.py:function_definition:symbol:b7d973fcf6f4f1a7:0\"}",
+       "response_bytes": 289,
+       "is_error": false
+      },
+      {
+       "tool": "get_context",
+       "arguments": "{\"file\": \"django/templatetags/l10n.py\", \"include_body\": true, \"line\": 31}",
+       "response_bytes": 1633,
+       "is_error": false
+      },
+      {
+       "tool": "read_graph",
+       "arguments": "{\"node_id\": \"./django/templatetags/tz.py:function_definition:symbol:8c39f3b615c59777:0\"}",
+       "response_bytes": 285,
+       "is_error": false
+      },
+      {
+       "tool": "get_context",
+       "arguments": "{\"file\": \"django/templatetags/tz.py\", \"include_body\": true, \"line\": 101}",
+       "response_bytes": 1603,
+       "is_error": false
+      }
+     ],
+     "locations": []
+    },
+    {
+     "kind": "impact",
+     "subject": "django/utils/text.py",
+     "calls": [
+      {
+       "tool": "impact_of_change",
+       "arguments": "{\"file\": \"django/utils/text.py\"}",
+       "response_bytes": 8665,
+       "is_error": false
+      }
+     ],
+     "locations": []
+    },
+    {
+     "kind": "impact",
+     "subject": "django/shortcuts.py",
+     "calls": [
+      {
+       "tool": "impact_of_change",
+       "arguments": "{\"file\": \"django/shortcuts.py\"}",
+       "response_bytes": 8573,
+       "is_error": false
+      }
+     ],
+     "locations": []
+    }
+   ]
+  }
+ ]
+}
