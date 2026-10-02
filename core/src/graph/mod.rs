@@ -176,13 +176,17 @@ impl CodeGraph {
         affected_names: &HashSet<String>,
     ) -> ReferenceRefresh {
         let affected_names = resolve::expand_affected_names(self, changed_files, affected_names);
+        let affected_names = resolve_rust::expand_affected_names(self, &affected_names);
+        let glob_files = resolve_rust::files_with_affected_globs(self, &affected_names);
         let sources: Vec<NodeIndex> = self
             .graph
             .node_indices()
             .filter(|idx| {
                 let node = &self.graph[*idx];
+                let file = graph_node_file_path(&node.id);
                 is_reference_source(node)
-                    && (changed_files.contains(graph_node_file_path(&node.id))
+                    && (changed_files.contains(file)
+                        || glob_files.contains(file)
                         || source_mentions_any(node, &affected_names))
             })
             .collect();
@@ -227,6 +231,15 @@ impl CodeGraph {
         // Taban listesi değişen sınıfın alt sınıflarındaki `self.ad()` çağrıları
         // kalıtılan üye adlarıyla yeniden çözülür (değişiklik öncesi durum).
         names.extend(resolve::inherited_member_names_in_file(self, file_id));
+        // `Cargo.toml` crate adlarını tanımlar: adı değişen crate'in yolları yeniden çözülür.
+        if file_id.ends_with("Cargo.toml") {
+            for idx in self.find_nodes_by_file(file_id) {
+                let node = &self.graph[*idx];
+                if node.node_type == NodeType::DataFile {
+                    names.extend(rust_modules::manifest_crate_names(&node.content));
+                }
+            }
+        }
         names
     }
 

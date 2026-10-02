@@ -8,13 +8,13 @@
 //! ya da bir türün `impl` metotlarına iner. Alıcısının türü bilinmeyen metot
 //! çağrıları en çok `MAX_POSSIBLE_TARGETS` metoda "olası" kenar üretir.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use petgraph::graph::NodeIndex;
 use petgraph::visit::EdgeRef;
 use petgraph::Direction;
 
-use super::references::{CallTarget, ImportBinding, ReferenceFacts, SyntaxFacts};
+use super::references::{CallTarget, ImportBinding, ReferenceFacts, SyntaxFacts, SyntaxLanguage};
 use super::resolve::{call_edges, edge_rank, Resolution, MAX_POSSIBLE_TARGETS};
 use super::rust_modules::{RustCrates, RustModule};
 use super::{graph_node_file_path, is_rust_impl_node, CodeGraph, EdgeType, NodeType};
@@ -102,6 +102,69 @@ pub(crate) fn rust_references(
     references.sort_by_key(|(_, target, edge)| (target.index(), edge_rank(edge)));
     references.dedup();
     references
+}
+
+/// Artımlı yenilemede etkilenen adların Rust kapanışı: yolu ya da sembolü
+/// etkilenen bir adı anan `use` bağının yerel adı da etkilenir (yeniden dışa
+/// aktarma ve crate adı zincirleri, en çok `MAX_HOPS` tur).
+pub(crate) fn expand_affected_names(graph: &CodeGraph, names: &HashSet<String>) -> HashSet<String> {
+    let bindings: Vec<&ImportBinding> = rust_bindings(graph).collect();
+    let mut expanded = names.clone();
+    for _ in 0..MAX_HOPS {
+        let before = expanded.len();
+        for binding in &bindings {
+            if binding.local != "*" && binding_mentions(binding, &expanded) {
+                expanded.insert(binding.local.clone());
+            }
+        }
+        if expanded.len() == before {
+            break;
+        }
+    }
+    expanded
+}
+
+/// Yolu etkilenen bir adı anan yıldız importunun dosyaları: yıldızla gelen
+/// adlar olgularda görünmediğinden dosyanın tüm kaynakları yeniden çözülür.
+pub(crate) fn files_with_affected_globs(
+    graph: &CodeGraph,
+    names: &HashSet<String>,
+) -> HashSet<String> {
+    graph
+        .graph
+        .node_weights()
+        .filter_map(|node| match &node.facts {
+            ReferenceFacts::Syntax(facts)
+                if facts
+                    .imports
+                    .iter()
+                    .any(|binding| binding.local == "*" && binding_mentions(binding, names)) =>
+            {
+                Some(graph_node_file_path(&node.id).to_string())
+            }
+            _ => None,
+        })
+        .collect()
+}
+
+fn rust_bindings(graph: &CodeGraph) -> impl Iterator<Item = &ImportBinding> {
+    graph
+        .graph
+        .node_weights()
+        .flat_map(|node| match &node.facts {
+            ReferenceFacts::Syntax(facts) if facts.language == SyntaxLanguage::Rust => {
+                facts.imports.as_slice()
+            }
+            _ => &[],
+        })
+}
+
+fn binding_mentions(binding: &ImportBinding, names: &HashSet<String>) -> bool {
+    binding.module.split('.').any(|part| names.contains(part))
+        || binding
+            .symbol
+            .as_ref()
+            .is_some_and(|symbol| names.contains(symbol))
 }
 
 /// `a.b.c` → `[a, b, c]`; boş yol bileşensizdir.

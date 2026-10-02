@@ -266,3 +266,109 @@ async fn live_incremental_updates_match_a_fresh_full_index() -> Result<()> {
     );
     Ok(())
 }
+
+/// İki crate'li Rust çalışma alanı (rust_references_test fikstürünün özü).
+const RUST_WORKSPACE: &[(&str, &str)] = &[
+    ("Cargo.toml", "[workspace]\nmembers = [\"app_core\", \"app_cli\"]\n"),
+    (
+        "app_core/Cargo.toml",
+        "[package]\nname = \"app-core\"\nversion = \"0.1.0\"\n",
+    ),
+    (
+        "app_core/src/lib.rs",
+        "pub mod engine;\npub mod other;\npub mod util;\n\npub use engine::Engine;\n",
+    ),
+    (
+        "app_core/src/util.rs",
+        "pub fn helper() -> u32 {\n    1\n}\n\npub enum Mode {\n    Fast,\n    Slow,\n}\n",
+    ),
+    ("app_core/src/other.rs", "pub fn helper() -> u32 {\n    2\n}\n"),
+    (
+        "app_core/src/engine.rs",
+        "use crate::util::helper;\n\npub struct Engine {}\n\nimpl Engine {\n    pub fn new() -> Self {\n        Engine {}\n    }\n\n    pub fn start(&self) -> u32 {\n        self.stop();\n        helper()\n    }\n\n    fn stop(&self) {}\n}\n",
+    ),
+    (
+        "app_cli/Cargo.toml",
+        "[package]\nname = \"app-cli\"\nversion = \"0.1.0\"\n",
+    ),
+    (
+        "app_cli/src/main.rs",
+        "use app_core::util::{self, Mode};\nuse app_core::Engine;\n\nfn main() {\n    let engine = Engine::new();\n    engine.start();\n    util::helper();\n    let _mode = Mode::Slow;\n}\n",
+    ),
+];
+
+#[tokio::test]
+async fn rust_incremental_edges_equal_a_full_rebuild() -> Result<()> {
+    std::env::set_var("CCM_DISABLE_EMBEDDER", "1");
+    let project = tempdir()?;
+    let root = std::fs::canonicalize(project.path())?;
+    let write = |relative: &str, content: &str| -> Result<PathBuf> {
+        let path = root.join(relative);
+        std::fs::create_dir_all(path.parent().expect("parent directory"))?;
+        std::fs::write(&path, content)?;
+        Ok(path)
+    };
+    for (path, content) in RUST_WORKSPACE {
+        write(path, content)?;
+    }
+    let project_path = root.to_string_lossy().to_string();
+    ccm_core::index_directory(&project_path, None).await?;
+    let live = LiveIndex::load(&project_path, None, None).await?;
+    assert_eq!(
+        live_signature(&live).await,
+        fresh_index_signature(&root).await?
+    );
+
+    // Yeniden dışa aktarma değişir: `app_core::Engine` artık çözülmez.
+    let lib = write(
+        "app_core/src/lib.rs",
+        "pub mod engine;\npub mod other;\npub mod util;\n\npub use other::helper as engine_helper;\n",
+    )?;
+    assert_paths_step(
+        &live,
+        &root,
+        "re-export changed",
+        std::slice::from_ref(&lib),
+    )
+    .await?;
+
+    // Başka dosyadaki fonksiyon yeniden adlandırılır.
+    let util = write(
+        "app_core/src/util.rs",
+        "pub fn assist() -> u32 {\n    1\n}\n\npub enum Mode {\n    Fast,\n    Slow,\n}\n",
+    )?;
+    assert_paths_step(
+        &live,
+        &root,
+        "function renamed",
+        std::slice::from_ref(&util),
+    )
+    .await?;
+
+    // Paket adı değişir: `app_core::…` yolları dış crate olur.
+    let manifest = write(
+        "app_core/Cargo.toml",
+        "[package]\nname = \"app-kernel\"\nversion = \"0.1.0\"\n",
+    )?;
+    assert_paths_step(
+        &live,
+        &root,
+        "crate renamed",
+        std::slice::from_ref(&manifest),
+    )
+    .await?;
+
+    // Aynı crate'te ikinci `impl Engine` bloğu: `self.stop()` iki adaya çıkar.
+    let other = write(
+        "app_core/src/other.rs",
+        "use crate::engine::Engine;\n\npub fn helper() -> u32 {\n    2\n}\n\nimpl Engine {\n    fn stop(&self) {}\n}\n",
+    )?;
+    assert_paths_step(
+        &live,
+        &root,
+        "second impl block",
+        std::slice::from_ref(&other),
+    )
+    .await?;
+    Ok(())
+}

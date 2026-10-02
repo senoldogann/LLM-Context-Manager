@@ -244,6 +244,18 @@ fn file_stem(file: &str) -> String {
     name.strip_suffix(".rs").unwrap_or(name).to_string()
 }
 
+/// `Cargo.toml` içeriğinin tanımladığı crate adları (paket ve `[lib] name`);
+/// artımlı yenileme bu adları değişiklikten önce ve sonra toplar.
+pub(crate) fn manifest_crate_names(content: &str) -> Vec<String> {
+    manifest_names(content)
+        .map(|names| {
+            let mut crate_names = vec![names.package];
+            crate_names.extend(names.lib);
+            crate_names
+        })
+        .unwrap_or_default()
+}
+
 /// `[package]` ve `[lib]` tablolarındaki `name`; satır tabanlı, TOML bağımlılığı
 /// olmadan. Paket adı yoksa crate tanımlanmaz.
 fn manifest_names(content: &str) -> Option<ManifestNames> {

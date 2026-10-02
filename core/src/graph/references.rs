@@ -94,7 +94,8 @@ impl SyntaxFacts {
     }
 
     /// Olgular adlardan birini anıyor mu? Artımlı yenileme etkilenen kaynakları
-    /// bununla seçer: çağrı adları, niteleyici bileşenleri, bağlar ve tabanlar.
+    /// bununla seçer: çağrı adları, niteleyici bileşenleri, noktalı ad ve modül
+    /// yolu bileşenleri, bağlar ve tabanlar.
     pub fn mentions_any(&self, names: &HashSet<String>) -> bool {
         let target_mentions = |target: &CallTarget| {
             names.contains(target.name())
@@ -103,13 +104,17 @@ impl SyntaxFacts {
         };
         self.calls.iter().any(|call| target_mentions(&call.target))
             || self.bases.iter().any(target_mentions)
-            || self.names.iter().any(|name| names.contains(name))
+            || self
+                .names
+                .iter()
+                .any(|name| name.split('.').any(|part| names.contains(part)))
             || self.imports.iter().any(|binding| {
                 names.contains(&binding.local)
                     || binding
                         .symbol
                         .as_ref()
                         .is_some_and(|symbol| names.contains(symbol))
+                    || binding.module.split('.').any(|part| names.contains(part))
             })
     }
 }
