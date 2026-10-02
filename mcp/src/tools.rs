@@ -6,7 +6,7 @@ use std::path::{Component, Path};
 use std::sync::Arc;
 
 use crate::protocol::{ToolResult, ToolResultContent};
-use ccm_core::engine::{CursorPosition, RetrievalEngine};
+use ccm_core::engine::{CursorPosition, RetrievalEngine, TargetForm};
 
 /// İstemci girdisinden kaynaklanan araç argüman hatası. MCP 2025-11-25 gereği
 /// araç yürütme hatası (`isError: true`) olarak döner; model argümanı düzeltip
@@ -371,6 +371,46 @@ fn normalize_graph_path(path_str: &str, project_path: Option<&str>) -> Result<St
     }
 
     normalize_relative_graph_path(path)
+}
+
+/// Hedef argümanını (`key`, yoksa eski `legacy_key`) biçimine göre ayırır:
+/// `:symbol:` taşıyan ya da en az üç `:` içeren değer düğüm kimliğidir,
+/// `yol:satır` konumdur, diğer her şey sembol adıdır (`Sınıf.üye` dahil).
+fn target_form(args: &Value, key: &str, legacy_key: &str) -> Result<TargetForm> {
+    let raw = args
+        .get(key)
+        .or_else(|| args.get(legacy_key))
+        .and_then(Value::as_str)
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .ok_or_else(|| input_error(format!("Missing '{key}' argument")))?;
+    let project_path = args.get("project_path").and_then(|v| v.as_str());
+    if raw.contains(":symbol:") || raw.matches(':').count() >= 3 {
+        return Ok(TargetForm::NodeId(normalize_graph_node_id(
+            raw,
+            project_path,
+        )?));
+    }
+    if let Some((path, line)) = raw.rsplit_once(':') {
+        if let Ok(line) = line.parse::<usize>() {
+            return Ok(TargetForm::Location {
+                file: normalize_graph_path(path, project_path)?,
+                line,
+            });
+        }
+    }
+    Ok(TargetForm::Name(raw.to_string()))
+}
+
+/// Ajana okunur bir hata metniyle `isError` sonucu.
+fn tool_error(text: String) -> ToolResult {
+    ToolResult {
+        content: vec![ToolResultContent {
+            content_type: "text".to_string(),
+            text,
+        }],
+        is_error: Some(true),
+    }
 }
 
 fn normalize_graph_node_id(node_id: &str, project_path: Option<&str>) -> Result<String> {
@@ -1061,23 +1101,11 @@ fn index_worker_timeout() -> std::time::Duration {
 /// Tool: find_usages
 /// Verilen node_id'yi çağıran / kullanan tüm node'ları döndürür.
 pub async fn find_usages(engine: &Arc<RetrievalEngine>, args: &Value) -> Result<ToolResult> {
-    let node_id = args
-        .get("node_id")
-        .and_then(|v| v.as_str())
-        .ok_or_else(|| anyhow::anyhow!("Missing 'node_id' argument"))?;
-
-    if node_id.trim().is_empty() {
-        return Ok(ToolResult {
-            content: vec![ToolResultContent {
-                content_type: "text".to_string(),
-                text: "Error: 'node_id' cannot be empty.".to_string(),
-            }],
-            is_error: Some(true),
-        });
-    }
-
-    let project_path = args.get("project_path").and_then(|v| v.as_str());
-    let normalized_id = normalize_graph_node_id(node_id, project_path)?;
+    let form = target_form(args, "target", "node_id")?;
+    let normalized_id = match engine.resolve_target(form).await {
+        Ok(id) => id,
+        Err(error) => return Ok(tool_error(error.to_string())),
+    };
     let limit = limit_from_args(args, 20);
     let report = match engine.find_usages(&normalized_id).await {
         Ok(report) => report,
@@ -1147,18 +1175,20 @@ fn usage_summary(target_name: &str, usages: &[ccm_core::graph::Usage]) -> String
 /// Tool: trace_call_chain
 /// from_id'den to_id'ye giden çağrı zincirini BFS ile bulur.
 pub async fn trace_call_chain(engine: &Arc<RetrievalEngine>, args: &Value) -> Result<ToolResult> {
-    let from_id = args
-        .get("from_id")
-        .and_then(|v| v.as_str())
-        .ok_or_else(|| anyhow::anyhow!("Missing 'from_id' argument"))?;
-    let to_id = args
-        .get("to_id")
-        .and_then(|v| v.as_str())
-        .ok_or_else(|| anyhow::anyhow!("Missing 'to_id' argument"))?;
-
-    let project_path = args.get("project_path").and_then(|v| v.as_str());
-    let normalized_from = normalize_graph_node_id(from_id, project_path)?;
-    let normalized_to = normalize_graph_node_id(to_id, project_path)?;
+    let normalized_from = match engine
+        .resolve_target(target_form(args, "from", "from_id")?)
+        .await
+    {
+        Ok(id) => id,
+        Err(error) => return Ok(tool_error(error.to_string())),
+    };
+    let normalized_to = match engine
+        .resolve_target(target_form(args, "to", "to_id")?)
+        .await
+    {
+        Ok(id) => id,
+        Err(error) => return Ok(tool_error(error.to_string())),
+    };
     let max_depth = args
         .get("max_depth")
         .and_then(|v| v.as_u64())
@@ -1179,7 +1209,7 @@ pub async fn trace_call_chain(engine: &Arc<RetrievalEngine>, args: &Value) -> Re
                 content_type: "text".to_string(),
                 text: format!(
                     "No call chain found from '{}' to '{}' within {} hops.",
-                    from_id, to_id, max_depth
+                    normalized_from, normalized_to, max_depth
                 ),
             }],
             is_error: None,
@@ -1191,8 +1221,8 @@ pub async fn trace_call_chain(engine: &Arc<RetrievalEngine>, args: &Value) -> Re
             content_type: "text".to_string(),
             text: format!(
                 "## Call Chain: {} → {} ({} steps)\n\n{}",
-                from_id,
-                to_id,
+                normalized_from,
+                normalized_to,
                 chain.len(),
                 format_suggestions_output(
                     &chain,

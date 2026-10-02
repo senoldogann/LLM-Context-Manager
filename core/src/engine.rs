@@ -43,6 +43,71 @@ pub struct ContextSuggestion {
     pub reason: String,
 }
 
+/// Araçlara verilen hedefin biçimi: düğüm kimliği, `yol:satır` ya da sembol adı.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum TargetForm {
+    NodeId(String),
+    /// `file` normalize edilmiş dosya kimliğidir (`./göreli/yol`).
+    Location {
+        file: String,
+        line: usize,
+    },
+    Name(String),
+}
+
+/// Hedef çözümünün açık hataları; ajan metinden bir sonraki adımı okuyabilir.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum TargetError {
+    NotFound(String),
+    NoSymbolAt {
+        file: String,
+        line: usize,
+    },
+    Ambiguous {
+        target: String,
+        candidates: Vec<String>,
+    },
+}
+
+/// Belirsiz hedefte listelenecek en çok aday.
+const MAX_TARGET_CANDIDATES: usize = 10;
+
+impl std::fmt::Display for TargetError {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            TargetError::NotFound(target) => write!(
+                formatter,
+                "no symbol named '{target}' in the index; check the spelling or pass path:line"
+            ),
+            TargetError::NoSymbolAt { file, line } => write!(
+                formatter,
+                "no symbol at {}:{line}; pass a line inside a function or class",
+                file.trim_start_matches("./")
+            ),
+            TargetError::Ambiguous { target, candidates } => {
+                write!(
+                    formatter,
+                    "'{target}' matches {} symbols; pass one of these as target:",
+                    candidates.len()
+                )?;
+                for candidate in candidates.iter().take(MAX_TARGET_CANDIDATES) {
+                    write!(formatter, "\n- {candidate}")?;
+                }
+                if candidates.len() > MAX_TARGET_CANDIDATES {
+                    write!(
+                        formatter,
+                        "\n… and {} more",
+                        candidates.len() - MAX_TARGET_CANDIDATES
+                    )?;
+                }
+                Ok(())
+            }
+        }
+    }
+}
+
+impl std::error::Error for TargetError {}
+
 /// Neighbors of a node in the code graph, categorized by relationship.
 #[derive(Debug, Clone, Default)]
 pub struct NodeNeighbors {
@@ -859,6 +924,43 @@ impl RetrievalEngine {
     /// Kesin eşleşme bulunamazsa yakın satır numaralı aynı tür node'u döndürür (fuzzy).
     pub async fn get_node_by_id(&self, id: &str) -> Option<CodeNode> {
         self.graph.read().await.find_node_fuzzy_by_id(id)
+    }
+
+    /// Hedefi düğüm kimliğine çözer. Kimlik olduğu gibi döner (varlığı kullanan
+    /// araç denetler); `yol:satır` satırı kapsayan en dar sembole, ad tek bir
+    /// sembole çözülmeli. Belirsiz ad sessizce seçilmez: adaylar hata olarak döner.
+    pub async fn resolve_target(&self, form: TargetForm) -> Result<String, TargetError> {
+        let graph = self.graph.read().await;
+        match form {
+            TargetForm::NodeId(id) => Ok(id),
+            TargetForm::Location { file, line } => graph
+                .symbol_at(&file, line)
+                .map(|idx| graph.graph[idx].id.clone())
+                .ok_or(TargetError::NoSymbolAt { file, line }),
+            TargetForm::Name(name) => {
+                let found = graph.symbols_named(&name);
+                match found.as_slice() {
+                    [] => Err(TargetError::NotFound(name)),
+                    [only] => Ok(graph.graph[*only].id.clone()),
+                    many => Err(TargetError::Ambiguous {
+                        target: name,
+                        candidates: many
+                            .iter()
+                            .map(|idx| {
+                                let node = &graph.graph[*idx];
+                                format!(
+                                    "{}:{} {:?} {}",
+                                    extract_file_path(&node.id).trim_start_matches("./"),
+                                    node.start_line,
+                                    node.node_type,
+                                    node.name
+                                )
+                            })
+                            .collect(),
+                    }),
+                }
+            }
+        }
     }
 
     /// Verilen düğümü kullananlar, ilişki etiketli ve kesinlik sırasıyla. Kimlik

@@ -1375,13 +1375,13 @@ fn handle_list_tools(id: Option<Value>) -> JsonRpcResponse {
             input_schema: serde_json::json!({
                 "type": "object",
                 "properties": {
-                    "node_id": { "type": "string", "description": "Node ID to find usages for (from read_graph or search_code results)." },
+                    "target": { "type": "string", "description": "Symbol to find usages for: a name (`run`, `Engine.start`), `path:line`, or a node ID." },
                     "limit": { "type": "integer", "minimum": 1, "maximum": 50, "description": "Max usages to return. Defaults to 20." },
                     "project_path": { "type": "string", "description": "Optional absolute path to the project root." },
                     "include_body": { "type": "boolean", "description": "Include node body snippets. Defaults to false (metadata only)." },
                     "max_chars": { "type": "integer", "minimum": 1, "maximum": 100000, "description": "Maximum total body characters to include. Defaults to 4000." }
                 },
-                "required": ["node_id"]
+                "required": ["target"]
             }),
             annotations: READ_ONLY_TOOL,
         },
@@ -1392,14 +1392,14 @@ fn handle_list_tools(id: Option<Value>) -> JsonRpcResponse {
             input_schema: serde_json::json!({
                 "type": "object",
                 "properties": {
-                    "from_id": { "type": "string", "description": "Starting node ID." },
-                    "to_id": { "type": "string", "description": "Target node ID." },
+                    "from": { "type": "string", "description": "Start symbol: name, `path:line` or node ID." },
+                    "to": { "type": "string", "description": "End symbol: name, `path:line` or node ID." },
                     "max_depth": { "type": "integer", "minimum": 1, "maximum": 32, "description": "Max hops to search. Defaults to 8." },
                     "project_path": { "type": "string", "description": "Optional absolute path to the project root." },
                     "include_body": { "type": "boolean", "description": "Include node body snippets. Defaults to false (metadata only)." },
                     "max_chars": { "type": "integer", "minimum": 1, "maximum": 100000, "description": "Maximum total body characters to include. Defaults to 4000." }
                 },
-                "required": ["from_id", "to_id"]
+                "required": ["from", "to"]
             }),
             annotations: READ_ONLY_TOOL,
         },
@@ -1661,25 +1661,29 @@ fn is_known_tool(tool_name: &str) -> bool {
 }
 
 fn validate_tool_arguments(tool_name: &str, arguments: &Value) -> std::result::Result<(), String> {
-    let required_strings: &[&str] = match tool_name {
-        "get_context" => &["file"],
-        "search_code" | "find_nodes" => &["query"],
-        "read_graph" | "find_usages" => &["node_id"],
-        "trace_call_chain" => &["from_id", "to_id"],
-        "impact_of_change" => &["file"],
-        "diff_context" | "index_project" | "index_now" => &["project_path"],
+    // Her iç dizi tek bir zorunlu argümanın kabul edilen adlarıdır (yeni ad, eski ad).
+    let required: &[&[&str]] = match tool_name {
+        "get_context" => &[&["file"]],
+        "search_code" | "find_nodes" => &[&["query"]],
+        "read_graph" => &[&["node_id"]],
+        "find_usages" => &[&["target", "node_id"]],
+        "trace_call_chain" => &[&["from", "from_id"], &["to", "to_id"]],
+        "impact_of_change" => &[&["file"]],
+        "diff_context" | "index_project" | "index_now" => &[&["project_path"]],
         _ => return Err(format!("Unknown tool: {}", tool_name)),
     };
 
-    for name in required_strings {
-        let valid = arguments
-            .get(*name)
-            .and_then(Value::as_str)
-            .is_some_and(|value| !value.trim().is_empty());
+    for names in required {
+        let valid = names.iter().any(|name| {
+            arguments
+                .get(*name)
+                .and_then(Value::as_str)
+                .is_some_and(|value| !value.trim().is_empty())
+        });
         if !valid {
             return Err(format!(
                 "Missing or invalid '{}' argument for {}",
-                name, tool_name
+                names[0], tool_name
             ));
         }
     }

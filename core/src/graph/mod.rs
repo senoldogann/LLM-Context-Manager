@@ -654,6 +654,67 @@ impl CodeGraph {
             .unwrap_or(&[])
     }
 
+    /// Dosyada satırı kapsayan en dar sembol (fonksiyon, metot, sınıf, yapı,
+    /// modül); eşit genişlikte önce başlayan seçilir. Sembol yoksa `None`.
+    pub fn symbol_at(&self, file_id: &str, line: usize) -> Option<NodeIndex> {
+        self.find_nodes_by_file(file_id)
+            .iter()
+            .copied()
+            .filter(|idx| {
+                let node = &self.graph[*idx];
+                is_reference_target_type(&node.node_type)
+                    && node.start_line <= line
+                    && line <= node.end_line
+            })
+            .min_by_key(|idx| {
+                let node = &self.graph[*idx];
+                (node.end_line - node.start_line, node.start_line)
+            })
+    }
+
+    /// Adı verilen semboller, dosya ve satıra göre sıralı. `Sahip.üye`
+    /// biçiminde adı `Sahip` olan sınıf ya da yapıların doğrudan üyeleri döner.
+    pub fn symbols_named(&self, name: &str) -> Vec<NodeIndex> {
+        let mut found: Vec<NodeIndex> = match name.rsplit_once('.') {
+            Some((owner, member)) => self
+                .find_nodes_by_name(owner)
+                .iter()
+                .copied()
+                .filter(|idx| {
+                    matches!(
+                        self.graph[*idx].node_type,
+                        NodeType::Class | NodeType::Struct
+                    )
+                })
+                .flat_map(|owner_idx| {
+                    self.graph
+                        .edges_directed(owner_idx, petgraph::Direction::Outgoing)
+                        .filter(|edge| matches!(edge.weight(), EdgeType::Contains))
+                        .map(|edge| edge.target())
+                        .filter(|idx| {
+                            let node = &self.graph[*idx];
+                            node.name == member
+                                && matches!(node.node_type, NodeType::Function | NodeType::Method)
+                        })
+                        .collect::<Vec<_>>()
+                })
+                .collect(),
+            None => self
+                .find_nodes_by_name(name)
+                .iter()
+                .copied()
+                .filter(|idx| is_reference_target_type(&self.graph[*idx].node_type))
+                .collect(),
+        };
+        found.sort_by(|left, right| {
+            let left = &self.graph[*left];
+            let right = &self.graph[*right];
+            (graph_node_file_path(&left.id), left.start_line)
+                .cmp(&(graph_node_file_path(&right.id), right.start_line))
+        });
+        found
+    }
+
     /// Alias for load_from_file to match API conventions
     pub fn from_file(path: &str) -> anyhow::Result<Self> {
         Self::load_from_file(path)
