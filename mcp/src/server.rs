@@ -1386,6 +1386,22 @@ fn handle_list_tools(id: Option<Value>) -> JsonRpcResponse {
             annotations: READ_ONLY_TOOL,
         },
         ToolDefinition {
+            name: "explain".to_string(),
+            title: "Explain Symbol".to_string(),
+            description: Some("Explain a symbol in one call: definition with body, members, callers, callees and tests, each as `path:line` lines within max_tokens.".to_string()),
+            input_schema: serde_json::json!({
+                "type": "object",
+                "properties": {
+                    "target": { "type": "string", "description": "Symbol: a name (`run`, `Engine.start`), `path:line`, or a node ID." },
+                    "project_path": { "type": "string", "description": "Optional absolute path to the project root." },
+                    "include_body": { "type": "boolean", "description": "Include the definition body. Defaults to true." },
+                    "max_tokens": { "type": "integer", "minimum": 1, "maximum": 20000, "description": "Answer budget in estimated tokens (about 4 characters each). Defaults to 1500." }
+                },
+                "required": ["target"]
+            }),
+            annotations: READ_ONLY_TOOL,
+        },
+        ToolDefinition {
             name: "trace_call_chain".to_string(),
             title: "Trace Call Chain".to_string(),
             description: Some("Find the BFS call chain between two nodes. Shows how execution flows from one function to another.".to_string()),
@@ -1556,6 +1572,7 @@ async fn run_tool(
         "find_nodes" => tools::find_nodes(&engine, arguments).await?,
         "read_graph" => tools::read_graph(&engine, arguments).await?,
         "find_usages" => tools::find_usages(&engine, arguments).await?,
+        "explain" => tools::explain(&engine, arguments).await?,
         "trace_call_chain" => tools::trace_call_chain(&engine, arguments).await?,
         "impact_of_change" => tools::impact_of_change(&engine, arguments).await?,
         "diff_context" => tools::diff_context(&engine, arguments).await?,
@@ -1654,6 +1671,7 @@ fn is_known_tool(tool_name: &str) -> bool {
             | "index_project"
             | "index_now"
             | "find_usages"
+            | "explain"
             | "trace_call_chain"
             | "impact_of_change"
             | "diff_context"
@@ -1666,7 +1684,7 @@ fn validate_tool_arguments(tool_name: &str, arguments: &Value) -> std::result::R
         "get_context" => &[&["file"]],
         "search_code" | "find_nodes" => &[&["query"]],
         "read_graph" => &[&["target", "node_id"]],
-        "find_usages" => &[&["target", "node_id"]],
+        "find_usages" | "explain" => &[&["target", "node_id"]],
         "trace_call_chain" => &[&["from", "from_id"], &["to", "to_id"]],
         "impact_of_change" => &[&["file"]],
         "diff_context" | "index_project" | "index_now" => &[&["project_path"]],

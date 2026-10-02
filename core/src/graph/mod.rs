@@ -8,7 +8,9 @@ pub mod references;
 mod resolve;
 pub mod usages;
 
-pub use usages::{usages_of, Usage, UsageError, UsageRelation, UsageReport};
+pub use usages::{
+    explanation_of, usages_of, Explanation, Usage, UsageError, UsageRelation, UsageReport,
+};
 
 pub use references::{
     python_module_path, python_package, CallSite, CallTarget, ImportBinding, ReferenceFacts,

@@ -1313,8 +1313,9 @@ fn mcp_resolves_class_import_constructor_context_and_impact(
         }),
     )?;
     let usages_text = tool_text(&usages);
-    assert!(usages_text.contains("./camera.py"));
-    assert!(usages_text.contains("open_camera"));
+    // Dosya düğümü satırı yolu bir kez yazar: `- File · camera.py:1-5 · imports`.
+    assert!(usages_text.contains("- File · camera.py:"), "{usages_text}");
+    assert!(usages_text.contains("open_camera"), "{usages_text}");
 
     let context = send_request(
         &mut stdin,
@@ -1386,8 +1387,8 @@ fn mcp_resolves_class_import_constructor_context_and_impact(
         }),
     )?;
     let impact_text = tool_text(&impact);
-    assert!(impact_text.contains("./camera.py"));
-    assert!(impact_text.contains("open_camera"));
+    assert!(impact_text.contains("· camera.py:"), "{impact_text}");
+    assert!(impact_text.contains("open_camera"), "{impact_text}");
 
     let _ = child.kill();
     Ok(())

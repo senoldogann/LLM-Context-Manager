@@ -208,3 +208,47 @@ fn max_tokens_caps_output_and_reports_the_rest() {
     );
     assert!(text.contains("more not shown (max_tokens=200)"), "{text}");
 }
+
+#[test]
+fn explain_returns_definition_callers_callees_and_tests_in_one_call() {
+    let mut server = Server::start();
+    let (text, is_error) = server.call("explain", json!({"target": "run"}));
+    assert!(!is_error, "{text}");
+    for expected in [
+        "Function `run` · app/core.py:13-17",
+        "def run():",
+        "callers:",
+        "main · app/cli.py",
+        "callees:",
+        "Class: Engine",
+        "tests:",
+        "test_run · tests/test_core.py",
+    ] {
+        assert!(text.contains(expected), "missing {expected:?}: {text}");
+    }
+}
+
+#[test]
+fn explain_handles_a_symbol_without_callers() {
+    let mut server = Server::start();
+    // `app.util.helper` import edildiği için `app/other.py` içindeki `helper`'ı kimse çağırmaz.
+    let (text, is_error) = server.call("explain", json!({"target": "app/other.py:1"}));
+    assert!(!is_error, "{text}");
+    assert!(text.contains("0 callers"), "{text}");
+    assert!(
+        !text.contains("callers:"),
+        "an empty list is not printed: {text}"
+    );
+}
+
+#[test]
+fn explain_lists_class_members() {
+    let mut server = Server::start();
+    let (text, is_error) = server.call("explain", json!({"target": "Engine"}));
+    assert!(!is_error, "{text}");
+    assert!(text.contains("members:"), "{text}");
+    assert!(
+        text.contains("- Function: stop · app/core.py:9-10"),
+        "{text}"
+    );
+}

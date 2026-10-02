@@ -69,6 +69,16 @@ pub struct UsageReport {
     pub usages: Vec<Usage>,
 }
 
+/// Bir sembolün tek bakışta özeti: tanımı, onu kullananlar, onun kullandıkları
+/// ve doğrudan içerdiği tanımlar (sınıf üyeleri, dosyanın üst düzey sembolleri).
+#[derive(Debug, Clone)]
+pub struct Explanation {
+    pub node: CodeNode,
+    pub usages: Vec<Usage>,
+    pub callees: Vec<Usage>,
+    pub members: Vec<CodeNode>,
+}
+
 /// Kullanım sorgusunun açık hataları.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum UsageError {
@@ -95,12 +105,60 @@ impl std::error::Error for UsageError {}
 pub fn usages_of(graph: &CodeGraph, node_id: &str) -> Result<UsageReport, UsageError> {
     let idx =
         lookup(graph, node_id).ok_or_else(|| UsageError::NodeNotFound(node_id.to_string()))?;
-    let mut usages: Vec<Usage> = graph
+    Ok(UsageReport {
+        target: graph.graph[idx].clone(),
+        usages: incoming_usages(graph, idx),
+    })
+}
+
+/// Sembolün özeti; kullananlar `usages_of` ile, kullandıkları aynı ilişki
+/// etiketleri ve sırasıyla. Kimlik indekste yoksa `NodeNotFound` döner.
+pub fn explanation_of(graph: &CodeGraph, node_id: &str) -> Result<Explanation, UsageError> {
+    let idx =
+        lookup(graph, node_id).ok_or_else(|| UsageError::NodeNotFound(node_id.to_string()))?;
+    let callees = collect_usages(
+        graph,
+        graph
+            .graph
+            .edges_directed(idx, Direction::Outgoing)
+            .map(|edge| (edge.weight(), edge.target())),
+    );
+    let mut members: Vec<CodeNode> = graph
         .graph
-        .edges_directed(idx, Direction::Incoming)
-        .filter_map(|edge| {
-            UsageRelation::from_edge(edge.weight()).map(|relation| Usage {
-                node: graph.graph[edge.source()].clone(),
+        .edges_directed(idx, Direction::Outgoing)
+        .filter(|edge| matches!(edge.weight(), EdgeType::Contains))
+        .map(|edge| graph.graph[edge.target()].clone())
+        .collect();
+    members.sort_by(|left, right| (left.start_line, &left.id).cmp(&(right.start_line, &right.id)));
+    members.dedup_by(|left, right| left.id == right.id);
+    Ok(Explanation {
+        node: graph.graph[idx].clone(),
+        usages: incoming_usages(graph, idx),
+        callees,
+        members,
+    })
+}
+
+fn incoming_usages(graph: &CodeGraph, idx: NodeIndex) -> Vec<Usage> {
+    collect_usages(
+        graph,
+        graph
+            .graph
+            .edges_directed(idx, Direction::Incoming)
+            .map(|edge| (edge.weight(), edge.source())),
+    )
+}
+
+/// (kenar türü, karşı düğüm) çiftlerinden kullanım listesi: kullanım olmayan
+/// kenarlar atlanır; ilişkiye, sonra kimliğe göre sıralı ve tekrarsız.
+fn collect_usages<'g>(
+    graph: &'g CodeGraph,
+    links: impl Iterator<Item = (&'g EdgeType, NodeIndex)>,
+) -> Vec<Usage> {
+    let mut usages: Vec<Usage> = links
+        .filter_map(|(edge, other)| {
+            UsageRelation::from_edge(edge).map(|relation| Usage {
+                node: graph.graph[other].clone(),
                 relation,
             })
         })
@@ -109,10 +167,7 @@ pub fn usages_of(graph: &CodeGraph, node_id: &str) -> Result<UsageReport, UsageE
         (left.relation, &left.node.id).cmp(&(right.relation, &right.node.id))
     });
     usages.dedup_by(|left, right| left.relation == right.relation && left.node.id == right.node.id);
-    Ok(UsageReport {
-        target: graph.graph[idx].clone(),
-        usages,
-    })
+    usages
 }
 
 /// Tam kimlik; kararlı kimliklerde (`:symbol:`) bulanık eşleşme başka bir sembolü

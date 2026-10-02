@@ -1130,7 +1130,7 @@ pub async fn find_usages(engine: &Arc<RetrievalEngine>, args: &Value) -> Result<
         .usages
         .iter()
         .take(limit)
-        .map(|usage| ccm_core::engine::usage_suggestion(usage, &report.target.name))
+        .map(ccm_core::engine::usage_suggestion)
         .collect();
     let mut text = usage_summary(&report.target.name, &report.usages);
     if shown.len() < report.usages.len() {
@@ -1164,6 +1164,151 @@ pub async fn find_usages(engine: &Arc<RetrievalEngine>, args: &Value) -> Result<
 }
 
 /// `find_usages` özet satırı: ilişki başına kullanım sayısı.
+/// Tool: explain
+/// Sembolü tek çağrıda açıklar: tanım, gövde, üyeler, çağıranlar, çağrılanlar ve testler.
+pub async fn explain(engine: &Arc<RetrievalEngine>, args: &Value) -> Result<ToolResult> {
+    let node_id = match engine
+        .resolve_target(target_form(args, "target", "node_id")?)
+        .await
+    {
+        Ok(id) => id,
+        Err(error) => return Ok(tool_error(error.to_string())),
+    };
+    let explanation = match engine.explain(&node_id).await {
+        Ok(explanation) => explanation,
+        Err(error) => return Ok(tool_error(error.to_string())),
+    };
+    // explain'de gövde varsayılan olarak gösterilir; okuma çağrısını gereksiz kılar.
+    let include_body = args
+        .get("include_body")
+        .and_then(Value::as_bool)
+        .unwrap_or(true);
+    Ok(ToolResult {
+        content: vec![ToolResultContent {
+            content_type: "text".to_string(),
+            text: format_explanation(&explanation, include_body, max_tokens_from_args(args)),
+        }],
+        is_error: None,
+    })
+}
+
+/// Başlık, bütçenin en çok yarısı kadar gövde, sonra `members:`, `callers:`,
+/// `callees:` ve `tests:` listeleri; her liste kalan bütçeden eşit pay alır,
+/// kullanmadığı pay sonraki listelere kalır.
+fn format_explanation(
+    explanation: &ccm_core::graph::Explanation,
+    include_body: bool,
+    max_tokens: usize,
+) -> String {
+    use ccm_core::engine::{extract_file_path, node_suggestion, usage_suggestion};
+    let node = &explanation.node;
+    let (tests, callers): (Vec<&ccm_core::graph::Usage>, Vec<&ccm_core::graph::Usage>) =
+        explanation
+            .usages
+            .iter()
+            .partition(|usage| is_test_path(&extract_file_path(&usage.node.id)));
+    let mut output = format!(
+        "{:?} `{}` · {}:{}-{} · {} callers, {} callees, {} tests",
+        node.node_type,
+        node.name,
+        extract_file_path(&node.id).trim_start_matches("./"),
+        node.start_line,
+        node.end_line,
+        callers.len(),
+        explanation.callees.len(),
+        tests.len()
+    );
+    if !explanation.members.is_empty() {
+        output.push_str(&format!(", {} members", explanation.members.len()));
+    }
+    output.push('\n');
+
+    let budget = max_tokens.saturating_mul(CHARS_PER_TOKEN);
+    if include_body && !node.content.is_empty() {
+        let limit = (budget / 2).saturating_sub(output.len() + 8);
+        output.push_str("```\n");
+        output.push_str(&clip(&node.content, limit));
+        output.push_str("\n```\n");
+        if node.content.chars().count() > limit {
+            output.push_str("… body clipped (raise max_tokens)\n");
+        }
+    }
+
+    let sections: Vec<(&str, Vec<String>)> = vec![
+        (
+            "members",
+            explanation
+                .members
+                .iter()
+                .map(|member| suggestion_line(&node_suggestion(member, String::new())))
+                .collect(),
+        ),
+        (
+            "callers",
+            callers
+                .iter()
+                .map(|usage| suggestion_line(&usage_suggestion(usage)))
+                .collect(),
+        ),
+        (
+            "callees",
+            explanation
+                .callees
+                .iter()
+                .map(|usage| suggestion_line(&usage_suggestion(usage)))
+                .collect(),
+        ),
+        (
+            "tests",
+            tests
+                .iter()
+                .map(|usage| suggestion_line(&usage_suggestion(usage)))
+                .collect(),
+        ),
+    ];
+    let filled: Vec<&(&str, Vec<String>)> = sections
+        .iter()
+        .filter(|(_, lines)| !lines.is_empty())
+        .collect();
+    for (index, (title, lines)) in filled.iter().enumerate() {
+        let share = budget.saturating_sub(output.len()) / (filled.len() - index);
+        output.push_str(&section_text(title, lines, share));
+    }
+    output
+}
+
+/// `başlık:` ve `budget` karaktere sığan satırlar; sığmayanlar `… n more` ile sayılır.
+fn section_text(title: &str, lines: &[String], budget: usize) -> String {
+    let mut text = format!("{title}:\n");
+    for (index, line) in lines.iter().enumerate() {
+        if text.len() + line.len() + 1 > budget {
+            text.push_str(&format!(
+                "… {} more (raise max_tokens)\n",
+                lines.len() - index
+            ));
+            return text;
+        }
+        text.push_str(line);
+        text.push('\n');
+    }
+    text
+}
+
+/// Test dosyası mı: `/tests/` ya da `/test/` altında, adı `test_` ile başlıyor ya
+/// da `_test.`, `.test.` veya `.spec.` içeriyor.
+fn is_test_path(path: &str) -> bool {
+    let rooted = format!("/{}", path.trim_start_matches("./"));
+    let name = rooted
+        .rsplit_once('/')
+        .map_or(rooted.as_str(), |(_, name)| name);
+    rooted.contains("/tests/")
+        || rooted.contains("/test/")
+        || name.starts_with("test_")
+        || name.contains("_test.")
+        || name.contains(".test.")
+        || name.contains(".spec.")
+}
+
 fn usage_summary(target_name: &str, usages: &[ccm_core::graph::Usage]) -> String {
     use ccm_core::graph::UsageRelation;
     let count = |relation: UsageRelation| {

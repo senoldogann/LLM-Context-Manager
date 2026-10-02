@@ -879,7 +879,7 @@ impl RetrievalEngine {
                     start_line: Some(node.start_line),
                     end_line: Some(node.end_line),
                     node_type: Some(format!("{:?}", node.node_type)),
-                    title: format!("{:?}: {}", node.node_type, node.name),
+                    title: node_title(&node),
                     content: node.content.to_string(),
                     relevance_score: candidate.combined_score,
                     reason: format!(
@@ -971,6 +971,15 @@ impl RetrievalEngine {
     ) -> Result<crate::graph::UsageReport, crate::graph::UsageError> {
         let graph = self.graph.read().await;
         crate::graph::usages_of(&graph, node_id)
+    }
+
+    /// Sembolün tek çağrılık özeti: tanım, kullananlar, kullandıkları ve üyeleri.
+    pub async fn explain(
+        &self,
+        node_id: &str,
+    ) -> Result<crate::graph::Explanation, crate::graph::UsageError> {
+        let graph = self.graph.read().await;
+        crate::graph::explanation_of(&graph, node_id)
     }
 
     /// from_id'den to_id'ye giden çağrı zincirini BFS ile bulur.
@@ -1159,7 +1168,7 @@ impl RetrievalEngine {
                         start_line: Some(source.start_line),
                         end_line: Some(source.end_line),
                         node_type: Some(format!("{:?}", source.node_type)),
-                        title: format!("{:?}: {}", source.node_type, source.name),
+                        title: node_title(source),
                         content: source.content.to_string(),
                         relevance_score: (1.0 - depth as f32 * 0.15).max(0.55),
                         reason: if depth == 0 {
@@ -1261,7 +1270,7 @@ impl RetrievalEngine {
                             start_line: Some(node.start_line),
                             end_line: Some(node.end_line),
                             node_type: Some(format!("{:?}", node.node_type)),
-                            title: format!("{:?}: {}", node.node_type, node.name),
+                            title: node_title(node),
                             content: node.content.to_string(),
                             relevance_score: 1.0,
                             reason: reason.clone(),
@@ -1395,7 +1404,7 @@ impl RetrievalEngine {
                         start_line: Some(node.start_line),
                         end_line: Some(node.end_line),
                         node_type: Some(format!("{:?}", node.node_type)),
-                        title: format!("{:?}: {}", node.node_type, node.name),
+                        title: node_title(node),
                         content: node.content.to_string(),
                         relevance_score: (score / 100.0).clamp(0.0, 1.0),
                         reason: format!("Ranked lexical graph match ({score:.0})"),
@@ -1547,24 +1556,38 @@ fn impact_relation(edge: &crate::graph::EdgeType) -> Option<&'static str> {
     }
 }
 
-/// Bir kullanımın araç çıktısındaki bloğu: `reason` ilişkiyi taşır
-/// (`calls → hedef`, `may call → hedef`, …).
-pub fn usage_suggestion(usage: &crate::graph::Usage, target_name: &str) -> ContextSuggestion {
-    let node = &usage.node;
+/// Bir kullanımın araç çıktısındaki satırı: `reason` ilişki etiketidir
+/// (`calls`, `may call …`); hedef, çıktının özet satırında adlandırılır.
+pub fn usage_suggestion(usage: &crate::graph::Usage) -> ContextSuggestion {
+    node_suggestion(&usage.node, usage.relation.label().to_string())
+}
+
+/// Düğümün araç çıktısındaki satırı; `reason` satırın sonunda gösterilir.
+pub fn node_suggestion(node: &CodeNode, reason: String) -> ContextSuggestion {
     ContextSuggestion {
         node_id: Some(node.id.clone()),
         file_path: Some(extract_file_path(&node.id)),
         start_line: Some(node.start_line),
         end_line: Some(node.end_line),
         node_type: Some(format!("{:?}", node.node_type)),
-        title: format!("{:?}: {}", node.node_type, node.name),
+        title: node_title(node),
         content: node.content.to_string(),
         relevance_score: 1.0,
-        reason: format!("{} → {}", usage.relation.label(), target_name),
+        reason,
     }
 }
 
-pub(crate) fn extract_file_path(node_id: &str) -> String {
+/// Sonuç satırının başlığı: `Tür: ad`; dosya düğümünün adı yolun kendisi
+/// olduğundan ve konum zaten yazıldığından yalnız `File`.
+fn node_title(node: &CodeNode) -> String {
+    match node.node_type {
+        NodeType::File => "File".to_string(),
+        _ => format!("{:?}: {}", node.node_type, node.name),
+    }
+}
+
+/// Düğüm kimliğindeki dosya yolu (`./app/core.py`).
+pub fn extract_file_path(node_id: &str) -> String {
     if let Some((path_and_kind, _)) = node_id.split_once(":symbol:") {
         if let Some((path, _kind)) = path_and_kind.rsplit_once(':') {
             return path.to_string();
