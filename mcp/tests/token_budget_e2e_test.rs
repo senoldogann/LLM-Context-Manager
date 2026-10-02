@@ -42,6 +42,10 @@ fn fixture_files() -> Vec<(String, String)> {
             "def authorize(token):\n    \"\"\"Validate bearer token for incoming requests.\"\"\"\n    return token == \"secret\"\n".into(),
         ),
         (
+            "app/branch_calls.py".into(),
+            "def branch_target():\n    return 1\n\n\ndef factory(flag):\n    if flag:\n        def view():\n            return branch_target()\n    else:\n        def view():\n            return branch_target()\n    return view\n".into(),
+        ),
+        (
             "app/models.py".into(),
             "class Base:\n    def save(self):\n        return 1\n\n\nclass User(Base):\n    def save(self):\n        return super().save()\n".into(),
         ),
@@ -366,6 +370,22 @@ fn context_explains_an_exact_symbol_in_one_call() {
     ] {
         assert!(text.contains(expected), "missing {expected:?}: {text}");
     }
+}
+
+#[test]
+fn context_deduplicates_branch_alternative_python_callers() {
+    let mut server = Server::start();
+    let (text, is_error) = server.call("context", json!({"query": "branch_target"}));
+    assert!(!is_error, "{text}");
+    assert!(
+        text.contains("Function `branch_target` · app/branch_calls.py:1-2 · 1 callers"),
+        "same lexical binding in if/else branches should count once: {text}"
+    );
+    assert_eq!(
+        text.matches("Function: view · app/branch_calls.py").count(),
+        1,
+        "branch alternatives should render one semantic caller: {text}"
+    );
 }
 
 #[test]

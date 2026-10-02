@@ -1567,6 +1567,37 @@ fn format_explanation(
     format_explanation_with_callers(explanation, include_body, max_tokens, None)
 }
 
+fn semantic_symbol_occurrence_key(node_id: &str) -> Option<&str> {
+    let (base, occurrence) = node_id.rsplit_once(':')?;
+    if !base.contains(":symbol:")
+        || occurrence.is_empty()
+        || !occurrence.bytes().all(|byte| byte.is_ascii_digit())
+    {
+        return None;
+    }
+    Some(base)
+}
+
+fn dedupe_semantic_callers(
+    callers: impl IntoIterator<Item = ccm_core::engine::ContextSuggestion>,
+) -> Vec<ccm_core::engine::ContextSuggestion> {
+    let mut seen = HashSet::new();
+    let mut deduped = Vec::new();
+    for caller in callers {
+        if let Some(key) = caller
+            .node_id
+            .as_deref()
+            .and_then(semantic_symbol_occurrence_key)
+        {
+            if !seen.insert(key.to_string()) {
+                continue;
+            }
+        }
+        deduped.push(caller);
+    }
+    deduped
+}
+
 fn format_explanation_with_callers(
     explanation: &ccm_core::graph::Explanation,
     include_body: bool,
@@ -1580,12 +1611,21 @@ fn format_explanation_with_callers(
             .usages
             .iter()
             .partition(|usage| is_test_path(&extract_file_path(&usage.node.id)));
+    let caller_suggestions = dedupe_semantic_callers(caller_override.map_or_else(
+        || {
+            callers
+                .iter()
+                .map(|usage| usage_suggestion(usage))
+                .collect()
+        },
+        |override_callers| override_callers.to_vec(),
+    ));
     // Dosya düğümünün adı yolun kendisidir; başlıkta yol bir kez yazılır.
     let title = match node.node_type {
         ccm_core::graph::NodeType::File => "File".to_string(),
         _ => format!("{:?} `{}`", node.node_type, node.name),
     };
-    let caller_count = caller_override.map_or(callers.len(), <[_]>::len);
+    let caller_count = caller_suggestions.len();
     let mut output = format!(
         "{title} · {}:{}-{} · {} callers, {} callees, {} tests",
         extract_file_path(&node.id).trim_start_matches("./"),
@@ -1618,15 +1658,7 @@ fn format_explanation_with_callers(
         }
     }
 
-    let caller_lines: Vec<String> = caller_override.map_or_else(
-        || {
-            callers
-                .iter()
-                .map(|usage| suggestion_line(&usage_suggestion(usage)))
-                .collect()
-        },
-        |override_callers| override_callers.iter().map(suggestion_line).collect(),
-    );
+    let caller_lines: Vec<String> = caller_suggestions.iter().map(suggestion_line).collect();
     let sections: Vec<(&str, Vec<String>)> = vec![
         (
             "members",
