@@ -489,8 +489,10 @@ fn exact_or_possible(
     }
 }
 
-/// Alıcısı bilinmeyen çağrı: aynı adlı Python fonksiyon ve metotları, en çok
-/// `MAX_POSSIBLE_TARGETS` aday varsa.
+/// Alıcısı bilinmeyen öznitelik çağrısı (`x.ad()`): aynı adlı Python sınıf
+/// metotları, en çok `MAX_POSSIBLE_TARGETS` aday varsa. Modül düzeyindeki
+/// fonksiyonlar aday değildir: modül alıcıları import bağıyla zaten kesin
+/// çözülür; kalan eşleşmeler (`", ".join` → şablon filtresi `join`) yanlıştır.
 fn possible(graph: &CodeGraph, source_idx: NodeIndex, name: &str) -> Resolution {
     let candidates: Vec<NodeIndex> = graph
         .find_nodes_by_name(name)
@@ -503,6 +505,7 @@ fn possible(graph: &CodeGraph, source_idx: NodeIndex, name: &str) -> Resolution 
                     NodeType::Function | NodeType::Method
                 )
                 && graph_node_file_path(&graph.graph[*idx].id).ends_with(".py")
+                && is_class_member(graph, *idx)
         })
         .collect();
     if candidates.is_empty() || candidates.len() > MAX_POSSIBLE_TARGETS {

@@ -281,8 +281,8 @@ async fn python_calls_resolve_through_scopes_and_imports() -> Result<()> {
     );
     assert_eq!(
         edge_types(&graph, run, other_start),
-        ambiguous,
-        "engine.start(): receiver unknown"
+        none,
+        "engine.start(): a module-level function is not an attribute of an object"
     );
     assert_eq!(
         edge_types(&graph, run, util_helper),
