@@ -11,3 +11,6 @@ corpus/
 # Python harness (benchmarks/freshness): uv ortamı ve bayt kodu
 .venv/
 __pycache__/
+
+# L3 ajan dökümleri büyük: koşu kayıtları (runs/), farklar (diffs/) ve rapor izlenir
+results/agent/*/transcripts/
