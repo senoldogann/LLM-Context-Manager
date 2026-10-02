@@ -1,0 +1,26 @@
+diff --git a/serde_derive/src/ser.rs b/serde_derive/src/ser.rs
+index c92800d..13ba0e4 100644
+--- a/serde_derive/src/ser.rs
++++ b/serde_derive/src/ser.rs
+@@ -140,7 +140,7 @@ fn build_generics(cont: &Container) -> syn::Generics {
+ 
+     match cont.attrs.ser_bound() {
+         Some(predicates) => bound::with_where_predicates(&generics, predicates),
+-        None => bound::with_bound(
++        None => with_serialize_bound(
+             cont,
+             &generics,
+             needs_serialize_bound,
+@@ -1364,3 +1364,12 @@ impl TupleTrait {
+         }
+     }
+ }
++
++fn with_serialize_bound(
++    cont: &Container,
++    generics: &syn::Generics,
++    filter: fn(&attr::Field, Option<&attr::Variant>) -> bool,
++    bound: &syn::Path,
++) -> syn::Generics {
++    bound::with_bound(cont, generics, filter, bound)
++}

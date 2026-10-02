@@ -1,0 +1,34 @@
+{
+  "schema_version": 1,
+  "harness_revision": "e4b9cec49102b7b9ee9b2eabed45a5811712e63a",
+  "preregistration": "benchmarks/agent/PREREGISTRATION.md",
+  "settings": {
+    "model": "claude-opus-5-5",
+    "effort": "high",
+    "embedding": "local",
+    "auth": "subscription",
+    "agent": "claude",
+    "max_budget_usd": 2.0,
+    "timeout_s": 1800,
+    "repetitions": 1,
+    "arms": [
+      "A",
+      "B",
+      "C"
+    ],
+    "tasks": [
+      "flask-callers-ensure-sync",
+      "express-trap-req-get",
+      "serde-edit-with-bound"
+    ]
+  },
+  "environment": {
+    "agent_version": "2.1.287 (Claude Code)",
+    "agent_login": "environment",
+    "ccm_version": "ccm-cli 0.4.0",
+    "ccm_commit": "e4b9cec49102b7b9ee9b2eabed45a5811712e63a",
+    "ccm_dirty": false,
+    "ccm_cli_sha256": "53e1042fcd62dbe801ad94f16ab2ed7145d06ee86f051baf52d693f6913f4045",
+    "ccm_mcp_sha256": "a0264807d91d9e008a80a32dccd1fb0d341d204d1c252781c83cf7d5e7ebc93c"
+  }
+}

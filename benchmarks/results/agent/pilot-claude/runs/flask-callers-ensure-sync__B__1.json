@@ -1,0 +1,62 @@
+{
+  "run_id": "flask-callers-ensure-sync__B__1",
+  "task_id": "flask-callers-ensure-sync",
+  "repo": "flask",
+  "category": "callers",
+  "arm": "B",
+  "rep": 1,
+  "model": "claude-opus-5-5",
+  "effort": "high",
+  "embedding": "local",
+  "index_s": 73.82353154199882,
+  "wall_s": 13.142323416999716,
+  "transcript": {
+    "result_text": "I found 14 places that call `ensure_sync` directly, spread across 11 functions or methods:\n\n- **`src/flask/app.py`** (`Flask` class):\n  - `update_template_context`\n  - `handle_http_exception`\n  - `handle_user_exception`\n  - `handle_exception`\n  - `dispatch_request`\n  - `preprocess_request`\n  - `process_response`\n  - `do_teardown_request`\n  - `do_teardown_appcontext`\n- **`src/flask/views.py`**:\n  - `View.as_view`: the calls are inside its nested `view` functions.\n  - `MethodView.dispatch_request`\n- **`src/flask/ctx.py`**:\n  - `copy_current_request_context`: the call is inside its nested `wrapper`.\n\nI left out places that only pass `ensure_sync` as a value without calling it, such as `_async_wrapper=app.ensure_sync` in signal `.send(...)` calls. Those appear in `helpers.py`, `templating.py`, `AppContext.push`/`pop` in `ctx.py`, and in `full_dispatch_request`, `finalize_request`, `do_teardown_request` and `do_teardown_appcontext` in `app.py`.\n\n```json\n{\"answer\": [\"src/flask/app.py:Flask.update_template_context\", \"src/flask/app.py:Flask.handle_http_exception\", \"src/flask/app.py:Flask.handle_user_exception\", \"src/flask/app.py:Flask.handle_exception\", \"src/flask/app.py:Flask.dispatch_request\", \"src/flask/app.py:Flask.preprocess_request\", \"src/flask/app.py:Flask.process_response\", \"src/flask/app.py:Flask.do_teardown_request\", \"src/flask/app.py:Flask.do_teardown_appcontext\", \"src/flask/views.py:View.as_view\", \"src/flask/views.py:MethodView.dispatch_request\", \"src/flask/ctx.py:copy_current_request_context\"]}\n```",
+    "subtype": "success",
+    "is_error": false,
+    "num_turns": 3,
+    "duration_ms": 12010,
+    "cost_usd": 0.1265078,
+    "usage": {
+      "input_tokens": 6,
+      "output_tokens": 1153,
+      "cache_creation_input_tokens": 12437,
+      "cache_read_input_tokens": 19639
+    },
+    "tool_calls": {
+      "Bash": 1,
+      "Grep": 1
+    },
+    "mcp_status": "connected",
+    "api_key_source": "none",
+    "tools": [
+      "Bash",
+      "Edit",
+      "Glob",
+      "Grep",
+      "Read",
+      "Write",
+      "mcp__context-manager__diff_context",
+      "mcp__context-manager__explain",
+      "mcp__context-manager__find_nodes",
+      "mcp__context-manager__find_usages",
+      "mcp__context-manager__impact_of_change",
+      "mcp__context-manager__index_now",
+      "mcp__context-manager__index_project",
+      "mcp__context-manager__map",
+      "mcp__context-manager__search_code",
+      "mcp__context-manager__trace_call_chain"
+    ]
+  },
+  "score": {
+    "answered": true,
+    "recall": 1.0,
+    "precision": 1.0,
+    "missing": [],
+    "extra": [],
+    "edit_applied": null,
+    "stale": [],
+    "success": true
+  },
+  "failure": null
+}

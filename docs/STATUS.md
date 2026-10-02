@@ -4,9 +4,14 @@ The current state of CCM and the next steps, for the owner and for any agent tha
 work. Keep it current: replace lines that stop being true instead of appending history (git log is
 the history).
 
-Last updated: 2026-10-02. Where work stopped: the L3 harness is finished for both agents and
-checked without spending; both pilots wait for the owner's subscription limits to reset. Nothing
-in L3 has been measured yet.
+Last updated: 2026-10-02. Where work stopped: the Claude pilot ran (see "Claude pilot result"):
+the harness works, but the agent never used CCM and CCM's tools made sessions cost more. The next
+agent starts with "First: make CCM worth reaching for". The Codex pilot waits for the owner's
+ChatGPT limit to reset.
+
+**Owner's direction (2026-10-02):** keep developing CCM until it is visibly usage-friendly and
+indispensable in real systems; try every approach that might get there, and measure each change
+before claiming it.
 
 ## Goal
 
@@ -46,6 +51,41 @@ are parked. The owner's strategy notes are `docs/productization-plan.md`,
 
 L3 has 24 tasks × 3 repetitions per arm and agent: the report gives intervals, and differences
 inside them are not evidence either way.
+
+## Claude pilot result (2026-10-02)
+
+`benchmarks/results/agent/pilot-claude/`: 3 tasks × 3 arms, Claude Code with Opus 5.5 at effort
+high on a Claude subscription (run records, diffs and report in git; transcripts stay local). The
+harness worked on real runs: authentication, isolation checks, scoring and records. What it
+showed:
+
+- All 9 runs succeeded. On 17–41 thousand line repositories two or three greps answer these
+  tasks, so they do not separate the arms for this model.
+- In B and C the agent never called a CCM tool, although the tools and the note were there; it
+  used Grep, Read and Bash every time.
+- Unused CCM still cost quota: B used 25%, 24% and 104% more input tokens (cache included) than A
+  on the three tasks (32,082 against 25,595; 43,953 against 35,515; 70,952 against 34,790). Part
+  of it is about 6,800 tokens of CCM tool definitions and the note added to every session.
+- Indexing serde for one B or C run took 114 s (release build, built-in embedding model).
+
+As configured, CCM is overhead on small repositories and the agent does not reach for it. That is
+the first problem to solve.
+
+## First: make CCM worth reaching for
+
+Measure each change against `pilot-claude` by re-running the same 9-run pilot into a new
+`--out-dir` and comparing input tokens, CCM calls and success.
+
+1. Cut the fixed cost: measure the tokens CCM adds to every session (tool list, descriptions,
+   schemas, note) and shrink them: fewer tools by default (`map`, `explain`, `find_usages`,
+   `impact_of_change`), shorter descriptions and schemas.
+2. Give the agent a reason to choose CCM: tool descriptions that say when CCM beats grep (common
+   names, cross-file impact, large repositories, answers after edits), then check what the agent
+   does with them.
+3. Test where grep gets expensive: a Django pilot (500 thousand lines) and multi-file changes.
+   Add index reuse first; one index per run already takes 114 s on serde.
+4. Keep the preregistered design for the final run, and run it only after B uses CCM where CCM
+   should help; record every product change with its commit.
 
 ## Next steps, in order
 

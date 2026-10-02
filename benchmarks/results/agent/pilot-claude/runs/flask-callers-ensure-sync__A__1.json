@@ -1,0 +1,52 @@
+{
+  "run_id": "flask-callers-ensure-sync__A__1",
+  "task_id": "flask-callers-ensure-sync",
+  "repo": "flask",
+  "category": "callers",
+  "arm": "A",
+  "rep": 1,
+  "model": "claude-opus-5-5",
+  "effort": "high",
+  "embedding": "local",
+  "index_s": null,
+  "wall_s": 13.17306854099661,
+  "transcript": {
+    "result_text": "Eleven functions and methods call `ensure_sync(...)` directly. Calls inside nested closures are credited to the outermost named function, as you asked:\n\n- **`src/flask/app.py`, in the `Flask` class:**\n  - `update_template_context`\n  - `handle_http_exception`\n  - `handle_user_exception`\n  - `handle_exception`\n  - `dispatch_request`\n  - `preprocess_request`\n  - `process_response`\n  - `do_teardown_request`\n  - `do_teardown_appcontext`\n- **`src/flask/views.py`:**\n  - `View.as_view`: the call is inside the nested `view` closure.\n  - `MethodView.dispatch_request`\n- **`src/flask/ctx.py`:**\n  - `copy_current_request_context`: the call is inside the nested `wrapper` closure.\n\nI left out places that pass `ensure_sync` as a value without calling it, as `_async_wrapper=...ensure_sync` in signal `.send(...)` calls. These are in `helpers.py`, `templating.py`, `ctx.py` (the `AppContext.push`/`pop` methods) and several other spots in `app.py`.\n\n```json\n{\"answer\": [\"src/flask/app.py:Flask.update_template_context\", \"src/flask/app.py:Flask.handle_http_exception\", \"src/flask/app.py:Flask.handle_user_exception\", \"src/flask/app.py:Flask.handle_exception\", \"src/flask/app.py:Flask.dispatch_request\", \"src/flask/app.py:Flask.preprocess_request\", \"src/flask/app.py:Flask.process_response\", \"src/flask/app.py:Flask.do_teardown_request\", \"src/flask/app.py:Flask.do_teardown_appcontext\", \"src/flask/views.py:View.as_view\", \"src/flask/views.py:MethodView.dispatch_request\", \"src/flask/ctx.py:copy_current_request_context\"]}\n```",
+    "subtype": "success",
+    "is_error": false,
+    "num_turns": 3,
+    "duration_ms": 11859,
+    "cost_usd": 0.07106860000000001,
+    "usage": {
+      "input_tokens": 6,
+      "output_tokens": 1110,
+      "cache_creation_input_tokens": 5606,
+      "cache_read_input_tokens": 19983
+    },
+    "tool_calls": {
+      "Bash": 1,
+      "Grep": 1
+    },
+    "mcp_status": "none",
+    "api_key_source": "none",
+    "tools": [
+      "Bash",
+      "Edit",
+      "Glob",
+      "Grep",
+      "Read",
+      "Write"
+    ]
+  },
+  "score": {
+    "answered": true,
+    "recall": 1.0,
+    "precision": 1.0,
+    "missing": [],
+    "extra": [],
+    "edit_applied": null,
+    "stale": [],
+    "success": true
+  },
+  "failure": null
+}
