@@ -10,12 +10,16 @@ product direction is now a single obvious `context` entry point: the agent state
 and CCM chooses graph/search operations and composes the smallest useful task packet server-side.
 The first implementation slice is implemented and verified locally: `context` owns exact-vs-hybrid
 routing, default MCP discovery is `context + index_project`, and the legacy surface is opt-in but
-still directly callable. The harness now has a separate `context-first-pilot` product profile;
-Python compilation, profile assertions and all 24 task anchors pass. Ruff/mypy are not verified
-in this lease because `uv` is outside the command allowlist and system Python does not provide
-those modules. The next evidence step is a fresh Claude pilot after the profile is committed and
-the release binaries are rebuilt. The harness does not copy or persist the owner's Claude
-credentials. The Codex pilot also waits for the owner's ChatGPT limit to reset.
+still directly callable. The harness has a separate `context-first-pilot` product profile without
+changing the preregistered final profile; Ruff, strict mypy, profile assertions and all 24 task
+anchors pass. Model-free audits on the three pilot tasks now show that one `context` call contains
+the expected answer set for Flask (12/12), the Express receiver trap (5/5, with no `app.get`
+false positive), and the edited Serde task (2/2, with the removed caller absent). These are packet
+quality checks, not agent-token evidence. A Codex smoke attempt stopped with exit 4 before any run
+record because the subscription usage limit was already exhausted; the CLI reported a reset around
+2026-10-07 02:17. Claude cannot be rerun from this environment until the owner supplies
+`CLAUDE_CODE_OAUTH_TOKEN`. The release binaries must be rebuilt once more after the current
+quality patch before either measured pilot.
 
 **Owner's direction (2026-10-02):** optimize for end-to-end agent token use without sacrificing
 answer quality, independent of model/provider/effort. Move retrieval/tool-selection decisions from
@@ -96,15 +100,27 @@ call. The legacy tools remain callable during migration, but they are primitives
 than the workflow the model must learn.
 
 The first slice is now implemented. Exact targets go directly to graph explanation; natural-language
-requests use hybrid retrieval and enrich the best graph node in the same call. The default
-`tools/list` serializes to 1,105 bytes in a direct MCP measurement, versus 6,854 bytes when
-`CCM_MCP_LEGACY_TOOLS=1` exposes the compatibility surface. This is a fixed-schema measurement,
+requests use hybrid retrieval and enrich the best graph node in the same call. Explicit scoped
+code hints can also route deterministically when the query gives enough evidence (for example a
+backtick `ensure_sync` or `module::symbol` plus a source scope, or a JS/TS `receiver.member`
+plus its definition file). Python project-object/proxy receivers fall back only to bounded `may call` candidates, while
+external imports do not. JS/TS callable assignment aliases and named function expressions are now
+addressable graph symbols, and receiver-sensitive evidence filters same-name false positives for
+lexical caller questions. These graph-semantics changes use index schema 11, so older indexes rebuild
+once.
+
+The default `tools/list` serializes to 1,105 bytes in a direct MCP measurement, versus 6,854 bytes
+when `CCM_MCP_LEGACY_TOOLS=1` exposes the compatibility surface. This is a fixed-schema measurement,
 not evidence of lower end-to-end agent tokens.
 
-Verification on the current worktree: all `ccm-mcp` tests passed (with the opt-in local-model and
-external guardian tests skipped as designed), including exact-target, natural-language, answer-budget,
-default-surface and legacy-compatibility coverage. `cargo clippy --workspace --all-targets -- -D
-warnings`, `cargo fmt --all -- --check` and `git diff --check` also passed.
+Verification on the current worktree: the full `ccm-core` package passed, including 143 unit tests
+(3 opt-in local-model tests ignored) and all integration suites; the full `ccm-mcp` package passed,
+including 18 token-budget/context tests, 22 auto-refresh tests, 26 MCP integration tests (1 opt-in
+local-model test ignored), 5 protocol tests and the hermetic E2E test (external Guardian fixture
+ignored as designed). `cargo clippy --workspace --all-targets -- -D warnings`,
+`cargo fmt --all -- --check` and `git diff --check` also pass. Model-free task audits on the
+pinned corpus: Flask 12/12, Express 5/5 with receiver false positives excluded, Serde 2/2 after the
+scripted edit.
 
 The next gate is behavioral: re-run the same Claude pilot. CCM is not ready for the preregistered
 final L3 run until the agent actually chooses `context` where it helps, with no success regression
@@ -113,21 +129,24 @@ multi-file edits where grep/read loops are expensive.
 
 ## Next steps, in order
 
-1. **Re-run the 3-task Claude pilot** into a new output directory using the verified
-   `context`-first/default-small-surface configuration. Compare success, CCM calls, input/output
-   tokens, turns and wall time with `pilot-claude`; inspect transcripts to see whether and why the
-   model selects `context`.
-2. **Run the Codex pilot** once the owner's ChatGPT limit allows it. The dedicated
-   `~/.ccm-bench/codex-home` login already exists; inspect the first real transcript before any
-   final run because the parser/isolation path has not yet seen real Codex output.
-3. **If agents use `context` but task packets are insufficient, improve server-side routing or
+1. **Commit the current packet-quality fixes and rebuild the release binaries.** Re-run the three
+   model-free task audits against that exact commit so the measured pilot and its local preflight
+   use the same graph schema and routing code.
+2. **Re-run the 3-task Claude pilot** into a new output directory once
+   `CLAUDE_CODE_OAUTH_TOKEN` is supplied. Compare success, CCM calls, input/output tokens, turns and
+   wall time with `pilot-claude`; inspect transcripts to see whether and why the model selects
+   `context`.
+3. **Run the Codex pilot after the subscription limit resets.** The dedicated
+   `~/.ccm-bench/codex-home` login exists; the 2026-10-02 smoke attempt stopped before a run record
+   with exit 4, so the first successful transcript still needs isolation/parser inspection.
+4. **If agents use `context` but task packets are insufficient, improve server-side routing or
    composition from transcript evidence**, not by adding default tools back speculatively.
-4. **Add reusable per-repository indexes**, then run large-repository (Django) and multi-file edit
+5. **Add reusable per-repository indexes**, then run large-repository (Django) and multi-file edit
    extensions. These are the cases most likely to separate CCM from grep/read loops.
-5. **Only after the product configuration is stable, run the preregistered L3 final experiment:**
+6. **Only after the product configuration is stable, run the preregistered L3 final experiment:**
    24 tasks × 3 arms × 3 repetitions per agent. Publish negative or mixed results and keep the
    preregistration/failure ledger intact.
-6. Later, only if L3 evidence supports it: TypeScript/JavaScript syntax-level resolution, then edge
+7. Later, only if L3 evidence supports it: TypeScript/JavaScript syntax-level resolution, then edge
    accuracy against language servers (L2).
 
 ## Running the L3 experiment

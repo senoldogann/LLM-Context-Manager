@@ -321,7 +321,21 @@ impl Extractor {
 
     fn classify_typescript_node(&self, node: &Node, kind: &str) -> Option<(NodeType, String)> {
         match kind {
-            "function_declaration" | "arrow_function" | "method_definition" => {
+            "function_declaration"
+            | "function_expression"
+            | "arrow_function"
+            | "method_definition" => {
+                // `obj.method = function named() {}` atamasında callable sembolü
+                // assignment_expression zaten `method` adıyla üretir. İçteki
+                // function_expression'ı ikinci kez eklemek graph/token şişirir.
+                if kind == "function_expression"
+                    && node
+                        .parent()
+                        .is_some_and(|parent| parent.kind() == "assignment_expression")
+                {
+                    return None;
+                }
+
                 let mut name_opt = self
                     .find_child_text(node, "identifier")
                     .or_else(|| self.find_child_text(node, "property_identifier"));
@@ -338,7 +352,14 @@ impl Extractor {
                     }
                 }
 
-                let name = name_opt.unwrap_or_else(|| "anonymous".to_string());
+                // Named callback expressions (`function protocol() {}`) are useful
+                // structural units. Anonymous callbacks are not addressable and would
+                // add large numbers of low-value nodes.
+                let name = match name_opt {
+                    Some(name) => name,
+                    None if kind == "function_expression" => return None,
+                    None => "anonymous".to_string(),
+                };
 
                 if kind == "method_definition" {
                     Some((NodeType::Method, name))
@@ -358,11 +379,45 @@ impl Extractor {
                 let name = self.find_child_text(node, "identifier")?;
                 Some((NodeType::Variable, name))
             }
+            "assignment_expression" => self
+                .typescript_assignment_function_alias(node)
+                .map(|name| (NodeType::Function, name)),
             "interface_declaration" | "type_alias_declaration" => {
                 let name = self.find_child_text(node, "type_identifier")?;
                 Some((NodeType::Struct, name)) // Using Struct for type definitions
             }
             _ => None,
+        }
+    }
+
+    /// JS/TS'de `req.get = req.header = function ...` gibi callable alias
+    /// zincirlerini ayrı semboller olarak görünür kılar. Sıradan atamalar sembol
+    /// türünü değiştirmez; sağ tarafın sonunda function/arrow function olmalı.
+    fn typescript_assignment_function_alias(&self, node: &Node) -> Option<String> {
+        let right = node.child_by_field_name("right")?;
+        if !Self::typescript_assignment_value_is_function(right) {
+            return None;
+        }
+        let left = node.child_by_field_name("left")?;
+        match left.kind() {
+            "identifier" => Some(self.get_node_text(&left)),
+            "member_expression" => left
+                .child_by_field_name("property")
+                .map(|property| self.get_node_text(&property)),
+            _ => None,
+        }
+    }
+
+    fn typescript_assignment_value_is_function(node: Node<'_>) -> bool {
+        match node.kind() {
+            "function_expression" | "arrow_function" => true,
+            "assignment_expression" => node
+                .child_by_field_name("right")
+                .is_some_and(Self::typescript_assignment_value_is_function),
+            "parenthesized_expression" => node
+                .named_child(0)
+                .is_some_and(Self::typescript_assignment_value_is_function),
+            _ => false,
         }
     }
 

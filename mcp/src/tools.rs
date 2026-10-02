@@ -2,6 +2,7 @@
 
 use anyhow::Result;
 use serde_json::Value;
+use std::collections::HashSet;
 use std::path::{Component, Path};
 use std::sync::Arc;
 
@@ -1077,6 +1078,266 @@ pub async fn find_usages(engine: &Arc<RetrievalEngine>, args: &Value) -> Result<
     })
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct MemberCallHint {
+    receiver: String,
+    member: String,
+    scope: Option<String>,
+    definition_file: Option<String>,
+}
+
+fn identifier_part(text: &str) -> bool {
+    let mut chars = text.chars();
+    matches!(chars.next(), Some(first) if first == '_' || first.is_ascii_alphabetic())
+        && chars.all(|ch| ch == '_' || ch.is_ascii_alphanumeric())
+}
+
+fn backtick_spans(query: &str) -> Vec<&str> {
+    query
+        .split('\u{0060}')
+        .enumerate()
+        .filter_map(|(index, part)| (index % 2 == 1).then_some(part.trim()))
+        .filter(|part| !part.is_empty())
+        .collect()
+}
+
+/// Caller sorusundaki açık kod ipucunu çıkarır. Yalnız backtick içindeki
+/// receiver.member biçimi kabul edilir; sıradan prose token'ları routing sinyali
+/// yapılmaz. İlk path/ scope, ilk dosya yolu ise tanım dosyası kabul edilir.
+fn member_call_hint(query: &str) -> Option<MemberCallHint> {
+    let spans = backtick_spans(query);
+    let scope = spans
+        .iter()
+        .copied()
+        .find(|part| part.ends_with('/') && part.contains('/'))
+        .map(|part| part.trim_start_matches("./").to_string());
+    let definition_file = spans
+        .iter()
+        .copied()
+        .find(|part| {
+            !part.ends_with('/') && part.contains('/') && Path::new(part).extension().is_some()
+        })
+        .map(|part| part.trim_start_matches("./").to_string());
+
+    for part in spans {
+        if part.contains('/') {
+            continue;
+        }
+        let Some((receiver, member)) = part.rsplit_once('.') else {
+            continue;
+        };
+        if identifier_part(member)
+            && receiver.split('.').all(identifier_part)
+            && !receiver.is_empty()
+        {
+            return Some(MemberCallHint {
+                receiver: receiver.to_string(),
+                member: member.to_string(),
+                scope,
+                definition_file,
+            });
+        }
+    }
+    None
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct ScopedSymbolHint {
+    symbol: String,
+    scope: Option<String>,
+    definition_file: Option<String>,
+}
+
+/// Backtick içindeki açık sembolü path kanıtıyla birlikte çıkarır. Çıplak
+/// `ensure_sync` ve `bound::with_bound` gibi qualified biçimler desteklenir;
+/// prose dili routing kararını etkilemez.
+fn scoped_symbol_hint(query: &str) -> Option<ScopedSymbolHint> {
+    let spans = backtick_spans(query);
+    let scope = spans
+        .iter()
+        .copied()
+        .find(|part| part.ends_with('/') && part.contains('/'))
+        .map(|part| part.trim_start_matches("./").to_string());
+    let definition_file = spans
+        .iter()
+        .copied()
+        .find(|part| {
+            !part.ends_with('/') && part.contains('/') && Path::new(part).extension().is_some()
+        })
+        .map(|part| part.trim_start_matches("./").to_string());
+
+    for part in spans {
+        if part.contains('/') {
+            continue;
+        }
+        let symbol = if let Some((qualifier, symbol)) = part.rsplit_once("::") {
+            if qualifier.is_empty()
+                || !identifier_part(symbol)
+                || !qualifier.split("::").all(identifier_part)
+            {
+                continue;
+            }
+            symbol
+        } else if identifier_part(part) {
+            part
+        } else {
+            continue;
+        };
+        return Some(ScopedSymbolHint {
+            symbol: symbol.to_string(),
+            scope,
+            definition_file,
+        });
+    }
+    None
+}
+
+async fn scoped_symbol_target_id(engine: &Arc<RetrievalEngine>, query: &str) -> Option<String> {
+    let hint = scoped_symbol_hint(query)?;
+    if hint.scope.is_none() && hint.definition_file.is_none() {
+        return None;
+    }
+
+    let graph = engine.graph.read().await;
+    let mut candidates = graph.graph.node_indices().filter(|idx| {
+        let node = &graph.graph[*idx];
+        if !matches!(
+            node.node_type,
+            ccm_core::graph::NodeType::Function | ccm_core::graph::NodeType::Method
+        ) || node.name != hint.symbol
+        {
+            return false;
+        }
+        let path = ccm_core::engine::extract_file_path(&node.id);
+        let path = path.trim_start_matches("./");
+        if let Some(definition_file) = hint.definition_file.as_deref() {
+            return path == definition_file;
+        }
+        hint.scope
+            .as_deref()
+            .is_some_and(|scope| path.starts_with(scope))
+    });
+    match (candidates.next(), candidates.next()) {
+        (Some(only), None) => Some(graph.graph[only].id.clone()),
+        _ => None,
+    }
+}
+
+fn is_js_ts_path(path: &str) -> bool {
+    matches!(
+        Path::new(path)
+            .extension()
+            .and_then(|extension| extension.to_str()),
+        Some("js" | "jsx" | "ts" | "tsx" | "mjs" | "cjs")
+    )
+}
+
+async fn member_call_target_id(engine: &Arc<RetrievalEngine>, query: &str) -> Option<String> {
+    let hint = member_call_hint(query)?;
+    let definition_file = hint.definition_file?;
+    if !is_js_ts_path(&definition_file) {
+        return None;
+    }
+    let graph = engine.graph.read().await;
+    let mut candidates = graph.graph.node_indices().filter(|idx| {
+        let node = &graph.graph[*idx];
+        matches!(
+            node.node_type,
+            ccm_core::graph::NodeType::Function | ccm_core::graph::NodeType::Method
+        ) && node.name == hint.member
+            && ccm_core::engine::extract_file_path(&node.id).trim_start_matches("./")
+                == definition_file
+    });
+    match (candidates.next(), candidates.next()) {
+        (Some(only), None) => Some(graph.graph[only].id.clone()),
+        _ => None,
+    }
+}
+
+fn contains_member_call(content: &str, expression: &str) -> bool {
+    let mut remaining = content;
+    while let Some(offset) = remaining.find(expression) {
+        let after = &remaining[offset + expression.len()..];
+        if after.trim_start().starts_with('(') {
+            return true;
+        }
+        remaining = after;
+    }
+    false
+}
+
+/// Graph receiver çözümü olmayan lexical diller için dar evidence: yalnız
+/// Function/Method gövdeleri, query'deki path scope ve receiver.member çağrısı.
+/// Tanım dosyasında this.member aynı receiver'ın metodu sayılır; başka
+/// dosyalarda yalnız query'deki receiver zinciri kabul edilir.
+async fn receiver_call_evidence(
+    engine: &Arc<RetrievalEngine>,
+    query: &str,
+    primary_node_id: Option<&str>,
+    known_ids: &HashSet<String>,
+) -> Vec<ccm_core::engine::ContextSuggestion> {
+    let Some(hint) = member_call_hint(query) else {
+        return Vec::new();
+    };
+    if !hint.definition_file.as_deref().is_some_and(is_js_ts_path) {
+        return Vec::new();
+    }
+    let receiver_expression = format!("{}.{}", hint.receiver, hint.member);
+    let this_expression = format!("this.{}", hint.member);
+    let graph = engine.graph.read().await;
+    let mut suggestions = Vec::new();
+
+    for idx in graph.graph.node_indices() {
+        let node = &graph.graph[idx];
+        if !matches!(
+            node.node_type,
+            ccm_core::graph::NodeType::Function | ccm_core::graph::NodeType::Method
+        ) {
+            continue;
+        }
+        if primary_node_id == Some(node.id.as_str()) || known_ids.contains(&node.id) {
+            continue;
+        }
+        let path = ccm_core::engine::extract_file_path(&node.id);
+        let path = path.trim_start_matches("./");
+        if hint
+            .scope
+            .as_deref()
+            .is_some_and(|scope| !path.starts_with(scope))
+        {
+            continue;
+        }
+        let direct = contains_member_call(&node.content, &receiver_expression);
+        let same_receiver_file = hint.definition_file.as_deref() == Some(path)
+            && contains_member_call(&node.content, &this_expression);
+        if !(direct || same_receiver_file) {
+            continue;
+        }
+        suggestions.push(ccm_core::engine::node_suggestion(
+            node,
+            format!(
+                "receiver-call evidence for {}.{}",
+                hint.receiver, hint.member
+            ),
+        ));
+    }
+
+    suggestions.sort_by(|left, right| {
+        (
+            left.file_path.as_deref().unwrap_or_default(),
+            left.start_line.unwrap_or_default(),
+            &left.title,
+        )
+            .cmp(&(
+                right.file_path.as_deref().unwrap_or_default(),
+                right.start_line.unwrap_or_default(),
+                &right.title,
+            ))
+    });
+    suggestions.truncate(20);
+    suggestions
+}
+
 /// Tool: context
 /// Ajanın araç seçmesini istemeden tek sorgudan yeterli görev bağlamı üretir.
 /// Kesin hedefler doğrudan graf açıklamasına gider; doğal dil sorguları hibrit
@@ -1119,8 +1380,19 @@ pub async fn context(engine: &Arc<RetrievalEngine>, args: &Value) -> Result<Tool
         Err(error) => return Ok(tool_error(error.to_string())),
     }
 
-    let hits = engine.search_code_hybrid(query, 5).await?;
-    if hits.is_empty() {
+    // Caller sorusu açık bir receiver.member ve tanım dosyası taşıyorsa
+    // deterministik graph hedefini seç. Bu durumda semantic arama gereksizdir:
+    // model/provider kalitesi routing kararını etkilemez ve embedding maliyeti
+    // ödenmez. Dosyada aynı adlı birden çok callable varsa sessiz seçim yapılmaz.
+    let member_target = member_call_target_id(engine, query).await;
+    let scoped_target = scoped_symbol_target_id(engine, query).await;
+    let hinted_target = member_target.clone().or(scoped_target);
+    let hits = if hinted_target.is_some() {
+        Vec::new()
+    } else {
+        engine.search_code_hybrid(query, 5).await?
+    };
+    if hinted_target.is_none() && hits.is_empty() {
         return Ok(ToolResult {
             content: vec![ToolResultContent {
                 content_type: "text".to_string(),
@@ -1130,19 +1402,73 @@ pub async fn context(engine: &Arc<RetrievalEngine>, args: &Value) -> Result<Tool
         });
     }
 
-    // En iyi arama sonucu graf düğümüyse asıl değeri arama listesinden değil,
-    // yapısal açıklamadan üret: gövde + üyeler + callers/callees + testler.
-    let mut output = if let Some(node_id) = hits[0].node_id.as_deref() {
+    // Deterministik hint hedefi varsa onu; yoksa en iyi hibrit graph düğümünü
+    // yapısal açıklamayla zenginleştir.
+    let selected_node_id = hinted_target
+        .as_deref()
+        .or_else(|| hits.first().and_then(|hit| hit.node_id.as_deref()));
+    let empty_known_ids = HashSet::new();
+    let hinted_callers = if let Some(node_id) = member_target.as_deref() {
+        receiver_call_evidence(engine, query, Some(node_id), &empty_known_ids).await
+    } else {
+        Vec::new()
+    };
+    let mut known_ids = HashSet::new();
+    let mut primary_node_id: Option<String> = None;
+    let mut output = if let Some(node_id) = selected_node_id {
+        primary_node_id = Some(node_id.to_string());
         match engine.explain(node_id).await {
             Ok(explanation) => {
+                known_ids.insert(explanation.node.id.clone());
+                known_ids.extend(explanation.usages.iter().map(|usage| usage.node.id.clone()));
+                known_ids.extend(
+                    explanation
+                        .callees
+                        .iter()
+                        .map(|usage| usage.node.id.clone()),
+                );
+                known_ids.extend(explanation.members.iter().map(|member| member.id.clone()));
                 let primary_tokens = max_tokens.saturating_mul(3).saturating_div(4).max(1);
-                format_explanation(&explanation, true, primary_tokens)
+                if member_target.as_deref() == Some(node_id) {
+                    format_explanation_with_callers(
+                        &explanation,
+                        true,
+                        primary_tokens,
+                        Some(&hinted_callers),
+                    )
+                } else {
+                    format_explanation(&explanation, true, primary_tokens)
+                }
             }
             Err(_) => format_suggestions_output(&hits, false, max_tokens, max_tokens),
         }
     } else {
         format_suggestions_output(&hits, false, max_tokens, max_tokens)
     };
+
+    // Hint hedefi yoksa receiver evidence yalnız ek bağlam olarak kullanılabilir.
+    // Hint hedefinde ise yukarıda caller listesinin kendisini override eder; bu,
+    // lexical graph'taki farklı receiver'lı aynı-name false positive'leri gizler.
+    if member_target.is_none() {
+        let evidence =
+            receiver_call_evidence(engine, query, primary_node_id.as_deref(), &known_ids).await;
+        if !evidence.is_empty() && char_count(&output) < budget_chars {
+            let header = "receiver-call evidence:\n";
+            let remaining_chars = budget_chars
+                .saturating_sub(char_count(&output))
+                .saturating_sub(char_count(header));
+            let remaining_tokens = remaining_chars / CHARS_PER_TOKEN;
+            if remaining_tokens > 0 {
+                output.push_str(header);
+                output.push_str(&format_suggestions_output(
+                    &evidence,
+                    false,
+                    remaining_tokens,
+                    remaining_tokens,
+                ));
+            }
+        }
+    }
 
     // Kalan bütçe varsa alternatifleri de kısa handle'lar olarak ver. Ajanın
     // ikinci bir search çağrısı yapmadan belirsizliği görmesini sağlar.
@@ -1238,6 +1564,15 @@ fn format_explanation(
     include_body: bool,
     max_tokens: usize,
 ) -> String {
+    format_explanation_with_callers(explanation, include_body, max_tokens, None)
+}
+
+fn format_explanation_with_callers(
+    explanation: &ccm_core::graph::Explanation,
+    include_body: bool,
+    max_tokens: usize,
+    caller_override: Option<&[ccm_core::engine::ContextSuggestion]>,
+) -> String {
     use ccm_core::engine::{extract_file_path, node_suggestion, usage_suggestion};
     let node = &explanation.node;
     let (tests, callers): (Vec<&ccm_core::graph::Usage>, Vec<&ccm_core::graph::Usage>) =
@@ -1250,12 +1585,13 @@ fn format_explanation(
         ccm_core::graph::NodeType::File => "File".to_string(),
         _ => format!("{:?} `{}`", node.node_type, node.name),
     };
+    let caller_count = caller_override.map_or(callers.len(), <[_]>::len);
     let mut output = format!(
         "{title} · {}:{}-{} · {} callers, {} callees, {} tests",
         extract_file_path(&node.id).trim_start_matches("./"),
         node.start_line,
         node.end_line,
-        callers.len(),
+        caller_count,
         explanation.callees.len(),
         tests.len()
     );
@@ -1282,6 +1618,15 @@ fn format_explanation(
         }
     }
 
+    let caller_lines: Vec<String> = caller_override.map_or_else(
+        || {
+            callers
+                .iter()
+                .map(|usage| suggestion_line(&usage_suggestion(usage)))
+                .collect()
+        },
+        |override_callers| override_callers.iter().map(suggestion_line).collect(),
+    );
     let sections: Vec<(&str, Vec<String>)> = vec![
         (
             "members",
@@ -1291,13 +1636,7 @@ fn format_explanation(
                 .map(|member| suggestion_line(&node_suggestion(member, String::new())))
                 .collect(),
         ),
-        (
-            "callers",
-            callers
-                .iter()
-                .map(|usage| suggestion_line(&usage_suggestion(usage)))
-                .collect(),
-        ),
+        ("callers", caller_lines),
         (
             "callees",
             explanation
@@ -1567,8 +1906,28 @@ pub async fn diff_context(engine: &Arc<RetrievalEngine>, args: &Value) -> Result
 
 #[cfg(test)]
 mod tests {
-    use super::{index_response_timeout, normalize_graph_node_id, normalize_graph_path};
+    use super::{
+        index_response_timeout, member_call_hint, normalize_graph_node_id, normalize_graph_path,
+        scoped_symbol_hint,
+    };
     use std::time::Duration;
+
+    #[test]
+    fn explicit_code_hints_do_not_depend_on_english_call_word() {
+        let bare = scoped_symbol_hint("Açıkla: `src/flask/` içindeki `ensure_sync`.").unwrap();
+        assert_eq!(bare.symbol, "ensure_sync");
+        assert_eq!(bare.scope.as_deref(), Some("src/flask/"));
+
+        let qualified =
+            scoped_symbol_hint("İncele: `serde_derive/src/` altında `bound::with_bound`.").unwrap();
+        assert_eq!(qualified.symbol, "with_bound");
+        assert_eq!(qualified.scope.as_deref(), Some("serde_derive/src/"));
+
+        let member = member_call_hint("İncele: `lib/request.js` dosyasındaki `req.get`.").unwrap();
+        assert_eq!(member.receiver, "req");
+        assert_eq!(member.member, "get");
+        assert_eq!(member.definition_file.as_deref(), Some("lib/request.js"));
+    }
 
     #[test]
     fn index_response_timeout_is_capped_below_client_timeout() {

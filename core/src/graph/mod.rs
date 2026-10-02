@@ -262,7 +262,15 @@ impl CodeGraph {
         for source_idx in sources {
             match &self.graph[*source_idx].facts {
                 ReferenceFacts::Lexical => {
-                    self.resolve_source_references(*source_idx, &mut symbols, &mut references)
+                    // Fonksiyon/metot içindeki Variable/Import düğümlerinin metni
+                    // enclosing callable'ın içeriğinde zaten vardır. İkisini de
+                    // source olarak çözmek aynı çağrıyı iki kez üretir ve usage
+                    // listelerinde gerçek callable'ları limit dışına iter.
+                    // Callable çıkarılmamışsa (örn. anonim/unsupported yapı) child
+                    // source korunur; bilgi kaybı olmaz.
+                    if !self.lexical_source_is_covered_by_callable(*source_idx) {
+                        self.resolve_source_references(*source_idx, &mut symbols, &mut references);
+                    }
                 }
                 ReferenceFacts::Syntax(facts) => match facts.language {
                     SyntaxLanguage::Python => references.extend(resolve::python_references(
@@ -276,6 +284,41 @@ impl CodeGraph {
             }
         }
         references
+    }
+
+    /// Sözcüksel Variable/Import düğümünün metni bir enclosing callable tarafından
+    /// zaten kapsanıyorsa child'ı ikinci kez reference source yapma. Contains
+    /// ağacında callable bulunamazsa child kendi başına kaynak kalır.
+    fn lexical_source_is_covered_by_callable(&self, source_idx: NodeIndex) -> bool {
+        if !matches!(
+            self.graph[source_idx].node_type,
+            NodeType::Variable | NodeType::Import
+        ) {
+            return false;
+        }
+
+        let mut stack = vec![source_idx];
+        let mut seen = HashSet::new();
+        while let Some(idx) = stack.pop() {
+            if !seen.insert(idx) {
+                continue;
+            }
+            for edge in self
+                .graph
+                .edges_directed(idx, petgraph::Direction::Incoming)
+                .filter(|edge| matches!(edge.weight(), EdgeType::Contains))
+            {
+                let parent = edge.source();
+                if matches!(
+                    self.graph[parent].node_type,
+                    NodeType::Function | NodeType::Method
+                ) {
+                    return true;
+                }
+                stack.push(parent);
+            }
+        }
+        false
     }
 
     /// Tek bir kaynağın içeriğindeki tanımlayıcıları hedef sembollere çözer ve

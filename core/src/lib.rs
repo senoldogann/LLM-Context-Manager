@@ -31,9 +31,11 @@ use std::path::{Path, PathBuf};
 use std::time::UNIX_EPOCH;
 
 /// İndeks biçimi ya da kenar anlamı değişince artar; eşleşmeyen indeks tam
-/// yeniden kurulur. 8: Rust `enum`/`trait` düğümleri ve ad eşleşmesinin dürüst
-/// etiketleri (`CallInferred`, `References`).
-pub const INDEX_SCHEMA_VERSION: u32 = 8;
+/// yeniden kurulur. 11: proje içinden import edilen proxy/instance alıcıları
+/// güvenli `CallAmbiguous` kenarı üretebilir; JS/TS callable assignment
+/// alias'ları (`obj.a = obj.b = function ...`) ayrı fonksiyon düğümleridir;
+/// callable içindeki lexical Variable/Import node'ları ayrı caller üretmez.
+pub const INDEX_SCHEMA_VERSION: u32 = 11;
 const GENERATIONS_DIRECTORY: &str = ".ccm-generations";
 const CURRENT_GENERATION_FILE: &str = "ccm_current";
 /// Etkinleştirme kilidinin taşıyıcı dosyası (bkz. `ActivationLock`). Eski

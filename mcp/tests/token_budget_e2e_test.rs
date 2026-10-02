@@ -49,6 +49,30 @@ fn fixture_files() -> Vec<(String, String)> {
             "tests/test_core.py".into(),
             "from app.core import run\n\n\ndef test_run():\n    assert run() is not None\n".into(),
         ),
+        (
+            "lib/request.js".into(),
+            "var req = {};\n\nreq.get =\nreq.header = function header(name) {\n  return name;\n};\n\nfunction range() {\n  return req.get('Range');\n}\n\nfunction defineGetter(obj, name, getter) {\n  return getter;\n}\n\ndefineGetter(req, 'protocol', function protocol() {\n  var header = this.get('X-Forwarded-Proto');\n  return header;\n});\n".into(),
+        ),
+        (
+            "lib/response.js".into(),
+            "var res = {};\n\nres.get = function get(field) {\n  return field;\n};\n\nres.location = function location(url) {\n  return this.req.get('Referrer') || url;\n};\n\nfunction noisy(app) {\n  return app.get('env');\n}\n".into(),
+        ),
+        (
+            "serde_derive/src/lib.rs".into(),
+            "mod bound;\nmod de;\nmod ser;\n".into(),
+        ),
+        (
+            "serde_derive/src/bound.rs".into(),
+            "pub fn with_bound() {}\n".into(),
+        ),
+        (
+            "serde_derive/src/de.rs".into(),
+            "use crate::bound;\n\npub fn build_generics() {\n    bound::with_bound();\n}\n".into(),
+        ),
+        (
+            "serde_derive/src/ser.rs".into(),
+            "use crate::bound;\n\npub fn with_serialize_bound() {\n    bound::with_bound();\n}\n\npub fn build_generics() {}\n".into(),
+        ),
     ];
     // Çok baytlı gövde: bütçe karakterle ölçülmeli, bayt değil.
     files.push((
@@ -373,6 +397,55 @@ fn context_routes_natural_language_and_enriches_the_best_match() {
         "natural-language retrieval should be enriched with a structural explanation: {text}"
     );
     assert!(text.contains("Validate bearer token"), "{text}");
+}
+
+#[test]
+fn context_routes_scoped_qualified_symbol_questions_to_the_unique_target() {
+    let mut server = Server::start();
+    let (text, is_error) = server.call(
+        "context",
+        json!({
+            "query": "After the change, which functions in `serde_derive/src/` call `bound::with_bound` directly?",
+            "max_tokens": 1200
+        }),
+    );
+    assert!(!is_error, "{text}");
+    for expected in [
+        "Function `with_bound` · serde_derive/src/bound.rs",
+        "Function: build_generics · serde_derive/src/de.rs",
+        "Function: with_serialize_bound · serde_derive/src/ser.rs",
+    ] {
+        assert!(text.contains(expected), "missing {expected:?}: {text}");
+    }
+    assert!(
+        !text.contains("Function: build_generics · serde_derive/src/ser.rs"),
+        "the edited-away caller must not be reported: {text}"
+    );
+}
+
+#[test]
+fn context_adds_receiver_sensitive_caller_evidence_for_lexical_code() {
+    let mut server = Server::start();
+    let (text, is_error) = server.call(
+        "context",
+        json!({
+            "query": "Which functions in `lib/` call the request method `req.get` (also exported as `req.header`, defined in `lib/request.js`)? Calls to `app.get` or `res.get` do not count.",
+            "max_tokens": 1200
+        }),
+    );
+    assert!(!is_error, "{text}");
+    for expected in [
+        "Function `get` · lib/request.js",
+        "Function: range · lib/request.js",
+        "Function: protocol · lib/request.js",
+        "Function: location · lib/response.js",
+    ] {
+        assert!(text.contains(expected), "missing {expected:?}: {text}");
+    }
+    assert!(
+        !text.contains("Function: noisy · lib/response.js"),
+        "app.get must not be treated as req.get evidence: {text}"
+    );
 }
 
 #[test]

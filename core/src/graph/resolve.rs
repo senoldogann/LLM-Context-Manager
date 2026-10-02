@@ -448,8 +448,24 @@ fn resolve_member(
         if !in_module.is_empty() {
             return Resolution::Exact(in_module);
         }
-        // Bulunamadıysa proje dışı bir modül ya da sınıftır.
-        return non_empty_exact(class_members_at(graph, modules, &path, name));
+        let class_members = class_members_at(graph, modules, &path, name);
+        if !class_members.is_empty() {
+            return Resolution::Exact(class_members);
+        }
+        // `from project.module import object` ile gelen değer bir proxy/instance
+        // olabilir; değişken düğümleri grafın hedef kümesinde olmadığı için sınıf
+        // olarak çözülemez. Modül proje içindeyse mevcut bilinmeyen-alıcı kuralına
+        // düş ve yalnız az sayıdaki sınıf metoduna `may call` üret. Harici import
+        // için bunu yapma: projedeki aynı adlı metotlara sahte kenar eklenmesin.
+        let imported_project_object = binding
+            .symbol
+            .as_deref()
+            .is_some_and(|symbol| symbol != "*")
+            && !modules.files(&binding.module).is_empty();
+        if imported_project_object {
+            return possible(graph, scope.source_idx, name);
+        }
+        return Resolution::External;
     }
     if rest.is_none() {
         let classes: Vec<NodeIndex> =
@@ -466,14 +482,6 @@ fn resolve_member(
         }
     }
     possible(graph, scope.source_idx, name)
-}
-
-fn non_empty_exact(targets: Vec<NodeIndex>) -> Resolution {
-    if targets.is_empty() {
-        Resolution::External
-    } else {
-        Resolution::Exact(targets)
-    }
 }
 
 fn exact_or_possible(

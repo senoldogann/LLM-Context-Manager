@@ -373,6 +373,36 @@ async fn root_relative_module_wins_over_a_suffix_match() -> Result<()> {
 }
 
 #[tokio::test]
+async fn imported_project_object_member_falls_back_to_a_possible_method() -> Result<()> {
+    let (_dir, engine) = index_fixture(&[
+        (
+            "app/service.py",
+            "class App:\n    def ensure_sync(self, func):\n        return func\n\n\ncurrent_app = App()\n",
+        ),
+        (
+            "app/use.py",
+            "from app.service import current_app\nfrom external.service import client\n\n\ndef internal(func):\n    return current_app.ensure_sync(func)\n\n\ndef external(func):\n    return client.ensure_sync(func)\n",
+        ),
+    ])
+    .await?;
+    let graph = engine.graph.read().await;
+    let ensure_sync = member(&graph, "app/service.py", "App", "ensure_sync");
+    let internal = node(&graph, "app/use.py", "internal");
+    let external = node(&graph, "app/use.py", "external");
+
+    assert_eq!(
+        edge_types(&graph, internal, ensure_sync),
+        vec![EdgeType::CallAmbiguous],
+        "an imported project object may call a project method with the same name"
+    );
+    assert!(
+        edge_types(&graph, external, ensure_sync).is_empty(),
+        "an imported external object must not fall back to project methods"
+    );
+    Ok(())
+}
+
+#[tokio::test]
 async fn a_method_name_shared_by_many_classes_produces_no_edge() -> Result<()> {
     let mut source = String::new();
     for index in 0..6 {

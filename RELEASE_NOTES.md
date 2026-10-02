@@ -17,6 +17,15 @@
 - Agent guidance no longer recommends a project-wide `map` at session start;
   startup context and additional public tools must justify their fixed token
   cost in agent benchmarks.
+- Explicit scoped code hints can bypass semantic routing when they uniquely
+  identify a target (for example `ensure_sync` in `src/flask/` or
+  `bound::with_bound` in `serde_derive/src/`). JS/TS receiver-member caller
+  questions can use the supplied definition file to keep same-name
+  `app.get`/`res.get` calls out of a `req.get` answer.
+- Index schema 11 adds bounded Python project-object/proxy call candidates,
+  JS/TS callable assignment aliases and named function-expression symbols, and
+  removes duplicate lexical Variable/Import callers already covered by an
+  enclosing callable. Existing indexes rebuild once.
 
 ## v0.4.0 - Token-Efficient Answers, Python Syntax Graph and Live Index
 
