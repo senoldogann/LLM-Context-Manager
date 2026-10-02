@@ -138,7 +138,8 @@ Use the newest model each agent offers when a run set starts (`~/.codex/models_c
 Codex's) and keep it for the whole set. The budget flags do not limit Codex, which reports no
 cost; its usage limit stops the run instead. For a final run use `--tasks all --repetitions 3`, a
 new `--out-dir` and a total cap that fits the plan. Exit codes: 3 total cap reached, 4 usage or
-rate limit (rerun later), 5 isolation check failed (fix before continuing). A measured run refuses
+rate limit (rerun later), 5 isolation check failed (fix before continuing), 6 authentication
+failed (export a new token; give it only through `read -s`, never on a command line). A measured run refuses
 to start with uncommitted changes under `benchmarks/agent`. `--embedding openai` needs
 `OPENAI_API_KEY` in the same terminal.
 
