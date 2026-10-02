@@ -46,6 +46,10 @@ fn fixture_files() -> Vec<(String, String)> {
             "def branch_target():\n    return 1\n\n\ndef factory(flag):\n    if flag:\n        def view():\n            return branch_target()\n    else:\n        def view():\n            return branch_target()\n    return view\n".into(),
         ),
         (
+            "app/caller_scopes.py".into(),
+            "def scope_target():\n    return 1\n\n\nclass Host:\n    def handler(self):\n        return scope_target()\n\n    def factory(self, flag):\n        if flag:\n            def view():\n                return scope_target()\n        else:\n            def view():\n                return scope_target()\n        return view\n\n\ndef decorate():\n    def wrapper():\n        return scope_target()\n    return wrapper\n\n\nclass Another:\n    def factory(self):\n        def view():\n            return scope_target()\n        return view\n".into(),
+        ),
+        (
             "app/models.py".into(),
             "class Base:\n    def save(self):\n        return 1\n\n\nclass User(Base):\n    def save(self):\n        return super().save()\n".into(),
         ),
@@ -78,6 +82,11 @@ fn fixture_files() -> Vec<(String, String)> {
             "use crate::bound;\n\npub fn with_serialize_bound() {\n    bound::with_bound();\n}\n\npub fn build_generics() {}\n".into(),
         ),
     ];
+    // Aynı ad farklı receiver'a aittir; sorgunun dışlanan hedefleri önce anması
+    // veya alias anması request caller kümesini genişletmemeli.
+    files.iter_mut().find(|(path, _)| path == "lib/request.js").expect("request fixture").1.push_str(
+        "\ndefineGetter(req, 'ip', function ip() {\n  return this.app.get('trust proxy fn');\n});\n\ndefineGetter(req, 'ips', function ips() {\n  return this.app.get('trust proxy fn');\n});\n\ndefineGetter(req, 'subdomains', function subdomains() {\n  return this.app.get('subdomain offset');\n});\n\nreq.other = function other() {\n  return 1;\n};\n"
+    );
     // Çok baytlı gövde: bütçe karakterle ölçülmeli, bayt değil.
     files.push((
         "app/cjk.py".into(),
@@ -465,6 +474,130 @@ fn context_adds_receiver_sensitive_caller_evidence_for_lexical_code() {
     assert!(
         !text.contains("Function: noisy · lib/response.js"),
         "app.get must not be treated as req.get evidence: {text}"
+    );
+}
+
+#[test]
+fn context_reproduces_plain_pilot_receiver_query() {
+    let mut server = Server::start();
+    let (text, is_error) = server.call(
+        "context",
+        json!({
+            "query": "Find every function in lib/ that calls the request getter req.get or its alias req.header defined in lib/request.js. Exclude app.get and res.get; include request calls through this or other aliases and identify outermost named function.",
+            "max_tokens": 1500
+        }),
+    );
+    assert!(!is_error, "{text}");
+    assert!(
+        text.contains("3 callers"),
+        "the exact receiver caller set is required: {text}"
+    );
+    for expected in [
+        "range · lib/request.js",
+        "protocol · lib/request.js",
+        "location · lib/response.js",
+    ] {
+        assert!(text.contains(expected), "missing {expected:?}: {text}");
+    }
+    for excluded in [
+        "Function: ip ·",
+        "Function: ips ·",
+        "Function: subdomains ·",
+        "Function: noisy ·",
+    ] {
+        assert!(
+            !text.contains(excluded),
+            "receiver mismatch {excluded:?}: {text}"
+        );
+    }
+}
+
+#[test]
+fn context_plain_receiver_hints_use_definition_evidence_instead_of_mention_order() {
+    let mut server = Server::start();
+    for query in [
+        "Exclude app.get and res.get. İncele: lib/ altında lib/request.js dosyasındaki req.get ve req.header.",
+        "İncele: lib/request.js; req.get; lib/.",
+    ] {
+        let (text, is_error) = server.call("context", json!({"query": query}));
+        assert!(!is_error, "{query}: {text}");
+        assert!(text.contains("3 callers"), "{query}: {text}");
+        assert!(text.contains("location · lib/response.js"), "{query}: {text}");
+        assert!(!text.contains("Function: ip ·"), "{query}: {text}");
+    }
+}
+
+#[test]
+fn context_reports_ambiguous_plain_member_targets() {
+    let mut server = Server::start();
+    let (text, is_error) = server.call(
+        "context",
+        json!({"query": "İncele: lib/request.js; req.get ve req.other; lib/."}),
+    );
+    assert!(
+        is_error,
+        "two unrelated explicit targets must not silently pick the first: {text}"
+    );
+    assert!(
+        text.contains("ambiguous") && text.contains("req.get") && text.contains("req.other"),
+        "{text}"
+    );
+}
+
+#[test]
+fn context_includes_qualified_and_outermost_caller_scopes_without_merging_names() {
+    let mut server = Server::start();
+    let (text, is_error) = server.call("context", json!({"query": "scope_target"}));
+    assert!(!is_error, "{text}");
+    assert!(
+        text.contains("4 callers"),
+        "different semantic families must survive branch dedupe: {text}"
+    );
+    for scope in [
+        "Host.handler",
+        "Host.factory.view",
+        "decorate.wrapper",
+        "Another.factory.view",
+    ] {
+        assert!(
+            text.contains(&format!("scope: {scope}")),
+            "missing {scope:?}: {text}"
+        );
+    }
+    for enclosing in ["Host.factory", "decorate", "Another.factory"] {
+        assert!(
+            text.contains(&format!("enclosing callable: {enclosing}")),
+            "missing {enclosing:?}: {text}"
+        );
+    }
+    assert_eq!(
+        text.matches("scope: Host.factory.view").count(),
+        1,
+        "{text}"
+    );
+    assert_eq!(
+        text.matches("scope: Another.factory.view").count(),
+        1,
+        "{text}"
+    );
+}
+
+#[test]
+fn context_routes_plain_qualified_symbol_and_path_without_caller_prose() {
+    let mut server = Server::start();
+    let (text, is_error) = server.call(
+        "context",
+        json!({"query": "İncele: serde_derive/src/; bound::with_bound."}),
+    );
+    assert!(!is_error, "{text}");
+    assert!(
+        text.contains("Function `with_bound` · serde_derive/src/bound.rs"),
+        "{text}"
+    );
+    assert!(text.contains("2 callers"), "{text}");
+    assert!(
+        text.contains("with_serialize_bound · serde_derive/src/ser.rs"),
+        "{text}"
     );
 }
 

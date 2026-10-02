@@ -4,8 +4,17 @@ The current state of CCM and the next steps, for the owner and for any agent tha
 work. Keep it current: replace lines that stop being true instead of appending history (git log is
 the history).
 
-Last updated: 2026-10-03. Where work stopped: the owner-approved **Codex context-first pilot is
-complete**, measured at clean commit `4185640` (see "Codex context-first pilot result"). All nine
+Last updated: 2026-10-03. Where work stopped: **local packet fixes are in progress** after the
+owner asked to continue the next steps. At base `dbaa2ec`, five new MCP end-to-end regressions
+compiled and executed, then failed for the intended routing/scope bugs; the same filtered target
+passed its six existing context tests (exit 101: 6 passed, 5 failed). No production code has changed
+yet. The RED checkpoint covers the actual plain-text pilot query, negative receivers mentioned
+first, unrelated target ambiguity, plain qualified Rust hints and caller scope/semantic-family
+preservation. Next: implement the general fixes, rerun this target, then full local/release gates.
+No new external AI quota use is authorized by this local continuation.
+
+The owner-approved **Codex context-first pilot is complete**, measured at clean commit `4185640`
+(see "Codex context-first pilot result"). All nine
 final answers passed, and B called `context` once in each task. B still used additional source
 inspection and its summed input+output tokens were 29.65% above A across these three tasks.
 Real-query inspection found two concrete packet gaps: unqualified/enclosing caller names in
