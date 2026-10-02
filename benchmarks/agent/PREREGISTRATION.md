@@ -81,7 +81,8 @@ Report, without dropping failures:
 
 1. task success rate and 95% Wilson interval by arm;
 2. recall and precision of the structured answer;
-3. model cost in USD as reported by Claude Code (Codex reports none);
+3. model cost in USD: as reported by Claude Code; for Codex, which reports none, an estimate from
+   the official API price list (`agent/prices.py`; the report names the source and its date);
 4. input tokens, including cache creation/read tokens, and output tokens;
 5. agent turns and wall-clock time;
 6. stale-answer count on edit tasks;
@@ -151,3 +152,6 @@ the final run is complete.
 4. 2026-10-02: the Codex agent was added (see Agents) at the owner's request, to measure both
    subscriptions. A zero-cost start without a login accepted every flag and override; its pilot
    checks the run-level isolation on real output before any final Codex run.
+5. 2026-10-02: at the owner's request the report estimates Codex's cost from the official API
+   price list, so that readers can weigh CCM in dollars as well as in tokens. Run records keep
+   the raw token counts; the estimate is computed when the report is written.

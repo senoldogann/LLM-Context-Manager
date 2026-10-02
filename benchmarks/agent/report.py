@@ -10,6 +10,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 
+from agent.prices import PRICES, estimated_cost
 from freshness.jsonio import as_bool, as_float, as_int, as_list, as_object, as_str
 from freshness.model import JsonValue
 
@@ -42,6 +43,8 @@ class Outcome:
     extra: tuple[str, ...]
     failure: str | None
     cost_usd: float | None
+    # Ajan maliyet bildirmediyse (Codex) `cost_usd` API fiyatıyla tahmindir.
+    cost_estimated: bool
     input_tokens: int | None
     output_tokens: int | None
     turns: int | None
@@ -108,6 +111,7 @@ def read_outcome(path: Path) -> Outcome:
             extra=(),
             failure=failure,
             cost_usd=None,
+            cost_estimated=False,
             input_tokens=None,
             output_tokens=None,
             turns=None,
@@ -127,6 +131,18 @@ def read_outcome(path: Path) -> Outcome:
     applied = result.get("edit_applied")
     input_fields = ("input_tokens", "cache_creation_input_tokens", "cache_read_input_tokens")
     score_success = as_bool(result.get("success"), f"{path}: success", ReportError)
+    output_tokens = as_int(usage.get("output_tokens"), f"{path}: output_tokens", ReportError)
+    reported_cost = optional_float(transcript.get("cost_usd"), f"{path}: cost_usd")
+    estimate = (
+        None
+        if reported_cost is not None
+        else estimated_cost(
+            as_str(record.get("model"), f"{path}: model", ReportError),
+            as_int(usage.get("input_tokens"), f"{path}: input_tokens", ReportError),
+            as_int(usage.get("cache_read_input_tokens"), f"{path}: cache_read", ReportError),
+            output_tokens,
+        )
+    )
     return Outcome(
         task_id=task_id,
         category=category,
@@ -141,11 +157,12 @@ def read_outcome(path: Path) -> Outcome:
         missing=strings(result.get("missing"), f"{path}: missing"),
         extra=strings(result.get("extra"), f"{path}: extra"),
         failure=failure,
-        cost_usd=optional_float(transcript.get("cost_usd"), f"{path}: cost_usd"),
+        cost_usd=reported_cost if reported_cost is not None else estimate,
+        cost_estimated=estimate is not None,
         input_tokens=sum(
             as_int(usage.get(field), f"{path}: {field}", ReportError) for field in input_fields
         ),
-        output_tokens=as_int(usage.get("output_tokens"), f"{path}: output_tokens", ReportError),
+        output_tokens=output_tokens,
         turns=optional_int(transcript.get("num_turns"), f"{path}: num_turns"),
         wall_s=wall_s,
         index_s=(
@@ -404,7 +421,22 @@ def header(setup: JsonValue, outcomes: list[Outcome]) -> list[str]:
         f"`{settings.get('effort')}`, embeddings `{settings.get('embedding')}`, per-run budget "
         f"${settings.get('max_budget_usd')}; {environment.get('ccm_version')} at "
         f"`{commit[:7]}`{' (uncommitted changes)' if dirty else ''}.",
+        "",
+        cost_note(as_str(settings.get("model"), "settings.json: model", ReportError), outcomes),
     ]
+
+
+def cost_note(model: str, outcomes: list[Outcome]) -> str:
+    """Maliyet sütunlarının neyi gösterdiği: ajanın bildirdiği tutar ya da API fiyatıyla tahmin."""
+    if not any(outcome.cost_estimated for outcome in outcomes):
+        return "Cost is the amount the agent reported."
+    price = PRICES[model]
+    return (
+        f"Cost is an API-price estimate (the agent reports none): `{model}` at ${price.input:.2f} "
+        f"input, ${price.cached_input:.2f} cached input and ${price.output:.2f} output per 1M "
+        f"tokens, standard tier, from {price.source} ({price.retrieved}). On a subscription it "
+        "shows what the same tokens would cost through the API; tokens are the quota measure."
+    )
 
 
 def render(outcomes: list[Outcome], setup: JsonValue) -> str:
