@@ -403,9 +403,9 @@ fn mcp_find_nodes_returns_node_metadata() -> Result<(), Box<dyn std::error::Erro
     stdin.flush()?;
 
     reader.read_line(&mut line)?;
-    assert!(line.contains("**Node ID:**"));
-    assert!(line.contains("**File:**"));
-    assert!(line.contains("foo"));
+    // Kompakt satır: `- Tür: ad · yol:başlangıç-bitiş · neden`.
+    assert!(line.contains("- Function: foo · main.rs:1-1 · "), "{line}");
+    assert!(!line.contains(":symbol:"), "{line}");
 
     let _ = child.kill();
 
@@ -1293,11 +1293,14 @@ fn mcp_resolves_class_import_constructor_context_and_impact(
         }),
     )?;
     let found_text = tool_text(&found);
+    // İlk kompakt satırın `yol:başlangıç` konumu hedef olarak kullanılır.
     let node_id = found_text
         .lines()
-        .find_map(|line| line.strip_prefix("**Node ID:** "))
-        .expect("YoloDetector stable node ID");
-    assert!(node_id.contains(":symbol:"));
+        .find(|line| line.contains(": YoloDetector · "))
+        .and_then(|line| line.split(" · ").nth(1))
+        .and_then(|location| location.split('-').next())
+        .expect("YoloDetector path:line handle");
+    assert!(node_id.starts_with("detector.py:"), "{node_id}");
 
     let usages = send_request(
         &mut stdin,
@@ -1370,7 +1373,7 @@ fn mcp_resolves_class_import_constructor_context_and_impact(
     )?;
     let graph_with_body_text = tool_text(&graph_with_body);
     assert!(graph_with_body_text.contains("class Yo"));
-    assert!(graph_with_body_text.contains("body truncated by max_chars"));
+    assert!(graph_with_body_text.contains("body truncated by max_tokens"));
 
     let impact = send_request(
         &mut stdin,
@@ -1541,7 +1544,7 @@ fn mcp_serves_the_active_generation_while_reindexing() -> Result<(), Box<dyn std
         tool_succeeded(&retrieval),
         "reads must keep serving the active generation: {retrieval}"
     );
-    assert!(tool_text(&retrieval).contains("stable_symbol (Score:"));
+    assert!(tool_text(&retrieval).contains(": stable_symbol · "));
 
     let _ = child.kill();
     Ok(())

@@ -1284,7 +1284,7 @@ fn handle_list_tools(id: Option<Value>) -> JsonRpcResponse {
                     "line": { "type": "integer", "minimum": 1, "description": "The line number" },
                     "project_path": { "type": "string", "description": "Optional absolute path to the project root. If provided, uses the index in that project." },
                     "include_body": { "type": "boolean", "description": "Include node body snippets. Defaults to false (metadata only)." },
-                    "max_chars": { "type": "integer", "minimum": 1, "maximum": 100000, "description": "Maximum total body characters to include. Defaults to 4000." }
+                    "max_tokens": { "type": "integer", "minimum": 1, "maximum": 20000, "description": "Answer budget in estimated tokens (about 4 characters each). Defaults to 1500." }
                 },
                 "required": ["file", "line"]
             }),
@@ -1301,7 +1301,7 @@ fn handle_list_tools(id: Option<Value>) -> JsonRpcResponse {
                     "limit": { "type": "integer", "minimum": 1, "maximum": 50, "description": "Optional maximum number of results to return. Defaults to 5." },
                     "project_path": { "type": "string", "description": "Optional absolute path to the project root. If provided, uses the index in that project." },
                     "include_body": { "type": "boolean", "description": "Include node body snippets. Defaults to false (metadata only)." },
-                    "max_chars": { "type": "integer", "minimum": 1, "maximum": 100000, "description": "Maximum total body characters to include. Defaults to 4000." }
+                    "max_tokens": { "type": "integer", "minimum": 1, "maximum": 20000, "description": "Answer budget in estimated tokens (about 4 characters each). Defaults to 1500." }
                 },
                 "required": ["query"]
             }),
@@ -1318,7 +1318,7 @@ fn handle_list_tools(id: Option<Value>) -> JsonRpcResponse {
                     "limit": { "type": "integer", "minimum": 1, "maximum": 50, "description": "Optional maximum number of matches to return. Defaults to 10." },
                     "project_path": { "type": "string", "description": "Optional absolute path to the project root. If provided, uses the index in that project." },
                     "include_body": { "type": "boolean", "description": "Include node body snippets. Defaults to false (metadata only)." },
-                    "max_chars": { "type": "integer", "minimum": 1, "maximum": 100000, "description": "Maximum total body characters to include. Defaults to 4000." }
+                    "max_tokens": { "type": "integer", "minimum": 1, "maximum": 20000, "description": "Answer budget in estimated tokens (about 4 characters each). Defaults to 1500." }
                 },
                 "required": ["query"]
             }),
@@ -1334,7 +1334,7 @@ fn handle_list_tools(id: Option<Value>) -> JsonRpcResponse {
                     "node_id": { "type": "string", "description": "The ID of the node to retrieve." },
                     "project_path": { "type": "string", "description": "Optional absolute path to the project root. If provided, uses the index in that project." },
                     "include_body": { "type": "boolean", "description": "Include node body snippets. Defaults to false (metadata only)." },
-                    "max_chars": { "type": "integer", "minimum": 1, "maximum": 100000, "description": "Maximum total body characters to include. Defaults to 4000." }
+                    "max_tokens": { "type": "integer", "minimum": 1, "maximum": 20000, "description": "Answer budget in estimated tokens (about 4 characters each). Defaults to 1500." }
                 },
                 "required": ["node_id"]
             }),
@@ -1379,7 +1379,7 @@ fn handle_list_tools(id: Option<Value>) -> JsonRpcResponse {
                     "limit": { "type": "integer", "minimum": 1, "maximum": 50, "description": "Max usages to return. Defaults to 20." },
                     "project_path": { "type": "string", "description": "Optional absolute path to the project root." },
                     "include_body": { "type": "boolean", "description": "Include node body snippets. Defaults to false (metadata only)." },
-                    "max_chars": { "type": "integer", "minimum": 1, "maximum": 100000, "description": "Maximum total body characters to include. Defaults to 4000." }
+                    "max_tokens": { "type": "integer", "minimum": 1, "maximum": 20000, "description": "Answer budget in estimated tokens (about 4 characters each). Defaults to 1500." }
                 },
                 "required": ["target"]
             }),
@@ -1397,7 +1397,7 @@ fn handle_list_tools(id: Option<Value>) -> JsonRpcResponse {
                     "max_depth": { "type": "integer", "minimum": 1, "maximum": 32, "description": "Max hops to search. Defaults to 8." },
                     "project_path": { "type": "string", "description": "Optional absolute path to the project root." },
                     "include_body": { "type": "boolean", "description": "Include node body snippets. Defaults to false (metadata only)." },
-                    "max_chars": { "type": "integer", "minimum": 1, "maximum": 100000, "description": "Maximum total body characters to include. Defaults to 4000." }
+                    "max_tokens": { "type": "integer", "minimum": 1, "maximum": 20000, "description": "Answer budget in estimated tokens (about 4 characters each). Defaults to 1500." }
                 },
                 "required": ["from", "to"]
             }),
@@ -1414,7 +1414,7 @@ fn handle_list_tools(id: Option<Value>) -> JsonRpcResponse {
                     "limit": { "type": "integer", "minimum": 1, "maximum": 50, "description": "Max dependents to return. Defaults to 30." },
                     "project_path": { "type": "string", "description": "Optional absolute path to the project root." },
                     "include_body": { "type": "boolean", "description": "Include node body snippets. Defaults to false (metadata only)." },
-                    "max_chars": { "type": "integer", "minimum": 1, "maximum": 100000, "description": "Maximum total body characters to include. Defaults to 4000." }
+                    "max_tokens": { "type": "integer", "minimum": 1, "maximum": 20000, "description": "Answer budget in estimated tokens (about 4 characters each). Defaults to 1500." }
                 },
                 "required": ["file"]
             }),
@@ -1431,7 +1431,7 @@ fn handle_list_tools(id: Option<Value>) -> JsonRpcResponse {
                     "days": { "type": "integer", "minimum": 1, "maximum": 3650, "description": "Days to look back in git history. Defaults to 7." },
                     "limit": { "type": "integer", "minimum": 1, "maximum": 50, "description": "Max nodes to return. Defaults to 30." },
                     "include_body": { "type": "boolean", "description": "Include node body snippets. Defaults to false (metadata only)." },
-                    "max_chars": { "type": "integer", "minimum": 1, "maximum": 100000, "description": "Maximum total body characters to include. Defaults to 4000." }
+                    "max_tokens": { "type": "integer", "minimum": 1, "maximum": 20000, "description": "Answer budget in estimated tokens (about 4 characters each). Defaults to 1500." }
                 },
                 "required": ["project_path"]
             }),
@@ -1665,7 +1665,7 @@ fn validate_tool_arguments(tool_name: &str, arguments: &Value) -> std::result::R
     let required: &[&[&str]] = match tool_name {
         "get_context" => &[&["file"]],
         "search_code" | "find_nodes" => &[&["query"]],
-        "read_graph" => &[&["node_id"]],
+        "read_graph" => &[&["target", "node_id"]],
         "find_usages" => &[&["target", "node_id"]],
         "trace_call_chain" => &[&["from", "from_id"], &["to", "to_id"]],
         "impact_of_change" => &[&["file"]],

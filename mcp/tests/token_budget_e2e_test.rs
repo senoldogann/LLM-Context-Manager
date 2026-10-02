@@ -126,10 +126,17 @@ impl Server {
             response.get("error").is_none(),
             "{tool} JSON-RPC error: {response}"
         );
-        let text = response["result"]["content"][0]["text"]
-            .as_str()
-            .unwrap_or_default()
-            .to_string();
+        // Tazelik satırı ayrı bir içerik öğesidir; tüm metinler birleştirilir.
+        let text = response["result"]["content"]
+            .as_array()
+            .map(|items| {
+                items
+                    .iter()
+                    .filter_map(|item| item["text"].as_str())
+                    .collect::<Vec<_>>()
+                    .join("\n")
+            })
+            .unwrap_or_default();
         (text, response["result"]["isError"] == true)
     }
 }
@@ -171,4 +178,33 @@ fn targets_accept_path_line_and_unique_names() {
     let (text, is_error) = server.call("find_usages", json!({"target": "app/core.py:3"}));
     assert!(is_error, "{text}");
     assert!(text.contains("no symbol at app/core.py:3"), "{text}");
+}
+
+#[test]
+fn usages_are_compact_lines_without_node_ids() {
+    let mut server = Server::start();
+    let (text, is_error) = server.call("find_usages", json!({"target": "app/models.py:2"}));
+    assert!(!is_error, "{text}");
+    assert!(
+        text.contains("- Function: save · app/models.py:7-8 · calls"),
+        "one compact line per usage: {text}"
+    );
+    assert!(!text.contains(":symbol:"), "no node IDs: {text}");
+    assert!(!text.contains("Score:"), "no scores: {text}");
+}
+
+#[test]
+fn max_tokens_caps_output_and_reports_the_rest() {
+    let mut server = Server::start();
+    let (text, is_error) = server.call(
+        "find_usages",
+        json!({"target": "hub", "max_tokens": 200, "limit": 50}),
+    );
+    assert!(!is_error, "{text}");
+    assert!(
+        text.len() <= 1000,
+        "budget of ~200 tokens: {} chars\n{text}",
+        text.len()
+    );
+    assert!(text.contains("more not shown (max_tokens=200)"), "{text}");
 }

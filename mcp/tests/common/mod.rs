@@ -216,7 +216,10 @@ pub fn tool_text(name: &str, response: &Value) -> TestResult<String> {
 /// "No graph nodes found for query: 'x'" mesajı da sembolü içerdiği için başlık
 /// biçimi (`<sembol> (Score:`) aranır.
 pub fn found_node(text: &str, symbol: &str) -> bool {
-    text.contains(&format!("{symbol} (Score:"))
+    // Kompakt sonuç satırı: `- Tür: ad · yol:aralık · neden`.
+    let marker = format!(": {symbol} · ");
+    text.lines()
+        .any(|line| line.starts_with("- ") && line.contains(&marker))
 }
 
 /// Koşul sağlanana kadar `find_nodes` çağırır; süre dolarsa son çıktıyla hata döner.

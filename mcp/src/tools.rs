@@ -26,76 +26,80 @@ pub(crate) fn input_error(message: impl Into<String>) -> anyhow::Error {
     anyhow::Error::new(ToolInputError(message.into()))
 }
 
-fn format_suggestion_metadata(suggestion: &ccm_core::engine::ContextSuggestion) -> String {
-    let mut metadata = Vec::new();
-
-    if let Some(node_id) = &suggestion.node_id {
-        metadata.push(format!("**Node ID:** {}", node_id));
-    }
-    if let Some(file_path) = &suggestion.file_path {
-        metadata.push(format!("**File:** {}", file_path));
-    }
-    if let Some(node_type) = &suggestion.node_type {
-        metadata.push(format!("**Node Type:** {}", node_type));
-    }
-    match (suggestion.start_line, suggestion.end_line) {
-        (Some(start), Some(end)) => metadata.push(format!("**Range:** {}-{}", start, end)),
-        (Some(start), None) => metadata.push(format!("**Line:** {}", start)),
-        _ => {}
-    }
-
-    if metadata.is_empty() {
-        String::new()
-    } else {
-        format!("{}\n\n", metadata.join("\n"))
-    }
-}
-
 const DEFAULT_MAX_LIMIT: usize = 50;
-const DEFAULT_MAX_BODY_CHARS: usize = 4_000;
-const MAX_BODY_CHARS: usize = 100_000;
+/// Varsayılan cevap bütçesi (yaklaşık token; bir token ≈ dört karakter).
+const DEFAULT_MAX_TOKENS: usize = 1_500;
+const MAX_MAX_TOKENS: usize = 20_000;
+const CHARS_PER_TOKEN: usize = 4;
 const MAX_GRAPH_DEPTH: usize = 32;
 const MAX_DIFF_DAYS: u32 = 3_650;
 
+/// Tek satırlık sonuç: `- Tür: ad · yol:başlangıç-bitiş · neden`.
+fn suggestion_line(suggestion: &ccm_core::engine::ContextSuggestion) -> String {
+    let mut line = format!("- {}", suggestion.title);
+    if let Some(path) = &suggestion.file_path {
+        let path = path.trim_start_matches("./");
+        match (suggestion.start_line, suggestion.end_line) {
+            (Some(start), Some(end)) => line.push_str(&format!(" · {path}:{start}-{end}")),
+            (Some(start), None) => line.push_str(&format!(" · {path}:{start}")),
+            _ => line.push_str(&format!(" · {path}")),
+        }
+    }
+    if !suggestion.reason.is_empty() {
+        line.push_str(" · ");
+        line.push_str(&suggestion.reason);
+    }
+    line
+}
+
+/// Sonuçları bütçe içinde tek satır olarak listeler. Gövdeler istenirse bütçeye
+/// dahildir ve sığmayan kısmı kesilir; sığmayan sonuçlar sonda sayılır.
 fn format_suggestions_output(
     suggestions: &[ccm_core::engine::ContextSuggestion],
     include_body: bool,
-    max_body_chars: usize,
+    list_tokens: usize,
+    requested_tokens: usize,
 ) -> String {
+    let budget = list_tokens.saturating_mul(CHARS_PER_TOKEN);
     let mut output = String::new();
-    let mut total_chars = 0usize;
-    let mut truncated = 0usize;
-    for suggestion in suggestions {
-        output.push_str(&format!(
-            "## {} (Score: {:.2})\n**Reason:** {}\n{}",
-            suggestion.title,
-            suggestion.relevance_score,
-            suggestion.reason,
-            format_suggestion_metadata(suggestion),
-        ));
+    for (index, suggestion) in suggestions.iter().enumerate() {
+        let line = suggestion_line(suggestion);
+        if output.len() + line.len() + 1 > budget {
+            output.push_str(&omitted_footer(suggestions.len() - index, requested_tokens));
+            return output;
+        }
+        output.push_str(&line);
+        output.push('\n');
         if include_body && !suggestion.content.is_empty() {
-            let remaining = max_body_chars.saturating_sub(total_chars);
-            if remaining > 0 {
-                let body: String = suggestion.content.chars().take(remaining).collect();
-                output.push_str(&format!("```\n{}\n```", body));
-                total_chars += body.chars().count();
-                if body.chars().count() < suggestion.content.chars().count() {
-                    truncated += 1;
-                    output.push_str("\n*(body truncated)*");
-                }
-            } else {
-                truncated += 1;
+            let remaining = budget.saturating_sub(output.len() + 8);
+            let body = clip(&suggestion.content, remaining);
+            if !body.is_empty() {
+                output.push_str("```\n");
+                output.push_str(&body);
+                output.push_str("\n```\n");
             }
         }
-        output.push_str("\n\n---\n");
-    }
-    if truncated > 0 {
-        output.push_str(&format!(
-            "_Note: {} result body or bodies were truncated by max_chars._\n",
-            truncated
-        ));
     }
     output
+}
+
+/// Bütçeye sığmayan sonuç sayısı ve nasıl genişletileceği.
+fn omitted_footer(count: usize, max_tokens: usize) -> String {
+    format!(
+        "… {count} more not shown (max_tokens={max_tokens}); narrow the query or raise max_tokens.\n"
+    )
+}
+
+/// Metni `limit` karaktere keser; kesilirse sonuna `…` ekler.
+fn clip(text: &str, limit: usize) -> String {
+    if text.chars().count() <= limit {
+        return text.to_string();
+    }
+    let mut clipped: String = text.chars().take(limit.saturating_sub(1)).collect();
+    if !clipped.is_empty() {
+        clipped.push('…');
+    }
+    clipped
 }
 
 fn limit_from_args(args: &Value, default: usize) -> usize {
@@ -105,15 +109,18 @@ fn limit_from_args(args: &Value, default: usize) -> usize {
         .unwrap_or(default)
 }
 
-fn max_chars_from_args(args: &Value) -> usize {
-    args.get("max_chars")
-        .and_then(|v| v.as_u64())
-        .map(|value| {
-            usize::try_from(value)
-                .unwrap_or(MAX_BODY_CHARS)
-                .clamp(1, MAX_BODY_CHARS)
-        })
-        .unwrap_or(DEFAULT_MAX_BODY_CHARS)
+/// Cevap bütçesi: `max_tokens`; yoksa eski `max_chars` / 4; yoksa varsayılan.
+fn max_tokens_from_args(args: &Value) -> usize {
+    if let Some(value) = args.get("max_tokens").and_then(Value::as_u64) {
+        return usize::try_from(value)
+            .unwrap_or(MAX_MAX_TOKENS)
+            .clamp(1, MAX_MAX_TOKENS);
+    }
+    if let Some(value) = args.get("max_chars").and_then(Value::as_u64) {
+        let chars = usize::try_from(value).unwrap_or(MAX_MAX_TOKENS * CHARS_PER_TOKEN);
+        return (chars / CHARS_PER_TOKEN).clamp(1, MAX_MAX_TOKENS);
+    }
+    DEFAULT_MAX_TOKENS
 }
 
 fn include_body_from_args(args: &Value) -> bool {
@@ -175,7 +182,8 @@ pub async fn get_context(engine: &Arc<RetrievalEngine>, args: &Value) -> Result<
             text: format_suggestions_output(
                 &suggestions,
                 include_body_from_args(args),
-                max_chars_from_args(args),
+                max_tokens_from_args(args),
+                max_tokens_from_args(args),
             ),
         }],
         is_error: None,
@@ -221,7 +229,8 @@ pub async fn search_code(engine: &Arc<RetrievalEngine>, args: &Value) -> Result<
             text: format_suggestions_output(
                 &hits,
                 include_body_from_args(args),
-                max_chars_from_args(args),
+                max_tokens_from_args(args),
+                max_tokens_from_args(args),
             ),
         }],
         is_error: None,
@@ -265,7 +274,8 @@ pub async fn find_nodes(engine: &Arc<RetrievalEngine>, args: &Value) -> Result<T
             text: format_suggestions_output(
                 &matches,
                 include_body_from_args(args),
-                max_chars_from_args(args),
+                max_tokens_from_args(args),
+                max_tokens_from_args(args),
             ),
         }],
         is_error: None,
@@ -275,13 +285,13 @@ pub async fn find_nodes(engine: &Arc<RetrievalEngine>, args: &Value) -> Result<T
 /// Tool: read_graph
 /// Retrieves details of a specific node in the code graph.
 pub async fn read_graph(engine: &Arc<RetrievalEngine>, args: &Value) -> Result<ToolResult> {
-    let node_id = args
-        .get("node_id")
-        .and_then(|v| v.as_str())
-        .ok_or_else(|| anyhow::anyhow!("Missing node_id argument"))?;
-
-    let project_path = args.get("project_path").and_then(|v| v.as_str());
-    let normalized_id = normalize_graph_node_id(node_id, project_path)?;
+    let normalized_id = match engine
+        .resolve_target(target_form(args, "target", "node_id")?)
+        .await
+    {
+        Ok(id) => id,
+        Err(error) => return Ok(tool_error(error.to_string())),
+    };
 
     let node_opt = engine.get_node_by_id(&normalized_id).await;
 
@@ -291,11 +301,11 @@ pub async fn read_graph(engine: &Arc<RetrievalEngine>, args: &Value) -> Result<T
             node.name, node.node_type, node.id, node.start_line, node.end_line
         );
         if include_body_from_args(args) && !node.content.is_empty() {
-            let max_chars = max_chars_from_args(args);
-            let body: String = node.content.chars().take(max_chars).collect();
+            let body_chars = max_tokens_from_args(args) * CHARS_PER_TOKEN;
+            let body: String = node.content.chars().take(body_chars).collect();
             output.push_str(&format!("\n\n```\n{}\n```", body));
             if body.chars().count() < node.content.chars().count() {
-                output.push_str("\n*(body truncated by max_chars)*");
+                output.push_str("\n*(body truncated by max_tokens)*");
             }
         }
 
@@ -338,10 +348,7 @@ pub async fn read_graph(engine: &Arc<RetrievalEngine>, args: &Value) -> Result<T
         Ok(ToolResult {
             content: vec![ToolResultContent {
                 content_type: "text".to_string(),
-                text: format!(
-                    "Node not found with ID: {} (Normalized: {})",
-                    node_id, normalized_id
-                ),
+                text: format!("Node not found with ID: {}", normalized_id),
             }],
             is_error: Some(true),
         })
@@ -1134,11 +1141,16 @@ pub async fn find_usages(engine: &Arc<RetrievalEngine>, args: &Value) -> Result<
         ));
     }
     if !shown.is_empty() {
+        // Özet satırı da bütçeden düşer; liste kalan bütçeyle biçimlenir.
+        let list_budget = max_tokens_from_args(args)
+            .saturating_sub(text.len() / CHARS_PER_TOKEN + 1)
+            .max(1);
         text.push_str("\n\n");
         text.push_str(&format_suggestions_output(
             &shown,
             include_body_from_args(args),
-            max_chars_from_args(args),
+            list_budget,
+            max_tokens_from_args(args),
         ));
     }
 
@@ -1227,7 +1239,8 @@ pub async fn trace_call_chain(engine: &Arc<RetrievalEngine>, args: &Value) -> Re
                 format_suggestions_output(
                     &chain,
                     include_body_from_args(args),
-                    max_chars_from_args(args),
+                    max_tokens_from_args(args),
+                    max_tokens_from_args(args),
                 )
             ),
         }],
@@ -1281,7 +1294,8 @@ pub async fn impact_of_change(engine: &Arc<RetrievalEngine>, args: &Value) -> Re
                 format_suggestions_output(
                     &impacted,
                     include_body_from_args(args),
-                    max_chars_from_args(args),
+                    max_tokens_from_args(args),
+                    max_tokens_from_args(args),
                 )
             ),
         }],
@@ -1328,7 +1342,8 @@ pub async fn diff_context(engine: &Arc<RetrievalEngine>, args: &Value) -> Result
                 format_suggestions_output(
                     &nodes,
                     include_body_from_args(args),
-                    max_chars_from_args(args),
+                    max_tokens_from_args(args),
+                    max_tokens_from_args(args),
                 )
             ),
         }],

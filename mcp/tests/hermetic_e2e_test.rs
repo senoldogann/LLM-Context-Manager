@@ -24,6 +24,16 @@ fn text_of(resp: &Value) -> String {
         .to_string()
 }
 
+/// Kompakt sonuç satırındaki (`- Tür: ad · yol:başlangıç-bitiş · …`) ilk `yol:başlangıç` hedefi.
+fn first_location(text: &str) -> Option<String> {
+    text.lines().find_map(|line| {
+        let location = line.strip_prefix("- ")?.split(" · ").nth(1)?;
+        let (path, range) = location.rsplit_once(':')?;
+        let start = range.split('-').next()?;
+        Some(format!("{path}:{start}"))
+    })
+}
+
 /// Adım ne JSON-RPC hatası ne de araç yürütme hatası (`isError: true`) döndürmeli.
 fn assert_no_error(resp: &Value, step: &str) {
     assert!(
@@ -191,20 +201,14 @@ fn hermetic_mcp_all_tools_e2e_on_synthetic_repo() {
         "find_nodes: {}",
         find_text
     );
-    // Metadata-first çıktı: node_id mevcut, gövde yok.
+    // Kompakt çıktı: varsayılan olarak gövde yok.
     assert!(
         !find_text.contains("fn compute_tax"),
         "varsayılan body içermemeli"
     );
 
-    // 7. read_graph: find_nodes çıktısından ilk node id'yi çöz.
-    let node_id = find_text
-        .lines()
-        .find_map(|line| {
-            line.strip_prefix("**Node ID:** ")
-                .map(|id| id.trim().to_string())
-        })
-        .expect("find_nodes must return a Node ID");
+    // 7. read_graph: find_nodes çıktısındaki ilk sonucun `yol:satır` hedefi.
+    let node_id = first_location(&find_text).expect("find_nodes must return a path:line handle");
     let resp = send(
         &mut stdin,
         &mut reader,
@@ -267,13 +271,7 @@ fn hermetic_mcp_all_tools_e2e_on_synthetic_repo() {
             }),
         );
         assert_no_error(&resp, "8 find_nodes compute_total");
-        text_of(&resp)
-            .lines()
-            .find_map(|line| {
-                line.strip_prefix("**Node ID:** ")
-                    .map(|id| id.trim().to_string())
-            })
-            .expect("compute_total node id")
+        first_location(&text_of(&resp)).expect("compute_total path:line handle")
     };
     let resp = send(
         &mut stdin,
