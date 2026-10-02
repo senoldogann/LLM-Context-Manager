@@ -7,6 +7,7 @@ use std::sync::Arc;
 pub mod map;
 pub mod references;
 mod resolve;
+mod resolve_rust;
 mod rust_modules;
 pub mod usages;
 
@@ -237,6 +238,7 @@ impl CodeGraph {
     fn resolve_references(&self, sources: &[NodeIndex]) -> Vec<(NodeIndex, NodeIndex, EdgeType)> {
         let mut symbols = SymbolTable::new(self);
         let modules = resolve::PythonModules::new(self);
+        let crates = rust_modules::RustCrates::new(self);
         let mut references = Vec::new();
         for source_idx in sources {
             match &self.graph[*source_idx].facts {
@@ -250,11 +252,12 @@ impl CodeGraph {
                         *source_idx,
                         facts,
                     )),
-                    // Rust olguları çözümleyiciyle birlikte düğümlere bağlanır; o
-                    // zamana kadar Rust kaynağı sözcüksel çözülür.
-                    SyntaxLanguage::Rust => {
-                        self.resolve_source_references(*source_idx, &mut symbols, &mut references)
-                    }
+                    SyntaxLanguage::Rust => references.extend(resolve_rust::rust_references(
+                        self,
+                        &crates,
+                        *source_idx,
+                        facts,
+                    )),
                 },
             }
         }

@@ -101,7 +101,7 @@ const PYTHON_BUILTINS: &[&str] = &[
 ];
 
 /// Bir çağrının çözüm sonucu.
-enum Resolution {
+pub(crate) enum Resolution {
     /// Kapsam kurallarıyla bulunan hedef(ler).
     Exact(Vec<NodeIndex>),
     /// Import edilmemiş ama projede tek tanımı olan ad.
@@ -294,7 +294,7 @@ pub(crate) fn python_references<'g>(
 }
 
 /// Kesinlik sırası: küçük olan daha güçlüdür.
-fn edge_rank(edge: &EdgeType) -> u8 {
+pub(crate) fn edge_rank(edge: &EdgeType) -> u8 {
     match edge {
         EdgeType::Calls => 0,
         EdgeType::CallInferred => 1,
@@ -333,7 +333,7 @@ fn reference_targets(
         .collect()
 }
 
-fn call_edges(resolution: Resolution) -> Vec<(NodeIndex, EdgeType)> {
+pub(crate) fn call_edges(resolution: Resolution) -> Vec<(NodeIndex, EdgeType)> {
     match resolution {
         Resolution::Exact(targets) if targets.len() == 1 => vec![(targets[0], EdgeType::Calls)],
         Resolution::Exact(targets) | Resolution::Possible(targets) => targets

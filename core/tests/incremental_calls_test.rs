@@ -50,8 +50,8 @@ async fn incremental_index_adds_call_edges() -> Result<()> {
     assert!(edge_idx.is_some(), "call edge not found");
 
     let edge_weight = graph.graph.edge_weight(edge_idx.unwrap()).unwrap();
-    // Rust sözdizimi çözümü gelene kadar ad eşleşmesi çıkarımdır (D1).
-    assert!(matches!(edge_weight, EdgeType::CallInferred));
+    // Rust sözdiziminden çözülür: aynı modüldeki tanım.
+    assert!(matches!(edge_weight, EdgeType::Calls));
 
     Ok(())
 }
@@ -70,9 +70,11 @@ async fn cross_file_reference_resolves_struct_that_has_impl_blocks() -> Result<(
          impl Foo {\n    pub fn new() -> Foo { Foo {} }\n}\n\
          impl Display for Foo {\n    fn fmt(&self, f: &mut Formatter) -> Result { Ok(()) }\n}\n",
     )?;
+    // Geçerli Rust: modüller crate kökünde bildirilir, tür `use` ile kapsama girer.
+    std::fs::write(dir.path().join("lib.rs"), "mod foo;\nmod user;\n")?;
     std::fs::write(
         dir.path().join("user.rs"),
-        "fn build() -> Foo {\n    let value: Foo = make();\n    value\n}\n",
+        "use crate::foo::Foo;\n\nfn build() -> Foo {\n    let value: Foo = make();\n    value\n}\n",
     )?;
 
     let db_path = dir.path().join("db");
@@ -82,7 +84,11 @@ async fn cross_file_reference_resolves_struct_that_has_impl_blocks() -> Result<(
     engine
         .incremental_index_paths(
             dir.path().to_string_lossy().as_ref(),
-            &[PathBuf::from("foo.rs"), PathBuf::from("user.rs")],
+            &[
+                PathBuf::from("lib.rs"),
+                PathBuf::from("foo.rs"),
+                PathBuf::from("user.rs"),
+            ],
         )
         .await?;
 

@@ -7,9 +7,6 @@
 //! kökleridir. Paketsiz dosyalar dizinlerindeki `main.rs`/`lib.rs`'ye, o da yoksa
 //! kendilerine bağlanır. `#[path]` öznitelikleri izlenmez.
 
-// Çözümleyici (Task 4) bağlanana kadar yalnız testler kullanır.
-#![cfg_attr(not(test), allow(dead_code))]
-
 use std::collections::BTreeSet;
 
 use super::{CodeGraph, NodeType};

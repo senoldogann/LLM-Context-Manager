@@ -3,8 +3,8 @@
 use anyhow::Result;
 use ccm_core::engine::RetrievalEngine;
 use ccm_core::graph::{
-    usages_of, CallTarget, CodeGraph, EdgeType, ImportBinding, ReferenceFacts, UsageError,
-    UsageRelation,
+    usages_of, CallTarget, CodeGraph, EdgeType, ImportBinding, ReferenceFacts, SyntaxLanguage,
+    UsageError, UsageRelation,
 };
 use ccm_core::vector::store::LanceDbStore;
 use petgraph::graph::NodeIndex;
@@ -229,9 +229,13 @@ async fn python_facts_come_from_the_syntax_tree() -> Result<()> {
         ]
     );
 
-    // Sözdizimi çıkarıcısı olmayan diller sözcüksel kalır.
+    // Rust da sözdiziminden çıkarılır; sözcüksel diller `lexical_labels_test`'te.
     let foo = node(&graph, "lib.rs", "foo");
-    assert_eq!(graph.graph[foo].facts, ReferenceFacts::Lexical);
+    assert!(
+        matches!(&graph.graph[foo].facts, ReferenceFacts::Syntax(facts) if facts.language == SyntaxLanguage::Rust),
+        "{:?}",
+        graph.graph[foo].facts
+    );
     Ok(())
 }
 
@@ -325,14 +329,14 @@ async fn python_calls_resolve_through_scopes_and_imports() -> Result<()> {
         edge_types(&graph, file_node(&graph, "app/cli.py"), run),
         vec![EdgeType::Imports]
     );
-    // Sözdizimi çıkarıcısı olmayan dil: ad eşleşmesi çıkarımdır (D1).
+    // Rust sözdiziminden çözülür: aynı modüldeki tanım.
     assert_eq!(
         edge_types(
             &graph,
             node(&graph, "lib.rs", "foo"),
             node(&graph, "lib.rs", "bar")
         ),
-        vec![EdgeType::CallInferred]
+        calls
     );
     Ok(())
 }

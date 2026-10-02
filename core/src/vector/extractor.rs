@@ -13,7 +13,7 @@ use crate::graph::{
     CodeGraph, CodeNode, EdgeType, NodeType, ReferenceFacts, SyntaxFacts, SyntaxLanguage,
 };
 use crate::parser::SupportedLanguage;
-use crate::vector::python_facts;
+use crate::vector::{python_facts, rust_facts};
 
 /// Extractor extracts semantic code elements from an AST and populates a CodeGraph.
 pub struct Extractor {
@@ -58,12 +58,21 @@ impl Extractor {
         // Walk the AST and extract elements
         self.walk_node(tree.root_node(), graph, file_idx, file_id, "")?;
 
-        if matches!(self.language, SupportedLanguage::Python) {
-            graph.graph[file_idx].facts = ReferenceFacts::Syntax(python_facts::module_facts(
-                tree.root_node(),
-                &self.source_code,
-                file_id,
-            ));
+        match self.language {
+            SupportedLanguage::Python => {
+                graph.graph[file_idx].facts = ReferenceFacts::Syntax(python_facts::module_facts(
+                    tree.root_node(),
+                    &self.source_code,
+                    file_id,
+                ));
+            }
+            SupportedLanguage::Rust => {
+                graph.graph[file_idx].facts = ReferenceFacts::Syntax(rust_facts::module_facts(
+                    tree.root_node(),
+                    &self.source_code,
+                ));
+            }
+            _ => {}
         }
 
         Ok(file_idx)
@@ -159,6 +168,18 @@ impl Extractor {
                 // Atama ve import düğümleri kenar üretmez: çağrılar kapsayan
                 // fonksiyona ya da dosyaya, import bağları kapsamın sahibine aittir.
                 _ => SyntaxFacts::empty(SyntaxLanguage::Python),
+            }),
+            SupportedLanguage::Rust => ReferenceFacts::Syntax(match node.kind() {
+                "function_item" => rust_facts::function_facts(*node, &self.source_code),
+                "impl_item"
+                | "struct_item"
+                | "enum_item"
+                | "trait_item"
+                | "function_signature_item" => rust_facts::item_facts(*node, &self.source_code),
+                "mod_item" => rust_facts::module_facts(*node, &self.source_code),
+                // `let`, `const`, `use` düğümleri kenar üretmez: çağrılar ve bağlar
+                // kapsayan fonksiyona, dosyaya ya da `mod` bloğuna aittir.
+                _ => SyntaxFacts::empty(SyntaxLanguage::Rust),
             }),
             _ => ReferenceFacts::Lexical,
         }
