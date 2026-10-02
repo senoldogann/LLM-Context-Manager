@@ -177,7 +177,12 @@ impl CodeGraph {
     ) -> ReferenceRefresh {
         let affected_names = resolve::expand_affected_names(self, changed_files, affected_names);
         let affected_names = resolve_rust::expand_affected_names(self, &affected_names);
-        let glob_files = resolve_rust::files_with_affected_globs(self, &affected_names);
+        let mut glob_files = resolve_rust::files_with_affected_globs(self, &affected_names);
+        glob_files.extend(resolve_rust::files_needing_module_refresh(
+            self,
+            changed_files,
+            &affected_names,
+        ));
         let sources: Vec<NodeIndex> = self
             .graph
             .node_indices()
@@ -213,7 +218,8 @@ impl CodeGraph {
             .iter()
             .map(|idx| &self.graph[*idx])
             .filter(|node| {
-                is_reference_target_type(&node.node_type) && is_referenceable_symbol(&node.name)
+                (is_reference_target_type(&node.node_type) || is_rust_const_or_static(node))
+                    && is_referenceable_symbol(&node.name)
             })
             .map(|node| node.name.clone())
             .collect();
@@ -251,7 +257,7 @@ impl CodeGraph {
     fn resolve_references(&self, sources: &[NodeIndex]) -> Vec<(NodeIndex, NodeIndex, EdgeType)> {
         let mut symbols = SymbolTable::new(self);
         let modules = resolve::PythonModules::new(self);
-        let crates = rust_modules::RustCrates::new(self);
+        let rust = resolve_rust::RustContext::new(self);
         let mut references = Vec::new();
         for source_idx in sources {
             match &self.graph[*source_idx].facts {
@@ -265,12 +271,7 @@ impl CodeGraph {
                         *source_idx,
                         facts,
                     )),
-                    SyntaxLanguage::Rust => references.extend(resolve_rust::rust_references(
-                        self,
-                        &crates,
-                        *source_idx,
-                        facts,
-                    )),
+                    SyntaxLanguage::Rust => references.extend(rust.references(*source_idx, facts)),
                 },
             }
         }
@@ -986,6 +987,14 @@ fn is_referenceable_symbol(name: &str) -> bool {
         && chars.all(|ch| is_identifier_start(ch) || ch.is_numeric())
 }
 
+/// Rust `const`/`static` öğesi: çözümleyici bunlara bağlanır, artımlı yenileme
+/// adlarını hedef adı sayar. `let` bağlamaları öğe değildir.
+fn is_rust_const_or_static(node: &CodeNode) -> bool {
+    node.node_type == NodeType::Variable
+        && graph_node_file_path(&node.id).ends_with(".rs")
+        && !node.content.trim_start().starts_with("let ")
+}
+
 pub(crate) fn is_rust_impl_node(node: &CodeNode) -> bool {
     // Rust'ta sınıf yoktur; .rs dosyasındaki Class düğümleri impl bloklarıdır.
     node.node_type == NodeType::Class && graph_node_file_path(&node.id).ends_with(".rs")
@@ -1536,6 +1545,7 @@ mod tests {
             }],
             bases: Vec::new(),
             names: vec!["User".to_string()],
+            impl_type: None,
         };
         let mut graph = CodeGraph::new();
         graph.add_node(CodeNode {

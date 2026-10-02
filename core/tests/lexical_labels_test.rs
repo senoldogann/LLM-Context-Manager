@@ -1,7 +1,7 @@
 //! Sözdizimi çıkarıcısı olmayan dillerde ad eşleşmesi kesin ilişki gibi etiketlenmez.
 
 use anyhow::Result;
-use ccm_core::graph::{CodeGraph, EdgeType};
+use ccm_core::graph::{CodeGraph, EdgeType, UsageRelation};
 
 /// Go fikstürü: `Run` tek tanımlı `Helper`'ı çağırır ve `Engine` türünü anar.
 const FILES: &[(&str, &str)] = &[
@@ -39,5 +39,10 @@ async fn name_matches_are_inferred_not_resolved() -> Result<()> {
     };
     assert_eq!(edge("Run", "Helper"), vec![EdgeType::CallInferred]);
     assert_eq!(edge("Run", "Engine"), vec![EdgeType::References]);
+    // Etiket kesinlik iddia etmez: aynı dosya kuralı başka tanımlar varken de bağlar.
+    assert_eq!(
+        UsageRelation::CallsInferred.label(),
+        "calls (inferred from the name, not resolved)"
+    );
     Ok(())
 }

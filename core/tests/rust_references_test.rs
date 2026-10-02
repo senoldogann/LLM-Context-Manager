@@ -547,3 +547,251 @@ async fn rust_let_bindings_do_not_shadow_the_function_they_call() -> Result<()> 
     );
     Ok(())
 }
+
+/// Dosya ve kaynaktan oluşan küçük bir projeyi indeksler.
+async fn graph_of(files: &[(&str, &str)]) -> Result<(TempDir, RetrievalEngine)> {
+    index_fixture(files).await
+}
+
+#[tokio::test]
+async fn rust_let_closures_shadow_later_calls() -> Result<()> {
+    // `let compare = |..| ..;` sonraki `compare(..)` çağrısını gölgeler.
+    let files: &[(&str, &str)] = &[(
+        "src/lib.rs",
+        "fn compare(a: u32, b: u32) -> bool {\n    a > b\n}\n\nfn pick(x: u32) -> bool {\n    let compare = |a: u32, b: u32| a < b;\n    compare(x, 1)\n}\n",
+    )];
+    let (_dir, engine) = graph_of(files).await?;
+    let graph = engine.graph.read().await;
+    assert_eq!(
+        edge_types(
+            &graph,
+            typed(&graph, "src/lib.rs", "pick", NodeType::Function),
+            typed(&graph, "src/lib.rs", "compare", NodeType::Function)
+        ),
+        vec![]
+    );
+    Ok(())
+}
+
+#[tokio::test]
+async fn rust_inline_generic_bounds_reference_the_trait() -> Result<()> {
+    let files: &[(&str, &str)] = &[(
+        "src/lib.rs",
+        "pub trait Runner {\n    fn run(&self);\n}\n\npub fn drive<T: Runner>(runner: T) {\n    runner.run();\n}\n\npub struct Holder<R: Runner> {\n    inner: R,\n}\n",
+    )];
+    let (_dir, engine) = graph_of(files).await?;
+    let graph = engine.graph.read().await;
+    let runner = typed(&graph, "src/lib.rs", "Runner", NodeType::Trait);
+    assert_eq!(
+        edge_types(
+            &graph,
+            typed(&graph, "src/lib.rs", "drive", NodeType::Function),
+            runner
+        ),
+        vec![EdgeType::References]
+    );
+    assert_eq!(
+        edge_types(
+            &graph,
+            typed(&graph, "src/lib.rs", "Holder", NodeType::Struct),
+            runner
+        ),
+        vec![EdgeType::References]
+    );
+    Ok(())
+}
+
+#[tokio::test]
+async fn rust_same_named_types_keep_their_own_impls() -> Result<()> {
+    // `a::Options` türetilmiş `Default`/`Clone` kullanır; `b::Options`'ın elle
+    // yazılmış impl'leri onun metotları değildir.
+    let files: &[(&str, &str)] = &[
+        ("src/lib.rs", "pub mod a;\npub mod b;\n"),
+        (
+            "src/a.rs",
+            "#[derive(Default, Clone)]\npub struct Options {\n    pub depth: u32,\n}\n\nimpl Options {\n    pub fn fresh() -> Self {\n        Self::default()\n    }\n\n    pub fn copy(&self) -> Self {\n        self.clone()\n    }\n}\n",
+        ),
+        (
+            "src/b.rs",
+            "pub struct Options {\n    pub width: u32,\n}\n\nimpl Default for Options {\n    fn default() -> Self {\n        Options { width: 1 }\n    }\n}\n\nimpl Clone for Options {\n    fn clone(&self) -> Self {\n        Options { width: self.width }\n    }\n}\n",
+        ),
+    ];
+    let (_dir, engine) = graph_of(files).await?;
+    let graph = engine.graph.read().await;
+    let b_impls = impls(&graph, "src/b.rs", "Options");
+    let b_default = member_of(&graph, b_impls[0], "default");
+    let b_clone = member_of(&graph, b_impls[1], "clone");
+    let a_impl = impls(&graph, "src/a.rs", "Options")[0];
+    for (source, target) in [
+        (member_of(&graph, a_impl, "fresh"), b_default),
+        (member_of(&graph, a_impl, "copy"), b_clone),
+    ] {
+        assert!(
+            !edge_types(&graph, source, target).contains(&EdgeType::Calls),
+            "another type's impl is not a resolved call: {:?}",
+            edge_types(&graph, source, target)
+        );
+    }
+    Ok(())
+}
+
+#[tokio::test]
+async fn rust_trait_defaults_come_from_the_imported_trait() -> Result<()> {
+    let files: &[(&str, &str)] = &[
+        ("Cargo.toml", "[workspace]\nmembers = [\"alpha\", \"pretty\", \"beta\"]\n"),
+        ("alpha/Cargo.toml", "[package]\nname = \"alpha\"\n"),
+        (
+            "alpha/src/lib.rs",
+            "pub trait Describe {\n    fn describe(&self) -> String {\n        String::new()\n    }\n}\n",
+        ),
+        ("pretty/Cargo.toml", "[package]\nname = \"pretty\"\n"),
+        (
+            "pretty/src/lib.rs",
+            "pub trait Describe {\n    fn describe(&self) -> String {\n        String::from(\"pretty\")\n    }\n}\n",
+        ),
+        ("beta/Cargo.toml", "[package]\nname = \"beta\"\n"),
+        (
+            "beta/src/lib.rs",
+            "use pretty::Describe;\n\npub struct Widget;\n\nimpl Describe for Widget {}\n\nimpl Widget {\n    pub fn show(&self) -> String {\n        self.describe()\n    }\n}\n",
+        ),
+    ];
+    let (_dir, engine) = graph_of(files).await?;
+    let graph = engine.graph.read().await;
+    let show = member_of(
+        &graph,
+        impls(&graph, "beta/src/lib.rs", "Widget")[1],
+        "show",
+    );
+    let describe_in = |file: &str| {
+        member_of(
+            &graph,
+            typed(&graph, file, "Describe", NodeType::Trait),
+            "describe",
+        )
+    };
+    assert_eq!(
+        edge_types(&graph, show, describe_in("pretty/src/lib.rs")),
+        vec![EdgeType::Calls]
+    );
+    assert_eq!(
+        edge_types(&graph, show, describe_in("alpha/src/lib.rs")),
+        vec![]
+    );
+    Ok(())
+}
+
+#[tokio::test]
+async fn rust_modules_declared_by_the_binary_belong_to_the_binary() -> Result<()> {
+    let files: &[(&str, &str)] = &[
+        ("Cargo.toml", "[package]\nname = \"app\"\n"),
+        ("src/lib.rs", "pub fn run() -> u32 {\n    1\n}\n"),
+        (
+            "src/main.rs",
+            "mod cli;\n\nfn run() -> u32 {\n    2\n}\n\nfn main() {\n    cli::start();\n}\n",
+        ),
+        (
+            "src/cli.rs",
+            "pub fn start() -> u32 {\n    crate::run()\n}\n",
+        ),
+    ];
+    let (_dir, engine) = graph_of(files).await?;
+    let graph = engine.graph.read().await;
+    let start = typed(&graph, "src/cli.rs", "start", NodeType::Function);
+    assert_eq!(
+        edge_types(
+            &graph,
+            start,
+            typed(&graph, "src/main.rs", "run", NodeType::Function)
+        ),
+        vec![EdgeType::Calls]
+    );
+    assert_eq!(
+        edge_types(
+            &graph,
+            start,
+            typed(&graph, "src/lib.rs", "run", NodeType::Function)
+        ),
+        vec![]
+    );
+    Ok(())
+}
+
+#[tokio::test]
+async fn rust_bin_directories_are_their_own_crates() -> Result<()> {
+    let files: &[(&str, &str)] = &[
+        ("Cargo.toml", "[package]\nname = \"app\"\n"),
+        ("src/lib.rs", "pub mod util;\n"),
+        ("src/util.rs", "pub fn helper() -> u32 {\n    1\n}\n"),
+        (
+            "src/bin/tool/main.rs",
+            "mod util;\n\nfn main() {\n    crate::util::helper();\n}\n",
+        ),
+        (
+            "src/bin/tool/util.rs",
+            "pub fn helper() -> u32 {\n    2\n}\n",
+        ),
+    ];
+    let (_dir, engine) = graph_of(files).await?;
+    let graph = engine.graph.read().await;
+    let main = typed(&graph, "src/bin/tool/main.rs", "main", NodeType::Function);
+    assert_eq!(
+        edge_types(
+            &graph,
+            main,
+            typed(&graph, "src/bin/tool/util.rs", "helper", NodeType::Function)
+        ),
+        vec![EdgeType::Calls]
+    );
+    assert_eq!(
+        edge_types(
+            &graph,
+            main,
+            typed(&graph, "src/util.rs", "helper", NodeType::Function)
+        ),
+        vec![]
+    );
+    Ok(())
+}
+
+#[tokio::test]
+async fn rust_glob_heavy_modules_resolve_quickly() -> Result<()> {
+    // Her modül altı başka modülü yıldızla içe aktarır ve çözülmeyen std
+    // adlarını çağırır; çözüm yıldız sayısıyla üstel büyümemeli.
+    const MODULES: usize = 24;
+    let mut owned: Vec<(String, String)> = Vec::new();
+    let lib: String = (0..MODULES).map(|i| format!("pub mod m{i};\n")).collect();
+    owned.push(("src/lib.rs".into(), lib));
+    for i in 0..MODULES {
+        let mut source: String = (1..=6)
+            .map(|k| format!("use crate::m{}::*;\n", (i + k) % MODULES))
+            .collect();
+        for j in 0..8 {
+            source.push_str(&format!(
+                "\npub fn f{i}_{j}() -> usize {{\n    let text = String::new();\n    let items: Vec<u32> = Vec::new();\n    let _ = Some(1);\n    f{}_{j}() + text.len() + items.len()\n}}\n",
+                (i + 1) % MODULES
+            ));
+        }
+        owned.push((format!("src/m{i}.rs"), source));
+    }
+    let files: Vec<(&str, &str)> = owned
+        .iter()
+        .map(|(path, source)| (path.as_str(), source.as_str()))
+        .collect();
+    let started = std::time::Instant::now();
+    let (_dir, engine) = graph_of(&files).await?;
+    let elapsed = started.elapsed();
+    let graph = engine.graph.read().await;
+    assert_eq!(
+        edge_types(
+            &graph,
+            typed(&graph, "src/m0.rs", "f0_0", NodeType::Function),
+            typed(&graph, "src/m1.rs", "f1_0", NodeType::Function)
+        ),
+        vec![EdgeType::Calls]
+    );
+    assert!(
+        elapsed < std::time::Duration::from_secs(10),
+        "indexing took {elapsed:?}"
+    );
+    Ok(())
+}

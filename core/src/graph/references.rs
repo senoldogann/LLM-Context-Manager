@@ -71,6 +71,10 @@ pub struct SyntaxFacts {
     /// Çağrılmadan kullanılan adlar: argümanlar, öznitelik zincirinin başı
     /// (`User.objects`), atamanın sağ tarafı, tip ipuçları. Tekil ve sıralı.
     pub names: Vec<String>,
+    /// Rust `impl` bloğunun uyguladığı tür (`impl Trait for Tür`); bloğun
+    /// metotları bu türün kapsamında çözülür.
+    #[serde(default)]
+    pub impl_type: Option<CallTarget>,
 }
 
 impl SyntaxFacts {
@@ -82,6 +86,7 @@ impl SyntaxFacts {
             imports: Vec::new(),
             bases: Vec::new(),
             names: Vec::new(),
+            impl_type: None,
         }
     }
 
@@ -90,7 +95,8 @@ impl SyntaxFacts {
         !(self.calls.is_empty()
             && self.imports.is_empty()
             && self.bases.is_empty()
-            && self.names.is_empty())
+            && self.names.is_empty()
+            && self.impl_type.is_none())
     }
 
     /// Olgular adlardan birini anıyor mu? Artımlı yenileme etkilenen kaynakları
@@ -104,6 +110,7 @@ impl SyntaxFacts {
         };
         self.calls.iter().any(|call| target_mentions(&call.target))
             || self.bases.iter().any(target_mentions)
+            || self.impl_type.as_ref().is_some_and(target_mentions)
             || self
                 .names
                 .iter()

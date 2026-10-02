@@ -372,3 +372,84 @@ async fn rust_incremental_edges_equal_a_full_rebuild() -> Result<()> {
     .await?;
     Ok(())
 }
+
+/// Fikstürü yazar, indeksler ve canlı indeksi yükler.
+async fn live_rust_project(
+    files: &[(&str, &str)],
+) -> Result<(tempfile::TempDir, PathBuf, LiveIndex)> {
+    std::env::set_var("CCM_DISABLE_EMBEDDER", "1");
+    let project = tempdir()?;
+    let root = std::fs::canonicalize(project.path())?;
+    for (path, content) in files {
+        let full = root.join(path);
+        std::fs::create_dir_all(full.parent().expect("parent directory"))?;
+        std::fs::write(&full, content)?;
+    }
+    let project_path = root.to_string_lossy().to_string();
+    ccm_core::index_directory(&project_path, None).await?;
+    let live = LiveIndex::load(&project_path, None, None).await?;
+    Ok((project, root, live))
+}
+
+#[tokio::test]
+async fn rust_const_and_static_edits_refresh_their_users() -> Result<()> {
+    let (_project, root, live) = live_rust_project(&[
+        ("src/lib.rs", "pub mod config;\npub mod user;\n"),
+        ("src/config.rs", "pub fn other() {}\n"),
+        (
+            "src/user.rs",
+            "use crate::config::MAX;\n\npub fn limit() -> usize {\n    crate::config::LIMIT + MAX\n}\n",
+        ),
+    ])
+    .await?;
+    let config = root.join("src/config.rs");
+    std::fs::write(
+        &config,
+        "pub fn other() {}\n\npub const LIMIT: usize = 1;\npub static MAX: usize = 2;\n",
+    )?;
+    assert_paths_step(
+        &live,
+        &root,
+        "const and static added",
+        std::slice::from_ref(&config),
+    )
+    .await?;
+    Ok(())
+}
+
+#[tokio::test]
+async fn rust_module_declarations_move_files_between_crates() -> Result<()> {
+    // `cli.rs` yalnız kütüphanedeki `helper`'ı anar: `mod cli;` kalkınca dosya
+    // ikiliden kütüphaneye geçer ve çağrı ancak paket yeniden çözülürse bağlanır.
+    let (_project, root, live) = live_rust_project(&[
+        ("Cargo.toml", "[package]\nname = \"app\"\n"),
+        ("src/lib.rs", "pub fn helper() -> u32 {\n    1\n}\n"),
+        (
+            "src/main.rs",
+            "mod cli;\n\nfn main() {\n    cli::start();\n}\n",
+        ),
+        (
+            "src/cli.rs",
+            "pub fn start() -> u32 {\n    crate::helper()\n}\n",
+        ),
+    ])
+    .await?;
+    let main = root.join("src/main.rs");
+    std::fs::write(&main, "fn main() {}\n")?;
+    assert_paths_step(
+        &live,
+        &root,
+        "mod declaration removed",
+        std::slice::from_ref(&main),
+    )
+    .await?;
+    std::fs::write(&main, "mod cli;\n\nfn main() {\n    cli::start();\n}\n")?;
+    assert_paths_step(
+        &live,
+        &root,
+        "mod declaration restored",
+        std::slice::from_ref(&main),
+    )
+    .await?;
+    Ok(())
+}

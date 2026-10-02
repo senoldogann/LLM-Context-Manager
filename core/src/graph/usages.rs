@@ -33,7 +33,7 @@ impl UsageRelation {
     pub fn label(self) -> &'static str {
         match self {
             UsageRelation::Calls => "calls",
-            UsageRelation::CallsInferred => "calls (inferred: the only definition with that name)",
+            UsageRelation::CallsInferred => "calls (inferred from the name, not resolved)",
             UsageRelation::MayCall => "may call (receiver type unknown or several candidates)",
             UsageRelation::References => "references (uses without calling)",
             UsageRelation::Imports => "imports",

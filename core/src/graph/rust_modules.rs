@@ -3,13 +3,23 @@
 //!
 //! Paket dizini `D` için `D/src/lib.rs` kütüphane (başka crate'lerden paket adıyla,
 //! `-` yerine `_` ile görünür), `D/src/main.rs` ikili crate köküdür; `D/src/bin`,
-//! `D/tests`, `D/benches` ve `D/examples` altındaki doğrudan `.rs` dosyaları kendi
-//! kökleridir. Paketsiz dosyalar dizinlerindeki `main.rs`/`lib.rs`'ye, o da yoksa
-//! kendilerine bağlanır. `#[path]` öznitelikleri izlenmez.
+//! `D/tests`, `D/benches` ve `D/examples` altındaki doğrudan `.rs` dosyaları ve
+//! `<ad>/main.rs` dosyaları kendi kökleridir. Bir dosya, onu `mod` ile bildiren
+//! köke aittir (önce kütüphane, sonra ikili, sonra diğerleri); bildirilmemiş
+//! dosyalar dizin önekiyle eşlenir. Paketsiz dosyalar dizinlerindeki
+//! `main.rs`/`lib.rs`'ye, o da yoksa kendilerine bağlanır. `#[path]` öznitelikleri
+//! izlenmez.
 
-use std::collections::BTreeSet;
+use std::collections::{BTreeSet, HashMap};
 
-use super::{CodeGraph, NodeType};
+use petgraph::graph::NodeIndex;
+use petgraph::visit::EdgeRef;
+use petgraph::Direction;
+
+use super::{CodeGraph, EdgeType, NodeType};
+
+/// `mod` bildirim zincirinde inilecek en çok derinlik.
+const MAX_MODULE_DEPTH: usize = 32;
 
 /// Crate'in türü: kütüphane başka crate'lerden paket adıyla görünür.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -30,16 +40,18 @@ pub(crate) struct RustCrate {
 }
 
 /// Dosyanın crate'i ve crate içindeki modül yolu.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub(crate) struct RustModule {
     pub(crate) krate: usize,
     pub(crate) path: Vec<String>,
 }
 
-/// Projedeki Rust crate'leri ve indekslenmiş `.rs` dosyaları.
+/// Projedeki Rust crate'leri, indekslenmiş `.rs` dosyaları ve `mod` ile
+/// bildirilmiş dosyaların modülleri.
 pub(crate) struct RustCrates {
     pub(crate) crates: Vec<RustCrate>,
     files: BTreeSet<String>,
+    declared: HashMap<String, RustModule>,
 }
 
 /// `Cargo.toml`'daki adlar: paket adı ve varsa `[lib] name`, `_` ile.
@@ -80,7 +92,12 @@ impl RustCrates {
             crates.extend(package_crates(package_dir, &names, &files));
         }
         crates.extend(loose_crates(&files, &crates));
-        Self { crates, files }
+        let declared = declared_modules(graph, &crates, &files);
+        Self {
+            crates,
+            files,
+            declared,
+        }
     }
 
     /// Dosyanın crate'i ve modül yolu; `.rs` dosyası değilse `None`.
@@ -94,6 +111,9 @@ impl RustCrates {
                 krate,
                 path: Vec::new(),
             });
+        }
+        if let Some(module) = self.declared.get(file_id) {
+            return Some(module.clone());
         }
         let krate = self
             .crates
@@ -134,10 +154,94 @@ impl RustCrates {
         if path.is_empty() {
             return Some(krate.root_file.clone());
         }
-        let base = format!("{}/{}", krate.root_dir, path.join("/"));
-        [format!("{base}.rs"), format!("{base}/mod.rs")]
-            .into_iter()
-            .find(|candidate| self.files.contains(candidate))
+        module_file(&krate.root_dir, path, &self.files)
+    }
+}
+
+/// `root_dir` altında modül yolunun dosyası: `a/b.rs` ya da `a/b/mod.rs`.
+fn module_file(root_dir: &str, path: &[String], files: &BTreeSet<String>) -> Option<String> {
+    let base = format!("{root_dir}/{}", path.join("/"));
+    [format!("{base}.rs"), format!("{base}/mod.rs")]
+        .into_iter()
+        .find(|candidate| files.contains(candidate))
+}
+
+/// Köklerden `mod x;` bildirimlerini izleyerek dosyaların modülleri. Aynı dosyayı
+/// birden çok kök bildirirse ilk kök (kütüphane, ikili, diğerleri sırasıyla) kazanır.
+fn declared_modules(
+    graph: &CodeGraph,
+    crates: &[RustCrate],
+    files: &BTreeSet<String>,
+) -> HashMap<String, RustModule> {
+    let mut order: Vec<usize> = (0..crates.len()).collect();
+    order.sort_by_key(|krate| {
+        KIND_ORDER
+            .iter()
+            .position(|kind| *kind == crates[*krate].kind)
+            .unwrap_or(KIND_ORDER.len())
+    });
+    let mut declared = HashMap::new();
+    for krate in order {
+        if let Some(root) = graph.find_file_node(&crates[krate].root_file) {
+            walk_declarations(graph, crates, files, krate, root, &[], &mut declared);
+        }
+    }
+    declared
+}
+
+/// Sahibin (dosya ya da satır içi `mod`) `mod` bildirimlerini dosyalarına izler.
+fn walk_declarations(
+    graph: &CodeGraph,
+    crates: &[RustCrate],
+    files: &BTreeSet<String>,
+    krate: usize,
+    owner: NodeIndex,
+    path: &[String],
+    declared: &mut HashMap<String, RustModule>,
+) {
+    if path.len() >= MAX_MODULE_DEPTH {
+        return;
+    }
+    let modules: Vec<NodeIndex> = graph
+        .graph
+        .edges_directed(owner, Direction::Outgoing)
+        .filter(|edge| matches!(edge.weight(), EdgeType::Contains))
+        .map(|edge| edge.target())
+        .filter(|child| graph.graph[*child].node_type == NodeType::Module)
+        .collect();
+    for module in modules {
+        let node = &graph.graph[module];
+        let mut child_path = path.to_vec();
+        child_path.push(node.name.clone());
+        // `mod x;` bildirimi dosyaya, `mod x { … }` aynı dosyada iner.
+        if !node.content.trim_end().ends_with(';') {
+            walk_declarations(graph, crates, files, krate, module, &child_path, declared);
+            continue;
+        }
+        let Some(file) = module_file(&crates[krate].root_dir, &child_path, files) else {
+            continue;
+        };
+        if declared.contains_key(&file) || crates.iter().any(|root| root.root_file == file) {
+            continue;
+        }
+        declared.insert(
+            file.clone(),
+            RustModule {
+                krate,
+                path: child_path.clone(),
+            },
+        );
+        if let Some(file_node) = graph.find_file_node(&file) {
+            walk_declarations(
+                graph,
+                crates,
+                files,
+                krate,
+                file_node,
+                &child_path,
+                declared,
+            );
+        }
     }
 }
 
@@ -181,16 +285,24 @@ fn package_crates(dir: &str, names: &ManifestNames, files: &BTreeSet<String>) ->
         join(dir, "benches"),
         join(dir, "examples"),
     ] {
-        for file in files.iter().filter(|file| {
-            file.strip_prefix(target_dir.as_str())
+        for file in files.iter() {
+            let Some(rest) = file
+                .strip_prefix(target_dir.as_str())
                 .and_then(|rest| rest.strip_prefix('/'))
-                .is_some_and(|rest| !rest.contains('/'))
-        }) {
+            else {
+                continue;
+            };
+            // `<hedef>/<ad>.rs` hedef dizinine, `<hedef>/<ad>/main.rs` kendi dizinine görelidir.
+            let root_dir = match rest.split_once('/') {
+                None => target_dir.clone(),
+                Some((name, "main.rs")) => join(&target_dir, name),
+                Some(_) => continue,
+            };
             crates.push(RustCrate {
                 name: file_stem(file),
                 kind: CrateKind::Other,
                 root_file: file.clone(),
-                root_dir: target_dir.clone(),
+                root_dir,
             });
         }
     }

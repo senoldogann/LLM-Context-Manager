@@ -38,7 +38,8 @@ const INERT: [&str; 7] = [
 pub fn function_facts(definition: Node, source: &str) -> SyntaxFacts {
     let mut facts = SyntaxFacts::empty(SyntaxLanguage::Rust);
     let generics = type_parameter_names(definition, source);
-    for field in ["parameters", "return_type"] {
+    // `type_parameters`: satır içi sınırlar (`<T: Runner>`) ad olarak toplanır.
+    for field in ["type_parameters", "parameters", "return_type"] {
         if let Some(node) = definition.child_by_field_name(field) {
             collect_types(node, source, &generics, &mut facts);
         }
@@ -55,6 +56,9 @@ pub fn function_facts(definition: Node, source: &str) -> SyntaxFacts {
 pub fn item_facts(definition: Node, source: &str) -> SyntaxFacts {
     let mut facts = SyntaxFacts::empty(SyntaxLanguage::Rust);
     let generics = type_parameter_names(definition, source);
+    if let Some(parameters) = definition.child_by_field_name("type_parameters") {
+        collect_types(parameters, source, &generics, &mut facts);
+    }
     match definition.kind() {
         "impl_item" => {
             if let Some(trait_node) = definition.child_by_field_name("trait") {
@@ -66,6 +70,7 @@ pub fn item_facts(definition: Node, source: &str) -> SyntaxFacts {
                 }
             }
             if let Some(type_node) = definition.child_by_field_name("type") {
+                facts.impl_type = type_target(type_node, source);
                 collect_types(type_node, source, &generics, &mut facts);
             }
         }
