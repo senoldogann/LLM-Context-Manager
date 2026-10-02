@@ -18,10 +18,12 @@ false positive), and the edited Serde task (2/2, with the removed caller absent)
 quality checks, not agent-token evidence. A Codex smoke attempt stopped with exit 4 before any run
 record because the subscription usage limit was already exhausted; the CLI reported a reset around
 2026-10-07 02:17. Claude cannot be rerun from this environment until the owner supplies
-`CLAUDE_CODE_OAUTH_TOKEN`. The final product head for this preflight is `5615c30`; the optimized
-MCP binary was rebuilt from that source, and the reproducible `preflight-context` command passes
+`CLAUDE_CODE_OAUTH_TOKEN`. The post-build release verification was refreshed on 2026-10-03 from
+base commit `9c3845d` (the Rust product tree is unchanged since `5615c30`), together with the Python
+formatting/typing corrections recorded in this status update. The existing optimized binaries pass
 all three pilot packets at recall=1.000 and precision=1.000 without an agent, API call or embedding
-model.
+model. Local validation is complete; any external AI pilot or publishing operation requires the
+owner's separate explicit approval.
 
 **Owner's direction (2026-10-02):** optimize for end-to-end agent token use without sacrificing
 answer quality, independent of model/provider/effort. Move retrieval/tool-selection decisions from
@@ -115,12 +117,17 @@ The default `tools/list` serializes to 1,105 bytes in a direct MCP measurement, 
 when `CCM_MCP_LEGACY_TOOLS=1` exposes the compatibility surface. This is a fixed-schema measurement,
 not evidence of lower end-to-end agent tokens.
 
-Verification through product commit `5615c30`: the full `ccm-core` package passed, including 143
-unit tests (3 opt-in local-model tests ignored) and all integration suites; the full `ccm-mcp`
-package passed, including 19 token-budget/context tests, 22 auto-refresh tests, 26 MCP integration
-tests (1 opt-in local-model test ignored), 5 protocol tests and the hermetic E2E test (external
-Guardian fixture ignored as designed). `cargo clippy --workspace --all-targets -- -D warnings`,
-`cargo fmt --all -- --check` and `git diff --check` also pass. `ccm-cli` is unchanged at SHA-256
+Verification on 2026-10-03 from base commit `9c3845d`, with the Python maintenance corrections in
+this status update: the full `ccm-core` package passed 223 tests (143 unit + 80 integration;
+3 opt-in local-model tests ignored). The full `ccm-mcp` package passed 88 tests, including all 19
+token-budget/context tests; the local-model and external Guardian tests were ignored as designed.
+The remaining workspace package, `ccm-cli`, passed 9 tests with 1 opt-in local-model test ignored;
+packages were tested sequentially without repeating the completed core/MCP suites.
+`cargo clippy --workspace --all-targets -- -D warnings`, `cargo fmt --all -- --check` and
+`git diff --check` pass. Retrieval gates on an isolated tracked-file export passed 50/50 structural
+tasks against `eval/report.phase3_baseline.json` and 180/180 offline synthetic-fixture tasks, with
+no failures or skipped tasks. Ruff format/lint, strict mypy across the 27 harness modules plus
+`scripts/aggregate.py`, and all 24 task anchors pass. `ccm-cli` is unchanged at SHA-256
 `72e84aea…47090703`; the optimized `ccm-mcp` rebuilt after the caller-render dedupe is
 `b44d580e…ea4970a`. `python -m agent preflight-context` verifies the selected corpus repos are
 clean and at the commits pinned in `benchmarks/corpus.json`, rejects task paths that escape the repo
@@ -130,19 +137,36 @@ Flask 12/12, Express 5/5 with no extra caller, and Serde 2/2 after the scripted 
 recall=1.000 and precision=1.000. Duplicate occurrence IDs for one semantic caller are collapsed
 only in the `context` rendering; graph call sites remain intact.
 
-The next gate is behavioral: re-run the same Claude pilot. CCM is not ready for the preregistered
-final L3 run until the agent actually chooses `context` where it helps, with no success regression
+The first isolated/offline core attempt exited 101 at link time before running tests: `ort-sys`
+could not acquire ONNX Runtime with the temporary HOME and offline mode. Setting `ORT_LIB_PATH`
+to the already cached library used by the release build fixed the environment; the full retry
+passed without a source change or download. Only CCM package dev-profile artifacts were cleaned
+to free 32.0 GiB; release binary hashes stayed unchanged. macOS debug linking reported the large
+`__eh_frame` warning; Clippy still passed with `-D warnings`.
+
+The first Python format check found two unformatted committed files, and the lint check found
+16 errors in the older `scripts/aggregate.py`. `agent/run.py` received formatting only (its AST is
+unchanged); `scripts/aggregate.py` received formatting and explicit types. An intermediate mypy
+check found three annotation errors, corrected before the final 28-file pass. Its stdout, stderr
+and exit code match the base commit across all five existing comparison-report directories. Task
+ground truth, scoring calculations, preregistration and recorded benchmark outputs were unchanged.
+
+The next gate is behavioral, after explicit owner approval: re-run the same Claude pilot. CCM is
+not ready for the preregistered final L3 run until the agent actually chooses `context` where it
+helps, with no success regression
 and a lower or defensible total-token cost. After that, add reusable indexes and test Django and
 multi-file edits where grep/read loops are expensive.
 
 ## Next steps, in order
 
-1. **Re-run the 3-task Claude pilot** into a new output directory once
-   `CLAUDE_CODE_OAUTH_TOKEN` is supplied. Run `preflight-context` first, then compare success,
-   CCM calls, input/output tokens, turns and wall time with `pilot-claude`; inspect transcripts to
+1. **Re-run the 3-task Claude pilot** only after separate explicit approval to spend external AI
+   quota and once the owner supplies `CLAUDE_CODE_OAUTH_TOKEN`. Use a new output directory, run
+   `preflight-context` first, then compare success, CCM calls, input/output tokens, turns and wall
+   time with `pilot-claude`; inspect transcripts to
    see whether and why the model selects `context`.
-2. **Run the Codex pilot after the subscription limit resets.** The dedicated
-   `~/.ccm-bench/codex-home` login exists; the 2026-10-02 smoke attempt stopped before a run record
+2. **Run the Codex pilot after the subscription limit resets and the owner explicitly approves
+   quota use.** The dedicated `~/.ccm-bench/codex-home` login exists; the 2026-10-02 smoke attempt
+   stopped before a run record
    with exit 4, so the first successful transcript still needs isolation/parser inspection.
 3. **If agents use `context` but task packets are insufficient, improve server-side routing or
    composition from transcript evidence**, not by adding default tools back speculatively.
@@ -223,14 +247,16 @@ to start with uncommitted changes under `benchmarks/agent`. `--embedding openai`
   `eval/report.phase3_baseline.json`) and against `eval/fixtures/golden_tasks.synthetic.json` with
   `CCM_EMBEDDING_FIXTURE=eval/fixtures/embeddings.ndjson`. Both must report no failed tasks.
 - Benchmarks (Python): in `benchmarks/`, `uv run ruff format --check`, `uv run ruff check`,
-  `uv run mypy`, `uv run python -m agent check --corpus-dir corpus`.
+  `uv run mypy freshness tokens agent scripts/aggregate.py`,
+  `uv run python -m agent check --corpus-dir corpus`.
 - `target/` grows past 60 GB; `cargo clean -p ccm-core -p ccm-mcp -p ccm-cli` frees most of it.
 
 ## Rules for agents working here
 
 - No unmeasured claims in docs, READMEs or release notes; a measurement names its commit.
-- Local commits are fine. The owner approved pushing `main`; tags, releases, npm or registry
-  publishing and any contact with other projects need the owner's explicit approval each time.
+- Local commits are fine. Pushes, tags, releases, npm or registry publishing, external AI
+  benchmark quota use and any contact with other projects need the owner's separate explicit
+  approval each time.
 - Never read or log `~/.ccm/.env` or other credential files. Credentials reach the harness only
   through environment variables the owner sets.
 - Do not copy code from competing tools into this repository (GitNexus is PolyForm

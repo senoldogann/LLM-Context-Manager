@@ -244,17 +244,13 @@ def arm_note(profile: ProductProfile, arm: Arm) -> str:
     return GRAPH_NOTE if arm == "B" else SEARCH_NOTE
 
 
-def expected_tools(
-    profile: ProductProfile, arm: Arm, connected: bool
-) -> tuple[str, ...]:
+def expected_tools(profile: ProductProfile, arm: Arm, connected: bool) -> tuple[str, ...]:
     """Ajanın görmesi gereken araç kümesi; MCP bağlanmadıysa yalnız yerleşik araçlar."""
     granted = granted_tools(profile, arm) if connected else ()
     return tuple(sorted((*BUILTIN_TOOLS, *(mcp_tool(tool) for tool in granted))))
 
 
-def verify_isolation(
-    transcript: Transcript, profile: ProductProfile, arm: Arm, auth: Auth
-) -> None:
+def verify_isolation(transcript: Transcript, profile: ProductProfile, arm: Arm, auth: Auth) -> None:
     """Kimlik kaynağı ya da araç kümesi deney tanımına uymuyorsa ölçümü durdurur."""
     expected_source = AUTH_SOURCE[auth]
     if transcript.api_key_source != expected_source:
@@ -344,9 +340,7 @@ def index_workspace(settings: Settings, workspace: Path, env: dict[str, str]) ->
     return time.monotonic() - started
 
 
-def ccm_server_env(
-    workspace: Path, env: dict[str, str], expose_legacy: bool
-) -> dict[str, str]:
+def ccm_server_env(workspace: Path, env: dict[str, str], expose_legacy: bool) -> dict[str, str]:
     """CCM MCP ortamı: tek kök, repo içi indeks ve gerektiğinde legacy discovery."""
     server_env = {
         **env,

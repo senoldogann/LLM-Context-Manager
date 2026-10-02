@@ -12,11 +12,56 @@ Matching replicates ccm-core eval::score_hits:
   - a hit matches an expected node id after normalize_node_id (strip '#...')
   - a hit matches an expected file path when its leading ':'-segment equals it
 """
+
 import json
 import statistics
 import sys
 from collections import defaultdict
+from collections.abc import Sequence
 from pathlib import Path
+from typing import Required, TypedDict, cast
+
+
+class ExpectedSpec(TypedDict, total=False):
+    """Görevin beklenen düğümleri, dosyaları ve sıralama sınırı."""
+
+    node_ids: list[str] | None
+    file_paths: list[str] | None
+    max_rank: int | None
+
+
+class TaskSpec(TypedDict, total=False):
+    """Özetleyicinin görev dosyasından kullandığı alanlar."""
+
+    id: Required[str]
+    expected: ExpectedSpec | None
+
+
+class TaskFile(TypedDict):
+    """Golden task dosyasındaki görev listesi."""
+
+    tasks: list[TaskSpec]
+
+
+class ReportResult(TypedDict, total=False):
+    """Tek görevin karşılaştırma raporundaki sonucu."""
+
+    id: Required[str]
+    query_type: str
+    status: str
+    ranked: list[str] | None
+    latency_ms: float | None
+
+
+class ModeReport(TypedDict, total=False):
+    """Bir retrieval modunun toplamları ve görev sonuçları."""
+
+    totals: dict[str, int]
+    results: list[ReportResult]
+
+
+Reports = dict[str, dict[str, ModeReport]]
+ExactMetrics = dict[str, dict[str, dict[str, dict[str, float]]]]
 
 ROOT = Path(__file__).resolve().parent.parent
 RESULTS = ROOT / "results"
@@ -34,7 +79,7 @@ def node_file_path(node_id: str) -> str:
     return cleaned.split(":", 1)[0]
 
 
-def expected_set(task):
+def expected_set(task: TaskSpec) -> set[tuple[str, str]]:
     ids = set()
     for nid in (task.get("expected") or {}).get("node_ids") or []:
         ids.add(("node", nid))
@@ -43,7 +88,7 @@ def expected_set(task):
     return ids
 
 
-def match_hits(task, ranked):
+def match_hits(task: TaskSpec, ranked: Sequence[str] | None) -> set[str]:
     exp = expected_set(task)
     matched = set()
     for hit in ranked or []:
@@ -57,7 +102,7 @@ def match_hits(task, ranked):
     return matched
 
 
-def compute_metrics(task, ranked):
+def compute_metrics(task: TaskSpec, ranked: Sequence[str] | None) -> dict[str, float]:
     exp = expected_set(task)
     exp_count = len(exp)
     metrics = {}
@@ -86,18 +131,20 @@ def compute_metrics(task, ranked):
     return metrics
 
 
-def load_reports(results):
+def load_reports(results: Path) -> Reports:
     reports = {}
     for path in sorted(results.glob("*.compare.json")):
-        reports[path.stem.replace(".compare", "")] = json.loads(path.read_text())
+        reports[path.stem.replace(".compare", "")] = cast(
+            dict[str, ModeReport], json.loads(path.read_text())
+        )
     return reports
 
 
-def mean_or_zero(values):
+def mean_or_zero(values: Sequence[float]) -> float:
     return statistics.mean(values) if values else 0.0
 
 
-def main():
+def main() -> int:
     results = Path(sys.argv[1]).resolve() if len(sys.argv) > 1 else RESULTS
     reports = load_reports(results)
     if not reports:
@@ -108,29 +155,38 @@ def main():
     print("CCM External Benchmark — summary")
     print("=" * 100)
 
-    # Recall@K / MRR@K are computed from the tasks files (exact ground truth),
-    # not from the report (which only carries matched counts).
+    # Recall@K / MRR@K görevlerin ground truth dosyalarından hesaplanır;
+    # rapor yalnız eşleşme sayılarını taşır.
     metrics_by_repo = compute_exact_metrics(reports)
 
     for repo, report in sorted(reports.items()):
         print(f"\n### {repo} (all query types)")
-        print(f"{'mode':<14} {'tasks':>6} {'passed':>6} {'failed':>6} {'pass%':>7} "
-              f"{'R@K':>7} {'MRR@K':>7} {'lat(ms)':>9}")
+        print(
+            f"{'mode':<14} {'tasks':>6} {'passed':>6} {'failed':>6} {'pass%':>7} "
+            f"{'R@K':>7} {'MRR@K':>7} {'lat(ms)':>9}"
+        )
         for mode in MODES:
             rep = report[mode]
             totals = rep.get("totals", {})
             scored = totals.get("scored", 0)
             passed = totals.get("passed", 0)
             pct = (passed / scored * 100) if scored else 0.0
-            per_task = metrics_by_repo.get(repo, {}).get(mode, {}).values()
-            lat = [r.get("latency_ms") for r in rep.get("results", []) if r.get("latency_ms") is not None]
-            print(f"{MODE_LABELS[mode]:<14} {scored:>6} {passed:>6} {totals.get('failed', 0):>6} {pct:>6.1f}% "
-                  f"{mean_or_zero([m['recall@k'] for m in per_task]):>6.2f} "
-                  f"{mean_or_zero([m['mrr@k'] for m in per_task]):>6.2f} "
-                  f"{mean_or_zero(lat):>8.1f}ms")
+            repo_metrics = metrics_by_repo.get(repo, {}).get(mode, {}).values()
+            lat = [
+                latency
+                for r in rep.get("results", [])
+                if (latency := r.get("latency_ms")) is not None
+            ]
+            print(
+                f"{MODE_LABELS[mode]:<14} {scored:>6} {passed:>6} "
+                f"{totals.get('failed', 0):>6} {pct:>6.1f}% "
+                f"{mean_or_zero([m['recall@k'] for m in repo_metrics]):>6.2f} "
+                f"{mean_or_zero([m['mrr@k'] for m in repo_metrics]):>6.2f} "
+                f"{mean_or_zero(lat):>8.1f}ms"
+            )
         for mode in MODES:
             rep = report[mode]
-            by_type = defaultdict(lambda: [0, 0])
+            by_type: defaultdict[str, list[int]] = defaultdict(lambda: [0, 0])
             for res in rep.get("results", []):
                 by_type[res.get("query_type", "?")][0] += 1
                 if res.get("status") == "pass":
@@ -141,7 +197,7 @@ def main():
                     parts.append(f"  {qt}: {passed}/{total}")
                 print(f"  [{MODE_LABELS[mode]}] by query type: {', '.join(parts)}")
 
-    # ---- Overall: semantic-only vs hybrid on search_code tasks only ----
+    # Genel karşılaştırma yalnız search_code görevlerini kapsar.
     print("\n### Overall (search_code only: semantic-only vs hybrid)")
     for mode in MODES:
         rec, mrr, pas, lat = [], [], [], []
@@ -153,32 +209,31 @@ def main():
                 rec.append(per_task[res["id"]]["recall@k"])
                 mrr.append(per_task[res["id"]]["mrr@k"])
                 pas.append(1 if res.get("status") == "pass" else 0)
-                if res.get("latency_ms") is not None:
-                    lat.append(res["latency_ms"])
-        print(f"{MODE_LABELS[mode]:<14} pass={sum(pas)}/{len(pas)}  R@K={mean_or_zero(rec):.3f}  "
-              f"MRR@K={mean_or_zero(mrr):.3f}  lat={mean_or_zero(lat):.1f}ms")
+                if (latency := res.get("latency_ms")) is not None:
+                    lat.append(latency)
+        print(
+            f"{MODE_LABELS[mode]:<14} pass={sum(pas)}/{len(pas)}  R@K={mean_or_zero(rec):.3f}  "
+            f"MRR@K={mean_or_zero(mrr):.3f}  lat={mean_or_zero(lat):.1f}ms"
+        )
 
     return 0
 
 
-def compute_exact_metrics(reports):
-    """Compute per-task Recall@K and MRR@K using ground truth from the tasks files.
-
-    Returns {repo: {mode: {task_id: {"recall@k": float, "mrr@k": float}}}} so
-    callers can aggregate over exactly the query types they report.
-    """
-    out = {}
+def compute_exact_metrics(reports: Reports) -> ExactMetrics:
+    """Görev ground truth'undan repo/mod/görev bazında Recall@K ve MRR@K hesapla."""
+    out: ExactMetrics = {}
     for tasks_path in sorted((ROOT / "tasks").glob("*.json")):
         repo = tasks_path.stem
         if repo not in reports:
             continue
-        tasks = json.loads(tasks_path.read_text())["tasks"]
+        tasks = cast(TaskFile, json.loads(tasks_path.read_text()))["tasks"]
         by_id = {t["id"]: t for t in tasks}
         out[repo] = {}
         for mode in MODES:
             per_task = {}
             for res in reports[repo][mode].get("results", []):
-                task = by_id.get(res.get("id"))
+                result_id = res.get("id")
+                task = by_id.get(result_id) if result_id is not None else None
                 if not task or res.get("status") == "skipped":
                     continue
                 m = compute_metrics(task, res.get("ranked") or [])
