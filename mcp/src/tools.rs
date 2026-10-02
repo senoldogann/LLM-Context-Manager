@@ -1,6 +1,7 @@
 //! MCP Tool implementations that bridge to ccm-core.
 
 use anyhow::Result;
+use petgraph::visit::EdgeRef;
 use serde_json::Value;
 use std::collections::HashSet;
 use std::path::{Component, Path};
@@ -1101,24 +1102,52 @@ fn backtick_spans(query: &str) -> Vec<&str> {
         .collect()
 }
 
-/// Caller sorusundaki açık kod ipucunu çıkarır. Yalnız backtick içindeki
-/// receiver.member biçimi kabul edilir; sıradan prose token'ları routing sinyali
-/// yapılmaz. İlk path/ scope, ilk dosya yolu ise tanım dosyası kabul edilir.
-fn member_call_hint(query: &str) -> Option<MemberCallHint> {
-    let spans = backtick_spans(query);
-    let scope = spans
-        .iter()
-        .copied()
-        .find(|part| part.ends_with('/') && part.contains('/'))
-        .map(|part| part.trim_start_matches("./").to_string());
-    let definition_file = spans
-        .iter()
-        .copied()
-        .find(|part| {
-            !part.ends_with('/') && part.contains('/') && Path::new(part).extension().is_some()
-        })
-        .map(|part| part.trim_start_matches("./").to_string());
+/// Noktalı/qualified kod ve göreli yol ipuçlarını prose dilinden bağımsız ayırır.
+/// Backtick zorunlu değildir; dosya erişimi yapılmaz, ipuçları indeksle doğrulanır.
+fn code_spans(query: &str) -> Vec<&str> {
+    let mut spans = backtick_spans(query);
+    spans.extend(
+        query
+            .split(|ch: char| {
+                !(ch.is_ascii_alphanumeric() || matches!(ch, '_' | '$' | '.' | ':' | '/' | '-'))
+            })
+            .map(|part| part.trim_end_matches(['.', ':']))
+            .filter(|part| !part.is_empty()),
+    );
+    let mut seen = HashSet::new();
+    spans.retain(|span| seen.insert(*span));
+    spans
+}
 
+fn hint_paths(spans: &[&str]) -> (Option<String>, Option<String>) {
+    let paths: Vec<&str> = spans
+        .iter()
+        .copied()
+        .filter(|part| {
+            part.contains('/')
+                && !Path::new(part).is_absolute()
+                && !Path::new(part)
+                    .components()
+                    .any(|component| matches!(component, Component::ParentDir))
+        })
+        .collect();
+    let scope = paths
+        .iter()
+        .find(|part| part.ends_with('/'))
+        .map(|part| part.trim_start_matches("./").to_string());
+    let file = paths
+        .iter()
+        .find(|part| !part.ends_with('/') && Path::new(part).extension().is_some())
+        .map(|part| part.trim_start_matches("./").to_string());
+    (scope, file)
+}
+
+/// Bütün receiver.member adayları tanım kanıtıyla değerlendirilmeli; dışlanan
+/// receiver'ın prose'da önce geçmesi onu hedef yapmaz.
+fn member_call_hints(query: &str) -> Vec<MemberCallHint> {
+    let spans = code_spans(query);
+    let (scope, definition_file) = hint_paths(&spans);
+    let mut hints = Vec::new();
     for part in spans {
         if part.contains('/') {
             continue;
@@ -1130,15 +1159,15 @@ fn member_call_hint(query: &str) -> Option<MemberCallHint> {
             && receiver.split('.').all(identifier_part)
             && !receiver.is_empty()
         {
-            return Some(MemberCallHint {
+            hints.push(MemberCallHint {
                 receiver: receiver.to_string(),
                 member: member.to_string(),
-                scope,
-                definition_file,
+                scope: scope.clone(),
+                definition_file: definition_file.clone(),
             });
         }
     }
-    None
+    hints
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -1151,21 +1180,10 @@ struct ScopedSymbolHint {
 /// Backtick içindeki açık sembolü path kanıtıyla birlikte çıkarır. Çıplak
 /// `ensure_sync` ve `bound::with_bound` gibi qualified biçimler desteklenir;
 /// prose dili routing kararını etkilemez.
-fn scoped_symbol_hint(query: &str) -> Option<ScopedSymbolHint> {
-    let spans = backtick_spans(query);
-    let scope = spans
-        .iter()
-        .copied()
-        .find(|part| part.ends_with('/') && part.contains('/'))
-        .map(|part| part.trim_start_matches("./").to_string());
-    let definition_file = spans
-        .iter()
-        .copied()
-        .find(|part| {
-            !part.ends_with('/') && part.contains('/') && Path::new(part).extension().is_some()
-        })
-        .map(|part| part.trim_start_matches("./").to_string());
-
+fn scoped_symbol_hints(query: &str) -> Vec<ScopedSymbolHint> {
+    let spans = code_spans(query);
+    let (scope, definition_file) = hint_paths(&spans);
+    let mut hints = Vec::new();
     for part in spans {
         if part.contains('/') {
             continue;
@@ -1183,18 +1201,18 @@ fn scoped_symbol_hint(query: &str) -> Option<ScopedSymbolHint> {
         } else {
             continue;
         };
-        return Some(ScopedSymbolHint {
+        hints.push(ScopedSymbolHint {
             symbol: symbol.to_string(),
-            scope,
-            definition_file,
+            scope: scope.clone(),
+            definition_file: definition_file.clone(),
         });
     }
-    None
+    hints
 }
 
 async fn scoped_symbol_target_id(engine: &Arc<RetrievalEngine>, query: &str) -> Option<String> {
-    let hint = scoped_symbol_hint(query)?;
-    if hint.scope.is_none() && hint.definition_file.is_none() {
+    let hints = scoped_symbol_hints(query);
+    if hints.is_empty() {
         return None;
     }
 
@@ -1204,18 +1222,21 @@ async fn scoped_symbol_target_id(engine: &Arc<RetrievalEngine>, query: &str) -> 
         if !matches!(
             node.node_type,
             ccm_core::graph::NodeType::Function | ccm_core::graph::NodeType::Method
-        ) || node.name != hint.symbol
-        {
+        ) {
             return false;
         }
         let path = ccm_core::engine::extract_file_path(&node.id);
         let path = path.trim_start_matches("./");
-        if let Some(definition_file) = hint.definition_file.as_deref() {
-            return path == definition_file;
-        }
-        hint.scope
-            .as_deref()
-            .is_some_and(|scope| path.starts_with(scope))
+        hints.iter().any(|hint| {
+            node.name == hint.symbol
+                && if let Some(definition_file) = hint.definition_file.as_deref() {
+                    path == definition_file
+                } else {
+                    hint.scope
+                        .as_deref()
+                        .is_some_and(|scope| path.starts_with(scope))
+                }
+        })
     });
     match (candidates.next(), candidates.next()) {
         (Some(only), None) => Some(graph.graph[only].id.clone()),
@@ -1232,36 +1253,157 @@ fn is_js_ts_path(path: &str) -> bool {
     )
 }
 
-async fn member_call_target_id(engine: &Arc<RetrievalEngine>, query: &str) -> Option<String> {
-    let hint = member_call_hint(query)?;
-    let definition_file = hint.definition_file?;
-    if !is_js_ts_path(&definition_file) {
-        return None;
-    }
-    let graph = engine.graph.read().await;
-    let mut candidates = graph.graph.node_indices().filter(|idx| {
-        let node = &graph.graph[*idx];
-        matches!(
-            node.node_type,
-            ccm_core::graph::NodeType::Function | ccm_core::graph::NodeType::Method
-        ) && node.name == hint.member
-            && ccm_core::engine::extract_file_path(&node.id).trim_start_matches("./")
-                == definition_file
-    });
-    match (candidates.next(), candidates.next()) {
-        (Some(only), None) => Some(graph.graph[only].id.clone()),
-        _ => None,
+struct MemberTarget {
+    node_id: String,
+    hint: MemberCallHint,
+}
+
+fn js_language(path: &str) -> ccm_core::parser::SupportedLanguage {
+    if matches!(
+        Path::new(path)
+            .extension()
+            .and_then(|extension| extension.to_str()),
+        Some("jsx" | "tsx")
+    ) {
+        ccm_core::parser::SupportedLanguage::Tsx
+    } else {
+        ccm_core::parser::SupportedLanguage::TypeScript
     }
 }
 
-fn contains_member_call(content: &str, expression: &str) -> bool {
-    let mut remaining = content;
-    while let Some(offset) = remaining.find(expression) {
-        let after = &remaining[offset + expression.len()..];
-        if after.trim_start().starts_with('(') {
+fn member_expression(node: tree_sitter::Node<'_>, content: &str) -> Option<String> {
+    let mut parts = Vec::new();
+    let mut current = node;
+    while current.kind() == "member_expression" {
+        let property = current.child_by_field_name("property")?;
+        let name = property.utf8_text(content.as_bytes()).ok()?;
+        if !identifier_part(name) {
+            return None;
+        }
+        parts.push(name);
+        current = current.child_by_field_name("object")?;
+    }
+    let root = current.utf8_text(content.as_bytes()).ok()?;
+    if !identifier_part(root) {
+        return None;
+    }
+    parts.push(root);
+    parts.reverse();
+    Some(parts.join("."))
+}
+
+/// Alias atamasının gerçekten aynı callable expression'a bağlandığını AST ile
+/// kanıtlar. Yorum/string ve gövdedeki başka atamalar tanım kanıtı değildir.
+fn assigned_callable<'a>(
+    tree: &'a tree_sitter::Tree,
+    content: &str,
+    expression: &str,
+) -> Option<tree_sitter::Node<'a>> {
+    let mut current = tree.root_node().named_child(0)?;
+    if current.kind() == "expression_statement" {
+        current = current.named_child(0)?;
+    }
+    let mut bound = false;
+    while current.kind() == "assignment_expression" {
+        let left = current.child_by_field_name("left")?;
+        bound |= member_expression(left, content).as_deref() == Some(expression);
+        current = current.child_by_field_name("right")?;
+    }
+    (bound && matches!(current.kind(), "function_expression" | "arrow_function")).then_some(current)
+}
+
+async fn member_call_target(
+    engine: &Arc<RetrievalEngine>,
+    query: &str,
+) -> Result<Option<MemberTarget>> {
+    let hints = member_call_hints(query);
+    let graph = engine.graph.read().await;
+    let mut candidates = Vec::new();
+    for hint in hints {
+        let Some(file) = hint
+            .definition_file
+            .as_deref()
+            .filter(|file| is_js_ts_path(file))
+        else {
+            continue;
+        };
+        let expression = format!("{}.{}", hint.receiver, hint.member);
+        for idx in graph.graph.node_indices() {
+            let node = &graph.graph[idx];
+            if !matches!(
+                node.node_type,
+                ccm_core::graph::NodeType::Function | ccm_core::graph::NodeType::Method
+            ) || node.name != hint.member
+                || ccm_core::engine::extract_file_path(&node.id).trim_start_matches("./") != file
+            {
+                continue;
+            }
+            let tree =
+                ccm_core::parser::CodeParser::new().parse_tree(&node.content, js_language(file))?;
+            if let Some(callable) = assigned_callable(&tree, &node.content, &expression) {
+                candidates.push((
+                    idx,
+                    hint.clone(),
+                    callable.utf8_text(node.content.as_bytes())?.to_string(),
+                ));
+            }
+        }
+    }
+    let Some((first, first_hint, body)) = candidates.first() else {
+        return Ok(None);
+    };
+    for (other, other_hint, other_body) in candidates.iter().skip(1) {
+        let contains = |parent, child| {
+            graph.graph.edges(parent).any(|edge| {
+                edge.target() == child
+                    && matches!(edge.weight(), ccm_core::graph::EdgeType::Contains)
+            })
+        };
+        if other != first
+            && !(body == other_body
+                && graph.graph[*first].end_line == graph.graph[*other].end_line
+                && (contains(*first, *other) || contains(*other, *first)))
+        {
+            return Err(input_error(format!(
+                "ambiguous code hints: {}.{} and {}.{} in {}; pass one explicit target",
+                first_hint.receiver,
+                first_hint.member,
+                other_hint.receiver,
+                other_hint.member,
+                first_hint.definition_file.as_deref().unwrap_or_default()
+            )));
+        }
+    }
+    Ok(Some(MemberTarget {
+        node_id: graph.graph[*first].id.clone(),
+        hint: first_hint.clone(),
+    }))
+}
+
+fn contains_member_call(
+    tree: &tree_sitter::Tree,
+    content: &str,
+    expression: &str,
+    allow_suffix: bool,
+) -> bool {
+    let mut stack = vec![tree.root_node()];
+    while let Some(node) = stack.pop() {
+        if node.kind() == "call_expression"
+            && node
+                .child_by_field_name("function")
+                .and_then(|callee| member_expression(callee, content))
+                .is_some_and(|callee| {
+                    callee == expression
+                        || (allow_suffix
+                            && callee
+                                .strip_suffix(expression)
+                                .is_some_and(|prefix| prefix.ends_with('.')))
+                })
+        {
             return true;
         }
-        remaining = after;
+        let mut cursor = node.walk();
+        stack.extend(node.named_children(&mut cursor));
     }
     false
 }
@@ -1272,15 +1414,12 @@ fn contains_member_call(content: &str, expression: &str) -> bool {
 /// dosyalarda yalnız query'deki receiver zinciri kabul edilir.
 async fn receiver_call_evidence(
     engine: &Arc<RetrievalEngine>,
-    query: &str,
+    hint: &MemberCallHint,
     primary_node_id: Option<&str>,
     known_ids: &HashSet<String>,
-) -> Vec<ccm_core::engine::ContextSuggestion> {
-    let Some(hint) = member_call_hint(query) else {
-        return Vec::new();
-    };
+) -> Result<Vec<ccm_core::engine::ContextSuggestion>> {
     if !hint.definition_file.as_deref().is_some_and(is_js_ts_path) {
-        return Vec::new();
+        return Ok(Vec::new());
     }
     let receiver_expression = format!("{}.{}", hint.receiver, hint.member);
     let this_expression = format!("this.{}", hint.member);
@@ -1307,9 +1446,11 @@ async fn receiver_call_evidence(
         {
             continue;
         }
-        let direct = contains_member_call(&node.content, &receiver_expression);
+        let tree =
+            ccm_core::parser::CodeParser::new().parse_tree(&node.content, js_language(path))?;
+        let direct = contains_member_call(&tree, &node.content, &receiver_expression, true);
         let same_receiver_file = hint.definition_file.as_deref() == Some(path)
-            && contains_member_call(&node.content, &this_expression);
+            && contains_member_call(&tree, &node.content, &this_expression, false);
         if !(direct || same_receiver_file) {
             continue;
         }
@@ -1335,7 +1476,7 @@ async fn receiver_call_evidence(
             ))
     });
     suggestions.truncate(20);
-    suggestions
+    Ok(suggestions)
 }
 
 /// Tool: context
@@ -1371,7 +1512,12 @@ pub async fn context(engine: &Arc<RetrievalEngine>, args: &Value) -> Result<Tool
             return Ok(ToolResult {
                 content: vec![ToolResultContent {
                     content_type: "text".to_string(),
-                    text: format_explanation(&explanation, true, max_tokens),
+                    text: format_explanation_with_callers(
+                        &explanation,
+                        true,
+                        max_tokens,
+                        Some(&context_callers(engine, &explanation, None).await?),
+                    ),
                 }],
                 is_error: None,
             });
@@ -1384,9 +1530,15 @@ pub async fn context(engine: &Arc<RetrievalEngine>, args: &Value) -> Result<Tool
     // deterministik graph hedefini seç. Bu durumda semantic arama gereksizdir:
     // model/provider kalitesi routing kararını etkilemez ve embedding maliyeti
     // ödenmez. Dosyada aynı adlı birden çok callable varsa sessiz seçim yapılmaz.
-    let member_target = member_call_target_id(engine, query).await;
+    let member_target = match member_call_target(engine, query).await {
+        Ok(target) => target,
+        Err(error) => return Ok(tool_error(error.to_string())),
+    };
     let scoped_target = scoped_symbol_target_id(engine, query).await;
-    let hinted_target = member_target.clone().or(scoped_target);
+    let hinted_target = member_target
+        .as_ref()
+        .map(|target| target.node_id.clone())
+        .or(scoped_target);
     let hits = if hinted_target.is_some() {
         Vec::new()
     } else {
@@ -1408,10 +1560,18 @@ pub async fn context(engine: &Arc<RetrievalEngine>, args: &Value) -> Result<Tool
         .as_deref()
         .or_else(|| hits.first().and_then(|hit| hit.node_id.as_deref()));
     let empty_known_ids = HashSet::new();
-    let hinted_callers = if let Some(node_id) = member_target.as_deref() {
-        receiver_call_evidence(engine, query, Some(node_id), &empty_known_ids).await
+    let hinted_callers = if let Some(target) = member_target.as_ref() {
+        Some(
+            receiver_call_evidence(
+                engine,
+                &target.hint,
+                Some(&target.node_id),
+                &empty_known_ids,
+            )
+            .await?,
+        )
     } else {
-        Vec::new()
+        None
     };
     let mut known_ids = HashSet::new();
     let mut primary_node_id: Option<String> = None;
@@ -1429,16 +1589,9 @@ pub async fn context(engine: &Arc<RetrievalEngine>, args: &Value) -> Result<Tool
                 );
                 known_ids.extend(explanation.members.iter().map(|member| member.id.clone()));
                 let primary_tokens = max_tokens.saturating_mul(3).saturating_div(4).max(1);
-                if member_target.as_deref() == Some(node_id) {
-                    format_explanation_with_callers(
-                        &explanation,
-                        true,
-                        primary_tokens,
-                        Some(&hinted_callers),
-                    )
-                } else {
-                    format_explanation(&explanation, true, primary_tokens)
-                }
+                let callers =
+                    context_callers(engine, &explanation, hinted_callers.as_deref()).await?;
+                format_explanation_with_callers(&explanation, true, primary_tokens, Some(&callers))
             }
             Err(_) => format_suggestions_output(&hits, false, max_tokens, max_tokens),
         }
@@ -1449,9 +1602,10 @@ pub async fn context(engine: &Arc<RetrievalEngine>, args: &Value) -> Result<Tool
     // Hint hedefi yoksa receiver evidence yalnız ek bağlam olarak kullanılabilir.
     // Hint hedefinde ise yukarıda caller listesinin kendisini override eder; bu,
     // lexical graph'taki farklı receiver'lı aynı-name false positive'leri gizler.
-    if member_target.is_none() {
+    if let Some(target) = member_target.as_ref().filter(|_| hinted_target.is_none()) {
         let evidence =
-            receiver_call_evidence(engine, query, primary_node_id.as_deref(), &known_ids).await;
+            receiver_call_evidence(engine, &target.hint, primary_node_id.as_deref(), &known_ids)
+                .await?;
         if !evidence.is_empty() && char_count(&output) < budget_chars {
             let header = "receiver-call evidence:\n";
             let remaining_chars = budget_chars
@@ -1500,6 +1654,95 @@ pub async fn context(engine: &Arc<RetrievalEngine>, args: &Value) -> Result<Tool
         }],
         is_error: None,
     })
+}
+
+/// İlişki etiketleri ve semantic ID'ler korunur; yalnız `context` caller satırına
+/// Contains zincirinden kanıtlanan kapsam eklenir. Legacy çıktıları değişmez.
+async fn context_callers(
+    engine: &Arc<RetrievalEngine>,
+    explanation: &ccm_core::graph::Explanation,
+    caller_override: Option<&[ccm_core::engine::ContextSuggestion]>,
+) -> Result<Vec<ccm_core::engine::ContextSuggestion>> {
+    let mut callers = caller_override.map_or_else(
+        || {
+            explanation
+                .usages
+                .iter()
+                .filter(|usage| !is_test_path(&ccm_core::engine::extract_file_path(&usage.node.id)))
+                .map(ccm_core::engine::usage_suggestion)
+                .collect()
+        },
+        |callers| callers.to_vec(),
+    );
+    let graph = engine.graph.read().await;
+    for caller in &mut callers {
+        let Some(id) = caller.node_id.as_deref() else {
+            continue;
+        };
+        let mut idx = graph
+            .find_node_index_by_id(id)
+            .ok_or_else(|| input_error(format!("caller '{id}' is no longer indexed")))?;
+        let mut seen = HashSet::new();
+        let mut scopes = Vec::new();
+        loop {
+            if !seen.insert(idx) {
+                return Err(input_error(format!(
+                    "cyclic Contains scope for caller '{id}'"
+                )));
+            }
+            let node = &graph.graph[idx];
+            if matches!(
+                node.node_type,
+                ccm_core::graph::NodeType::Class
+                    | ccm_core::graph::NodeType::Struct
+                    | ccm_core::graph::NodeType::Enum
+                    | ccm_core::graph::NodeType::Trait
+                    | ccm_core::graph::NodeType::Function
+                    | ccm_core::graph::NodeType::Method
+            ) {
+                scopes.push(node);
+            }
+            let mut parents: Vec<_> = graph
+                .graph
+                .edges_directed(idx, petgraph::Direction::Incoming)
+                .filter(|edge| matches!(edge.weight(), ccm_core::graph::EdgeType::Contains))
+                .map(|edge| edge.source())
+                .collect();
+            parents.sort_unstable();
+            parents.dedup();
+            match parents.as_slice() {
+                [] => break,
+                [parent] => idx = *parent,
+                _ => {
+                    return Err(input_error(format!(
+                        "ambiguous Contains scope for caller '{id}'"
+                    )))
+                }
+            }
+        }
+        if scopes.len() < 2 {
+            continue;
+        }
+        scopes.reverse();
+        let qualified: Vec<&str> = scopes.iter().map(|node| node.name.as_str()).collect();
+        caller
+            .reason
+            .push_str(&format!("; scope: {}", qualified.join(".")));
+        if let Some(outer) = scopes.iter().position(|node| {
+            matches!(
+                node.node_type,
+                ccm_core::graph::NodeType::Function | ccm_core::graph::NodeType::Method
+            )
+        }) {
+            if outer + 1 < scopes.len() {
+                caller.reason.push_str(&format!(
+                    "; enclosing callable: {}",
+                    qualified[..=outer].join(".")
+                ));
+            }
+        }
+    }
+    Ok(callers)
 }
 
 /// Tool: map
@@ -1939,23 +2182,25 @@ pub async fn diff_context(engine: &Arc<RetrievalEngine>, args: &Value) -> Result
 #[cfg(test)]
 mod tests {
     use super::{
-        index_response_timeout, member_call_hint, normalize_graph_node_id, normalize_graph_path,
-        scoped_symbol_hint,
+        index_response_timeout, member_call_hints, normalize_graph_node_id, normalize_graph_path,
+        scoped_symbol_hints,
     };
     use std::time::Duration;
 
     #[test]
     fn explicit_code_hints_do_not_depend_on_english_call_word() {
-        let bare = scoped_symbol_hint("Açıkla: `src/flask/` içindeki `ensure_sync`.").unwrap();
+        let bare = scoped_symbol_hints("Açıkla: `src/flask/` içindeki `ensure_sync`.").remove(0);
         assert_eq!(bare.symbol, "ensure_sync");
         assert_eq!(bare.scope.as_deref(), Some("src/flask/"));
 
         let qualified =
-            scoped_symbol_hint("İncele: `serde_derive/src/` altında `bound::with_bound`.").unwrap();
+            scoped_symbol_hints("İncele: `serde_derive/src/` altında `bound::with_bound`.")
+                .remove(0);
         assert_eq!(qualified.symbol, "with_bound");
         assert_eq!(qualified.scope.as_deref(), Some("serde_derive/src/"));
 
-        let member = member_call_hint("İncele: `lib/request.js` dosyasındaki `req.get`.").unwrap();
+        let member =
+            member_call_hints("İncele: `lib/request.js` dosyasındaki `req.get`.").remove(0);
         assert_eq!(member.receiver, "req");
         assert_eq!(member.member, "get");
         assert_eq!(member.definition_file.as_deref(), Some("lib/request.js"));

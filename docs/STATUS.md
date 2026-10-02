@@ -4,13 +4,16 @@ The current state of CCM and the next steps, for the owner and for any agent tha
 work. Keep it current: replace lines that stop being true instead of appending history (git log is
 the history).
 
-Last updated: 2026-10-03. Where work stopped: **local packet fixes are in progress** after the
-owner asked to continue the next steps. At base `dbaa2ec`, five new MCP end-to-end regressions
-compiled and executed, then failed for the intended routing/scope bugs; the same filtered target
-passed its six existing context tests (exit 101: 6 passed, 5 failed). No production code has changed
-yet. The RED checkpoint covers the actual plain-text pilot query, negative receivers mentioned
-first, unrelated target ambiguity, plain qualified Rust hints and caller scope/semantic-family
-preservation. Next: implement the general fixes, rerun this target, then full local/release gates.
+Last updated: 2026-10-03. Where work stopped: **local packet fixes passed their GREEN gate** after
+the owner asked to continue the next steps. RED checkpoint `2374152` compiled/executed five new
+MCP end-to-end regressions at base `dbaa2ec`: exit 101, 6 existing tests passed and 5 new tests
+failed for the intended routing/scope bugs. The same target now passes all 11 context tests.
+Plain code/path hints are checked against indexed callable assignments, alias declarations are
+validated with the existing JS/TS parser, unrelated explicit targets return an ambiguity error,
+and `context` caller lines include Contains-based qualified/enclosing scopes while preserving
+semantic IDs and relation labels. The graph schema and legacy rendering are unchanged. Next:
+review/refine the implementation, then run full local gates and rebuild/verify the changed MCP
+release binary against pinned corpus packets.
 No new external AI quota use is authorized by this local continuation.
 
 The owner-approved **Codex context-first pilot is complete**, measured at clean commit `4185640`

@@ -23,6 +23,8 @@ tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 lru = "0.18.2"
 url = "2.5"
 notify = "6.1"
+petgraph = "0.6"
+tree-sitter = "0.26"
 
 [dev-dependencies]
 assert_cmd = "2.0"

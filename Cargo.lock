@@ -764,12 +764,14 @@ dependencies = [
  "ccm-core",
  "lru",
  "notify",
+ "petgraph 0.6.5",
  "serde",
  "serde_json",
  "tempfile",
  "tokio",
  "tracing",
  "tracing-subscriber",
+ "tree-sitter",
  "url",
 ]
 
