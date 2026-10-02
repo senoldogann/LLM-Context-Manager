@@ -235,6 +235,23 @@ schema-7 indexes of the same corpus commits. Both runs are in
 [`results/tokens/`](results/tokens/) (`baseline-fd9af8b`, `m2-9eb8ded`,
 `m2-364c59a`).
 
+### Context-first packet preflight
+
+Before spending agent quota, the three follow-up pilot tasks can be checked directly against
+`context` using the same pinned corpus and release binaries:
+
+```bash
+cd benchmarks
+uv run python -m agent preflight-context --ccm-bin-dir ../target/release --corpus-dir corpus
+```
+
+The command exports clean workspaces, applies the Serde reference edit, disables embeddings,
+builds graph-only indexes, makes one `context` call per task, and compares the returned `callers:`
+lines one-to-one with task ground truth. Missing callers, extra callers and duplicate caller lines
+all fail. On product commit `5615c30`, the rebuilt release binaries score recall 1.000 and
+precision 1.000 on Flask, Express and Serde. This is a packet-quality preflight, not an agent-token
+or agent-behavior result.
+
 ### Limits
 
 - Bytes, not tokens: bytes / 4 is an estimate, and tokenizers differ.

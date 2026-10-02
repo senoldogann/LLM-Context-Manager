@@ -26,6 +26,9 @@
   JS/TS callable assignment aliases and named function-expression symbols, and
   removes duplicate lexical Variable/Import callers already covered by an
   enclosing callable. Existing indexes rebuild once.
+- `context` rendering collapses multiple occurrence IDs of the same semantic
+  caller (for example equivalent nested functions in alternative branches) into
+  one compact caller entry; the underlying graph call sites are preserved.
 
 ## v0.4.0 - Token-Efficient Answers, Python Syntax Graph and Live Index
 

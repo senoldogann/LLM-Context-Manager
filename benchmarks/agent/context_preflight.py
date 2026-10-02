@@ -1,0 +1,319 @@
+"""Model çağırmadan context-first pilot paketlerinin recall/precision preflight'ı.
+
+Bu kontrol L3 agent sonucunun yerine geçmez. Yalnız üç pilot görevin sorusunu CCM'nin
+`context` aracına tek çağrıda verir ve caller satırlarını elle doğrulanmış ground truth ile
+bire bir eşleştirir. Eksik, fazla veya duplicate caller başarısızdır. Embedding kapalıdır;
+bu görevlerin açık kod ipuçları server-side deterministik routing ile çözülmelidir.
+"""
+
+from __future__ import annotations
+
+import json
+import os
+import subprocess
+import tempfile
+import time
+from dataclasses import dataclass
+from pathlib import Path
+from typing import cast
+
+from agent.check import apply_steps, check_tasks
+from agent.run import SYSTEM_PATH, index_db_path, prepare_workspace
+from agent.tasks import TASKS, Item, Task, label
+
+PILOT_TASK_IDS = (
+    "flask-callers-ensure-sync",
+    "express-trap-req-get",
+    "serde-edit-with-bound",
+)
+
+
+class PreflightError(RuntimeError):
+    """Context packet preflight kurulamadı veya MCP protokolü bozuldu."""
+
+
+@dataclass(frozen=True)
+class PacketScore:
+    """Bir context packet'inin bire-bir caller eşleşme sonucu."""
+
+    task_id: str
+    expected: int
+    found: int
+    missing: tuple[str, ...]
+    extras: tuple[str, ...]
+    index_s: float
+
+    @property
+    def ok(self) -> bool:
+        """Eksik ve fazla caller yoksa paket ground truth ile aynıdır."""
+        return not self.missing and not self.extras
+
+
+def pilot_tasks() -> tuple[Task, ...]:
+    """Üç context-first pilot görevini ana task tablosundan veri sırasıyla seç."""
+    selected = tuple(task for task in TASKS if task.id in PILOT_TASK_IDS)
+    if tuple(task.id for task in selected) != PILOT_TASK_IDS:
+        found = {task.id for task in selected}
+        missing = [task_id for task_id in PILOT_TASK_IDS if task_id not in found]
+        raise PreflightError("pilot tasks missing from agent.tasks: " + ", ".join(missing))
+    return selected
+
+
+def parse_callers(text: str) -> list[tuple[str, str]]:
+    """Compact explanation içindeki `callers:` satırlarını sırasıyla koru."""
+    lines = iter(text.splitlines())
+    for line in lines:
+        if line == "callers:":
+            break
+    else:
+        return []
+
+    callers: list[tuple[str, str]] = []
+    for line in lines:
+        if not line.startswith("- "):
+            break
+        fields = line[2:].split(" · ")
+        if len(fields) < 2 or ": " not in fields[0] or ":" not in fields[1]:
+            raise PreflightError(f"unrecognised caller line: {line}")
+        _kind, name = fields[0].split(": ", 1)
+        path, _location = fields[1].rsplit(":", 1)
+        callers.append((path, name))
+    return callers
+
+
+def item_matches(item: Item, candidate: tuple[str, str]) -> bool:
+    """Caller path/name'i Item'ın canonical adı veya alias'larından biri mi?"""
+    path, name = candidate
+    return path == item.path and name in (item.name, *item.aliases)
+
+
+def score_callers(task: Task, callers: list[tuple[str, str]], index_s: float) -> PacketScore:
+    """Caller listesini ground truth ile bire-bir eşleştir; duplicate actual extra sayılır."""
+    unmatched = list(range(len(callers)))
+    missing: list[str] = []
+    found = 0
+
+    for item in task.expected:
+        match_index = next(
+            (index for index in unmatched if item_matches(item, callers[index])),
+            None,
+        )
+        if match_index is None:
+            missing.append(label(item))
+            continue
+        unmatched.remove(match_index)
+        found += 1
+
+    extras = tuple(f"{callers[index][0]}:{callers[index][1]}" for index in unmatched)
+    return PacketScore(
+        task_id=task.id,
+        expected=len(task.expected),
+        found=found,
+        missing=tuple(missing),
+        extras=extras,
+        index_s=index_s,
+    )
+
+
+def executable(path: Path) -> Path:
+    """Var ve executable olan path'i resolve et; değilse açık hata ver."""
+    resolved = path.expanduser().resolve()
+    if not resolved.is_file() or not os.access(resolved, os.X_OK):
+        raise PreflightError(f"executable not found: {resolved}")
+    return resolved
+
+
+def base_env(home: Path) -> dict[str, str]:
+    """Preflight'ın secretsiz, ağsız CCM ortamı."""
+    return {
+        "PATH": SYSTEM_PATH,
+        "HOME": str(home),
+        "RUST_LOG": "warn",
+        "CCM_DISABLE_EMBEDDER": "1",
+    }
+
+
+def index_workspace(cli: Path, workspace: Path, home: Path) -> float:
+    """Graph-only indeks kur; semantic model/API kullanma."""
+    started = time.monotonic()
+    completed = subprocess.run(
+        [
+            str(cli),
+            "index",
+            "--path",
+            str(workspace),
+            "--db-path",
+            str(index_db_path(workspace)),
+        ],
+        cwd=workspace,
+        env=base_env(home),
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if completed.returncode != 0:
+        raise PreflightError(
+            f"ccm-cli index failed for {workspace} (exit {completed.returncode}): "
+            f"{completed.stderr[-2000:]}"
+        )
+    return time.monotonic() - started
+
+
+def send_message(process: subprocess.Popen[str], message: dict[str, object]) -> None:
+    """Bir JSON-RPC satırı gönder."""
+    if process.stdin is None:
+        raise PreflightError("MCP stdin is unavailable")
+    process.stdin.write(json.dumps(message, separators=(",", ":")) + "\n")
+    process.stdin.flush()
+
+
+def next_message(process: subprocess.Popen[str]) -> dict[str, object]:
+    """Bir JSON-RPC object satırı oku."""
+    if process.stdout is None:
+        raise PreflightError("MCP stdout is unavailable")
+    line = process.stdout.readline()
+    if not line:
+        raise PreflightError("MCP server closed stdout")
+    parsed: object = json.loads(line)
+    if not isinstance(parsed, dict):
+        raise PreflightError("MCP response is not an object")
+    return cast(dict[str, object], parsed)
+
+
+def response_for(
+    process: subprocess.Popen[str],
+    request_id: int,
+    workspace: Path,
+) -> dict[str, object]:
+    """İstenen response gelene kadar roots/list handshake'ini cevapla."""
+    while True:
+        message = next_message(process)
+        if message.get("method") == "roots/list":
+            roots_id = message.get("id")
+            send_message(
+                process,
+                {
+                    "jsonrpc": "2.0",
+                    "id": roots_id,
+                    "result": {"roots": [{"uri": workspace.as_uri()}]},
+                },
+            )
+            continue
+        if message.get("id") == request_id:
+            return message
+
+
+def context_text(mcp: Path, workspace: Path, home: Path, query: str) -> str:
+    """Release MCP'ye tek context çağrısı yap ve text payload'ı döndür."""
+    env = {
+        **base_env(home),
+        "CCM_PROJECT_ROOT": str(workspace),
+        "CCM_ALLOWED_ROOTS": str(workspace),
+        "CCM_REQUIRE_ALLOWED_ROOTS": "1",
+        "CCM_DB_PATH": str(index_db_path(workspace)),
+        "CCM_AUTO_REFRESH": "0",
+    }
+    process = subprocess.Popen(
+        [str(mcp)],
+        cwd=workspace,
+        env=env,
+        stdin=subprocess.PIPE,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.DEVNULL,
+        text=True,
+    )
+    try:
+        send_message(process, {"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {}})
+        response_for(process, 1, workspace)
+        send_message(
+            process,
+            {
+                "jsonrpc": "2.0",
+                "id": 2,
+                "method": "tools/call",
+                "params": {
+                    "name": "context",
+                    "arguments": {"query": query, "max_tokens": 1500},
+                },
+            },
+        )
+        response = response_for(process, 2, workspace)
+        result = response.get("result")
+        if not isinstance(result, dict):
+            raise PreflightError(f"context returned no result: {response}")
+        typed_result = cast(dict[str, object], result)
+        content = typed_result.get("content")
+        if not isinstance(content, list) or not content:
+            raise PreflightError(f"context returned no content: {response}")
+        first = content[0]
+        if not isinstance(first, dict):
+            raise PreflightError(f"context content has unexpected shape: {response}")
+        typed_first = cast(dict[str, object], first)
+        text = typed_first.get("text")
+        if not isinstance(text, str):
+            raise PreflightError(f"context content has no text: {response}")
+        return text
+    finally:
+        process.terminate()
+        try:
+            process.wait(timeout=5)
+        except subprocess.TimeoutExpired:
+            process.kill()
+            process.wait(timeout=5)
+
+
+def run_task(
+    task: Task,
+    corpus_dir: Path,
+    scratch: Path,
+    cli: Path,
+    mcp: Path,
+    home: Path,
+) -> PacketScore:
+    """Workspace hazırla, varsa referans edit'i uygula, indeksle ve context'i puanla."""
+    workspace = scratch / task.id
+    prepare_workspace(corpus_dir / task.repo, workspace)
+    edit_problems = apply_steps(task, workspace)
+    if edit_problems:
+        raise PreflightError("\n".join(edit_problems))
+    index_s = index_workspace(cli, workspace, home)
+    text = context_text(mcp, workspace, home, task.question)
+    return score_callers(task, parse_callers(text), index_s)
+
+
+def command_preflight(ccm_bin_dir: Path, corpus_dir: Path) -> int:
+    """Üç pilot context packet'ini model çağırmadan doğrula."""
+    bin_dir = ccm_bin_dir.expanduser().resolve()
+    corpus = corpus_dir.expanduser().resolve()
+    cli = executable(bin_dir / "ccm-cli")
+    mcp = executable(bin_dir / "ccm-mcp")
+    if not corpus.is_dir():
+        raise PreflightError(f"corpus directory not found: {corpus}")
+
+    tasks = pilot_tasks()
+    problems = check_tasks(tasks, corpus)
+    if problems:
+        raise PreflightError("task validation failed:\n" + "\n".join(problems))
+
+    all_ok = True
+    with tempfile.TemporaryDirectory(prefix="ccm-context-preflight-") as directory:
+        scratch = Path(directory)
+        home = scratch / "home"
+        home.mkdir()
+        for task in tasks:
+            result = run_task(task, corpus, scratch, cli, mcp, home)
+            precision_denominator = result.found + len(result.extras)
+            precision = result.found / precision_denominator if precision_denominator else 1.0
+            recall = result.found / result.expected if result.expected else 1.0
+            print(
+                f"{result.task_id}: recall={recall:.3f} precision={precision:.3f} "
+                f"index_s={result.index_s:.2f}"
+            )
+            if result.missing:
+                print("  missing: " + ", ".join(result.missing))
+            if result.extras:
+                print("  extras: " + ", ".join(result.extras))
+            all_ok = all_ok and result.ok
+
+    print("context preflight: " + ("PASS" if all_ok else "FAIL"))
+    return 0 if all_ok else 1

@@ -18,8 +18,10 @@ false positive), and the edited Serde task (2/2, with the removed caller absent)
 quality checks, not agent-token evidence. A Codex smoke attempt stopped with exit 4 before any run
 record because the subscription usage limit was already exhausted; the CLI reported a reset around
 2026-10-07 02:17. Claude cannot be rerun from this environment until the owner supplies
-`CLAUDE_CODE_OAUTH_TOKEN`. The release binaries must be rebuilt once more after the current
-quality patch before either measured pilot.
+`CLAUDE_CODE_OAUTH_TOKEN`. The final product head for this preflight is `5615c30`; the optimized
+MCP binary was rebuilt from that source, and the reproducible `preflight-context` command passes
+all three pilot packets at recall=1.000 and precision=1.000 without an agent, API call or embedding
+model.
 
 **Owner's direction (2026-10-02):** optimize for end-to-end agent token use without sacrificing
 answer quality, independent of model/provider/effort. Move retrieval/tool-selection decisions from
@@ -113,14 +115,18 @@ The default `tools/list` serializes to 1,105 bytes in a direct MCP measurement, 
 when `CCM_MCP_LEGACY_TOOLS=1` exposes the compatibility surface. This is a fixed-schema measurement,
 not evidence of lower end-to-end agent tokens.
 
-Verification on the current worktree: the full `ccm-core` package passed, including 143 unit tests
-(3 opt-in local-model tests ignored) and all integration suites; the full `ccm-mcp` package passed,
-including 18 token-budget/context tests, 22 auto-refresh tests, 26 MCP integration tests (1 opt-in
-local-model test ignored), 5 protocol tests and the hermetic E2E test (external Guardian fixture
-ignored as designed). `cargo clippy --workspace --all-targets -- -D warnings`,
-`cargo fmt --all -- --check` and `git diff --check` also pass. Model-free task audits on the
-pinned corpus: Flask 12/12, Express 5/5 with receiver false positives excluded, Serde 2/2 after the
-scripted edit.
+Verification through product commit `5615c30`: the full `ccm-core` package passed, including 143
+unit tests (3 opt-in local-model tests ignored) and all integration suites; the full `ccm-mcp`
+package passed, including 19 token-budget/context tests, 22 auto-refresh tests, 26 MCP integration
+tests (1 opt-in local-model test ignored), 5 protocol tests and the hermetic E2E test (external
+Guardian fixture ignored as designed). `cargo clippy --workspace --all-targets -- -D warnings`,
+`cargo fmt --all -- --check` and `git diff --check` also pass. `ccm-cli` is unchanged at SHA-256
+`72e84aea…47090703`; the optimized `ccm-mcp` rebuilt after the caller-render dedupe is
+`37be6d90…71c094d`. `python -m agent preflight-context` rebuilds graph-only indexes from the pinned
+corpus and verifies the three packets against task ground truth; that exact release pair scores
+Flask 12/12, Express 5/5 with no extra caller, and Serde 2/2 after the scripted edit, all at
+recall=1.000 and precision=1.000. Duplicate occurrence IDs for one semantic caller are collapsed
+only in the `context` rendering; graph call sites remain intact.
 
 The next gate is behavioral: re-run the same Claude pilot. CCM is not ready for the preregistered
 final L3 run until the agent actually chooses `context` where it helps, with no success regression
@@ -129,24 +135,21 @@ multi-file edits where grep/read loops are expensive.
 
 ## Next steps, in order
 
-1. **Commit the current packet-quality fixes and rebuild the release binaries.** Re-run the three
-   model-free task audits against that exact commit so the measured pilot and its local preflight
-   use the same graph schema and routing code.
-2. **Re-run the 3-task Claude pilot** into a new output directory once
-   `CLAUDE_CODE_OAUTH_TOKEN` is supplied. Compare success, CCM calls, input/output tokens, turns and
-   wall time with `pilot-claude`; inspect transcripts to see whether and why the model selects
-   `context`.
-3. **Run the Codex pilot after the subscription limit resets.** The dedicated
+1. **Re-run the 3-task Claude pilot** into a new output directory once
+   `CLAUDE_CODE_OAUTH_TOKEN` is supplied. Run `preflight-context` first, then compare success,
+   CCM calls, input/output tokens, turns and wall time with `pilot-claude`; inspect transcripts to
+   see whether and why the model selects `context`.
+2. **Run the Codex pilot after the subscription limit resets.** The dedicated
    `~/.ccm-bench/codex-home` login exists; the 2026-10-02 smoke attempt stopped before a run record
    with exit 4, so the first successful transcript still needs isolation/parser inspection.
-4. **If agents use `context` but task packets are insufficient, improve server-side routing or
+3. **If agents use `context` but task packets are insufficient, improve server-side routing or
    composition from transcript evidence**, not by adding default tools back speculatively.
-5. **Add reusable per-repository indexes**, then run large-repository (Django) and multi-file edit
+4. **Add reusable per-repository indexes**, then run large-repository (Django) and multi-file edit
    extensions. These are the cases most likely to separate CCM from grep/read loops.
-6. **Only after the product configuration is stable, run the preregistered L3 final experiment:**
+5. **Only after the product configuration is stable, run the preregistered L3 final experiment:**
    24 tasks × 3 arms × 3 repetitions per agent. Publish negative or mixed results and keep the
    preregistration/failure ledger intact.
-7. Later, only if L3 evidence supports it: TypeScript/JavaScript syntax-level resolution, then edge
+6. Later, only if L3 evidence supports it: TypeScript/JavaScript syntax-level resolution, then edge
    accuracy against language servers (L2).
 
 ## Running the L3 experiment
@@ -154,6 +157,14 @@ multi-file edits where grep/read loops are expensive.
 Prerequisites: the corpus (`benchmarks/scripts/fetch_corpus.sh`), release binaries
 (`cargo build --release -p ccm-cli -p ccm-mcp`, about 20 minutes) and the built-in embedding model
 in `~/.ccm/models` (downloaded by the first `ccm-cli` index).
+
+Before spending any agent quota, verify the exact release binaries against the three pilot task
+packets. This preflight disables embeddings and makes no model/API call:
+
+```bash
+cd benchmarks
+uv run python -m agent preflight-context --ccm-bin-dir ../target/release --corpus-dir corpus
+```
 
 Claude Code, on the Claude subscription:
 

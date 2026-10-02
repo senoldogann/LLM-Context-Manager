@@ -12,6 +12,7 @@ from pathlib import Path
 
 from agent import codex
 from agent.check import check_tasks
+from agent.context_preflight import command_preflight
 from agent.report import ReportError, read_outcomes, render
 from agent.run import (
     AgentName,
@@ -381,6 +382,13 @@ def build_parser() -> argparse.ArgumentParser:
     check = commands.add_parser("check", help="validate all task ground truth against the corpus")
     check.add_argument("--corpus-dir", type=Path, required=True)
 
+    preflight = commands.add_parser(
+        "preflight-context",
+        help="verify the three context-first pilot packets without calling an agent or API",
+    )
+    preflight.add_argument("--ccm-bin-dir", type=Path, required=True)
+    preflight.add_argument("--corpus-dir", type=Path, required=True)
+
     run = commands.add_parser("run", help="run or resume the three-arm agent benchmark")
     run.add_argument("--model", required=True)
     run.add_argument("--effort", required=True)
@@ -437,6 +445,8 @@ def main() -> int:
     namespace = build_parser().parse_args()
     if namespace.command == "check":
         return command_check(namespace.corpus_dir)
+    if namespace.command == "preflight-context":
+        return command_preflight(namespace.ccm_bin_dir, namespace.corpus_dir)
     if namespace.command == "report":
         return command_report(namespace.out_dir, namespace.out)
     embedding: Embedding = namespace.embedding
