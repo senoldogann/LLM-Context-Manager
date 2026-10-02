@@ -526,3 +526,24 @@ async fn rust_test_modules_see_parent_items_through_glob_imports() -> Result<()>
     );
     Ok(())
 }
+
+#[tokio::test]
+async fn rust_let_bindings_do_not_shadow_the_function_they_call() -> Result<()> {
+    // `let report = report();` sağ taraf bağlamadan önce değerlendirilir:
+    // çağrı modüldeki fonksiyona gider; `let` değişkeni öğe değildir.
+    let files: &[(&str, &str)] = &[(
+        "src/lib.rs",
+        "fn report() -> u32 {\n    1\n}\n\nfn run() -> u32 {\n    let report = report();\n    report\n}\n",
+    )];
+    let (_dir, engine) = index_fixture(files).await?;
+    let graph = engine.graph.read().await;
+    assert_eq!(
+        edge_types(
+            &graph,
+            typed(&graph, "src/lib.rs", "run", NodeType::Function),
+            typed(&graph, "src/lib.rs", "report", NodeType::Function)
+        ),
+        vec![EdgeType::Calls]
+    );
+    Ok(())
+}

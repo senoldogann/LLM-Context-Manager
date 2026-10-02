@@ -377,7 +377,15 @@ impl<'g> Resolver<'g> {
     /// Kapsamda ad: saran fonksiyonların tanımları ve `use` bağları, sonra modül.
     fn lookup(&self, name: &str, scope: &Scope, depth: usize) -> Vec<Item> {
         for function in &scope.functions {
-            let local = self.children_named(*function, name, &scope.module);
+            // `let` bağlamaları öğe değildir: `let x = x();` modüldeki `x`'i çağırır.
+            let local: Vec<Item> = self
+                .children_named(*function, name, &scope.module)
+                .into_iter()
+                .filter(|item| {
+                    !matches!(item, Item::Node(idx)
+                        if self.graph.graph[*idx].node_type == NodeType::Variable)
+                })
+                .collect();
             if !local.is_empty() {
                 return local;
             }
