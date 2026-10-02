@@ -14,10 +14,11 @@ and `context` caller lines include Contains-based qualified/enclosing scopes whi
 semantic IDs and relation labels. The graph schema and legacy rendering are unchanged. Next:
 review/refine the implementation, then run full local gates and rebuild/verify the changed MCP
 release binary against pinned corpus packets.
-An additional alias/non-code boundary regression compiled and ran at `6ed2690`, then failed
-(exit 101, 0 passed, 1 failed): the request packet retained the canonical call but missed a call
-through the same assignment's proven alias. Next: retain that entire callable binding's aliases
-in receiver evidence and rerun the context target before the full gates.
+Additional RED checkpoint `b1d7563` compiled/executed an alias/non-code boundary regression at
+`6ed2690` (exit 101, 0 passed, 1 failed): the canonical call was present but its assignment alias
+caller was missing. The full context target now passes all 12 tests: proven assignment aliases
+are preserved in receiver evidence, while comments, strings and identifier suffixes are excluded
+by AST call inspection. No source corpus, agent measurement or preregistration was modified.
 No new external AI quota use is authorized by this local continuation.
 
 The owner-approved **Codex context-first pilot is complete**, measured at clean commit `4185640`

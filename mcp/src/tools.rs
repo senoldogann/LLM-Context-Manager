@@ -1256,6 +1256,7 @@ fn is_js_ts_path(path: &str) -> bool {
 struct MemberTarget {
     node_id: String,
     hint: MemberCallHint,
+    expressions: Vec<String>,
 }
 
 fn js_language(path: &str) -> ccm_core::parser::SupportedLanguage {
@@ -1298,18 +1299,23 @@ fn assigned_callable<'a>(
     tree: &'a tree_sitter::Tree,
     content: &str,
     expression: &str,
-) -> Option<tree_sitter::Node<'a>> {
+) -> Option<(tree_sitter::Node<'a>, Vec<String>)> {
     let mut current = tree.root_node().named_child(0)?;
     if current.kind() == "expression_statement" {
         current = current.named_child(0)?;
     }
     let mut bound = false;
+    let mut expressions = Vec::new();
     while current.kind() == "assignment_expression" {
         let left = current.child_by_field_name("left")?;
-        bound |= member_expression(left, content).as_deref() == Some(expression);
+        if let Some(binding) = member_expression(left, content) {
+            bound |= binding == expression;
+            expressions.push(binding);
+        }
         current = current.child_by_field_name("right")?;
     }
-    (bound && matches!(current.kind(), "function_expression" | "arrow_function")).then_some(current)
+    (bound && matches!(current.kind(), "function_expression" | "arrow_function"))
+        .then_some((current, expressions))
 }
 
 async fn member_call_target(
@@ -1333,26 +1339,34 @@ async fn member_call_target(
             if !matches!(
                 node.node_type,
                 ccm_core::graph::NodeType::Function | ccm_core::graph::NodeType::Method
-            ) || node.name != hint.member
-                || ccm_core::engine::extract_file_path(&node.id).trim_start_matches("./") != file
+            ) || ccm_core::engine::extract_file_path(&node.id).trim_start_matches("./") != file
             {
                 continue;
             }
             let tree =
                 ccm_core::parser::CodeParser::new().parse_tree(&node.content, js_language(file))?;
-            if let Some(callable) = assigned_callable(&tree, &node.content, &expression) {
+            if let Some((callable, expressions)) =
+                assigned_callable(&tree, &node.content, &expression)
+            {
                 candidates.push((
                     idx,
                     hint.clone(),
                     callable.utf8_text(node.content.as_bytes())?.to_string(),
+                    expressions,
                 ));
             }
         }
     }
-    let Some((first, first_hint, body)) = candidates.first() else {
+    candidates.sort_by_key(|(idx, _, _, _)| {
+        (
+            graph.graph[*idx].start_line,
+            std::cmp::Reverse(graph.graph[*idx].content.len()),
+        )
+    });
+    let Some((first, first_hint, body, _)) = candidates.first() else {
         return Ok(None);
     };
-    for (other, other_hint, other_body) in candidates.iter().skip(1) {
+    for (other, other_hint, other_body, _) in candidates.iter().skip(1) {
         let contains = |parent, child| {
             graph.graph.edges(parent).any(|edge| {
                 edge.target() == child
@@ -1374,9 +1388,16 @@ async fn member_call_target(
             )));
         }
     }
+    let mut expressions: Vec<String> = candidates
+        .iter()
+        .flat_map(|(_, _, _, expressions)| expressions.iter().cloned())
+        .collect();
+    expressions.sort();
+    expressions.dedup();
     Ok(Some(MemberTarget {
         node_id: graph.graph[*first].id.clone(),
         hint: first_hint.clone(),
+        expressions,
     }))
 }
 
@@ -1414,15 +1435,12 @@ fn contains_member_call(
 /// dosyalarda yalnız query'deki receiver zinciri kabul edilir.
 async fn receiver_call_evidence(
     engine: &Arc<RetrievalEngine>,
-    hint: &MemberCallHint,
-    primary_node_id: Option<&str>,
-    known_ids: &HashSet<String>,
+    target: &MemberTarget,
 ) -> Result<Vec<ccm_core::engine::ContextSuggestion>> {
+    let hint = &target.hint;
     if !hint.definition_file.as_deref().is_some_and(is_js_ts_path) {
         return Ok(Vec::new());
     }
-    let receiver_expression = format!("{}.{}", hint.receiver, hint.member);
-    let this_expression = format!("this.{}", hint.member);
     let graph = engine.graph.read().await;
     let mut suggestions = Vec::new();
 
@@ -1434,11 +1452,14 @@ async fn receiver_call_evidence(
         ) {
             continue;
         }
-        if primary_node_id == Some(node.id.as_str()) || known_ids.contains(&node.id) {
+        if target.node_id == node.id {
             continue;
         }
         let path = ccm_core::engine::extract_file_path(&node.id);
         let path = path.trim_start_matches("./");
+        if !is_js_ts_path(path) {
+            continue;
+        }
         if hint
             .scope
             .as_deref()
@@ -1448,18 +1469,19 @@ async fn receiver_call_evidence(
         }
         let tree =
             ccm_core::parser::CodeParser::new().parse_tree(&node.content, js_language(path))?;
-        let direct = contains_member_call(&tree, &node.content, &receiver_expression, true);
-        let same_receiver_file = hint.definition_file.as_deref() == Some(path)
-            && contains_member_call(&tree, &node.content, &this_expression, false);
-        if !(direct || same_receiver_file) {
+        let matching_expression = target.expressions.iter().find(|expression| {
+            contains_member_call(&tree, &node.content, expression, true)
+                || (hint.definition_file.as_deref() == Some(path)
+                    && expression.rsplit_once('.').is_some_and(|(_, member)| {
+                        contains_member_call(&tree, &node.content, &format!("this.{member}"), false)
+                    }))
+        });
+        let Some(expression) = matching_expression else {
             continue;
-        }
+        };
         suggestions.push(ccm_core::engine::node_suggestion(
             node,
-            format!(
-                "receiver-call evidence for {}.{}",
-                hint.receiver, hint.member
-            ),
+            format!("receiver-call evidence for {expression}"),
         ));
     }
 
@@ -1559,35 +1581,14 @@ pub async fn context(engine: &Arc<RetrievalEngine>, args: &Value) -> Result<Tool
     let selected_node_id = hinted_target
         .as_deref()
         .or_else(|| hits.first().and_then(|hit| hit.node_id.as_deref()));
-    let empty_known_ids = HashSet::new();
     let hinted_callers = if let Some(target) = member_target.as_ref() {
-        Some(
-            receiver_call_evidence(
-                engine,
-                &target.hint,
-                Some(&target.node_id),
-                &empty_known_ids,
-            )
-            .await?,
-        )
+        Some(receiver_call_evidence(engine, target).await?)
     } else {
         None
     };
-    let mut known_ids = HashSet::new();
-    let mut primary_node_id: Option<String> = None;
     let mut output = if let Some(node_id) = selected_node_id {
-        primary_node_id = Some(node_id.to_string());
         match engine.explain(node_id).await {
             Ok(explanation) => {
-                known_ids.insert(explanation.node.id.clone());
-                known_ids.extend(explanation.usages.iter().map(|usage| usage.node.id.clone()));
-                known_ids.extend(
-                    explanation
-                        .callees
-                        .iter()
-                        .map(|usage| usage.node.id.clone()),
-                );
-                known_ids.extend(explanation.members.iter().map(|member| member.id.clone()));
                 let primary_tokens = max_tokens.saturating_mul(3).saturating_div(4).max(1);
                 let callers =
                     context_callers(engine, &explanation, hinted_callers.as_deref()).await?;
@@ -1598,31 +1599,6 @@ pub async fn context(engine: &Arc<RetrievalEngine>, args: &Value) -> Result<Tool
     } else {
         format_suggestions_output(&hits, false, max_tokens, max_tokens)
     };
-
-    // Hint hedefi yoksa receiver evidence yalnız ek bağlam olarak kullanılabilir.
-    // Hint hedefinde ise yukarıda caller listesinin kendisini override eder; bu,
-    // lexical graph'taki farklı receiver'lı aynı-name false positive'leri gizler.
-    if let Some(target) = member_target.as_ref().filter(|_| hinted_target.is_none()) {
-        let evidence =
-            receiver_call_evidence(engine, &target.hint, primary_node_id.as_deref(), &known_ids)
-                .await?;
-        if !evidence.is_empty() && char_count(&output) < budget_chars {
-            let header = "receiver-call evidence:\n";
-            let remaining_chars = budget_chars
-                .saturating_sub(char_count(&output))
-                .saturating_sub(char_count(header));
-            let remaining_tokens = remaining_chars / CHARS_PER_TOKEN;
-            if remaining_tokens > 0 {
-                output.push_str(header);
-                output.push_str(&format_suggestions_output(
-                    &evidence,
-                    false,
-                    remaining_tokens,
-                    remaining_tokens,
-                ));
-            }
-        }
-    }
 
     // Kalan bütçe varsa alternatifleri de kısa handle'lar olarak ver. Ajanın
     // ikinci bir search çağrısı yapmadan belirsizliği görmesini sağlar.
