@@ -59,6 +59,11 @@ fn fixture_files() -> Vec<(String, String)> {
         "app/nested.py".into(),
         "class Outer:\n    class Inner:\n        def go(self):\n            return 1\n".into(),
     ));
+    // Rust trait ve enum düğümleri; trait metodu `Store.save` olarak hedeflenir.
+    files.push((
+        "src/store.rs".into(),
+        "pub trait Store {\n    fn save(&self) -> bool;\n}\n\npub enum Kind {\n    Fast,\n    Slow,\n}\n".into(),
+    ));
     // Rust: `impl Foo` ayrı bir düğümdür; çıplak `Foo` yapının kendisidir.
     files.push((
         "src/lib.rs".into(),
@@ -405,4 +410,21 @@ fn tool_list_is_lean() {
             description.chars().count()
         );
     }
+}
+
+#[test]
+fn rust_traits_and_enums_are_symbols() {
+    let mut server = Server::start();
+    let (text, is_error) = server.call("explain", json!({"target": "Store"}));
+    assert!(!is_error, "{text}");
+    assert!(text.contains("Trait `Store`"), "{text}");
+    let (text, is_error) = server.call("explain", json!({"target": "Store.save"}));
+    assert!(!is_error, "a trait method is a member of its trait: {text}");
+    assert!(text.contains("Function `save`"), "{text}");
+    let (text, is_error) = server.call("map", json!({"path": "src"}));
+    assert!(!is_error, "{text}");
+    assert!(
+        text.contains("src/store.rs — Store, Store.save, Kind"),
+        "{text}"
+    );
 }

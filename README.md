@@ -63,11 +63,16 @@ the syntax tree and resolved through the file's imports (`import`,
 `from .x import *`), `self`/`cls`/`super()` and class names;
 a call on a receiver whose type is unknown is reported as a *possible* call to
 at most five same-named definitions, and imports that leave the project produce
-no edge. In the other 12 languages call edges are still resolved by name: a
-call binds to a definition in the same file first, otherwise to the only
-definition elsewhere; several same-file definitions produce edges marked
-ambiguous, and a name defined in several other files produces no edge. How often
-this matches a type-aware tool has not been measured yet. Other MCP servers
+no edge. Rust files are resolved the same way through `use` paths (`crate`,
+`self`, `super`, other workspace crates named in `Cargo.toml`, `pub use`
+re-exports), inline and file modules, `impl` blocks and traits, including calls
+inside macro arguments; a method call on a value whose type is unknown is a
+*possible* call to at most five methods. In the other 11 languages call edges
+are matched by name and labelled as inferred: a call binds to a definition in
+the same file first, otherwise to the only definition elsewhere; several
+same-file definitions produce edges marked ambiguous, and a name defined in
+several other files produces no edge. How often this matches a type-aware tool
+has not been measured yet. Other MCP servers
 also build code graphs and refresh them automatically; CCM makes no claim of
 being fresher or more accurate than them until that is measured
 ([`benchmarks/`](./benchmarks/README.md)).
@@ -79,7 +84,7 @@ being fresher or more accurate than them until that is measured
 ### 🧠 Connected Intelligence (Graph Navigator)
 - **Two-Pass Indexing** - Links function definitions to call sites
 - **Incremental Refresh** - Re-indexes only added, modified, renamed, or deleted files after the first run
-- **Deep Traversal** - Ask "Who calls this?" and get the callers the graph knows (name-resolved, see limits above)
+- **Deep Traversal** - Ask "Who calls this?" and get the callers the graph knows (syntax-resolved for Python and Rust, name-matched elsewhere; see limits above)
 
 ### ⚡ High-Performance Core
 - **Rust-Powered** - Single-binary CLI and MCP server; index and query timings

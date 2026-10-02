@@ -48,8 +48,9 @@ Usages are labelled `calls` (resolved through imports, local definitions,
 `self` or `super`), `calls (inferred …)` (the only project definition of that
 name, not imported), `may call` (receiver type unknown or several candidates),
 `references`, `imports`, `may import` and `inherits`. Treat `may …` lines as
-candidates to verify, not facts. Python is resolved at syntax level; other
-languages are matched by name.
+candidates to verify, not facts. Python and Rust are resolved at syntax level;
+other languages are matched by name, and those matches are labelled
+`calls (inferred …)` or `references`.
 
 ## Budgets
 

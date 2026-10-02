@@ -65,11 +65,16 @@ ağacından okunur ve dosyanın importları (`import`, `from … import`, görel
 importlar, `from .x import *` dahil paket yeniden dışa aktarımları),
 `self`/`cls`/`super()` ve sınıf adlarıyla çözülür;
 türü bilinmeyen bir alıcıdaki çağrı en çok beş aynı adlı tanıma *olası* çağrı
-olarak raporlanır, projeden çıkan importlar kenar üretmez. Diğer 12 dilde çağrı
-kenarları hâlâ isimle çözülür: bir çağrı önce aynı dosyadaki tanıma, yoksa başka
-yerdeki tek tanıma bağlanır; aynı dosyadaki birden çok tanım belirsiz olarak
-işaretlenmiş kenarlar üretir, birden çok başka dosyada tanımlı bir isim hiç
-kenar üretmez. Bunun tür bilen bir araçla
+olarak raporlanır, projeden çıkan importlar kenar üretmez. Rust dosyaları da
+aynı biçimde `use` yolları (`crate`, `self`, `super`, `Cargo.toml`'da adı geçen
+diğer çalışma alanı crate'leri, `pub use` yeniden dışa aktarımları), satır içi
+ve dosya modülleri, `impl` blokları ve trait'ler üzerinden çözülür; makro
+argümanlarındaki çağrılar da buna dahildir. Türü bilinmeyen bir değer üzerindeki
+metot çağrısı en çok beş metoda *olası* çağrıdır. Diğer 11 dilde çağrı
+kenarları isimle eşleştirilir ve çıkarım olarak etiketlenir: bir çağrı önce aynı
+dosyadaki tanıma, yoksa başka yerdeki tek tanıma bağlanır; aynı dosyadaki birden
+çok tanım belirsiz olarak işaretlenmiş kenarlar üretir, birden çok başka dosyada
+tanımlı bir isim hiç kenar üretmez. Bunun tür bilen bir araçla
 ne sıklıkla örtüştüğü henüz ölçülmedi. Başka MCP sunucuları da kod grafı kurup
 otomatik yeniler; CCM bu ölçülene kadar onlardan daha taze ya da daha doğru
 olduğunu iddia etmez ([`benchmarks/`](./benchmarks/README.md)).
@@ -81,7 +86,7 @@ olduğunu iddia etmez ([`benchmarks/`](./benchmarks/README.md)).
 ### Bağlı Zeka (Graph Navigator)
 - **İki Aşamalı İndeksleme** - Fonksiyon tanımlarını çağrı noktalarına bağlar
 - **Artırmalı Güncelleme** - İlk çalışmadan sonra yalnızca eklenen, değişen, yeniden adlandırılan veya silinen dosyaları işler
-- **Derin Gezinti** - "Bunu kim çağırıyor?" sorusuna grafın bildiği çağıranlarla cevap verir (isimle çözülür, yukarıdaki sınırlara bakın)
+- **Derin Gezinti** - "Bunu kim çağırıyor?" sorusuna grafın bildiği çağıranlarla cevap verir (Python ve Rust'ta sözdiziminden, diğer dillerde isimle; yukarıdaki sınırlara bakın)
 
 ### Yüksek Performanslı Çekirdek
 - **Rust Tabanlı** - Hızlı indeksleme ve sorgulama

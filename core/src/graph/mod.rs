@@ -692,7 +692,8 @@ impl CodeGraph {
     }
 
     /// Adı verilen semboller, dosya ve satıra göre sıralı. `Sahip.üye`
-    /// biçiminde adı `Sahip` olan sınıf ya da yapıların doğrudan üyeleri döner.
+    /// biçiminde adı `Sahip` olan sınıf, yapı, enum ya da trait'lerin doğrudan
+    /// üyeleri döner.
     pub fn symbols_named(&self, name: &str) -> Vec<NodeIndex> {
         let mut found: Vec<NodeIndex> = match name.rsplit_once('.') {
             Some((owner, member)) => self
@@ -702,7 +703,7 @@ impl CodeGraph {
                 .filter(|idx| {
                     matches!(
                         self.graph[*idx].node_type,
-                        NodeType::Class | NodeType::Struct
+                        NodeType::Class | NodeType::Struct | NodeType::Enum | NodeType::Trait
                     )
                 })
                 .flat_map(|owner_idx| {

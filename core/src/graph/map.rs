@@ -187,7 +187,7 @@ fn is_certain_use(edge: &EdgeType) -> bool {
     }
 }
 
-/// Sınıf ya da yapı üyesi için `Sahip.ad`, diğerleri için ad; `explain` bu
+/// Sınıf, yapı, enum ya da trait üyesi için `Sahip.ad`, diğerleri için ad; `explain` bu
 /// biçimi hedef olarak kabul eder.
 fn qualified_name(graph: &CodeGraph, idx: NodeIndex) -> String {
     let name = &graph.graph[idx].name;
@@ -198,7 +198,7 @@ fn qualified_name(graph: &CodeGraph, idx: NodeIndex) -> String {
             matches!(edge.weight(), EdgeType::Contains)
                 && matches!(
                     graph.graph[edge.source()].node_type,
-                    NodeType::Class | NodeType::Struct
+                    NodeType::Class | NodeType::Struct | NodeType::Enum | NodeType::Trait
                 )
         })
         .map_or_else(
