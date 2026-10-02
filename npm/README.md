@@ -58,11 +58,13 @@ The first index is complete; subsequent runs are incremental and process only ad
 
 ## 📖 What is CCM?
 
-CCM transforms static source code into a dynamic, queryable Knowledge Graph:
+CCM turns a project into a code graph that agents query in one call, with
+compact `path:line` answers inside a token budget:
 
-- **🔍 Semantic Search** - Find code by meaning ("where is auth logic?")
-- **🧠 Graph Navigation** - Understand relationships ("who calls this function?")
-- **📍 Cursor Context** - Get relevant code based on your position
+- **🗺️ Project map** - the most-used files and symbols (`map`)
+- **🔎 Explain** - definition, callers, callees and tests of a symbol (`explain`)
+- **🧠 Usages and impact** - who calls this, and what breaks if this file changes
+- **🔍 Semantic search** - find code by meaning ("where is auth logic?")
 
 ---
 
@@ -74,6 +76,7 @@ The npm wrapper downloads pre-built binaries and passes commands through:
 |---------|-------------|
 | `npx @senoldogann/context-manager install` | Auto-configure MCP for editors |
 | `npx @senoldogann/context-manager index --path <dir>` | Index a project |
+| `npx @senoldogann/context-manager map --path <dir>` | Most-used files and symbols |
 | `npx @senoldogann/context-manager query --text "..."` | Search codebase |
 | `npx @senoldogann/context-manager mcp` | Run MCP server directly |
 | `npx @senoldogann/context-manager doctor --path <dir>` | Diagnose config and index health |
@@ -91,6 +94,7 @@ keeping one client request open until timeout.
 
 | Host | Status |
 |------|--------|
+| Claude Code | Supported |
 | Codex | Supported |
 | Cursor | Supported |
 | Claude Desktop | Supported |
@@ -189,11 +193,11 @@ Advanced overrides:
 
 Once configured, ask your AI agent:
 
+> "Map this project with context-manager, then explain `UserService`."
+
+> "Who calls `parse_config`, and what breaks if I change `config.py`?"
+
 > "Search for the authentication flow in this codebase."
-
-> "Read the graph for `UserService` and show me its callers."
-
-> "What functions call `parse_config`?"
 
 ## 🧠 Self-Improving Retrieval (v0.3.2+)
 
@@ -267,6 +271,18 @@ Enable `CCM_EMBED_DATA_FILES=1` to include them in semantic search.
 ---
 
 ## 📝 Changelog
+
+### v0.4.0
+- ⚠️ Breaking: `get_context` and `read_graph` are replaced by `explain`; graph
+  tools return compact `path:line` lines with a `max_tokens` budget; indexes
+  are rebuilt once (schema 7)
+- ✅ `explain` and `map` answer common questions in one call; `target` accepts
+  names, file paths and `path:line`
+- ✅ LLM-free benchmark on Flask and Django: 74% fewer response bytes and 92
+  instead of 138 calls for 24 fixed questions
+- ✅ Python calls resolved from the syntax tree with labelled relations
+- ✅ Auto-refresh of the live index, MCP roots, concurrent requests and a
+  built-in local embedding model
 
 ### v0.3.13
 - ✅ New `benchmarks/` suite: 35 hand-verified golden tasks across 3 real

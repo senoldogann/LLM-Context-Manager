@@ -1,7 +1,7 @@
 {
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
   "name": "io.github.senoldogann/context-manager",
-  "description": "Code knowledge graph for AI agents: always-fresh semantic search, call graphs, impact analysis.",
+  "description": "Code graph for AI agents: project map, explain, usages and impact in compact answers.",
   "repository": {
     "url": "https://github.com/senoldogann/LLM-Context-Manager",
     "source": "github"

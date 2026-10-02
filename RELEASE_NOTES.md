@@ -1,5 +1,70 @@
 # Release Notes
 
+## v0.4.0 - Token-Efficient Answers, Python Syntax Graph and Live Index
+
+**Breaking changes**
+
+- The `get_context` and `read_graph` MCP tools are removed; `explain` covers
+  both. Graph tools return compact one-line results
+  (`- Kind: name · path:start-end · relation`) without node IDs and take
+  `max_tokens` (default 1500) instead of `max_chars`, which is still read as
+  characters / 4. Pass a name, a file path or `path:line` as `target`.
+- Index schema 7: existing indexes are rebuilt once on first use.
+
+**Answers in fewer tokens**
+
+- `explain {target}`: definition, body (at most half of the budget), members,
+  callers, callees and tests in one call.
+- `map {path?}` and `ccm-cli map`: code files ordered by how much other files
+  use them, each with its most-used symbols.
+- `target` accepts a name (`run`, `Engine.start`), a file path, `path:line`, a
+  result's `path:start-end` or a node ID. An ambiguous name returns up to 10
+  candidates; an unknown target is an error, never an empty result.
+- `tools/list` shrinks from 9,333 to 6,640 bytes and `SKILL.md` from 25,993 to
+  4,051 bytes; the skill adds a `CLAUDE.md` snippet and a SessionStart hook.
+- Pre-registered, LLM-free benchmark on Flask and Django (24 fixed questions):
+  526,912 → 136,296 response bytes (−74%) and 138 → 92 calls. Agent outcomes
+  are not measured yet ([benchmarks](benchmarks/README.md#token-cost-of-answers-m2)).
+
+**Python syntax graph**
+
+- Python call sites, imports and base classes come from the syntax tree. Calls
+  are resolved through scopes, imports, `self`/`super` and class members, and
+  every usage is labelled `calls`, `calls (inferred …)`, `may call`,
+  `references`, `imports`, `may import` or `inherits`.
+- Comments and strings no longer create edges, and `x.name()` with an unknown
+  receiver may call class methods only.
+- Incremental refresh re-resolves callers when an import or re-export changes;
+  `impact_of_change` follows uncertain edges and names the relation.
+
+**Live index and MCP**
+
+- Auto-refresh: a per-project watcher applies saved changes to the in-memory
+  index (on Django 5.1 a saved change shows up after a median of about 0.6 s,
+  release build, embedder off). Every answer starts with the index state, and a
+  failed re-index never replaces the last good graph.
+- The project comes from MCP roots instead of being pinned at install time.
+- Requests are served concurrently with cancellation; tools carry titles and
+  annotations, and tool failures are `isError` results.
+- A graph-only index is activated when the embedding service is down, and
+  activation is serialized with an OS advisory lock.
+
+**Embeddings**
+
+- Built-in local embedding model (granite-embedding-97m-multilingual-r2, int8
+  ONNX, ~124 MB, checksum-verified download): semantic search without Ollama
+  or an API key. Not available on Intel Macs, where the index stays graph-only
+  until a provider is configured.
+
+**Fixes**
+
+- Rust impl blocks are named after the implemented type, so references to
+  structs with impls get edges.
+- The default exclude policy applies to project-relative paths; projects under
+  a directory such as `/build/app` are no longer skipped.
+- `ping` returns an empty result, and the npm wrapper writes download notices
+  to stderr so they cannot corrupt the MCP stdout channel.
+
 ## v0.3.13 - External Benchmark on Real Repositories
 
 - New `benchmarks/` suite: 35 hand-verified golden tasks across 3 real
