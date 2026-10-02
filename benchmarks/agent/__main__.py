@@ -12,7 +12,17 @@ from pathlib import Path
 
 from agent.check import check_tasks
 from agent.report import ReportError, read_outcomes, render
-from agent.run import Arm, Embedding, Secrets, Settings, record_path, run_one
+from agent.run import (
+    Arm,
+    Auth,
+    Embedding,
+    IsolationError,
+    QuotaError,
+    Secrets,
+    Settings,
+    record_path,
+    run_one,
+)
 from agent.tasks import TASKS, Task
 from freshness.model import JsonValue
 from freshness.repos import run_git
@@ -91,6 +101,7 @@ def settings_json(
         "model": settings.model,
         "effort": settings.effort,
         "embedding": settings.embedding,
+        "auth": settings.auth,
         "max_budget_usd": settings.max_budget_usd,
         "timeout_s": settings.timeout_s,
         "repetitions": repetitions,
@@ -178,15 +189,33 @@ def validate_paths(settings: Settings) -> None:
         raise HarnessError(f"local model directory not found: {settings.ccm_model_dir}")
 
 
-def secrets_from_env(embedding: Embedding) -> Secrets:
-    """Anahtarları yalnız ortamdan alır; hiçbir sonuç dosyasına yazmaz."""
-    anthropic = os.environ.get("ANTHROPIC_API_KEY")
-    if not anthropic:
-        raise HarnessError("ANTHROPIC_API_KEY is required for agent runs")
-    openai = os.environ.get("OPENAI_API_KEY")
-    if embedding == "openai" and not openai:
-        raise HarnessError("--embedding openai requires OPENAI_API_KEY")
-    return Secrets(anthropic_api_key=anthropic, openai_api_key=openai)
+def required_env(name: str, reason: str) -> str:
+    """Zorunlu ortam değişkeni; yoksa ne yapılacağını söyleyen açık hata."""
+    value = os.environ.get(name)
+    if not value:
+        raise HarnessError(f"{name} is required: {reason}")
+    return value
+
+
+def secrets_from_env(embedding: Embedding, auth: Auth) -> Secrets:
+    """Yalnız seçilen kipin kimlik bilgilerini ortamdan alır; hiçbir dosyaya yazmaz."""
+    return Secrets(
+        claude_oauth_token=(
+            required_env("CLAUDE_CODE_OAUTH_TOKEN", "create one with `claude setup-token`")
+            if auth == "subscription"
+            else None
+        ),
+        anthropic_api_key=(
+            required_env("ANTHROPIC_API_KEY", "--auth api-key bills the API key")
+            if auth == "api-key"
+            else None
+        ),
+        openai_api_key=(
+            required_env("OPENAI_API_KEY", "--embedding openai embeds through the OpenAI API")
+            if embedding == "openai"
+            else None
+        ),
+    )
 
 
 def arm_order(task_index: int, repetition: int) -> tuple[Arm, ...]:
@@ -237,7 +266,7 @@ def command_run(
     revision = harness_revision()
     setup = setup_json(settings, repetitions, tasks, revision)
     write_or_verify_setup(settings.out_dir / "settings.json", setup)
-    secrets = secrets_from_env(settings.embedding)
+    secrets = secrets_from_env(settings.embedding, settings.auth)
 
     total = len(tasks) * len(ARMS) * repetitions
     completed = 0
@@ -258,7 +287,15 @@ def command_run(
                     )
                     return 3
                 print(f"[{completed + 1}/{total}] run {name} (spent ${spent:.2f})", flush=True)
-                record = run_one(settings, task, arm, repetition, secrets)
+                try:
+                    record = run_one(settings, task, arm, repetition, secrets)
+                except QuotaError as error:
+                    print(f"stopping at {name}: usage or rate limit ({error}).", flush=True)
+                    print("Rerun the same command after the limit resets.", flush=True)
+                    return 4
+                except IsolationError as error:
+                    print(f"stopping at {name}: isolation check failed: {error}", flush=True)
+                    return 5
                 completed += 1
                 if record.transcript is not None:
                     spent += record.transcript.cost_usd
@@ -310,6 +347,13 @@ def build_parser() -> argparse.ArgumentParser:
     run.add_argument("--model", required=True)
     run.add_argument("--effort", required=True)
     run.add_argument("--embedding", choices=("local", "openai"), required=True)
+    run.add_argument(
+        "--auth",
+        choices=("subscription", "api-key"),
+        required=True,
+        help="subscription: CLAUDE_CODE_OAUTH_TOKEN from `claude setup-token`; "
+        "api-key: ANTHROPIC_API_KEY",
+    )
     run.add_argument("--max-budget-usd", type=float, required=True, help="cap per agent run")
     run.add_argument(
         "--max-total-usd",
@@ -340,10 +384,12 @@ def main() -> int:
     if namespace.command == "report":
         return command_report(namespace.out_dir, namespace.out)
     embedding: Embedding = namespace.embedding
+    auth: Auth = namespace.auth
     settings = Settings(
         model=namespace.model,
         effort=namespace.effort,
         embedding=embedding,
+        auth=auth,
         max_budget_usd=namespace.max_budget_usd,
         timeout_s=namespace.timeout_s,
         claude_bin=namespace.claude_bin.resolve(),

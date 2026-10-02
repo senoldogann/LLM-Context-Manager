@@ -92,10 +92,16 @@ remain visible. They are not discarded to improve an arm's rate.
 Each run gets a fresh exported corpus copy in a temporary directory outside the repository and the
 home directory, and a fresh temporary HOME and CLAUDE_CONFIG_DIR, so no user Claude settings,
 hooks, plugins, MCP servers or CLAUDE.md files are loaded. Claude Code runs in its normal mode,
-not `--bare`. Authentication comes only from `ANTHROPIC_API_KEY`. The harness stops the
-measurement, without recording the run, if Claude Code reports another authentication source, if
-the tools it exposes differ from the arm's tool set, or if a CLAUDE.md file sits above the
-workspace.
+not `--bare`. Authentication comes only from the environment and is chosen with `--auth`: a
+Claude subscription token (`CLAUDE_CODE_OAUTH_TOKEN`, created once with `claude setup-token`;
+Claude Code reports the source as `none`) or an API key (`ANTHROPIC_API_KEY`). The harness stops
+the measurement, without recording the run, if Claude Code reports another authentication source
+than the chosen one, if the tools it exposes differ from the arm's tool set, or if a CLAUDE.md
+file sits above the workspace. A usage-limit, rate-limit or overload error also stops it without
+recording the run; the same command resumes after the limit resets.
+
+With a subscription, `cost_usd` is Claude Code's API-price estimate for the tokens used, not money
+spent; the token counts are the measure of quota use.
 
 CCM artifacts are placed under the temporary repository's `.git/ccm-bench/` directory, not in
 the source tree, so normal source discovery cannot benefit from or be polluted by index files.
@@ -120,3 +126,8 @@ the final run is complete.
    location, and every run checks the reported authentication source and tool set.
 2. 2026-10-02: `--max-total-usd` stops the harness before a run that could push the total cost
    over the given amount. It limits spending and does not change what is measured.
+3. 2026-10-02: `--auth subscription` added at the owner's request, so the agent can run on the
+   owner's Claude subscription instead of an API key; it is the setting that matches how the tool
+   is used day to day, and quota use is what the owner wants to measure. Usage-limit stops are not
+   recorded as runs. A second agent (Codex on a ChatGPT subscription) is planned but not part of
+   this preregistration until its isolation is verified.

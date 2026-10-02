@@ -30,6 +30,12 @@ from freshness.repos import export_corpus, init_git, run_git
 
 Arm = Literal["A", "B", "C"]
 Embedding = Literal["local", "openai"]
+# subscription: `claude setup-token` ile üretilen abonelik jetonu; api-key: ücretli API anahtarı.
+Auth = Literal["subscription", "api-key"]
+# Claude Code'un `init` olayında bildirdiği kimlik kaynağı: OAuth (abonelik) için `none`.
+AUTH_SOURCE: dict[Auth, str] = {"subscription": "none", "api-key": "ANTHROPIC_API_KEY"}
+# Sınır ya da aşırı yük hatası ajanın başarısızlığı değildir: koşu kaydedilmez, ölçüm durur.
+QUOTA_MARKERS = ("usage limit", "rate limit", "rate_limit", "limit reached", "overloaded")
 
 SERVER = "context-manager"
 CCM_TOOLS = (
@@ -69,6 +75,10 @@ class TranscriptError(RunError):
     """stream-json çıktısı beklenen biçimde değil."""
 
 
+class QuotaError(RuntimeError):
+    """Abonelik ya da hız sınırı: koşu kaydedilmez; sınır sıfırlanınca aynı komut sürdürür."""
+
+
 class IsolationError(RuntimeError):
     """Koşu deneyin yalıtım koşullarını bozdu; kayıt yazılmaz ve ölçüm durur.
 
@@ -84,6 +94,7 @@ class Settings:
     model: str
     effort: str
     embedding: Embedding
+    auth: Auth
     max_budget_usd: float
     timeout_s: int
     claude_bin: Path
@@ -95,13 +106,15 @@ class Settings:
 
 @dataclass(frozen=True)
 class Secrets:
-    """Ortamdan okunan anahtarlar; loglanmaz ve kayıtlara girmez.
+    """Ortamdan okunan kimlik bilgileri; loglanmaz ve kayıtlara girmez.
 
-    OpenAI seçildiğinde anahtar, koşu süresince 0600 izinli MCP yapılandırmasında durur ve
-    koşu bitince çalışma diziniyle birlikte silinir.
+    Ajana `--auth` ile seçilen tek bir Claude kimliği geçer. OpenAI seçildiğinde anahtar,
+    koşu süresince 0600 izinli MCP yapılandırmasında durur ve koşu bitince çalışma diziniyle
+    birlikte silinir.
     """
 
-    anthropic_api_key: str
+    claude_oauth_token: str | None
+    anthropic_api_key: str | None
     openai_api_key: str | None
 
 
@@ -189,18 +202,26 @@ def expected_tools(arm: Arm, connected: bool) -> tuple[str, ...]:
     return tuple(sorted((*BUILTIN_TOOLS, *(mcp_tool(tool) for tool in granted))))
 
 
-def verify_isolation(transcript: Transcript, arm: Arm) -> None:
+def verify_isolation(transcript: Transcript, arm: Arm, auth: Auth) -> None:
     """Kimlik kaynağı ya da araç kümesi deney tanımına uymuyorsa ölçümü durdurur."""
-    if transcript.api_key_source != "ANTHROPIC_API_KEY":
+    expected_source = AUTH_SOURCE[auth]
+    if transcript.api_key_source != expected_source:
         raise IsolationError(
-            f"Claude Code authenticated with {transcript.api_key_source!r}, not "
-            "ANTHROPIC_API_KEY; stopping so that no subscription quota is used"
+            f"Claude Code reported authentication source {transcript.api_key_source!r}, "
+            f"expected {expected_source!r} for --auth {auth}; stopping before more runs use "
+            "the wrong account"
         )
     expected = expected_tools(arm, transcript.mcp_status == "connected")
     if transcript.tools != expected:
         raise IsolationError(
             f"arm {arm} exposed tools {list(transcript.tools)}, expected {list(expected)}"
         )
+
+
+def hit_quota(transcript: Transcript) -> bool:
+    """Sonuç bir kullanım ya da hız sınırı veya aşırı yük hatası mı."""
+    text = transcript.result_text.lower()
+    return transcript.is_error and any(marker in text for marker in QUOTA_MARKERS)
 
 
 def memory_files_above(workspace: Path) -> list[Path]:
@@ -328,13 +349,24 @@ def claude_command(settings: Settings, task: Task, arm: Arm, config_path: Path) 
     return [*command, "--disallowedTools", ",".join(denied)] if denied else command
 
 
-def claude_env(home: Path, secrets: Secrets) -> dict[str, str]:
-    """Ajan ortamı: geçici HOME ve yalnız Anthropic anahtarı."""
+def claude_credentials(auth: Auth, secrets: Secrets) -> dict[str, str]:
+    """Seçilen kimlik kipinin ajana geçen tek ortam değişkeni."""
+    if auth == "subscription":
+        if secrets.claude_oauth_token is None:
+            raise RunError("--auth subscription needs CLAUDE_CODE_OAUTH_TOKEN (claude setup-token)")
+        return {"CLAUDE_CODE_OAUTH_TOKEN": secrets.claude_oauth_token}
+    if secrets.anthropic_api_key is None:
+        raise RunError("--auth api-key needs ANTHROPIC_API_KEY")
+    return {"ANTHROPIC_API_KEY": secrets.anthropic_api_key}
+
+
+def claude_env(home: Path, auth: Auth, secrets: Secrets) -> dict[str, str]:
+    """Ajan ortamı: geçici HOME ve CLAUDE_CONFIG_DIR, yalnız seçilen Claude kimliği."""
     return {
         "PATH": SYSTEM_PATH,
         "HOME": str(home),
         "CLAUDE_CONFIG_DIR": str(home / ".claude"),
-        "ANTHROPIC_API_KEY": secrets.anthropic_api_key,
+        **claude_credentials(auth, secrets),
         "LANG": "en_US.UTF-8",
         "DISABLE_AUTOUPDATER": "1",
         "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1",
@@ -523,13 +555,15 @@ def run_one(settings: Settings, task: Task, arm: Arm, rep: int, secrets: Secrets
         wall_s = run_claude(
             claude_command(settings, task, arm, config_path),
             workspace,
-            claude_env(home, secrets),
+            claude_env(home, settings.auth, secrets),
             settings.timeout_s,
             transcript_path,
             transcript_path.with_suffix(".stderr"),
         )
         transcript = parse_transcript(transcript_path.read_text().splitlines())
-        verify_isolation(transcript, arm)
+        verify_isolation(transcript, arm, settings.auth)
+        if hit_quota(transcript):
+            raise QuotaError(f"{name}: {transcript.result_text[:300]}")
         if transcript.is_error:
             failure = f"claude result error ({transcript.subtype})"
         if arm != "A" and transcript.mcp_status != "connected":
