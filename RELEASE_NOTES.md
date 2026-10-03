@@ -36,6 +36,11 @@
 - `context` caller lines now include class-qualified scopes and the outermost
   enclosing callable where available, preserving semantic identities and
   uncertainty labels. Legacy caller rendering is unchanged.
+- Active auto-refresh validates indexed sources against the live manifest before
+  reporting a read as fresh. Saved edits can be detected before the filesystem
+  watcher delivers its event. Validation and refresh share the existing two-second
+  read budget; expired reads remain labelled stale and validation errors are explicit.
+  Disabled auto-refresh retains manual indexing semantics.
 
 ## v0.4.0 - Token-Efficient Answers, Python Syntax Graph and Live Index
 

@@ -576,17 +576,53 @@ impl ServerState {
             .is_some_and(|counts| counts.quick_index > 0)
     }
 
-    /// Projenin bekleyen yenilemesini en fazla `budget` kadar bekler; otomatik
-    /// yenileme kaydı yoksa kapalı durum döner.
+    /// Okuma öncesi disk doğrulaması ve bekleyen yenileme aynı süre bütçesini
+    /// paylaşır. Watcher teslim edilmemiş değişiklikleri doğrulama yakalar;
+    /// süre dolarsa tam karşılaştırma istenir ve eski sonuç bayat işaretlenir.
     pub(crate) async fn wait_until_fresh(
         &self,
         project_key: &str,
+        loaded: &CachedEngine,
         budget: std::time::Duration,
-    ) -> crate::freshness::ProjectFreshness {
-        match self.freshness_handle(project_key) {
-            Some(handle) => crate::freshness::wait_until_fresh(&handle, budget).await,
-            None => crate::freshness::disabled_freshness(),
+    ) -> Result<crate::freshness::ProjectFreshness> {
+        let Some(handle) = self.freshness_handle(project_key) else {
+            return Ok(crate::freshness::disabled_freshness());
+        };
+        if handle.state.borrow().watcher != crate::freshness::WatcherStatus::Active {
+            return Ok(handle.state.borrow().clone());
         }
+        let deadline = tokio::time::Instant::now() + budget;
+        let freshness = crate::freshness::wait_until_fresh(&handle, budget).await;
+        if !crate::freshness::is_settled(&freshness)
+            || freshness.waiting_for_upgrade
+            || freshness.last_error.is_some()
+        {
+            return Ok(freshness);
+        }
+        if let EngineSource::Live(live) = &loaded.source {
+            match tokio::time::timeout_at(deadline, live.has_pending_changes()).await {
+                Ok(Ok(false)) => {}
+                Ok(Ok(true)) => self.request_refresh(project_key),
+                Ok(Err(error)) => {
+                    return Err(error.context(format!(
+                        "Could not validate project '{}' against the indexed sources",
+                        project_key
+                    )));
+                }
+                Err(_) => {
+                    tracing::warn!(
+                        project = %project_key,
+                        "Disk validation exceeded the read budget; scheduling a full refresh"
+                    );
+                    self.request_refresh(project_key);
+                }
+            }
+        }
+        Ok(crate::freshness::wait_until_fresh(
+            &handle,
+            deadline.saturating_duration_since(tokio::time::Instant::now()),
+        )
+        .await)
     }
 
     /// Projenin anlık tazelik durumu (beklemeden); otomatik yenileme kaydı yoksa
@@ -1579,12 +1615,18 @@ async fn run_tool(
     let project_key = state.project_key(project_path);
     // İlk yükleme izin listesini ve indeksin varlığını doğrular; watcher yalnızca
     // izinli ve indeksi olan projelerde başlar.
-    if let Err(error) = state.get_engine(project_path).await {
-        return Ok(engine_error_result(tool_name, &error));
-    }
+    let initial = match state.get_engine(project_path).await {
+        Ok(loaded) => loaded,
+        Err(error) => return Ok(engine_error_result(tool_name, &error)),
+    };
     if let Some(key) = &project_key {
         state.ensure_auto_refresh(key);
-        state.wait_until_fresh(key, FRESHNESS_WAIT_BUDGET).await;
+        if let Err(error) = state
+            .wait_until_fresh(key, &initial, FRESHNESS_WAIT_BUDGET)
+            .await
+        {
+            return Ok(engine_error_result(tool_name, &error));
+        }
     }
     // Bekleme sırasında yeni generation aktive edilmiş olabilir.
     let loaded = match state.get_engine(project_path).await {

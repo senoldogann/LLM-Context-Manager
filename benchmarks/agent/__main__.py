@@ -388,6 +388,11 @@ def build_parser() -> argparse.ArgumentParser:
     )
     preflight.add_argument("--ccm-bin-dir", type=Path, required=True)
     preflight.add_argument("--corpus-dir", type=Path, required=True)
+    preflight.add_argument(
+        "--live-edits",
+        action="store_true",
+        help="index edit tasks before editing, then check the first live post-edit context packet",
+    )
 
     run = commands.add_parser("run", help="run or resume the three-arm agent benchmark")
     run.add_argument("--model", required=True)
@@ -446,7 +451,7 @@ def main() -> int:
     if namespace.command == "check":
         return command_check(namespace.corpus_dir)
     if namespace.command == "preflight-context":
-        return command_preflight(namespace.ccm_bin_dir, namespace.corpus_dir)
+        return command_preflight(namespace.ccm_bin_dir, namespace.corpus_dir, namespace.live_edits)
     if namespace.command == "report":
         return command_report(namespace.out_dir, namespace.out)
     embedding: Embedding = namespace.embedding

@@ -257,6 +257,18 @@ regression failures and local gates are in the
 [follow-up report](results/context-packet-followup-20261003/report.md). This is a packet-quality
 preflight, not an agent-token or agent-behavior result.
 
+To check immediate live refresh for the pilot edit task, use the same command with
+`--live-edits`. It indexes the unedited temporary copy, verifies its pre-edit packet, keeps the
+MCP session and watcher open, applies the existing reference edit, and checks the **first**
+post-edit `context` response. There is no post-edit polling, sleep or manual re-index. The
+freshness label must be fresh and the exact post-edit caller set must match; embeddings remain
+disabled and corpus sources remain untouched. This is a separate model-free packet check;
+the default preflight and preregistered agent experiment are unchanged.
+
+```bash
+uv run python -m agent preflight-context --ccm-bin-dir ../target/release --corpus-dir corpus --live-edits
+```
+
 ### Limits
 
 - Bytes, not tokens: bytes / 4 is an estimate, and tokenizers differ.

@@ -132,16 +132,20 @@ fn immediate_reads_after_saved_edits_return_current_callers() -> Result<(), Box<
     let mut previous = "caller_before".to_string();
     for iteration in 0..12 {
         let current = format!("caller_after_{iteration}");
-        fs::write(
-            &source,
-            format!("fn target() {{}}\nfn {current}() {{ target(); }}\n"),
-        )?;
+        let code = format!("fn target() {{}}\nfn {current}() {{ target(); }}\n");
+        if iteration % 3 == 1 {
+            let saved = project.path().join(".lib.rs.save");
+            fs::write(&saved, code)?;
+            fs::rename(saved, &source)?;
+        } else {
+            fs::write(&source, code)?;
+        }
         let (tool, arguments) = if iteration % 2 == 0 {
             ("find_usages", json!({ "target": "target" }))
         } else {
             (
                 "context",
-                json!({ "query": "Which functions call `target` in lib.rs directly?", "max_tokens": 1500 }),
+                json!({ "query": "lib.rs:1", "max_tokens": 1500 }),
             )
         };
         let text = session.call_tool(tool, arguments)?;
@@ -153,6 +157,38 @@ fn immediate_reads_after_saved_edits_return_current_callers() -> Result<(), Box<
         );
         previous = current;
     }
+    Ok(())
+}
+
+#[test]
+fn immediate_reads_observe_new_and_removed_files() -> Result<(), Box<dyn Error>> {
+    let project = tempdir()?;
+    fs::write(project.path().join("main.rs"), "fn existing_symbol() {}\n")?;
+    let mut session = McpSession::start(project.path(), &[])?;
+    session.call_tool("index_now", json!({ "project_path": project.path() }))?;
+    poll_find_nodes(
+        &mut session,
+        "existing_symbol",
+        Duration::from_secs(10),
+        |text| found_node(text, "existing_symbol") && text.starts_with("_Index: fresh"),
+    )?;
+
+    let added = project.path().join("added.rs");
+    fs::write(&added, "fn immediately_added_symbol() {}\n")?;
+    let created =
+        session.call_tool("find_nodes", json!({ "query": "immediately_added_symbol" }))?;
+    assert!(
+        found_node(&created, "immediately_added_symbol") && created.starts_with("_Index: fresh"),
+        "first read must observe the new file: {created}"
+    );
+
+    fs::remove_file(added)?;
+    let removed =
+        session.call_tool("find_nodes", json!({ "query": "immediately_added_symbol" }))?;
+    assert!(
+        !found_node(&removed, "immediately_added_symbol") && removed.starts_with("_Index: fresh"),
+        "first read must exclude the removed file: {removed}"
+    );
     Ok(())
 }
 
@@ -951,11 +987,14 @@ fn persist_failure_is_reported_in_the_freshness_line() -> Result<(), Box<dyn Err
 #[test]
 fn changes_from_a_failed_round_are_recovered_by_the_next_round() -> Result<(), Box<dyn Error>> {
     let project = tempdir()?;
+    let logs = tempdir()?;
+    let log_path = logs.path().join("refresh.log");
     fs::write(project.path().join("main.rs"), "fn existing_symbol() {}\n")?;
     // İlk hedefli tur üç denemede de tarama hatası alır (tam karşılaştırmalar etkilenmez).
-    let mut session = McpSession::start(
+    let mut session = McpSession::start_logged(
         project.path(),
         &[("CCM_INTERNAL_REFRESH_TEST_FAIL_TARGETED", "3")],
+        &log_path,
     )?;
     session.call_tool("index_now", json!({ "project_path": project.path() }))?;
     poll_find_nodes(
@@ -966,6 +1005,22 @@ fn changes_from_a_failed_round_are_recovered_by_the_next_round() -> Result<(), B
     )?;
 
     fs::write(project.path().join("lost.rs"), "fn lost_symbol() {}\n")?;
+    // Okuma artık watcher'dan önce disk farkını yakalayıp tam karşılaştırma
+    // isteyebilir. Hedefli hata turunu önce kendi günlüğünden doğrula.
+    let started = Instant::now();
+    loop {
+        let log = fs::read_to_string(&log_path)?;
+        if log.contains("Auto-refresh failed; the active generation keeps serving reads") {
+            assert_eq!(log.matches("injected targeted scan failure").count(), 3);
+            break;
+        }
+        if started.elapsed() > Duration::from_secs(20) {
+            return Err(
+                format!("targeted refresh did not fail after three attempts: {log}").into(),
+            );
+        }
+        std::thread::sleep(Duration::from_millis(50));
+    }
     poll_find_nodes(
         &mut session,
         "existing_symbol",

@@ -13,7 +13,7 @@ import os
 import subprocess
 import tempfile
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import cast
 
@@ -270,15 +270,52 @@ def response_for(
             return message
 
 
-def context_text(mcp: Path, workspace: Path, home: Path, query: str) -> str:
-    """Release MCP'ye tek context çağrısı yap ve text payload'ı döndür."""
+def request_context(
+    process: subprocess.Popen[str], workspace: Path, query: str, request_id: int
+) -> str:
+    """Açık MCP oturumunda tek context isteği yap; protokol/araç hatasını reddet."""
+    send_message(
+        process,
+        {
+            "jsonrpc": "2.0",
+            "id": request_id,
+            "method": "tools/call",
+            "params": {
+                "name": "context",
+                "arguments": {"query": query, "max_tokens": 1500},
+            },
+        },
+    )
+    response = response_for(process, request_id, workspace)
+    result = response.get("result")
+    if not isinstance(result, dict):
+        raise PreflightError(f"context returned no result: {response}")
+    typed_result = cast(dict[str, object], result)
+    if typed_result.get("isError") is True:
+        raise PreflightError(f"context returned a tool error: {response}")
+    content = typed_result.get("content")
+    if not isinstance(content, list) or not content:
+        raise PreflightError(f"context returned no content: {response}")
+    first = content[0]
+    if not isinstance(first, dict):
+        raise PreflightError(f"context content has unexpected shape: {response}")
+    text = cast(dict[str, object], first).get("text")
+    if not isinstance(text, str):
+        raise PreflightError(f"context content has no text: {response}")
+    return text
+
+
+def context_packet(
+    mcp: Path, workspace: Path, home: Path, query: str, live_edit: Task | None
+) -> tuple[str, float]:
+    """İzole MCP oturumunda paket al; canlı edit varsa ilk post-edit çağrısını ölç."""
     env = {
         **base_env(home),
         "CCM_PROJECT_ROOT": str(workspace),
         "CCM_ALLOWED_ROOTS": str(workspace),
         "CCM_REQUIRE_ALLOWED_ROOTS": "1",
         "CCM_DB_PATH": str(index_db_path(workspace)),
-        "CCM_AUTO_REFRESH": "0",
+        "CCM_AUTO_REFRESH": "1" if live_edit is not None else "0",
     }
     process = subprocess.Popen(
         [str(mcp)],
@@ -292,34 +329,27 @@ def context_text(mcp: Path, workspace: Path, home: Path, query: str) -> str:
     try:
         send_message(process, {"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {}})
         response_for(process, 1, workspace)
-        send_message(
-            process,
-            {
-                "jsonrpc": "2.0",
-                "id": 2,
-                "method": "tools/call",
-                "params": {
-                    "name": "context",
-                    "arguments": {"query": query, "max_tokens": 1500},
-                },
-            },
-        )
-        response = response_for(process, 2, workspace)
-        result = response.get("result")
-        if not isinstance(result, dict):
-            raise PreflightError(f"context returned no result: {response}")
-        typed_result = cast(dict[str, object], result)
-        content = typed_result.get("content")
-        if not isinstance(content, list) or not content:
-            raise PreflightError(f"context returned no content: {response}")
-        first = content[0]
-        if not isinstance(first, dict):
-            raise PreflightError(f"context content has unexpected shape: {response}")
-        typed_first = cast(dict[str, object], first)
-        text = typed_first.get("text")
-        if not isinstance(text, str):
-            raise PreflightError(f"context content has no text: {response}")
-        return text
+        request_id = 2
+        if live_edit is not None:
+            edit = live_edit.edit
+            if edit is None:
+                raise PreflightError(f"{live_edit.id}: live edit requires an edit task")
+            before = request_context(process, workspace, query, request_id)
+            expected_before = tuple(item for item in live_edit.expected if item not in edit.added)
+            baseline = replace(live_edit, expected=(*expected_before, *edit.removed))
+            before_score = score_callers(baseline, parse_callers(before), 0.0)
+            if not before.startswith("_Index: fresh · auto-refresh on_") or not before_score.ok:
+                raise PreflightError(f"{live_edit.id}: pre-edit packet is not current: {before}")
+            problems = apply_steps(live_edit, workspace)
+            if problems:
+                raise PreflightError("\n".join(problems))
+            request_id += 1
+        started = time.monotonic()
+        text = request_context(process, workspace, query, request_id)
+        read_s = time.monotonic() - started
+        if live_edit is not None and not text.startswith("_Index: fresh · auto-refresh on_"):
+            raise PreflightError(f"{live_edit.id}: first post-edit packet is not fresh: {text}")
+        return text, read_s
     finally:
         process.terminate()
         try:
@@ -329,6 +359,12 @@ def context_text(mcp: Path, workspace: Path, home: Path, query: str) -> str:
             process.wait(timeout=5)
 
 
+def context_text(mcp: Path, workspace: Path, home: Path, query: str) -> str:
+    """Release MCP'ye tek context çağrısı yap ve text payload'ı döndür."""
+    text, _read_s = context_packet(mcp, workspace, home, query, None)
+    return text
+
+
 def run_task(
     task: Task,
     corpus_dir: Path,
@@ -336,22 +372,26 @@ def run_task(
     cli: Path,
     mcp: Path,
     home: Path,
+    live_edits: bool,
 ) -> PacketScore:
-    """Workspace hazırla, varsa referans edit'i uygula, indeksle ve context'i puanla."""
+    """Workspace hazırla; edit'i seçilen sırada uygula ve context'i puanla."""
     workspace = scratch / task.id
     repo = confined_path(corpus_dir, task.repo, task.id, directory=True)
     prepare_workspace(repo, workspace)
     for relative in task_file_paths(task):
         confined_path(workspace, relative, task.id)
-    edit_problems = apply_steps(task, workspace)
-    if edit_problems:
-        raise PreflightError("\n".join(edit_problems))
+    if not live_edits:
+        edit_problems = apply_steps(task, workspace)
+        if edit_problems:
+            raise PreflightError("\n".join(edit_problems))
     index_s = index_workspace(cli, workspace, home)
-    text = context_text(mcp, workspace, home, task.question)
+    text, read_s = context_packet(mcp, workspace, home, task.question, task if live_edits else None)
+    if live_edits:
+        print(f"{task.id}: first_post_edit_context_s={read_s:.3f} (no polling or reindex)")
     return score_callers(task, parse_callers(text), index_s)
 
 
-def command_preflight(ccm_bin_dir: Path, corpus_dir: Path) -> int:
+def command_preflight(ccm_bin_dir: Path, corpus_dir: Path, live_edits: bool) -> int:
     """Üç pilot context packet'ini model çağırmadan doğrula."""
     bin_dir = ccm_bin_dir.expanduser().resolve()
     corpus = corpus_dir.expanduser().resolve()
@@ -366,13 +406,18 @@ def command_preflight(ccm_bin_dir: Path, corpus_dir: Path) -> int:
     if problems:
         raise PreflightError("task validation failed:\n" + "\n".join(problems))
 
+    if live_edits:
+        tasks = tuple(task for task in tasks if task.edit is not None)
+        if not tasks:
+            raise PreflightError("no pilot edit tasks available for live preflight")
+
     all_ok = True
     with tempfile.TemporaryDirectory(prefix="ccm-context-preflight-") as directory:
         scratch = Path(directory)
         home = scratch / "home"
         home.mkdir()
         for task in tasks:
-            result = run_task(task, corpus, scratch, cli, mcp, home)
+            result = run_task(task, corpus, scratch, cli, mcp, home, live_edits)
             precision_denominator = result.found + len(result.extras)
             precision = result.found / precision_denominator if precision_denominator else 1.0
             recall = result.found / result.expected if result.expected else 1.0
@@ -387,5 +432,6 @@ def command_preflight(ccm_bin_dir: Path, corpus_dir: Path) -> int:
                 print("  extras: " + ", ".join(result.extras))
             all_ok = all_ok and result.ok
 
-    print("context preflight: " + ("PASS" if all_ok else "FAIL"))
+    mode = "live edit context preflight" if live_edits else "context preflight"
+    print(mode + ": " + ("PASS" if all_ok else "FAIL"))
     return 0 if all_ok else 1

@@ -295,6 +295,18 @@ impl LiveIndex {
         (applied_at != UNKNOWN_TIMESTAMP).then_some(applied_at)
     }
 
+    /// Watcher olayı henüz teslim edilmemiş olsa da okuma öncesinde diski
+    /// manifestle karşılaştırır. Grafı veya kalıcı indeksi değiştirmez;
+    /// değişmeyen dosyalar mevcut stat/hash önbelleğinden yararlanır.
+    pub async fn has_pending_changes(&self) -> Result<bool> {
+        let state = self.state.lock().await;
+        if state.superseded {
+            return Ok(true);
+        }
+        let delta = self.scan_all(&state.manifest).await?;
+        Ok(!delta.changed.is_empty() || !delta.deleted.is_empty())
+    }
+
     /// Watcher'ın bildirdiği yolları uygular: yalnızca bu yollar (dizinse
     /// altları) tam taramanın kurallarıyla taranır ve manifestle karşılaştırılır.
     /// Yüklemeden sonraki ilk tur, yarıda kalmış bir turun ardından gelen tur,
