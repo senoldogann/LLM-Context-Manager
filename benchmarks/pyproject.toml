@@ -3,7 +3,9 @@ name = "ccm-bench"
 version = "0.1.0"
 description = "CCM-Bench: freshness (L1) and edge accuracy (L2) harnesses for code-graph MCP servers"
 requires-python = ">=3.11"
-dependencies = []
+dependencies = [
+    "tiktoken==0.14.0",
+]
 
 [dependency-groups]
 dev = [
@@ -19,7 +21,7 @@ strict = true
 python_version = "3.11"
 warn_unreachable = true
 disallow_any_explicit = true
-files = ["freshness", "tokens", "agent"]
+files = ["freshness", "tokens", "agent", "search"]
 
 [tool.ruff]
 line-length = 100

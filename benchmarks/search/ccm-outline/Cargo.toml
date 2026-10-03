@@ -1,0 +1,18 @@
+[package]
+name = "ccm-outline"
+version = "0.0.0"
+edition = "2021"
+publish = false
+
+# Arama ön çalışmasının aracı: CCM ile aynı tree-sitter sürümleri, çalışma alanından bağımsız derlenir.
+[workspace]
+
+[dependencies]
+tree-sitter = "=0.26.11"
+tree-sitter-python = "=0.25.0"
+tree-sitter-rust = "=0.24.2"
+tree-sitter-typescript = "=0.23.2"
+tree-sitter-swift = "=0.7.3"
+tree-sitter-go = "=0.25.0"
+serde = { version = "=1.0.229", features = ["derive"] }
+serde_json = "=1.0.151"
