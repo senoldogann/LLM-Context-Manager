@@ -4,8 +4,20 @@ The current state of CCM and the next steps, for the owner and for any agent tha
 work. Keep it current: replace lines that stop being true instead of appending history (git log is
 the history).
 
-Last updated: 2026-10-03. Where work stopped: **the owner-approved matched Codex follow-up is
-complete**, measured at clean commit `f649a40`: the same three tasks × three arms × one repetition,
+Last updated: 2026-10-03. Where work stopped: **Claude authentication availability checked;
+the conditional Claude pilot awaits an environment token**. The owner asked to test Claude too
+if authentication works. CLI 2.1.288 reports loggedIn=true, authMethod=claude.ai through its
+official `auth status` command; this is a login-state check, not a successful model/API call.
+`CLAUDE_CODE_OAUTH_TOKEN` is absent from the supervising benchmark shell. The existing harness
+requires that environment token with a temporary HOME; do not extract credentials from files or
+keychain, copy the owner's Claude configuration, or change isolation to use the normal HOME.
+The owner was asked which terminal has the token or to supply it only in the invoking terminal's
+environment. No Claude model call or new pilot output was started. If supplied, the bounded
+proposed scope is the same three tasks × three arms × one repetition in a new output directory;
+CLI version differs from the older Claude pilot (2.1.287), so record that difference.
+
+The owner-approved matched Codex follow-up is complete, measured at clean commit `f649a40`:
+the same three tasks × three arms × one repetition,
 Codex CLI 0.160.0, `gpt-6.1-sol`, effort high, local embeddings, unchanged harness/prompts/scorer.
 Exactly nine authorized agent runs completed, exit 0, all final answers correct. B still used
 more input+output tokens than A in this sample: 193,473 versus 157,643 (+22.73%). Results and
@@ -16,8 +28,9 @@ and verified the changed source, `find_usages` returned the old `ser::build_gene
 `ser::with_serialize_bound`, incorrectly labelled fresh. Packet recall=precision=0.500; the final
 answer was correct from sources, so the final-answer scorer's stale count is zero. Do not treat
 that score as proof of CCM freshness. The next step is an offline deterministic regression and
-a general watcher/refresh-admission fix; its cause is not established yet. No further AI run,
-Claude run or final L3 experiment is authorized by the completed bounded follow-up.
+a general watcher/refresh-admission fix; its cause is not established yet. The completed Codex
+scope authorizes no further Codex run or final L3 experiment; the later conditional Claude
+request above is separate.
 
 The prior local packet fixes and all gates remain complete at product commit `bcff2e2`. The
 verified release pair is unchanged. Actual Flask/Express B packets now have 12/12 and 5/5 callers;
@@ -278,8 +291,8 @@ with separate quota approval. Reusable indexes and Django/multi-file extensions 
 4. **Add reusable per-repository indexes**, then large-repository (Django) and multi-file edits.
 5. **After the product configuration is stable, run the preregistered L3 final experiment:**
    24 tasks × 3 arms × 3 repetitions per agent, with separate quota approval. Publish negative or
-   mixed results and keep the preregistration/failure ledger intact. The owner selected Codex only;
-   a Claude follow-up also requires an owner-supplied token through the invoking environment.
+   mixed results and keep the preregistration/failure ledger intact. A Claude run requires its
+   approved scope and an owner-supplied token through the invoking environment.
 6. Later, only if L3 evidence supports it: JS/TS syntax-level resolution, then L2 edge accuracy.
 
 ## Running the L3 experiment
