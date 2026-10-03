@@ -1,0 +1,26 @@
+{
+  "run_id": "flask-trap-load-dotenv__A__1",
+  "task_id": "flask-trap-load-dotenv",
+  "repo": "flask",
+  "category": "trap",
+  "arm": "A",
+  "rep": 1,
+  "rg_path": "/opt/homebrew/bin/rg",
+  "wall_s": 26.07684033300029,
+  "input_tokens": 48131,
+  "cached_input_tokens": 20480,
+  "output_tokens": 401,
+  "tool_calls": {
+    "command_execution": 5
+  },
+  "shell_calls": 5,
+  "rg_calls": 4,
+  "read_calls": 1,
+  "shim_modes": {},
+  "shim_raw_bytes": 0,
+  "shim_output_bytes": 0,
+  "success": true,
+  "recall": 1.0,
+  "precision": 1.0,
+  "failure": null
+}

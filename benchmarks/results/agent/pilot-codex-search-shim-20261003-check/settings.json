@@ -1,0 +1,15 @@
+{
+  "product_commit": "c0ce0a26b7ba0748ebd380da73bd7b3c4ff41bdb",
+  "agent_version": "codex-cli 0.160.0",
+  "model": "gpt-6.1-sol",
+  "effort": "high",
+  "tasks": [
+    "flask-callers-ensure-sync"
+  ],
+  "arms": [
+    "S"
+  ],
+  "repetitions": 1,
+  "timeout_s": 1800,
+  "shim_python": "/Users/dogan/Desktop/LLM-Context-Manager/benchmarks/.venv/bin/python3"
+}

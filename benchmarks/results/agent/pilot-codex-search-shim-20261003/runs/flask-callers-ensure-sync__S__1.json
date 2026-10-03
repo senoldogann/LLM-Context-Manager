@@ -1,0 +1,26 @@
+{
+  "run_id": "flask-callers-ensure-sync__S__1",
+  "task_id": "flask-callers-ensure-sync",
+  "repo": "flask",
+  "category": "callers",
+  "arm": "S",
+  "rep": 1,
+  "rg_path": "/opt/homebrew/bin/rg",
+  "wall_s": 44.71369537500141,
+  "input_tokens": 68984,
+  "cached_input_tokens": 48384,
+  "output_tokens": 900,
+  "tool_calls": {
+    "command_execution": 3
+  },
+  "shell_calls": 3,
+  "rg_calls": 1,
+  "read_calls": 0,
+  "shim_modes": {},
+  "shim_raw_bytes": 0,
+  "shim_output_bytes": 0,
+  "success": true,
+  "recall": 1.0,
+  "precision": 1.0,
+  "failure": null
+}

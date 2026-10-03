@@ -1,0 +1,26 @@
+{
+  "run_id": "express-trap-req-get__S__1",
+  "task_id": "express-trap-req-get",
+  "repo": "express",
+  "category": "trap",
+  "arm": "S",
+  "rep": 1,
+  "rg_path": "/opt/homebrew/bin/rg",
+  "wall_s": 26.091314874996897,
+  "input_tokens": 59431,
+  "cached_input_tokens": 36096,
+  "output_tokens": 445,
+  "tool_calls": {
+    "command_execution": 5
+  },
+  "shell_calls": 5,
+  "rg_calls": 5,
+  "read_calls": 2,
+  "shim_modes": {},
+  "shim_raw_bytes": 0,
+  "shim_output_bytes": 0,
+  "success": true,
+  "recall": 1.0,
+  "precision": 1.0,
+  "failure": null
+}
