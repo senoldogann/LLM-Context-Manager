@@ -198,9 +198,11 @@ def run_one(config: PilotConfig, task: Task, arm: PilotArm, rep: int) -> PilotRe
         prepare_workspace(config.corpus_dir / task.repo, workspace)
         with (workspace / ".git" / "info" / "exclude").open("a") as exclude:
             exclude.write(f"/{shim_log.name}\n")
-        command = codex.command(
+        base = codex.command(
             config.agent_bin, config.model, config.effort, workspace, prompt_for(task), None
         )
+        # Kabuk anlık görüntüsü PATH'i kendisi kurar ve sarmalayıcıyı atlar; iki kolda da kapalı.
+        command = [*base[:-1], "--disable", "shell_snapshot", base[-1]]
         real_rg = codex.bundled_path(config.agent_bin) / "rg"
         rg_path = str(real_rg)
         wrapper_dir = work / "wrapper"
