@@ -4,34 +4,36 @@ The current state of CCM and the next steps, for the owner and for any agent tha
 work. Keep it current: replace lines that stop being true instead of appending history (git log is
 the history).
 
-Last updated: 2026-10-03. Where work stopped: **preparing the owner-approved matched Codex
-follow-up**. The owner asked to continue the next step after the bounded proposal: the same three
-tasks × three arms × one repetition, dedicated Codex only, unchanged model/effort/profile and a
-fresh output directory. No additional repetitions, Claude run or final L3 run are authorized.
-Current release hashes match the verified pair; Codex CLI remains 0.160.0, and the harness,
-task prompts, scorer and preregistration are unchanged since the original pilot. No build or
-agent benchmark was running at the initial process check.
+Last updated: 2026-10-03. Where work stopped: **the owner-approved matched Codex follow-up is
+complete**, measured at clean commit `f649a40`: the same three tasks × three arms × one repetition,
+Codex CLI 0.160.0, `gpt-6.1-sol`, effort high, local embeddings, unchanged harness/prompts/scorer.
+Exactly nine authorized agent runs completed, exit 0, all final answers correct. B still used
+more input+output tokens than A in this sample: 193,473 versus 157,643 (+22.73%). Results and
+retained failures are under `benchmarks/results/agent/pilot-codex-context-first-followup-20261003/`.
 
-Local packet fixes and all local gates are complete, measured at clean product commit `bcff2e2`.
-The changed release pair was rebuilt
-once and verified after the build: Flask 12/12, Express 5/5, edited Serde 2/2, no missing/extra
-caller. Replaying the actual plain-text Codex queries also passed: Flask includes qualified and
-enclosing callable scopes; Express includes `location` and excludes the receiver false positives.
-Exact packets, binary hashes, full gate totals and RED/GREEN failures are recorded under
-`benchmarks/results/context-packet-followup-20261003/`. No new external AI quota was used by this
-local continuation. The owner's new instruction authorizes the bounded follow-up above.
+**A new freshness packet failure is the next local priority.** After Serde C completed its edit
+and verified the changed source, `find_usages` returned the old `ser::build_generics` and omitted
+`ser::with_serialize_bound`, incorrectly labelled fresh. Packet recall=precision=0.500; the final
+answer was correct from sources, so the final-answer scorer's stale count is zero. Do not treat
+that score as proof of CCM freshness. The next step is an offline deterministic regression and
+a general watcher/refresh-admission fix; its cause is not established yet. No further AI run,
+Claude run or final L3 experiment is authorized by the completed bounded follow-up.
 
-The owner-approved **Codex context-first pilot is complete**, measured at clean commit `4185640`
-(see "Codex context-first pilot result"). All nine final answers passed, and B called `context`
-once in each task. B still used additional source inspection and its summed input+output tokens
-were 29.65% above A across these three tasks. The two recorded packet gaps have now been fixed
-and verified locally; whether this reduces agent source reads or total tokens remains unmeasured.
-Serde B's pre-edit-only CCM use also remains an agent behavior gap. The accepted product direction
-is a single `context` entry point: the agent states what it needs, and CCM chooses graph/search
-operations and composes the task packet server-side. Default discovery remains
-`context + index_project`; legacy tools are opt-in but directly callable. The separate
-`context-first-pilot` profile leaves the preregistered final design intact. The owner selected
-dedicated Codex only; no Claude follow-up was started.
+The prior local packet fixes and all gates remain complete at product commit `bcff2e2`. The
+verified release pair is unchanged. Actual Flask/Express B packets now have 12/12 and 5/5 callers;
+Flask qualified/enclosing names are present, Express includes `location` without receiver extras.
+B still read sources and made one pre-edit-only CCM call in Serde. The canonical Serde preflight
+edits before indexing and passes 2/2; it does not cover this immediate live-refresh failure.
+Local gate evidence is in `benchmarks/results/context-packet-followup-20261003/` and was not
+repeated for the results-only step. Product code, corpus sources, earlier measurements and the
+preregistration were unchanged. Dedicated Codex was used; no Claude token or credential file was
+searched, copied or persisted by the supervising agent.
+
+The accepted direction remains one `context` entry point: the agent states what it needs, and
+CCM chooses graph/search operations and composes the task packet server-side. Default discovery
+remains `context + index_project`; legacy tools are opt-in but directly callable. Both Codex
+pilots are separate product pilots; the preregistered final design remains intact. Neither pilot
+establishes general token savings, quality equivalence or model independence.
 
 **Owner's direction (2026-10-02):** optimize for end-to-end agent token use without sacrificing
 answer quality, independent of model/provider/effort. Move retrieval/tool-selection decisions from
@@ -61,10 +63,10 @@ are parked. The owner's strategy notes are `docs/productization-plan.md`,
 | Python | calls, imports and inheritance resolved from the syntax tree | `core/tests/` |
 | Rust | resolved through modules, `use` paths, workspace crates and impl blocks | `benchmarks/README.md`, "Rust edges (M3)" |
 | Other languages | matched by name and labelled `calls (inferred …)` or `may call` | `core/tests/lexical_labels_test.rs` |
-| Freshness after an edit (L1) | measured | `benchmarks/README.md`, "Level 1" |
+| Freshness after an edit (L1) | measured; immediate post-edit stale packet observed in Codex follow-up | `benchmarks/README.md`, "Level 1" |
 | Token cost of answers (M2) | measured; compact answers cut scripted response bytes 74% | `benchmarks/README.md`, "Token cost of answers" |
 | Agent interface | default discovery: `context + index_project`; legacy structural tools remain callable and are discoverable with `CCM_MCP_LEGACY_TOOLS=1` | `mcp/src/server.rs`, `mcp/tests/token_budget_e2e_test.rs` |
-| Agent experiment (L3) | Claude legacy pilot: no CCM use; Codex context-first pilot: all 9 answers correct, B/C used CCM, no aggregate token saving in this 3-task sample; final L3 pending | `benchmarks/results/agent/pilot-claude/`, `benchmarks/results/agent/pilot-codex-context-first-20261003/`, `benchmarks/agent/PREREGISTRATION.md` |
+| Agent experiment (L3) | two Codex product pilots: all final answers correct, B/C used CCM, B still above A in total tokens; stale CCM packet in follow-up; final L3 pending | `benchmarks/results/agent/pilot-codex-context-first-followup-20261003/audit.md`, `benchmarks/agent/PREREGISTRATION.md` |
 
 ## What the measurements cover
 
@@ -154,6 +156,50 @@ each archived Serde unified diff. A scoped `.gitattributes` rule disables end-of
 checks only for `benchmarks/results/agent/*/diffs/*.diff`; the exact measured patch bytes and
 checks on source/docs/JSON are preserved.
 
+## Matched Codex follow-up result (2026-10-03)
+
+Measured at `f649a4017bf6f06fc7d3689bee7a0ca81fc947fd` after separate owner approval to continue
+the bounded next step. Agent/CLI/model/effort, three tasks, three arms, one repetition, local
+embeddings, prompts, harness, scorer and preregistration match the first Codex pilot. Only the
+verified product binary pair changed. Settings, report, nine records, exact Serde patches,
+comparison values and transcript/packet audit are committed in
+`benchmarks/results/agent/pilot-codex-context-first-followup-20261003/`; raw transcripts stay local.
+
+- Harness exit 0; 9/9 final answers recall=precision=1.000, no run failure or stale final item.
+  All three edits were applied and their diffs are byte-identical; corpus Rust compilation was
+  not part of this pilot. Raw usage/tool/final-text consistency and tool-grant checks passed for
+  all nine runs. Source corpus pins and release hashes remained unchanged.
+- Input+output tokens (cached input included once):
+
+  | Task | A | B | C | B versus A |
+  |---|---:|---:|---:|---:|
+  | Flask | 48,828 | 63,320 | 63,405 | +29.68% |
+  | Express | 61,494 | 65,838 | 68,326 | +7.06% |
+  | Serde | 47,321 | 64,315 | 95,211 | +35.91% |
+  | Sum | 157,643 | 193,473 | 226,942 | +22.73% |
+
+- B made one `context` call per task plus 3/3/4 shell calls; C made 6/9/9 CCM calls and 2/4/5
+  shell calls. B's Flask/Express packets include the fixed scopes and exact caller sets, but
+  source inspection still occurs. Both real B queries chose max_tokens=6000; local preflight used
+  1500. Serde B again used CCM only before editing, so its final answer does not test freshness.
+- Agent wall sums: A=90.6 s, B=85.2 s, C=112.8 s. Separate pre-index sums: B=76.6 s, C=76.7 s.
+  Reusable indexes were not tested. Codex cost/turns remain unknown; report dollars are estimates
+  from the unchanged committed API price table, not subscription charges. Dollar flags did not
+  cap Codex quota. No additional repetition, model download, embedding API call or Claude run ran.
+- B's absolute token total decreased 8.95% from the prior pilot; A also decreased 3.82% and C
+  increased 4.93%. One repetition and different agent queries/retries/cache use prevent a causal
+  attribution of the full difference to the product fix. The new paired input ratio B/A is 1.31
+  (1.07–1.36 over three tasks). B remains above A in total tokens in all three tasks.
+- **Retained freshness failure:** Serde C transcript line 29 completes the edit; line 31 confirms
+  the actual changed source with successful diff/grep checks; line 32 starts `find_usages` and
+  line 33 returns the old caller with `_Index: fresh · auto-refresh on_`. The packet has one
+  correct caller, one stale extra and one missing caller: recall=precision=0.500. Correct final
+  answers and the report's zero stale-final count do not validate this response. Root cause and
+  a deterministic reproduction remain open.
+- Recovered errors remain in counts: Flask A's unavailable `python` (exit 127), three AGENTS
+  discovery no-match exits, and five explicit legacy MCP target/ambiguity errors. Ruff
+  format/lint, strict mypy across 28 files and all 24 task anchors passed after the run set.
+
 ## First: one obvious entry point
 
 The pilot says the first product problem is not another ranking tweak: the model did not choose CCM
@@ -209,28 +255,32 @@ first routing/scope regressions (exit 101, 6 passed/5 failed), then `6ed2690` pa
 unsupported by macOS; the portable retry succeeded before retrieval measurement. Detailed results
 are in `benchmarks/results/context-packet-followup-20261003/report.md` and `verification.json`.
 
-The Codex pilot cleared tool adoption for its configuration. Local packet correctness now covers
-its two observed query gaps, but agent packet sufficiency and measured total-token cost remain
-open. CCM is not ready for the preregistered final L3 run: three correct final answers per arm do
-not establish quality equivalence. With a fresh approved quota scope, repeat a matched agent
-pilot; reusable indexes and Django/multi-file extensions remain later steps.
+The two Codex pilots establish tool adoption in their configuration and show the local packet
+fixes in real queries. B still costs more total tokens than A, still reads sources, and the new
+live-refresh packet failure is unresolved. CCM is not ready for the preregistered final L3 run.
+The next work is local freshness correctness, followed by another matched agent experiment only
+with separate quota approval. Reusable indexes and Django/multi-file extensions remain later.
 
 ## Next steps, in order
 
-1. **Repeat a matched Codex product pilot after separate explicit approval for new AI quota use.**
-   Keep the three tasks, three arms, one repetition and recorded model/effort comparable to the
-   completed pilot, use the verified release pair and a new output directory. Inspect real tool
-   queries and post-edit CCM use as well as final answers and total tokens. Local routing/scope
-   regressions, full gates and post-build packet verification are complete; do not repeat those
-   steps unless product code or the selected binary pair changes.
-2. **Add reusable per-repository indexes**, then run large-repository (Django) and multi-file edit
-   extensions. These are the cases most likely to separate CCM from grep/read loops.
-3. **Only after the product configuration is stable, run the preregistered L3 final experiment:**
+1. **Reproduce and fix the observed post-edit freshness failure locally, without AI quota use.**
+   Start from the saved Serde C edit/tool sequence, build an isolated indexed fixture and query
+   immediately after the edit. Require updated caller evidence or an honest stale/pending state;
+   an old graph must not be labelled fresh. Inspect `mcp/src/freshness.rs`, retrieval admission
+   and watcher/sandbox interactions before choosing a fix. Add a deterministic general regression,
+   preserve strict confinement/index validation and avoid framework-specific or timing hacks.
+2. **Revalidate any changed implementation and optimized binary pair**, including live edit/query
+   behavior and existing core/MCP/clippy/fmt/retrieval/canonical packet gates. Rebuild only when
+   product changes make the verified pair stale. Current results-only work changed no product code.
+3. **Only after local correctness, run another matched Codex pilot with separate explicit quota
+   approval.** Use a fresh output directory; retain actual packets and recovered errors alongside
+   final answers and total tokens. Do not start the final L3 run from nine successful final answers.
+4. **Add reusable per-repository indexes**, then large-repository (Django) and multi-file edits.
+5. **After the product configuration is stable, run the preregistered L3 final experiment:**
    24 tasks × 3 arms × 3 repetitions per agent, with separate quota approval. Publish negative or
-   mixed results and keep the preregistration/failure ledger intact. Any Claude follow-up needs
-   the owner to supply its token through the invoking environment; do not search credentials.
-4. Later, only if L3 evidence supports it: TypeScript/JavaScript syntax-level resolution, then edge
-   accuracy against language servers (L2).
+   mixed results and keep the preregistration/failure ledger intact. The owner selected Codex only;
+   a Claude follow-up also requires an owner-supplied token through the invoking environment.
+6. Later, only if L3 evidence supports it: JS/TS syntax-level resolution, then L2 edge accuracy.
 
 ## Running the L3 experiment
 
