@@ -1,8 +1,9 @@
 """Arama sarmalayıcısı pilotu: Codex aynı görevlerde A (düz rg) ve S (CCM kompakt rg) kollarında.
 
 Ön kayıtlı L3 harness'ine dokunmaz; onun görevlerini, istemini, Codex komutunu ve ortamını, döküm
-okuyucusunu ve puanlayıcısını kullanır. Kollar yalnız PATH'te ayrışır: S kolunda paketlenmiş
-`rg`'nin önüne `search.rg_shim` sarmalayıcısı konur. Ölçüm yalnız commit'lenmiş kodla başlar ve
+okuyucusunu ve puanlayıcısını kullanır. İki kolda da PATH'in başında, paketlenmiş aynı `rg`'yi
+çağıran bir sarmalayıcı vardır: A'da çağrıyı kaydedip çıktıya dokunmaz, S'de `search.rg_shim`
+çıktıyı kompakt biçime çevirir. Ölçüm yalnız commit'lenmiş kodla başlar ve
 kota yalnız sahibin açık onayıyla harcanır. Sınır ya da kimlik hatası ölçümü durdurur; tamamlanan
 kayıtlar kalır.
 
@@ -108,25 +109,20 @@ def require_committed() -> None:
         )
 
 
-def resolve_rg(env: dict[str, str], workspace: Path) -> Path:
-    """Ajanın kabuğunun (`zsh -lc`) bulduğu `rg`.
+def write_baseline_wrapper(path: Path, real_rg: Path, log: Path) -> None:
+    """A kolunun `rg`'si: çağrıyı kaydeder ve aynı gerçek `rg`'yi aynen çalıştırır.
 
-    macOS `/etc/zprofile` içindeki `path_helper` PATH'i yeniden sıralar: ajanın gerçekte kullandığı
-    `rg` ortam PATH'inin ilk girdisi olmayabilir. Sarmalayıcı aynı `rg`'yi çağırır ki kollar
-    yalnız çıktı biçiminde ayrışsın.
+    İki kolda da PATH'in başında bir sarmalayıcı bulunur; kollar yalnız çıktı biçiminde ayrışır ve
+    kayıt sarmalayıcının gerçekten çağrıldığını kanıtlar.
     """
-    completed = subprocess.run(
-        ["/bin/zsh", "-lc", "whence -p rg"],
-        cwd=workspace,
-        env=env,
-        capture_output=True,
-        text=True,
-        check=False,
+    entry = json.dumps({"mode": "baseline", "raw_bytes": 0, "output_bytes": 0})
+    script = (
+        "#!/bin/sh\n"
+        f"printf '%s\\n' {shlex.quote(entry)} >> {shlex.quote(str(log))}\n"
+        f'exec {shlex.quote(str(real_rg))} "$@"\n'
     )
-    found = completed.stdout.strip()
-    if completed.returncode != 0 or not found:
-        raise RunError(f"the agent shell finds no rg: {completed.stderr.strip()}")
-    return Path(found)
+    path.write_text(script)
+    path.chmod(0o755)
 
 
 def write_shim(path: Path, real_rg: Path, log: Path) -> None:
@@ -205,15 +201,19 @@ def run_one(config: PilotConfig, task: Task, arm: PilotArm, rep: int) -> PilotRe
         command = codex.command(
             config.agent_bin, config.model, config.effort, workspace, prompt_for(task), None
         )
-        env = codex.environment(config.agent_bin, home, config.codex_home)
-        real_rg = resolve_rg(env, workspace)
+        real_rg = codex.bundled_path(config.agent_bin) / "rg"
         rg_path = str(real_rg)
+        wrapper_dir = work / "wrapper"
+        wrapper_dir.mkdir()
         if arm == "S":
-            shim_dir = work / "shim"
-            shim_dir.mkdir()
-            write_shim(shim_dir / "rg", real_rg, shim_log)
-            # Giriş kabuğu /etc/zprofile'dan sonra HOME/.zprofile'ı okur: sarmalayıcı öne geçer.
-            (home / ".zprofile").write_text(f"export PATH={shlex.quote(str(shim_dir))}:$PATH\n")
+            write_shim(wrapper_dir / "rg", real_rg, shim_log)
+        else:
+            write_baseline_wrapper(wrapper_dir / "rg", real_rg, shim_log)
+        env = codex.environment(config.agent_bin, home, config.codex_home)
+        # Codex kabuk anlık görüntüsü ortam PATH'ini kullanır; giriş kabuğu ise /etc/zprofile'dan
+        # sonra HOME/.zprofile'ı okur. Sarmalayıcı iki durumda da öndedir.
+        env = {**env, "PATH": f"{wrapper_dir}:{env['PATH']}"}
+        (home / ".zprofile").write_text(f"export PATH={shlex.quote(str(wrapper_dir))}:$PATH\n")
         wall_s = run_agent(
             command,
             workspace,
@@ -243,6 +243,9 @@ def run_one(config: PilotConfig, task: Task, arm: PilotArm, rep: int) -> PilotRe
         precision = task_score.precision
         commands = shell_commands(lines)
         modes, raw_bytes, output_bytes = shim_summary(shim_log)
+        if any(RG_CALL.search(c) for c in commands) and not modes:
+            missing = "the rg wrapper was not invoked although the agent ran rg"
+            failure = missing if failure is None else f"{failure}; {missing}"
     except (RunError, codex.CodexOutputError) as error:
         failure = str(error)
     finally:

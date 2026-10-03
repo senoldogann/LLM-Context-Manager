@@ -1,0 +1,54 @@
+search commands in RTK history: 16362
+  unique: 15051
+  project-exists: 10346
+  simple: 5152
+  sampled: 1500
+  measured: 403
+  skipped no-match-or-error: 1079
+  skipped timeout: 1
+  skipped too-large: 17
+shape: line=308 other=95
+
+line-shaped (unique commands)
+  tokens raw=3,076,274 rtk=583,081 plain=128,951 full=129,591 compact=104,976 passthrough=103,268
+  bytes  raw=9,331,000 rtk=1,903,512 plain=432,914 full=449,811 compact=341,945 passthrough=338,633
+  token ratio vs RTK: raw=5.276 plain=0.221 full=0.222 compact=0.180 passthrough=0.177
+  visible locations: total=89,462 rtk=5,985 plain=5,786 full=5,952 compact=8,602
+
+line-shaped (weighted by history count)
+  tokens raw=3,247,413 rtk=621,227 plain=157,812 full=153,244 compact=126,688 passthrough=124,958
+  bytes  raw=9,976,226 rtk=2,039,978 plain=534,129 full=533,687 compact=416,938 passthrough=413,710
+  token ratio vs RTK: raw=5.227 plain=0.254 full=0.247 compact=0.204 passthrough=0.201
+  visible locations: total=89,462 rtk=5,985 plain=5,786 full=5,952 compact=8,602
+
+all measured (unique commands)
+  tokens raw=9,535,878 rtk=638,799 plain=184,669 full=185,309 compact=160,694 passthrough=158,986
+  bytes  raw=30,681,106 rtk=2,095,616 plain=625,018 full=641,915 compact=534,049 passthrough=530,737
+  token ratio vs RTK: raw=14.928 plain=0.289 full=0.290 compact=0.252 passthrough=0.249
+  visible locations: total=92,833 rtk=9,356 plain=9,157 full=9,323 compact=11,973
+
+all measured (weighted by history count)
+  tokens raw=9,708,728 rtk=678,656 plain=215,241 full=210,673 compact=184,117 passthrough=182,387
+  bytes  raw=31,332,403 rtk=2,238,153 plain=732,304 full=731,862 compact=615,113 passthrough=611,885
+  token ratio vs RTK: raw=14.306 plain=0.317 full=0.310 compact=0.271 passthrough=0.269
+  visible locations: total=92,833 rtk=9,356 plain=9,157 full=9,323 compact=11,973
+
+RTK left the output unchanged: 69.5% of line-shaped commands
+per-command token ratio, percentiles p10 p25 p50 p75 p90:
+  compact/RTK: 0.30 0.46 0.67 1.09 1.78
+  passthrough/RTK: 0.30 0.46 0.67 1.00 1.00
+  plain/RTK: 0.70 0.84 1.06 1.33 2.00
+  full/RTK: 0.41 0.75 1.07 1.46 2.19
+  compact/plain: 0.34 0.48 0.67 0.96 1.00
+  passthrough at least 30% below RTK: 53.2%
+  passthrough above RTK: 2.3%
+  commands where compact shows fewer locations than RTK: 3
+
+line-shaped matches by kind: code 46.6%, text 41.6%, doc 5.3%, import 3.3%, def 3.2%
+
+by raw size (line-shaped, tokens):
+  bucket: count, median passthrough/RTK, median plain/RTK, total passthrough/RTK
+  a) <250 tokens: 198, 0.82, 1.23, 0.66
+  b) 250-2,500: 89, 0.44, 0.86, 0.46
+  c) 2,500-25,000: 13, 0.76, 0.80, 0.71
+  d) >=25,000: 8, 0.65, 0.57, 0.07
