@@ -11,8 +11,13 @@ official `auth status` command; this is a login-state check, not a successful mo
 `CLAUDE_CODE_OAUTH_TOKEN` is absent from the supervising benchmark shell. The existing harness
 requires that environment token with a temporary HOME; do not extract credentials from files or
 keychain, copy the owner's Claude configuration, or change isolation to use the normal HOME.
-The owner was asked which terminal has the token or to supply it only in the invoking terminal's
-environment. No Claude model call or new pilot output was started. If supplied, the bounded
+The owner identified the Claude Code application as the last authenticated session. A second
+official `auth status --json` check with a temporary HOME and CLAUDE_CONFIG_DIR, matching the
+harness isolation, exited 1 and reported loggedIn=false, authMethod=none. Application login
+does not supply authentication to that isolated environment. A token must be supplied only in
+the terminal that actually invokes the benchmark; exporting it in another terminal does not
+change the supervising process environment. No Claude model call or new pilot output was
+started. If supplied, the bounded
 proposed scope is the same three tasks × three arms × one repetition in a new output directory;
 CLI version differs from the older Claude pilot (2.1.287), so record that difference.
 
