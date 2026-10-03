@@ -1,0 +1,278 @@
+{
+  "measured_commit": "fb0ecd4a504201dd998154dcec5ddcbd7d80e278",
+  "measured_date": "2026-10-03",
+  "rust": {
+    "ccm-cli": {
+      "passed": 9,
+      "failed": 0,
+      "ignored": 1,
+      "exit_code": 0
+    },
+    "ccm-core": {
+      "passed": 223,
+      "failed": 0,
+      "ignored": 3,
+      "exit_code": 0
+    },
+    "ccm-mcp": {
+      "passed": 96,
+      "failed": 0,
+      "ignored": 2,
+      "exit_code": 0
+    }
+  },
+  "rust_suites": [
+    {
+      "package": "ccm-cli",
+      "suite": "Running unittests src/main.rs (target/debug/deps/ccm_cli-76127dcaadc8b3fd)",
+      "summary": "test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s"
+    },
+    {
+      "package": "ccm-cli",
+      "suite": "Running tests/cli_integration_test.rs (target/debug/deps/cli_integration_test-d68146a8260fca1c)",
+      "summary": "test result: ok. 7 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 11.00s"
+    },
+    {
+      "package": "ccm-core",
+      "suite": "Running unittests src/lib.rs (target/debug/deps/ccm_core-c5162b2a106bf26c)",
+      "summary": "test result: ok. 143 passed; 0 failed; 3 ignored; 0 measured; 0 filtered out; finished in 0.33s"
+    },
+    {
+      "package": "ccm-core",
+      "suite": "Running tests/git_integration_test.rs (target/debug/deps/git_integration_test-d7f2ea050c46c257)",
+      "summary": "test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.08s"
+    },
+    {
+      "package": "ccm-core",
+      "suite": "Running tests/incremental_calls_test.rs (target/debug/deps/incremental_calls_test-75c8f1c78d607c38)",
+      "summary": "test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s"
+    },
+    {
+      "package": "ccm-core",
+      "suite": "Running tests/incremental_filesystem_test.rs (target/debug/deps/incremental_filesystem_test-1e6fad482d9d2188)",
+      "summary": "test result: ok. 33 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 18.41s"
+    },
+    {
+      "package": "ccm-core",
+      "suite": "Running tests/learn_pipeline_test.rs (target/debug/deps/learn_pipeline_test-e936652f890351dd)",
+      "summary": "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 5.52s"
+    },
+    {
+      "package": "ccm-core",
+      "suite": "Running tests/lexical_labels_test.rs (target/debug/deps/lexical_labels_test-1e1c7a3ddb12d6eb)",
+      "summary": "test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.09s"
+    },
+    {
+      "package": "ccm-core",
+      "suite": "Running tests/live_index_parity_test.rs (target/debug/deps/live_index_parity_test-31b5189d6f5de2f5)",
+      "summary": "test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.59s"
+    },
+    {
+      "package": "ccm-core",
+      "suite": "Running tests/python_references_test.rs (target/debug/deps/python_references_test-8faeb0f569f37a3d)",
+      "summary": "test result: ok. 14 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.06s"
+    },
+    {
+      "package": "ccm-core",
+      "suite": "Running tests/rust_references_test.rs (target/debug/deps/rust_references_test-e6a98e18eb7730be)",
+      "summary": "test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.18s"
+    },
+    {
+      "package": "ccm-core",
+      "suite": "Running tests/vector_delete_test.rs (target/debug/deps/vector_delete_test-0f71deb0bc5b1693)",
+      "summary": "test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.06s"
+    },
+    {
+      "package": "ccm-mcp",
+      "suite": "Running unittests src/main.rs (target/debug/deps/ccm_mcp-6417cde959956989)",
+      "summary": "test result: ok. 14 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s"
+    },
+    {
+      "package": "ccm-mcp",
+      "suite": "Running tests/auto_refresh_test.rs (target/debug/deps/auto_refresh_test-30624dd9879bb362)",
+      "summary": "test result: ok. 24 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 30.07s"
+    },
+    {
+      "package": "ccm-mcp",
+      "suite": "Running tests/durable_upgrade_test.rs (target/debug/deps/durable_upgrade_test-922e7b28815370aa)",
+      "summary": "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.26s"
+    },
+    {
+      "package": "ccm-mcp",
+      "suite": "Running tests/guardian_e2e_test.rs (target/debug/deps/guardian_e2e_test-1a0699ff439967cf)",
+      "summary": "test result: ok. 0 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.00s"
+    },
+    {
+      "package": "ccm-mcp",
+      "suite": "Running tests/hermetic_e2e_test.rs (target/debug/deps/hermetic_e2e_test-c36aae72fda05381)",
+      "summary": "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.43s"
+    },
+    {
+      "package": "ccm-mcp",
+      "suite": "Running tests/mcp_integration_test.rs (target/debug/deps/mcp_integration_test-75e7b9e0652a30b8)",
+      "summary": "test result: ok. 26 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 3.27s"
+    },
+    {
+      "package": "ccm-mcp",
+      "suite": "Running tests/protocol_test.rs (target/debug/deps/protocol_test-61a7a0267aa85b0c)",
+      "summary": "test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 5.39s"
+    },
+    {
+      "package": "ccm-mcp",
+      "suite": "Running tests/token_budget_e2e_test.rs (target/debug/deps/token_budget_e2e_test-daccf4d85f905592)",
+      "summary": "test result: ok. 25 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.54s"
+    },
+    {
+      "package": "ccm-core",
+      "suite": "Doc-tests ccm_core",
+      "summary": "test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s"
+    }
+  ],
+  "freshness_regressions": {
+    "red": {
+      "commit": "41bb558",
+      "exit_code": 101,
+      "passed": 0,
+      "failed": 1,
+      "failure": "First find_usages read returned caller_before as fresh after caller_after_0 was saved."
+    },
+    "initial_fix_attempt": {
+      "base_commit": "41bb558",
+      "tracked_changes": true,
+      "candidate_diff_archived": false,
+      "exit_code": 101,
+      "passed": 21,
+      "failed": 2,
+      "failures": [
+        "Fixture prose context query did not route; replaced by an exact path:line target to isolate freshness.",
+        "Existing targeted failure test assumed passive reads; now waits for three injected failures in the server log before reading."
+      ]
+    },
+    "green": {
+      "commit": "fb0ecd4",
+      "exit_code": 0,
+      "passed": 24,
+      "failed": 0,
+      "immediate_caller_edits": 12,
+      "coverage": [
+        "find_usages",
+        "context",
+        "same-size edits",
+        "atomic saves",
+        "file creation",
+        "file deletion",
+        "disabled auto-refresh",
+        "slow refresh budget/stale label",
+        "ignore/artifact exclusions",
+        "schema migration",
+        "failure recovery"
+      ]
+    },
+    "debug_live_serde": {
+      "exit_code": 0,
+      "found": 2,
+      "expected": 2,
+      "first_read_s": 0.388
+    }
+  },
+  "prior_release_live_preflight": {
+    "product_commit": "bcff2e2",
+    "harness_commit": "fb0ecd4",
+    "exit_code": 1,
+    "sha256": {
+      "ccm-cli": "99446be7c123f91dc6b7653bb80c3f90a4f488e2fc36942f1f2622e7a40cdc8e",
+      "ccm-mcp": "610153e60d7418f4a70efba208a9d1d2a8ce5758f8a7386100a27a5490948b9f"
+    },
+    "stdout": "serde-edit-with-bound: first_post_edit_context_s=0.001 (no polling or reindex)\nserde-edit-with-bound: callers=1/2 recall=0.500 precision=0.500 index_s=0.15\n  missing: serde_derive/src/ser.rs:with_serialize_bound\n  extras: serde_derive/src/ser.rs:build_generics\nlive edit context preflight: FAIL\n"
+  },
+  "release_build": {
+    "exit_code": 0,
+    "duration": "3m 49s",
+    "sha256": {
+      "ccm-cli": "99446be7c123f91dc6b7653bb80c3f90a4f488e2fc36942f1f2622e7a40cdc8e",
+      "ccm-mcp": "723900012c13d991f8b48f831b14b882b53f84415a3a1e948a3b3f7a30215575"
+    }
+  },
+  "release_preflight": {
+    "exit_code": 0,
+    "stdout": "flask-callers-ensure-sync: callers=12/12 recall=1.000 precision=1.000 index_s=2.29\nexpress-trap-req-get: callers=5/5 recall=1.000 precision=1.000 index_s=0.07\nserde-edit-with-bound: callers=2/2 recall=1.000 precision=1.000 index_s=0.10\ncontext preflight: PASS\n"
+  },
+  "release_live_preflight": {
+    "exit_code": 0,
+    "first_read_s": 0.338,
+    "stdout": "serde-edit-with-bound: first_post_edit_context_s=0.338 (no polling or reindex)\nserde-edit-with-bound: callers=2/2 recall=1.000 precision=1.000 index_s=0.10\nlive edit context preflight: PASS\n",
+    "post_edit_context_calls": 1,
+    "post_edit_polling": false,
+    "post_edit_reindex": false
+  },
+  "corpus_pins": {
+    "serde": "49d098debdf8b5c38bfb6868f455c6ce542c422c",
+    "flask": "c12a5d874c5a014495eb2db8a73f40037bc813ac",
+    "express": "04bc62787be974874bc1467b23606c36bc9779ba"
+  },
+  "source_corpus_clean_after_runs": true,
+  "retrieval": {
+    "structural": {
+      "exit_code": 0,
+      "totals": {
+        "tasks": 50,
+        "scored": 50,
+        "passed": 50,
+        "failed": 0,
+        "skipped": 0
+      }
+    },
+    "synthetic": {
+      "exit_code": 0,
+      "totals": {
+        "tasks": 180,
+        "scored": 180,
+        "passed": 180,
+        "failed": 0,
+        "skipped": 0
+      }
+    }
+  },
+  "checks": {
+    "clippy_workspace_all_targets_D_warnings": 0,
+    "cargo_fmt_all_check": 0,
+    "git_diff_check": 0,
+    "ruff_format_28_files": 0,
+    "ruff_check": 0,
+    "strict_mypy_28_files": 0,
+    "agent_anchors_24_tasks": 0
+  },
+  "environment": {
+    "temporary_home": true,
+    "cargo_net_offline": true,
+    "uv_offline": true,
+    "ort": "already cached runtime via ORT_LIB_PATH",
+    "strict_project_root_confinement": true,
+    "external_agent_calls": 0,
+    "embedding_api_calls": 0,
+    "model_downloads": 0,
+    "structural_embedding": "disabled",
+    "synthetic_embedding": "committed offline fixture"
+  },
+  "local_log_sha256": {
+    "red.log": "029cf4f250c94bf6a943c2c192af31c0ef79a8787af3c145401480b9a3f244c9",
+    "auto-refresh-green.log": "8f1557b698b54de2a12d38d93b5e4623fc64a4bae453777ce499fdf2125b0d84",
+    "auto-refresh-green-2.log": "315abea88dcd08c3040d1c85568588bf79356c3c07a24af3d6dc28806bf9db90",
+    "workspace-tests.log": "eeab6a172b10191dd89ecf66f4471585a9c2ed9d9ea42d16071ea0b716dd3753",
+    "clippy.log": "b5e2c680e6c4cdce442212b6c0116961ca6c23abec386e795a88fa2dfaaac083",
+    "release-build.log": "aece254b291a713de154ff27f09a76bdb12b19ec12eb410d15f881587f2989f3",
+    "old-release-live-red.log": "129715dadfa6db2493945086802ec351050e0658cce34e59095b43d2c1f87c50",
+    "release-preflight.log": "4f851e085fb49df73bfa6a924e23f69ac64960cb74922fb5d338aa585108e236",
+    "release-live-preflight.log": "07964ca991fdb9d30234fbb67d5d0aa81d293674b94f5b2ec73aab38da904ca9",
+    "structural-eval.log": "8b52a05960ebe77e5e55d4ccb698f9229632cf46eb9988fe4304665cfe6f0c4c",
+    "synthetic-eval.log": "603349b63615a0da750dec8123db26f358e883242d68d87fae507b5615e4ada9"
+  },
+  "limitations": [
+    "No new external agent pilot; end-to-end token impact of this fix is unmeasured.",
+    "Full read validation walks indexed project sources; very large-project latency is unmeasured.",
+    "Historical pilot subprocess factors were not independently reconstructed; the same packet failure is locally reproduced.",
+    "Corpus Serde reference edit was not compiled.",
+    "Instrumented code coverage was not measured.",
+    "Existing macOS debug linker large __eh_frame warning remains."
+  ]
+}

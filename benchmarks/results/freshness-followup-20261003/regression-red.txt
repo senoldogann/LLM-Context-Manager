@@ -1,0 +1,23 @@
+running 1 test
+test immediate_reads_after_saved_edits_return_current_callers ... FAILED
+
+failures:
+
+---- immediate_reads_after_saved_edits_return_current_callers stdout ----
+
+thread 'immediate_reads_after_saved_edits_return_current_callers' (2621898) panicked at mcp/tests/auto_refresh_test.rs:148:9:
+first find_usages read after save 0 must contain caller_after_0 and exclude caller_before: _Index: fresh · auto-refresh on_
+
+1 usages of `target`: 1 calls, 0 inferred, 0 may call, 0 imports, 0 inherits
+
+- Function: caller_before · lib.rs:2-2 · calls
+
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+
+failures:
+    immediate_reads_after_saved_edits_return_current_callers
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 22 filtered out; finished in 7.72s
+
+error: test failed, to rerun pass `-p ccm-mcp --test auto_refresh_test`

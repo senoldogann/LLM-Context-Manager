@@ -1,0 +1,3 @@
+serde-edit-with-bound: first_post_edit_context_s=0.338 (no polling or reindex)
+serde-edit-with-bound: callers=2/2 recall=1.000 precision=1.000 index_s=0.10
+live edit context preflight: PASS

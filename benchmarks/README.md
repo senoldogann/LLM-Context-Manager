@@ -265,6 +265,11 @@ freshness label must be fresh and the exact post-edit caller set must match; emb
 disabled and corpus sources remain untouched. This is a separate model-free packet check;
 the default preflight and preregistered agent experiment are unchanged.
 
+At `fb0ecd4`, the rebuilt release pair passes the canonical 12/12, 5/5 and 2/2 sets and
+the first live Serde response passes 2/2 in 0.338 s. The prior release pair failed this live
+check at recall=precision=0.500. See the [freshness follow-up](results/freshness-followup-20261003/report.md)
+for hashes, failures, local gates and measurement limits. No new external agent run was used.
+
 ```bash
 uv run python -m agent preflight-context --ccm-bin-dir ../target/release --corpus-dir corpus --live-edits
 ```

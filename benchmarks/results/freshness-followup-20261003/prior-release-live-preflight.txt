@@ -1,0 +1,5 @@
+serde-edit-with-bound: first_post_edit_context_s=0.001 (no polling or reindex)
+serde-edit-with-bound: callers=1/2 recall=0.500 precision=0.500 index_s=0.15
+  missing: serde_derive/src/ser.rs:with_serialize_bound
+  extras: serde_derive/src/ser.rs:build_generics
+live edit context preflight: FAIL
