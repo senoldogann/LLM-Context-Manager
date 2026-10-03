@@ -110,6 +110,52 @@ fn saved_change_becomes_searchable_without_manual_index() -> Result<(), Box<dyn 
     Ok(())
 }
 
+/// Kaydetmeden sonraki ilk okuma watcher teslimini bekleyen bir poll ile
+/// gizlenmez; eski caller kümesi hiçbir zaman taze diye sunulmamalıdır.
+#[test]
+fn immediate_reads_after_saved_edits_return_current_callers() -> Result<(), Box<dyn Error>> {
+    let project = tempdir()?;
+    let source = project.path().join("lib.rs");
+    fs::write(
+        &source,
+        "fn target() {}\nfn caller_before() { target(); }\n",
+    )?;
+    let mut session = McpSession::start(project.path(), &[])?;
+    session.call_tool("index_now", json!({ "project_path": project.path() }))?;
+    poll_find_nodes(
+        &mut session,
+        "caller_before",
+        Duration::from_secs(10),
+        |text| found_node(text, "caller_before") && text.starts_with("_Index: fresh"),
+    )?;
+
+    let mut previous = "caller_before".to_string();
+    for iteration in 0..12 {
+        let current = format!("caller_after_{iteration}");
+        fs::write(
+            &source,
+            format!("fn target() {{}}\nfn {current}() {{ target(); }}\n"),
+        )?;
+        let (tool, arguments) = if iteration % 2 == 0 {
+            ("find_usages", json!({ "target": "target" }))
+        } else {
+            (
+                "context",
+                json!({ "query": "Which functions call `target` in lib.rs directly?", "max_tokens": 1500 }),
+            )
+        };
+        let text = session.call_tool(tool, arguments)?;
+        assert!(
+            text.starts_with("_Index: fresh · auto-refresh on_")
+                && text.contains(&current)
+                && !text.contains(&previous),
+            "first {tool} read after save {iteration} must contain {current} and exclude {previous}: {text}"
+        );
+        previous = current;
+    }
+    Ok(())
+}
+
 #[test]
 fn slow_refresh_returns_stale_result_within_budget() -> Result<(), Box<dyn Error>> {
     let project = tempdir()?;

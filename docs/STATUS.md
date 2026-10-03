@@ -4,8 +4,9 @@ The current state of CCM and the next steps, for the owner and for any agent tha
 work. Keep it current: replace lines that stop being true instead of appending history (git log is
 the history).
 
-Last updated: 2026-10-03. Where work stopped: **Claude authentication availability checked;
-the conditional Claude pilot awaits an environment token**. The owner asked to test Claude too
+Last updated: 2026-10-03. Current step: **offline regression for immediate post-edit freshness**.
+The owner is away from the computer and asked to continue the next local steps. No additional
+external agent run is authorized by this local step. Claude authentication remains pending. The owner asked to test Claude too
 if authentication works. CLI 2.1.288 reports loggedIn=true, authMethod=claude.ai through its
 official `auth status` command; this is a login-state check, not a successful model/API call.
 `CLAUDE_CODE_OAUTH_TOKEN` is absent from the supervising benchmark shell. The existing harness
@@ -32,8 +33,10 @@ retained failures are under `benchmarks/results/agent/pilot-codex-context-first-
 and verified the changed source, `find_usages` returned the old `ser::build_generics` and omitted
 `ser::with_serialize_bound`, incorrectly labelled fresh. Packet recall=precision=0.500; the final
 answer was correct from sources, so the final-answer scorer's stale count is zero. Do not treat
-that score as proof of CCM freshness. The next step is an offline deterministic regression and
-a general watcher/refresh-admission fix; its cause is not established yet. The completed Codex
+that score as proof of CCM freshness. A new general MCP integration regression edits a tiny Rust project and immediately queries
+callers through alternating `find_usages` and `context` calls, without post-edit polling.
+The suspected watcher-delivery admission gap is being tested; a general fix and the required
+verification gates are pending. The observed pilot cause is not established yet. The completed Codex
 scope authorizes no further Codex run or final L3 experiment; the later conditional Claude
 request above is separate.
 
