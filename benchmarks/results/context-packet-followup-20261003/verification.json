@@ -1,0 +1,126 @@
+{
+  "measured_commit": "bcff2e2c1171033bf2ef2ea4738b8920e3c3fa55",
+  "measured_date": "2026-10-03",
+  "rust": {
+    "ccm-core": {
+      "passed": 223,
+      "failed": 0,
+      "ignored": 3,
+      "exit_code": 0
+    },
+    "ccm-mcp": {
+      "passed": 94,
+      "failed": 0,
+      "ignored": 2,
+      "exit_code": 0
+    },
+    "ccm-cli": {
+      "passed": 9,
+      "failed": 0,
+      "ignored": 1,
+      "exit_code": 0
+    }
+  },
+  "retrieval": {
+    "structural": {
+      "totals": {
+        "tasks": 50,
+        "scored": 50,
+        "passed": 50,
+        "failed": 0,
+        "skipped": 0
+      },
+      "exit_code": 0
+    },
+    "synthetic": {
+      "totals": {
+        "tasks": 180,
+        "scored": 180,
+        "passed": 180,
+        "failed": 0,
+        "skipped": 0
+      },
+      "exit_code": 0
+    }
+  },
+  "tdd_checkpoints": [
+    {
+      "phase": "RED",
+      "commit": "2374152",
+      "exit_code": 101,
+      "summary": [
+        "test result: FAILED. 6 passed; 5 failed; 0 ignored; 0 measured; 13 filtered out; finished in 7.03s"
+      ],
+      "failed_tests": [
+        "context_reports_ambiguous_plain_member_targets",
+        "context_plain_receiver_hints_use_definition_evidence_instead_of_mention_order",
+        "context_includes_qualified_and_outermost_caller_scopes_without_merging_names",
+        "context_routes_plain_qualified_symbol_and_path_without_caller_prose",
+        "context_reproduces_plain_pilot_receiver_query"
+      ]
+    },
+    {
+      "phase": "GREEN",
+      "commit": "6ed2690",
+      "exit_code": 0,
+      "summary": [
+        "test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 13 filtered out; finished in 7.08s"
+      ],
+      "failed_tests": []
+    },
+    {
+      "phase": "RED",
+      "commit": "b1d7563",
+      "exit_code": 101,
+      "summary": [
+        "test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 24 filtered out; finished in 6.81s"
+      ],
+      "failed_tests": [
+        "context_receiver_packets_include_proven_alias_calls_and_ignore_non_code"
+      ]
+    },
+    {
+      "phase": "GREEN",
+      "commit": "bcff2e2",
+      "exit_code": 0,
+      "summary": [
+        "test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 13 filtered out; finished in 7.46s"
+      ],
+      "failed_tests": []
+    }
+  ],
+  "release_build": {
+    "exit_code": 0,
+    "duration": "3m 49s",
+    "sha256": {
+      "ccm-cli": "99446be7c123f91dc6b7653bb80c3f90a4f488e2fc36942f1f2622e7a40cdc8e",
+      "ccm-mcp": "610153e60d7418f4a70efba208a9d1d2a8ce5758f8a7386100a27a5490948b9f"
+    }
+  },
+  "release_preflight": {
+    "exit_code": 0,
+    "stdout": "flask-callers-ensure-sync: callers=12/12 recall=1.000 precision=1.000 index_s=1.99\nexpress-trap-req-get: callers=5/5 recall=1.000 precision=1.000 index_s=0.06\nserde-edit-with-bound: callers=2/2 recall=1.000 precision=1.000 index_s=0.10\ncontext preflight: PASS\n"
+  },
+  "checks": {
+    "clippy_workspace_all_targets_D_warnings": 0,
+    "cargo_fmt_all_check": 0,
+    "git_diff_check": 0,
+    "ruff_format_check": 0,
+    "ruff_check": 0,
+    "mypy_28_files": 0,
+    "agent_check_24_tasks": 0
+  },
+  "environment": {
+    "temporary_home": true,
+    "cargo_net_offline": true,
+    "uv_offline": true,
+    "ort": "already cached local runtime via ORT_LIB_PATH",
+    "agent_or_embedding_api_calls": 0,
+    "structural_embedding": "disabled",
+    "synthetic_embedding": "committed fixture"
+  },
+  "warnings_and_preparation_failures": [
+    "macOS debug linker reported the existing large __eh_frame warning; tests and clippy exited 0.",
+    "Initial tracked export used GNU tar --one-top-level, unsupported by macOS bsdtar (exit 1); retried into a newly created directory with portable tar -x -C."
+  ]
+}

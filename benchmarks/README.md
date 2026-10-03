@@ -250,9 +250,12 @@ The command first verifies that the selected clones are clean and exactly at the
 workspaces, applies the Serde reference edit, disables embeddings, builds graph-only indexes, makes
 one `context` call per task, and compares the returned `callers:` lines one-to-one with task ground
 truth. Missing callers, extra callers and duplicate caller lines all fail. On product commit
-`5615c30`, the rebuilt release binaries score Flask 12/12, Express 5/5 and Serde 2/2, all at recall
-1.000 and precision 1.000. This is a packet-quality preflight, not an agent-token or agent-behavior
-result.
+`bcff2e2`, the rebuilt release binaries score Flask 12/12, Express 5/5 and Serde 2/2, all at recall
+1.000 and precision 1.000. Replaying the actual plain-text Codex queries also passes, with Flask
+qualified/enclosing scopes and no Express receiver false positives. Exact packets, binary hashes,
+regression failures and local gates are in the
+[follow-up report](results/context-packet-followup-20261003/report.md). This is a packet-quality
+preflight, not an agent-token or agent-behavior result.
 
 ### Limits
 

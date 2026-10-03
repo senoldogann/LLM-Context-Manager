@@ -29,6 +29,13 @@
 - `context` rendering collapses multiple occurrence IDs of the same semantic
   caller (for example equivalent nested functions in alternative branches) into
   one compact caller entry; the underlying graph call sites are preserved.
+- Plain code/path hints no longer require backticks. JS/TS member targets use
+  callable assignment evidence, retain proven aliases and report unrelated
+  explicit targets as ambiguous. Caller inspection uses AST calls, excluding
+  comments, strings and identifier-prefix lookalikes.
+- `context` caller lines now include class-qualified scopes and the outermost
+  enclosing callable where available, preserving semantic identities and
+  uncertainty labels. Legacy caller rendering is unchanged.
 
 ## v0.4.0 - Token-Efficient Answers, Python Syntax Graph and Live Index
 

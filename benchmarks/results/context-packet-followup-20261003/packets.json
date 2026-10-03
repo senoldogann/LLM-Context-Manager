@@ -1,0 +1,107 @@
+{
+  "kind": "model-free packet quality follow-up",
+  "measured_commit": "bcff2e2c1171033bf2ef2ea4738b8920e3c3fa55",
+  "binary_sha256": {
+    "ccm-cli": "99446be7c123f91dc6b7653bb80c3f90a4f488e2fc36942f1f2622e7a40cdc8e",
+    "ccm-mcp": "610153e60d7418f4a70efba208a9d1d2a8ce5758f8a7386100a27a5490948b9f"
+  },
+  "corpus_manifest": {
+    "schema_version": 1,
+    "description": "External benchmark corpus: real open-source repositories at pinned refs. Tasks reference the local clone under benchmarks/corpus/<name>.",
+    "repos": [
+      {
+        "name": "serde",
+        "url": "https://github.com/serde-rs/serde.git",
+        "ref": "v1.0.219",
+        "commit": "49d098debdf8b5c38bfb6868f455c6ce542c422c",
+        "languages": [
+          "rust"
+        ],
+        "size_hint": "medium",
+        "notes": "Serde serialization framework; strong AST structure, trait-heavy."
+      },
+      {
+        "name": "flask",
+        "url": "https://github.com/pallets/flask.git",
+        "ref": "3.0.3",
+        "commit": "c12a5d874c5a014495eb2db8a73f40037bc813ac",
+        "languages": [
+          "python"
+        ],
+        "size_hint": "small",
+        "notes": "Flask micro-framework; request routing and app lifecycle."
+      },
+      {
+        "name": "express",
+        "url": "https://github.com/expressjs/express.git",
+        "ref": "4.19.2",
+        "commit": "04bc62787be974874bc1467b23606c36bc9779ba",
+        "languages": [
+          "javascript"
+        ],
+        "size_hint": "medium",
+        "notes": "Express web framework; middleware chain and router."
+      },
+      {
+        "name": "django",
+        "url": "https://github.com/django/django.git",
+        "ref": "5.1",
+        "commit": "373cb3037fe4e67adbac9ac43340391e859aa957",
+        "languages": [
+          "python"
+        ],
+        "size_hint": "large",
+        "notes": "Django web framework; large Python codebase for the L1 freshness benchmark (S1)."
+      }
+    ]
+  },
+  "max_tokens": 1500,
+  "embedding": "disabled",
+  "results": [
+    {
+      "query": "Which functions or methods in src/flask/ call ensure_sync directly? Find all calls and their enclosing outermost named function/method.",
+      "score": {
+        "task_id": "flask-callers-ensure-sync",
+        "expected": 12,
+        "found": 12,
+        "missing": [],
+        "extras": [],
+        "index_s": 0.13429816700227093
+      },
+      "scope_checks": {
+        "scope: Flask.update_template_context": true,
+        "scope: copy_current_request_context.wrapper; enclosing callable: copy_current_request_context": true,
+        "scope: View.as_view.view; enclosing callable: View.as_view": true,
+        "scope: MethodView.dispatch_request": true
+      },
+      "packet": "_Index: auto-refresh off \u00b7 indexed 0s ago_\n\nFunction `ensure_sync` \u00b7 src/flask/app.py:929-941 \u00b7 12 callers, 1 callees, 0 tests\n```\ndef ensure_sync(self, func: t.Callable[..., t.Any]) -> t.Callable[..., t.Any]:\n        \"\"\"Ensure that the function is synchronous for WSGI workers.\n        Plain ``def`` functions are returned as-is. ``async def``\n        functions are wrapped to run and wait for the response.\n\n        Override this method to change how the app runs async views.\n\n        .. versionadded:: 2.0\n        \"\"\"\n        if iscoroutinefunction(func):\n            return self.async_to_sync(func)\n\n        return func\n```\ncallers:\n- Function: update_template_context \u00b7 src/flask/app.py:469-495 \u00b7 calls; scope: Flask.update_template_context\n- Function: handle_http_exception \u00b7 src/flask/app.py:707-740 \u00b7 calls; scope: Flask.handle_http_exception\n- Function: handle_user_exception \u00b7 src/flask/app.py:742-772 \u00b7 calls; scope: Flask.handle_user_exception\n- Function: handle_exception \u00b7 src/flask/app.py:774-825 \u00b7 calls; scope: Flask.handle_exception\n- Function: dispatch_request \u00b7 src/flask/app.py:842-865 \u00b7 calls; scope: Flask.dispatch_request\n- Function: preprocess_request \u00b7 src/flask/app.py:1233-1258 \u00b7 calls; scope: Flask.preprocess_request\n- Function: process_response \u00b7 src/flask/app.py:1260-1286 \u00b7 calls; scope: Flask.process_response\n- Function: do_teardown_request \u00b7 src/flask/app.py:1288-1320 \u00b7 calls; scope: Flask.do_teardown_request\n- Function: do_teardown_appcontext \u00b7 src/flask/app.py:1322-1346 \u00b7 calls; scope: Flask.do_teardown_appcontext\n- Function: wrapper \u00b7 src/flask/ctx.py:189-191 \u00b7 may call (receiver type unknown or several candidates); scope: copy_current_request_context.wrapper; enclosing callable: copy_current_request_context\n- Function: view \u00b7 src/flask/views.py:106-110 \u00b7 may call (receiver type unknown or several candidates); scope: View.as_view.view; enclosing callable: View.as_view\n- Function: dispatch_request \u00b7 src/flask/views.py:182-191 \u00b7 may call (receiver type unknown or several candidates); scope: MethodView.dispatch_request\ncallees:\n- Function: async_to_sync \u00b7 src/flask/app.py:943-964 \u00b7 calls\n"
+    },
+    {
+      "query": "Find every function in lib/ that calls the request getter req.get or its alias req.header defined in lib/request.js. Exclude app.get and res.get; include request calls through this or other aliases and identify outermost named function.",
+      "score": {
+        "task_id": "express-trap-req-get",
+        "expected": 5,
+        "found": 5,
+        "missing": [],
+        "extras": [],
+        "index_s": 0.07050183400133392
+      },
+      "scope_checks": {},
+      "packet": "_Index: auto-refresh off \u00b7 indexed 0s ago_\n\nFunction `get` \u00b7 lib/request.js:64-84 \u00b7 5 callers, 1 callees, 0 tests, 1 members\n```\nreq.get =\nreq.header = function header(name) {\n  if (!name) {\n    throw new TypeError('name argument is required to req.get');\n  }\n\n  if (typeof name !== 'string') {\n    throw new TypeError('name must be a string to req.get');\n  }\n\n  var lc = name.toLowerCase();\n\n  switch (lc) {\n    case 'referer':\n    case 'referrer':\n      return this.headers.referrer\n        || this.headers.referer;\n    default:\n      return this.headers[lc];\n  }\n}\n```\nmembers:\n- Function: header \u00b7 lib/request.js:65-84\ncallers:\n- Function: range \u00b7 lib/request.js:212-216 \u00b7 receiver-call evidence for req.get\n- Function: protocol \u00b7 lib/request.js:306-324 \u00b7 receiver-call evidence for req.get\n- Function: hostname \u00b7 lib/request.js:427-450 \u00b7 receiver-call evidence for req.get\n- Function: xhr \u00b7 lib/request.js:506-509 \u00b7 receiver-call evidence for req.get\n- Function: location \u00b7 lib/response.js:907-925 \u00b7 receiver-call evidence for req.get\ncallees:\n- Function: header \u00b7 lib/request.js:65-84 \u00b7 calls (inferred from the name, not resolved)\n"
+    },
+    {
+      "query": "After the change, which functions in `serde_derive/src/` call `bound::with_bound` directly?",
+      "score": {
+        "task_id": "serde-edit-with-bound",
+        "expected": 2,
+        "found": 2,
+        "missing": [],
+        "extras": [],
+        "index_s": 0.08993912499863654
+      },
+      "scope_checks": {},
+      "packet": "_Index: auto-refresh off \u00b7 indexed 0s ago_\n\nFunction `with_bound` \u00b7 serde_derive/src/bound.rs:91-310 \u00b7 2 callers, 14 callees, 0 tests, 2 members\n```\n//         a: A,\n//         b: Option<&'b B>\n//         #[serde(skip_serializing)]\n//         c: C,\n//     }\npub fn with_bound(\n    cont: &Container,\n    generics: &syn::Generics,\n    filter: fn(&attr::Field, Option<&attr::Variant>) -> bool,\n    bound: &syn::Path,\n) -> syn::Generics {\n    struct FindTyParams<'ast> {\n        // Set of all generic type parameters on the current struct (A, B, C in\n        // the example). Initialized up front.\n        all_type_params: HashSet<syn::Ident>,\n\n        // Set of generic type parameters used in fields for which filter\n        // returns true (A and B in the example). Filled in as the visitor sees\n        // them.\n        relevant_type_params: HashSet<syn::Ident>,\n\n        // Fields whose type is an associated type of one of the generic type\n        // parameters.\n        associated_type_usage: Vec<&'ast syn::TypePath>,\n    }\n\n    impl<'ast> FindTyParams<'ast> {\n        fn visit_field(&mut self, field: &'ast syn::Field) {\n            if let syn::Type::Path(ty) = ungroup(&field.ty) {\n                if let Some(Pair::Punctuated(t, _)) = ty.path.segments.pairs().next() {\n                    if self.all_type_params.contains(&t.ident) {\n                        self.associated_type_usage.push(ty);\n                    }\n                }\n            }\n            self.visit_type(&field.ty);\n        }\n\n        fn visit_path(&mut self, path: &'ast syn::Path) {\n            if let Some(seg) = path.segments.last() {\n                if seg.ident == \"PhantomData\" {\n                    // Hardcoded exception, because PhantomData<T> implements\n                    // Serialize and Deserialize whether or not T implements it.\n                    return;\n                }\n            }\n            if path.leading_colon.is_none() && path.segments.len() == 1 {\n                let id = &path.segments[0].ident;\n                if self.all_type_params.contains(id) {\n                    self.relevant_type_params.insert(id.clone());\n                }\n            }\n            for segment in &path.segments {\n                self.visit_path_segment(segment);\n            }\n        }\n\n       \u2026\n```\n\u2026 body clipped (raise max_tokens)\nmembers:\n- Struct: FindTyParams \u00b7 serde_derive/src/bound.rs:97-110\n- Class: FindTyParams \u00b7 serde_derive/src/bound.rs:112-244\ncallers:\n- Function: build_generics \u00b7 serde_derive/src/de.rs:162-198 \u00b7 calls\n- Function: with_serialize_bound \u00b7 serde_derive/src/ser.rs:1368-1375 \u00b7 calls\ncallees:\n- Struct: FindTyParams \u00b7 serde_derive/src/bound.rs:97-110 \u00b7 calls\n- Function: clone \u00b7 serde/src/de/value.rs:643-648 \u00b7 may call (receiver type unknown or several candidates)\n- Function: clone \u00b7 serde/src/de/value.rs:760-765 \u00b7 may call (receiver type unknown or several candidates)\n- Function: clone \u00b7 serde/src/de/value.rs:1445-1453 \u00b7 may call (receiver type unknown or several candidates)\n- Function: clone \u00b7 serde/src/private/de.rs:2120-2122 \u00b7 may call (receiver type unknown or several candidates)\n- Function: visit_field \u00b7 serde_derive/src/bound.rs:113-122 \u00b7 may call (receiver type unknown or several candidates)\n- Function: into_iter \u00b7 test_suite/tests/macros/mod.rs:61-61 \u00b7 may call (receiver type unknown or several candidates)\n- Function: into_iter \u00b7 test_suite/tests/macros/mod.rs:65-67 \u00b7 may call (receiver type unknown or several candidates)\n- Function: into \u00b7 test_suite/tests/test_annotations.rs:1513-1517 \u00b7 may call (receiver type unknown or several candidates)\n- Function: into \u00b7 test_suite/tests/test_annotations.rs:1537-1545 \u00b7 may call (receiver type unknown or several candidates)\n- Struct: Container \u00b7 serde_derive/src/internals/ast.rs:9-20 \u00b7 references (uses without calling)\n- Enum: Data \u00b7 serde_derive/src/internals/ast.rs:25-28 \u00b7 references (uses without calling)\n- Struct: Variant \u00b7 serde_derive/src/internals/attr.rs:734-746 \u00b7 references (uses without calling)\n- Struct: Field \u00b7 serde_derive/src/internals/attr.rs:984-998 \u00b7 references (uses without calling)\n"
+    }
+  ],
+  "measured_date": "2026-10-03"
+}

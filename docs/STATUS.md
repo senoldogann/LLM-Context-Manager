@@ -4,45 +4,26 @@ The current state of CCM and the next steps, for the owner and for any agent tha
 work. Keep it current: replace lines that stop being true instead of appending history (git log is
 the history).
 
-Last updated: 2026-10-03. Where work stopped: **local packet fixes passed their GREEN gate** after
-the owner asked to continue the next steps. RED checkpoint `2374152` compiled/executed five new
-MCP end-to-end regressions at base `dbaa2ec`: exit 101, 6 existing tests passed and 5 new tests
-failed for the intended routing/scope bugs. The same target now passes all 11 context tests.
-Plain code/path hints are checked against indexed callable assignments, alias declarations are
-validated with the existing JS/TS parser, unrelated explicit targets return an ambiguity error,
-and `context` caller lines include Contains-based qualified/enclosing scopes while preserving
-semantic IDs and relation labels. The graph schema and legacy rendering are unchanged. Next:
-review/refine the implementation, then run full local gates and rebuild/verify the changed MCP
-release binary against pinned corpus packets.
-Additional RED checkpoint `b1d7563` compiled/executed an alias/non-code boundary regression at
-`6ed2690` (exit 101, 0 passed, 1 failed): the canonical call was present but its assignment alias
-caller was missing. The full context target now passes all 12 tests: proven assignment aliases
-are preserved in receiver evidence, while comments, strings and identifier suffixes are excluded
-by AST call inspection. No source corpus, agent measurement or preregistration was modified.
-No new external AI quota use is authorized by this local continuation.
+Last updated: 2026-10-03. Where work stopped: **local packet fixes and all local gates are
+complete**, measured at clean product commit `bcff2e2`. The changed release pair was rebuilt
+once and verified after the build: Flask 12/12, Express 5/5, edited Serde 2/2, no missing/extra
+caller. Replaying the actual plain-text Codex queries also passed: Flask includes qualified and
+enclosing callable scopes; Express includes `location` and excludes the receiver false positives.
+Exact packets, binary hashes, full gate totals and RED/GREEN failures are recorded under
+`benchmarks/results/context-packet-followup-20261003/`. No new external AI quota was used by this
+local continuation. Next: a matched Codex follow-up only after separate explicit quota approval.
 
 The owner-approved **Codex context-first pilot is complete**, measured at clean commit `4185640`
-(see "Codex context-first pilot result"). All nine
-final answers passed, and B called `context` once in each task. B still used additional source
-inspection and its summed input+output tokens were 29.65% above A across these three tasks.
-Real-query inspection found two concrete packet gaps: unqualified/enclosing caller names in
-Flask, and receiver false positives/missing evidence when the Express query omitted backticks.
-The next work is local regression coverage and general server routing/composition fixes before
-another agent experiment. The accepted product direction remains a single `context` entry point:
-the agent states what it needs, and CCM chooses graph/search operations and composes the smallest
-useful task packet server-side. Default discovery is `context + index_project`; legacy tools are
-opt-in but directly callable. The separate `context-first-pilot` profile leaves the preregistered
-final design intact.
-
-The existing optimized binaries again passed the **model-free packet quality preflight** before
-the Codex pilot: Flask 12/12, Express 5/5 with no extra caller, edited Serde 2/2 with the removed
-caller absent; recall=precision=1.000. These canonical preflight queries do not cover every query
-an agent can produce. The release pair is unchanged from the full local verification accompanying
-`4185640`, and was not rebuilt. Ruff format/lint, strict mypy across 28 files and all 24 task anchors
-passed after the pilot. Claude remains unavailable in this session without an owner-supplied
-`CLAUDE_CODE_OAUTH_TOKEN`; the owner selected dedicated Codex only. The earlier Codex limit failure
-is retained as prior evidence, but this nine-run attempt was accepted and completed. Any further
-external AI run or publishing operation requires the owner's separate explicit approval.
+(see "Codex context-first pilot result"). All nine final answers passed, and B called `context`
+once in each task. B still used additional source inspection and its summed input+output tokens
+were 29.65% above A across these three tasks. The two recorded packet gaps have now been fixed
+and verified locally; whether this reduces agent source reads or total tokens remains unmeasured.
+Serde B's pre-edit-only CCM use also remains an agent behavior gap. The accepted product direction
+is a single `context` entry point: the agent states what it needs, and CCM chooses graph/search
+operations and composes the task packet server-side. Default discovery remains
+`context + index_project`; legacy tools are opt-in but directly callable. The separate
+`context-first-pilot` profile leaves the preregistered final design intact. The owner selected
+dedicated Codex only; no Claude follow-up was started.
 
 **Owner's direction (2026-10-02):** optimize for end-to-end agent token use without sacrificing
 answer quality, independent of model/provider/effort. Move retrieval/tool-selection decisions from
@@ -181,9 +162,11 @@ than the workflow the model must learn.
 
 The first slice is now implemented. Exact targets go directly to graph explanation; natural-language
 requests use hybrid retrieval and enrich the best graph node in the same call. Explicit scoped
-code hints can also route deterministically when the query gives enough evidence (for example a
-backtick `ensure_sync` or `module::symbol` plus a source scope, or a JS/TS `receiver.member`
-plus its definition file). Python project-object/proxy receivers fall back only to bounded `may call` candidates, while
+code hints, with or without backticks, can also route deterministically when indexed declarations
+provide enough evidence (a symbol plus source scope, or a JS/TS `receiver.member` plus its definition
+file). Proven callable assignment aliases are retained, unrelated explicit targets return an
+ambiguity error, and `context` caller lines include qualified/enclosing scopes from Contains edges.
+Python project-object/proxy receivers fall back only to bounded `may call` candidates, while
 external imports do not. JS/TS callable assignment aliases and named function expressions are now
 addressable graph symbols, and receiver-sensitive evidence filters same-name false positives for
 lexical caller questions. These graph-semantics changes use index schema 11, so older indexes rebuild
@@ -193,67 +176,52 @@ The default `tools/list` serializes to 1,105 bytes in a direct MCP measurement, 
 when `CCM_MCP_LEGACY_TOOLS=1` exposes the compatibility surface. This is a fixed-schema measurement,
 not evidence of lower end-to-end agent tokens.
 
-Verification on 2026-10-03 from base commit `9c3845d`, with the Python maintenance corrections in
-this status update: the full `ccm-core` package passed 223 tests (143 unit + 80 integration;
-3 opt-in local-model tests ignored). The full `ccm-mcp` package passed 88 tests, including all 19
-token-budget/context tests; the local-model and external Guardian tests were ignored as designed.
-The remaining workspace package, `ccm-cli`, passed 9 tests with 1 opt-in local-model test ignored;
-packages were tested sequentially without repeating the completed core/MCP suites.
-`cargo clippy --workspace --all-targets -- -D warnings`, `cargo fmt --all -- --check` and
-`git diff --check` pass. Retrieval gates on an isolated tracked-file export passed 50/50 structural
-tasks against `eval/report.phase3_baseline.json` and 180/180 offline synthetic-fixture tasks, with
-no failures or skipped tasks. Ruff format/lint, strict mypy across the 27 harness modules plus
-`scripts/aggregate.py`, and all 24 task anchors pass. `ccm-cli` is unchanged at SHA-256
-`72e84aea…47090703`; the optimized `ccm-mcp` rebuilt after the caller-render dedupe is
-`b44d580e…ea4970a`. `python -m agent preflight-context` verifies the selected corpus repos are
-clean and at the commits pinned in `benchmarks/corpus.json`, rejects task paths that escape the repo
-root, rebuilds graph-only indexes from isolated temporary workspaces, and checks the three packets
-against task ground truth; that exact release pair scores
-Flask 12/12, Express 5/5 with no extra caller, and Serde 2/2 after the scripted edit, all at
-recall=1.000 and precision=1.000. Duplicate occurrence IDs for one semantic caller are collapsed
-only in the `context` rendering; graph call sites remain intact.
+Verification on 2026-10-03 at product commit `bcff2e2`: sequential full packages passed
+223 core tests (143 unit + 80 integration; 3 opt-in local-model tests ignored), 94 MCP tests
+(including 25/25 token-budget/context tests; 2 opt-in tests ignored), and 9 CLI tests
+(1 opt-in local-model test ignored). Workspace clippy with all targets and `-D warnings`,
+Rust fmt check and diff-check passed. Structural retrieval on an isolated tracked export passed
+50/50 against the phase3 baseline; offline synthetic-fixture retrieval passed 180/180, with no
+failed or skipped task. Ruff format/lint, strict mypy across 28 files and all 24 task anchors
+passed. Cargo/uv ran offline with temporary HOME and cached ONNX Runtime; the existing macOS
+large `__eh_frame` debug-link warning remains. Instrumented coverage was not measured.
 
-The first isolated/offline core attempt exited 101 at link time before running tests: `ort-sys`
-could not acquire ONNX Runtime with the temporary HOME and offline mode. Setting `ORT_LIB_PATH`
-to the already cached library used by the release build fixed the environment; the full retry
-passed without a source change or download. Only CCM package dev-profile artifacts were cleaned
-to free 32.0 GiB; release binary hashes stayed unchanged. macOS debug linking reported the large
-`__eh_frame` warning; Clippy still passed with `-D warnings`.
+The release build completed in 3m 49s. SHA-256: `ccm-cli=99446be7…0cdc8e`,
+`ccm-mcp=610153e6…948b9f` (full values and commands in the follow-up report).
+The existing committed preflight was unchanged: clean pinned source repos, temporary `git archive`
+workspaces, copy-only edits, explicit binary paths, embeddings disabled, strict root confinement,
+no API/credential access, and exact missing/extra caller failure checks. Post-build canonical
+packets passed 12/12, 5/5 and 2/2. Reuse of its helpers for the real-query replay passed the same
+sets, plus Flask scope checks. Original corpus and agent benchmark outputs were not changed.
 
-The first Python format check found two unformatted committed files, and the lint check found
-16 errors in the older `scripts/aggregate.py`. `agent/run.py` received formatting only (its AST is
-unchanged); `scripts/aggregate.py` received formatting and explicit types. An intermediate mypy
-check found three annotation errors, corrected before the final 28-file pass. Its stdout, stderr
-and exit code match the base commit across all five existing comparison-report directories. Task
-ground truth, scoring calculations, preregistration and recorded benchmark outputs were unchanged.
+Regression history is preserved as separate RED/GREEN commits: `2374152` compiled and ran the
+first routing/scope regressions (exit 101, 6 passed/5 failed), then `6ed2690` passed 11/11;
+`b1d7563` compiled and ran the alias boundary regression (exit 101, 0 passed/1 failed), then
+`bcff2e2` passed 12/12 context tests. The only export preparation failure was a GNU-only tar flag
+unsupported by macOS; the portable retry succeeded before retrieval measurement. Detailed results
+are in `benchmarks/results/context-packet-followup-20261003/report.md` and `verification.json`.
 
-The Codex pilot cleared tool adoption for this configuration, but the next gate is packet
-sufficiency for real agent queries and measured total-token cost. CCM is not ready for the
-preregistered final L3 run: three correct final answers per arm do not establish quality
-equivalence, and source inspection still compensates for packet gaps. First cover and fix those
-general routing/composition gaps locally. Then, with a fresh approved quota scope, repeat a
-matched agent pilot; reusable indexes and Django/multi-file extensions remain later steps.
+The Codex pilot cleared tool adoption for its configuration. Local packet correctness now covers
+its two observed query gaps, but agent packet sufficiency and measured total-token cost remain
+open. CCM is not ready for the preregistered final L3 run: three correct final answers per arm do
+not establish quality equivalence. With a fresh approved quota scope, repeat a matched agent
+pilot; reusable indexes and Django/multi-file extensions remain later steps.
 
 ## Next steps, in order
 
-1. **Add local regressions from the actual Codex queries and fix general packet composition.**
-   Cover plain receiver/path hints plus negative receiver mentions without requiring English
-   caller prose, and include enough enclosing/class scope to identify callers from one packet.
-   Preserve uncertainty labels, semantic-family dedupe, strict root confinement, freshness and
-   legacy compatibility. No framework-specific rule or extra default tool is justified.
-2. **Revalidate changed code and the optimized release pair** with full local gates and the
-   existing pinned-corpus preflight. Rebuild only when changed product code makes it necessary.
-3. **Repeat a matched product pilot only after separate explicit approval for new AI quota use.**
-   Use a new output directory and compare against this Codex pilot; any Claude follow-up also
-   needs the owner to supply `CLAUDE_CODE_OAUTH_TOKEN` through the invoking environment. The
-   earlier Codex smoke exited 4 before records; the 2026-10-03 nine-run pilot completed, and
-   real transcript isolation/parser inspection is now complete.
-4. **Add reusable per-repository indexes**, then run large-repository (Django) and multi-file edit
+1. **Repeat a matched Codex product pilot after separate explicit approval for new AI quota use.**
+   Keep the three tasks, three arms, one repetition and recorded model/effort comparable to the
+   completed pilot, use the verified release pair and a new output directory. Inspect real tool
+   queries and post-edit CCM use as well as final answers and total tokens. Local routing/scope
+   regressions, full gates and post-build packet verification are complete; do not repeat those
+   steps unless product code or the selected binary pair changes.
+2. **Add reusable per-repository indexes**, then run large-repository (Django) and multi-file edit
    extensions. These are the cases most likely to separate CCM from grep/read loops.
-5. **Only after the product configuration is stable, run the preregistered L3 final experiment:**
-   24 tasks × 3 arms × 3 repetitions per agent. Publish negative or mixed results and keep the
-   preregistration/failure ledger intact.
-6. Later, only if L3 evidence supports it: TypeScript/JavaScript syntax-level resolution, then edge
+3. **Only after the product configuration is stable, run the preregistered L3 final experiment:**
+   24 tasks × 3 arms × 3 repetitions per agent, with separate quota approval. Publish negative or
+   mixed results and keep the preregistration/failure ledger intact. Any Claude follow-up needs
+   the owner to supply its token through the invoking environment; do not search credentials.
+4. Later, only if L3 evidence supports it: TypeScript/JavaScript syntax-level resolution, then edge
    accuracy against language servers (L2).
 
 ## Running the L3 experiment

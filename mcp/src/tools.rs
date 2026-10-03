@@ -1177,7 +1177,7 @@ struct ScopedSymbolHint {
     definition_file: Option<String>,
 }
 
-/// Backtick içindeki açık sembolü path kanıtıyla birlikte çıkarır. Çıplak
+/// Açık sembolü path kanıtıyla birlikte çıkarır. Çıplak
 /// `ensure_sync` ve `bound::with_bound` gibi qualified biçimler desteklenir;
 /// prose dili routing kararını etkilemez.
 fn scoped_symbol_hints(query: &str) -> Vec<ScopedSymbolHint> {
