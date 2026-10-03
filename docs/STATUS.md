@@ -4,14 +4,22 @@ The current state of CCM and the next steps, for the owner and for any agent tha
 work. Keep it current: replace lines that stop being true instead of appending history (git log is
 the history).
 
-Last updated: 2026-10-03. Where work stopped: **local packet fixes and all local gates are
-complete**, measured at clean product commit `bcff2e2`. The changed release pair was rebuilt
+Last updated: 2026-10-03. Where work stopped: **preparing the owner-approved matched Codex
+follow-up**. The owner asked to continue the next step after the bounded proposal: the same three
+tasks × three arms × one repetition, dedicated Codex only, unchanged model/effort/profile and a
+fresh output directory. No additional repetitions, Claude run or final L3 run are authorized.
+Current release hashes match the verified pair; Codex CLI remains 0.160.0, and the harness,
+task prompts, scorer and preregistration are unchanged since the original pilot. No build or
+agent benchmark was running at the initial process check.
+
+Local packet fixes and all local gates are complete, measured at clean product commit `bcff2e2`.
+The changed release pair was rebuilt
 once and verified after the build: Flask 12/12, Express 5/5, edited Serde 2/2, no missing/extra
 caller. Replaying the actual plain-text Codex queries also passed: Flask includes qualified and
 enclosing callable scopes; Express includes `location` and excludes the receiver false positives.
 Exact packets, binary hashes, full gate totals and RED/GREEN failures are recorded under
 `benchmarks/results/context-packet-followup-20261003/`. No new external AI quota was used by this
-local continuation. Next: a matched Codex follow-up only after separate explicit quota approval.
+local continuation. The owner's new instruction authorizes the bounded follow-up above.
 
 The owner-approved **Codex context-first pilot is complete**, measured at clean commit `4185640`
 (see "Codex context-first pilot result"). All nine final answers passed, and B called `context`
