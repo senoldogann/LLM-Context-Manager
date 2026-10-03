@@ -4,10 +4,38 @@ The current state of CCM and the next steps, for the owner and for any agent tha
 work. Keep it current: replace lines that stop being true instead of appending history (git log is
 the history).
 
-Last updated: 2026-10-03. Where work stopped: **immediate post-edit freshness fix verified
-with the release pair and all local gates** at product/harness commit `fb0ecd4`. The owner was
-away from the computer and asked to continue local steps. Evidence and retained failures are
-in `benchmarks/results/freshness-followup-20261003/`. No new external agent call or quota use ran.
+Last updated: 2026-10-03. Where work stopped: **search-output pre-study and Codex rg-wrapper
+pilot measured; the direction did not save agent tokens and awaits the owner's decision.**
+Rewriting the agent's own rg output into structure-aware compact form shrank real search output
+(median 0.67 of RTK's tokens offline) but in the valid 6-task Codex pilot the wrapper arm used more
+total tokens in all six tasks (median S/A 1.08) and read more files. See "Search output pre-study
+and rg-wrapper pilot" below. The owner's thesis email draft (outside the repo) is on hold.
+
+## Search output pre-study and rg-wrapper pilot (2026-10-03)
+
+The owner asked for a direction with real users (RTK-like: in the agent's path, no new tool to
+learn) and for real results before fixing thesis goals. Measured with `benchmarks/search/`
+(commits `d925d30`–`f5f401a`):
+
+- **Offline replay** (`benchmarks/results/search-prestudy-20261003/report.md`): 1,500 sampled real
+  rg/grep commands from the owner's RTK history, 308 reproducible line-shaped ones, o200k tokens.
+  CCM compact (definitions with signature, other matches as line numbers under the enclosing
+  function) used a median 0.67 of RTK's tokens (p25–p75 0.46–1.00) and showed 44% more match
+  locations; a structureless grouping baseline was 1.06, and the text-preserving "full" variant 1.07.
+- **Agent pilot** (`benchmarks/results/agent/pilot-codex-search-shim-20261003-v2/report.md`, commit
+  `3814a87`): Codex 0.160.0, `gpt-6.1-sol` high, 6 tasks × A/S × 1. All 12 answers correct. Total
+  tokens A 293,585, S 334,025; S above A in every task; shell/rg/read commands 22/18/9 versus
+  28/21/12. The wrapper compacted 12 calls to 0.15 of their raw bytes, and the agent read whole files
+  to recover the hidden code text. Two earlier attempts never invoked the wrapper and are kept as
+  failures; attempt 1 doubles as an A/A check (per-task ratios 0.89–1.55).
+- **Harness finding:** with Codex's `shell_snapshot` enabled (the L3 default) a PATH-prefixed rg
+  wrapper is never invoked; the L3 harness has therefore not verified which rg Codex runs or that
+  the temporary HOME isolates the shell environment. The pilot disables the snapshot in both arms.
+- **Related tools:** Graft, wonk and duckgrep already offer structure-aware search to agents as
+  explicit tools and report agent-level savings with their own methods.
+
+No product code changed. The open decision is the owner's: what the thesis and product should
+target given this result (the compaction idea in this form is not supported).
 
 The matched Codex follow-up remains measured at `f649a40`: three tasks × three arms × one
 repetition, Codex CLI 0.160.0, `gpt-6.1-sol`, high effort and local embeddings. All nine final
@@ -386,8 +414,9 @@ to start with uncommitted changes under `benchmarks/agent`. `--embedding openai`
   `eval/report.phase3_baseline.json`) and against `eval/fixtures/golden_tasks.synthetic.json` with
   `CCM_EMBEDDING_FIXTURE=eval/fixtures/embeddings.ndjson`. Both must report no failed tasks.
 - Benchmarks (Python): in `benchmarks/`, `uv run ruff format --check`, `uv run ruff check`,
-  `uv run mypy freshness tokens agent scripts/aggregate.py`,
-  `uv run python -m agent check --corpus-dir corpus`.
+  `uv run mypy freshness tokens agent search scripts/aggregate.py`,
+  `uv run python -m agent check --corpus-dir corpus`. The search pre-study also needs
+  `cargo build --release --offline --manifest-path search/ccm-outline/Cargo.toml`.
 - `target/` grows past 60 GB; `cargo clean -p ccm-core -p ccm-mcp -p ccm-cli` frees most of it.
 
 ## Rules for agents working here

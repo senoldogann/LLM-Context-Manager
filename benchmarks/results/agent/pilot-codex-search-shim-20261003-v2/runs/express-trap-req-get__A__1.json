@@ -1,0 +1,28 @@
+{
+  "run_id": "express-trap-req-get__A__1",
+  "task_id": "express-trap-req-get",
+  "repo": "express",
+  "category": "trap",
+  "arm": "A",
+  "rep": 1,
+  "rg_path": "/Users/dogan/.local/lib/node_modules/@openai/codex/node_modules/@openai/codex-darwin-arm64/vendor/aarch64-apple-darwin/codex-path/rg",
+  "wall_s": 24.928646665997803,
+  "input_tokens": 59027,
+  "cached_input_tokens": 40576,
+  "output_tokens": 308,
+  "tool_calls": {
+    "command_execution": 4
+  },
+  "shell_calls": 4,
+  "rg_calls": 4,
+  "read_calls": 2,
+  "shim_modes": {
+    "baseline": 4
+  },
+  "shim_raw_bytes": 0,
+  "shim_output_bytes": 0,
+  "success": true,
+  "recall": 1.0,
+  "precision": 1.0,
+  "failure": null
+}

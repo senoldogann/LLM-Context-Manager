@@ -1,0 +1,28 @@
+{
+  "run_id": "express-callers-res-set__A__1",
+  "task_id": "express-callers-res-set",
+  "repo": "express",
+  "category": "callers",
+  "arm": "A",
+  "rep": 1,
+  "rg_path": "/Users/dogan/.local/lib/node_modules/@openai/codex/node_modules/@openai/codex-darwin-arm64/vendor/aarch64-apple-darwin/codex-path/rg",
+  "wall_s": 33.24287000000186,
+  "input_tokens": 53195,
+  "cached_input_tokens": 34944,
+  "output_tokens": 656,
+  "tool_calls": {
+    "command_execution": 4
+  },
+  "shell_calls": 4,
+  "rg_calls": 4,
+  "read_calls": 2,
+  "shim_modes": {
+    "baseline": 5
+  },
+  "shim_raw_bytes": 0,
+  "shim_output_bytes": 0,
+  "success": true,
+  "recall": 1.0,
+  "precision": 1.0,
+  "failure": null
+}

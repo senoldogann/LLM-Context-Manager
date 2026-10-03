@@ -1,0 +1,28 @@
+{
+  "run_id": "flask-callers-ensure-sync__A__1",
+  "task_id": "flask-callers-ensure-sync",
+  "repo": "flask",
+  "category": "callers",
+  "arm": "A",
+  "rep": 1,
+  "rg_path": "/Users/dogan/.local/lib/node_modules/@openai/codex/node_modules/@openai/codex-darwin-arm64/vendor/aarch64-apple-darwin/codex-path/rg",
+  "wall_s": 47.65010979199724,
+  "input_tokens": 47054,
+  "cached_input_tokens": 33280,
+  "output_tokens": 1033,
+  "tool_calls": {
+    "command_execution": 5
+  },
+  "shell_calls": 5,
+  "rg_calls": 3,
+  "read_calls": 1,
+  "shim_modes": {
+    "baseline": 3
+  },
+  "shim_raw_bytes": 0,
+  "shim_output_bytes": 0,
+  "success": true,
+  "recall": 1.0,
+  "precision": 1.0,
+  "failure": null
+}

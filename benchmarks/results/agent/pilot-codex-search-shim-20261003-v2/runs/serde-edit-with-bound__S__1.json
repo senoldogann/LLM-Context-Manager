@@ -1,0 +1,30 @@
+{
+  "run_id": "serde-edit-with-bound__S__1",
+  "task_id": "serde-edit-with-bound",
+  "repo": "serde",
+  "category": "edit",
+  "arm": "S",
+  "rep": 1,
+  "rg_path": "/Users/dogan/.local/lib/node_modules/@openai/codex/node_modules/@openai/codex-darwin-arm64/vendor/aarch64-apple-darwin/codex-path/rg",
+  "wall_s": 40.097489249994396,
+  "input_tokens": 46919,
+  "cached_input_tokens": 24832,
+  "output_tokens": 745,
+  "tool_calls": {
+    "command_execution": 5,
+    "file_change": 1
+  },
+  "shell_calls": 5,
+  "rg_calls": 3,
+  "read_calls": 3,
+  "shim_modes": {
+    "delegate-shape": 1,
+    "compact": 2
+  },
+  "shim_raw_bytes": 602,
+  "shim_output_bytes": 458,
+  "success": true,
+  "recall": 1.0,
+  "precision": 1.0,
+  "failure": null
+}

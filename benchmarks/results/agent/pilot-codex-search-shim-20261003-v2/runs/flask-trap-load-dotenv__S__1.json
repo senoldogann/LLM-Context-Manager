@@ -1,0 +1,29 @@
+{
+  "run_id": "flask-trap-load-dotenv__S__1",
+  "task_id": "flask-trap-load-dotenv",
+  "repo": "flask",
+  "category": "trap",
+  "arm": "S",
+  "rep": 1,
+  "rg_path": "/Users/dogan/.local/lib/node_modules/@openai/codex/node_modules/@openai/codex-darwin-arm64/vendor/aarch64-apple-darwin/codex-path/rg",
+  "wall_s": 23.97127300000284,
+  "input_tokens": 35372,
+  "cached_input_tokens": 20096,
+  "output_tokens": 339,
+  "tool_calls": {
+    "command_execution": 3
+  },
+  "shell_calls": 3,
+  "rg_calls": 2,
+  "read_calls": 2,
+  "shim_modes": {
+    "delegate-shape": 1,
+    "compact": 2
+  },
+  "shim_raw_bytes": 2989,
+  "shim_output_bytes": 1227,
+  "success": true,
+  "recall": 1.0,
+  "precision": 1.0,
+  "failure": null
+}

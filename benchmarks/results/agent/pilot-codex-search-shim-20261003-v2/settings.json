@@ -1,0 +1,21 @@
+{
+  "product_commit": "3814a876d6aef350a925db95b2ddc55ad70f654a",
+  "agent_version": "codex-cli 0.160.0",
+  "model": "gpt-6.1-sol",
+  "effort": "high",
+  "tasks": [
+    "flask-callers-ensure-sync",
+    "flask-trap-load-dotenv",
+    "express-trap-req-get",
+    "express-callers-res-set",
+    "serde-callers-expr-is-missing",
+    "serde-edit-with-bound"
+  ],
+  "arms": [
+    "A",
+    "S"
+  ],
+  "repetitions": 1,
+  "timeout_s": 1800,
+  "shim_python": "/Users/dogan/Desktop/LLM-Context-Manager/benchmarks/.venv/bin/python3"
+}
