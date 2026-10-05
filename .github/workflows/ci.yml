@@ -2,7 +2,7 @@ name: CI
 
 on:
   push:
-    branches: [ "main" ]
+    branches: [ "main", "opinnaytetyo" ]
   pull_request:
     branches: [ "main" ]
 
@@ -69,3 +69,20 @@ jobs:
           components: rustfmt
       - name: Check Formatting
         run: cargo fmt --all -- --check
+
+  benchmarks:
+    name: Benchmarks (Python)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: benchmarks
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - name: Install uv
+        run: pipx install uv==0.10.9
+      - name: Run Tests
+        run: uv run --frozen python -m unittest discover --start-directory . --top-level-directory .
+      - name: Type Check
+        run: uv run --frozen mypy
+      - name: Lint
+        run: uv run --frozen ruff check .
