@@ -21,7 +21,7 @@ strict = true
 python_version = "3.11"
 warn_unreachable = true
 disallow_any_explicit = true
-files = ["freshness", "tokens", "agent", "search"]
+files = ["freshness", "tokens", "agent", "search", "retrieval"]
 
 [tool.ruff]
 line-length = 100
