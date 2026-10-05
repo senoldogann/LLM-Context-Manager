@@ -21,8 +21,15 @@ Oikeat vastaukset:
   satır, onu içeren en içteki yeni fonksiyonlardan eski dosyada da (nitelikli ad ve aynı adın
   kaçıncı tanımı olduğu ile) bulunan ilkine aittir. Hiçbir fonksiyona düşmeyen satırlar
   sayılır ama oikea vastaus üretmez. Eski fonksiyonlar CCM'nin `Function` düğümlerine dosya
-  yolu, ad ve `def` satırıyla eşlenir (CCM'de dekoratör düğüme dahil değildir). Eşleşme tek
-  değilse ya da bir adın tanım sayısı yamada değiştiği için eşleme belirsizse hata verilir.
+  yolu, ad ve `def` satırıyla eşlenir (CCM'de dekoratör düğüme dahil değildir). Birden çok
+  düğüm eşleşirse ya da bir adın tanım sayısı yamada değiştiği için eşleme belirsizse hata
+  verilir.
+
+İndekste olmayan oikeat vastaukset (ön kayıtlı kural): dosya CCM indeksinde yoksa dosya düzeyi
+görevi yine yazılır; hiçbir yöntem dosyayı bulamaz ve görev her yöntem için kaçırılmış sayılır.
+Bir eski fonksiyona eşleşen `Function` düğümü yoksa örnek fonksiyon düzeyine alınmaz. İki durum
+da `<instance_id>.gold.json` kaydında görünür: `file_in_index` ve düğümü olmayan fonksiyonun
+`node_id` değeri (`null`).
 
 Kullanım:
   uv run python -m retrieval.swebench order --instances swe-bench-lite-test.jsonl \\
@@ -236,7 +243,8 @@ class GoldFunctionRecord:
     def_line: int
     start_line: int
     end_line: int
-    node_id: str
+    # Eşleşen CCM `Function` düğümü yoksa `None`; örnek o zaman fonksiyon düzeyine alınmaz.
+    node_id: str | None
 
 
 @dataclass(frozen=True)
@@ -246,6 +254,7 @@ class GoldRecord:
     repo: str
     base_commit: str
     file_path: str
+    file_in_index: bool
     hunk_offsets: list[int]
     removed_lines: list[int]
     added_lines: list[int]
@@ -540,27 +549,30 @@ def has_file_node(nodes: Sequence[GraphNode], file_path: str) -> bool:
 
 def function_node_ids(
     functions: Sequence[FunctionSpan], nodes: Sequence[GraphNode], file_path: str, context: str
-) -> tuple[str, ...]:
-    """Eski fonksiyonların CCM `Function` düğüm kimlikleri; her fonksiyona tam bir düğüm."""
+) -> tuple[str | None, ...]:
+    """Eski fonksiyonların CCM `Function` düğüm kimlikleri; eşleşen düğüm yoksa `None`.
+
+    Birden çok düğüm eşleşirse oikea vastaus belirsizdir ve hata verilir.
+    """
     prefix = f"./{file_path}:"
     candidates = [
         node
         for node in nodes
         if node.node_type == CCM_FUNCTION_TYPE and node.node_id.startswith(prefix)
     ]
-    node_ids: list[str] = []
+    node_ids: list[str | None] = []
     for span in functions:
         matches = [
             node
             for node in candidates
             if node.name == span.name and node.start_line == span.def_line
         ]
-        if len(matches) != 1:
+        if len(matches) > 1:
             raise GoldError(
                 f"{context}: {span.qualname} (def line {span.def_line}) matches "
                 f"{len(matches)} CCM Function nodes in {file_path}"
             )
-        node_ids.append(matches[0].node_id)
+        node_ids.append(matches[0].node_id if matches else None)
     return tuple(node_ids)
 
 
@@ -711,18 +723,20 @@ def run_tasks(args: argparse.Namespace) -> None:
     applied = apply_patch(source_lines(old_text, instance.instance_id), patch, instance.instance_id)
     gold = instance_function_gold(old_text, applied, instance.instance_id)
     nodes = graph_nodes(as_object(read_json(directory / "ccm_graph.json"), "graph", SweBenchError))
-    if not has_file_node(nodes, patch.path):
-        raise GoldError(f"{instance.instance_id}: {patch.path} is not in the CCM index")
+    file_in_index = has_file_node(nodes, patch.path)
     node_ids = function_node_ids(gold.functions, nodes, patch.path, instance.instance_id)
+    mapped = [node_id for node_id in node_ids if node_id is not None]
+    # Fonksiyon düzeyine yalnız her eski fonksiyonu bir düğüme eşlenen örnekler girer.
+    function_level = bool(node_ids) and len(mapped) == len(node_ids)
     out_dir.mkdir(parents=True, exist_ok=True)
     write_json(
         out_dir / f"{instance.instance_id}.file.json",
         asdict(file_task_file(instance, repo_root, patch.path)),
     )
-    if node_ids:
+    if function_level:
         write_json(
             out_dir / f"{instance.instance_id}.function.json",
-            asdict(node_task_file(instance, repo_root, node_ids)),
+            asdict(node_task_file(instance, repo_root, mapped)),
         )
     record = GoldRecord(
         schema_version=SCHEMA_VERSION,
@@ -730,6 +744,7 @@ def run_tasks(args: argparse.Namespace) -> None:
         repo=instance.repo,
         base_commit=instance.base_commit,
         file_path=patch.path,
+        file_in_index=file_in_index,
         hunk_offsets=list(applied.offsets),
         removed_lines=list(applied.removed_lines),
         added_lines=list(applied.added_lines),
@@ -748,7 +763,10 @@ def run_tasks(args: argparse.Namespace) -> None:
         ],
     )
     write_json(out_dir / f"{instance.instance_id}.gold.json", asdict(record))
-    print(f"{instance.instance_id}: file {patch.path}, functions {len(node_ids)}")
+    print(
+        f"{instance.instance_id}: file {patch.path} (in index: {file_in_index}), "
+        f"functions {len(mapped)}/{len(node_ids)} mapped, function task: {function_level}"
+    )
 
 
 def parse_args() -> argparse.Namespace:

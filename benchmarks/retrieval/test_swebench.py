@@ -5,11 +5,17 @@
 
 from __future__ import annotations
 
+import argparse
+import contextlib
+import io
 import json
 import tempfile
 import unittest
 from pathlib import Path
 
+from freshness.jsonio import as_list, as_object
+from freshness.model import JsonValue
+from retrieval.graph_stats import CURRENT_GENERATION_FILE, GENERATIONS_DIRECTORY
 from retrieval.swebench import (
     AppliedPatch,
     FunctionGold,
@@ -30,6 +36,7 @@ from retrieval.swebench import (
     locate_hunk,
     order_key,
     parse_patch,
+    run_tasks,
     selection_order,
     source_lines,
 )
@@ -368,13 +375,110 @@ class FunctionNodeIdsTest(unittest.TestCase):
             ("./pkg/m.py:function_definition:symbol:cccccccccccccccc:0",),
         )
 
-    def test_function_of_another_file_does_not_match(self) -> None:
+    def test_function_without_node_in_the_file_maps_to_none(self) -> None:
+        # `g` yalnız başka bir dosyada var; bu dosyanın düğümlerinde eşi yok.
+        self.assertEqual(
+            function_node_ids((FunctionSpan("g", 0, "g", 5, 5, 6),), self.NODES, "pkg/m.py", "t"),
+            (None,),
+        )
+
+    def test_more_than_one_matching_node_raises(self) -> None:
+        duplicate = GraphNode(
+            "./pkg/m.py:function_definition:symbol:eeeeeeeeeeeeeeee:0", "Function", "f", 5
+        )
         with self.assertRaises(GoldError):
-            function_node_ids((FunctionSpan("g", 0, "g", 5, 5, 6),), self.NODES, "pkg/m.py", "t")
+            function_node_ids(
+                (FunctionSpan("f", 0, "f", 5, 5, 6),), (*self.NODES, duplicate), "pkg/m.py", "t"
+            )
 
     def test_file_node(self) -> None:
         self.assertTrue(has_file_node(self.NODES, "pkg/m.py"))
         self.assertFalse(has_file_node(self.NODES, "pkg/m2.py"))
+
+
+def graph_node(node_id: str, node_type: str, name: str, start_line: int) -> JsonValue:
+    """`ccm_graph.json` düğümünün eşleme için okunan alanları."""
+    return {"id": node_id, "node_type": node_type, "name": name, "start_line": start_line}
+
+
+class RunTasksTest(unittest.TestCase):
+    INSTANCE_ID: str = "o__a-1"
+    FUNCTION_ID: str = "./pkg/m.py:function_definition:symbol:bbbbbbbbbbbbbbbb:0"
+
+    def setUp(self) -> None:
+        self.path = Path(self.enterContext(tempfile.TemporaryDirectory()))
+        self.repo_root = self.path / "repo"
+        (self.repo_root / "pkg").mkdir(parents=True)
+        (self.repo_root / "pkg" / "m.py").write_text(
+            text("def f():", "    return 1"), encoding="utf-8"
+        )
+        row = {
+            "instance_id": self.INSTANCE_ID,
+            "repo": "o/a",
+            "base_commit": "0" * 40,
+            "created_at": "2020-01-01T00:00:00Z",
+            "version": "1.0",
+            "problem_statement": "issue",
+            "patch": file_diff(
+                "pkg/m.py", text("@@ -1,2 +1,2 @@", " def f():", "-    return 1", "+    return 2")
+            ),
+        }
+        self.instances = self.path / "instances.jsonl"
+        self.instances.write_text(json.dumps(row) + "\n", encoding="utf-8")
+        self.out_dir = self.path / "tasks"
+
+    def index(self, nodes: list[JsonValue]) -> None:
+        """CCM'nin etkin generation düzeni: işaretçi dosyası, manifest ve graf."""
+        data = self.repo_root / "data"
+        generation = data / GENERATIONS_DIRECTORY / "g1"
+        generation.mkdir(parents=True)
+        (data / CURRENT_GENERATION_FILE).write_text("g1\n", encoding="utf-8")
+        (generation / "ccm_manifest.json").write_text(
+            json.dumps({"indexed_commit": "0" * 40}), encoding="utf-8"
+        )
+        (generation / "ccm_graph.json").write_text(
+            json.dumps({"nodes": nodes, "edges": []}), encoding="utf-8"
+        )
+
+    def gold_record(self) -> dict[str, JsonValue]:
+        args = argparse.Namespace(
+            instances=self.instances,
+            instance_id=self.INSTANCE_ID,
+            repo_root=self.repo_root,
+            out_dir=self.out_dir,
+        )
+        with contextlib.redirect_stdout(io.StringIO()):
+            run_tasks(args)
+        loaded: JsonValue = json.loads(
+            (self.out_dir / f"{self.INSTANCE_ID}.gold.json").read_bytes()
+        )
+        return as_object(loaded, "gold", AssertionError)
+
+    def function_ids(self, gold: dict[str, JsonValue]) -> list[JsonValue]:
+        functions = as_list(gold["functions"], "functions", AssertionError)
+        return [as_object(item, "function", AssertionError)["node_id"] for item in functions]
+
+    def test_indexed_gold_writes_both_levels(self) -> None:
+        self.index(
+            [
+                graph_node("./pkg/m.py", "File", "./pkg/m.py", 1),
+                graph_node(self.FUNCTION_ID, "Function", "f", 1),
+            ]
+        )
+        gold = self.gold_record()
+        self.assertIs(gold["file_in_index"], True)
+        self.assertEqual(self.function_ids(gold), [self.FUNCTION_ID])
+        self.assertTrue((self.out_dir / f"{self.INSTANCE_ID}.file.json").is_file())
+        self.assertTrue((self.out_dir / f"{self.INSTANCE_ID}.function.json").is_file())
+
+    def test_gold_missing_from_the_index_keeps_only_the_file_level(self) -> None:
+        # Dosya düzeyi görevi yine yazılır ve her yöntem için kaçırılmış sayılır.
+        self.index([])
+        gold = self.gold_record()
+        self.assertIs(gold["file_in_index"], False)
+        self.assertEqual(self.function_ids(gold), [None])
+        self.assertTrue((self.out_dir / f"{self.INSTANCE_ID}.file.json").is_file())
+        self.assertFalse((self.out_dir / f"{self.INSTANCE_ID}.function.json").exists())
 
 
 class LoadInstancesTest(unittest.TestCase):
