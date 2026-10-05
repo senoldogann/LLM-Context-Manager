@@ -1,13 +1,15 @@
 pub mod hybrid;
+pub mod propagation;
 
 use crate::engine::hybrid::HybridScorer;
+use crate::engine::propagation::{propagation_ranking, semantic_ranking, RankedCandidate};
 use crate::fs_utils::{detect_language, read_text_file_limited, FileReadError};
 use crate::git::GitIntegrator;
 use crate::graph::{CodeGraph, CodeNode, NodeType};
 use crate::normalize_file_id_with_root;
 use crate::parser::CodeParser;
 use crate::parser::SupportedLanguage;
-use crate::policy::RetrievalPolicy;
+use crate::policy::{RankingMethod, RetrievalPolicy};
 use crate::trajectory::{current_context, record_if_enabled, RetrievalEvent, RetrievalResultItem};
 use crate::vector::extractor::Extractor;
 use crate::vector::store::LanceDbStore;
@@ -182,6 +184,13 @@ pub struct RetrievalEngine {
     pub graph: Arc<RwLock<CodeGraph>>,
     pub vector_store: LanceDbStore,
     pub active_policy: RetrievalPolicy,
+}
+
+/// Vektör aramasının düğüm başına tekilleştirilmiş tohumları: her düğüm için en
+/// iyi chunk'ın semantik skoru ve içeriği.
+struct SemanticSeeds {
+    scores: HashMap<String, f32>,
+    content: HashMap<String, String>,
 }
 
 struct HybridCandidate {
@@ -689,12 +698,66 @@ impl RetrievalEngine {
     }
 
     /// Performs a hybrid search by combining semantic vector hits with structural graph neighbors.
+    ///
+    /// Sıralama yöntemi etkin policy'den gelir: `Hybrid` (H0, üretim), `Semantic`
+    /// (S, yalnızca vektör tohumları) ya da `Propagation` (H1, graf skor
+    /// yayılımı). Üç yöntem de aynı vektör tohumlarını, aynı File/DataFile
+    /// filtresini ve aynı `limit` değerini kullanır.
     pub async fn search_code_hybrid(
         &self,
         query: &str,
         limit: usize,
     ) -> Result<Vec<ContextSuggestion>> {
         let started = std::time::Instant::now();
+        let seeds = self.semantic_seeds(query, limit).await?;
+        let results = if seeds.scores.is_empty() {
+            // vector sonuç yoksa graph üzerinden lexical arama ile fallback yap
+            self.find_graph_nodes(query, limit).await
+        } else {
+            match self.active_policy.ranking {
+                RankingMethod::Hybrid => self.rank_hybrid(seeds, limit).await,
+                RankingMethod::Semantic => {
+                    let graph = self.graph.read().await;
+                    ranked_suggestions(
+                        &graph,
+                        semantic_ranking(&seeds.scores),
+                        &seeds.content,
+                        limit,
+                        |candidate| format!("Semantic (semantic {:.2})", candidate.semantic_score),
+                    )
+                }
+                RankingMethod::Propagation => {
+                    let weight = self.active_policy.propagation_weight;
+                    let graph = self.graph.read().await;
+                    ranked_suggestions(
+                        &graph,
+                        propagation_ranking(&graph, &seeds.scores, &self.active_policy),
+                        &seeds.content,
+                        limit,
+                        |candidate| {
+                            format!(
+                                "Propagation (semantic {:.2}, support {:.2}, weight {:.2})",
+                                candidate.semantic_score, candidate.support, weight
+                            )
+                        },
+                    )
+                }
+            }
+        };
+        record_search_event(
+            query,
+            &results,
+            self.active_policy.version,
+            self.active_policy.task_type,
+            started.elapsed().as_millis() as u64,
+        );
+        Ok(results)
+    }
+
+    /// Vektör aramasının tohumları: `limit × seed_multiplier` sonuç, düğüm
+    /// kimliğine göre tekilleştirilir; her düğümde en iyi chunk'ın skoru ve
+    /// içeriği kalır. Embedder ya da tablo yoksa tohum kümesi boştur.
+    async fn semantic_seeds(&self, query: &str, limit: usize) -> Result<SemanticSeeds> {
         let seed_multiplier = self.active_policy.seed_multiplier as usize;
         let seed_limit = limit.saturating_mul(seed_multiplier).max(limit);
         // Embedder kapalıyken vector store boş sonuç yerine hata döndürür.
@@ -724,22 +787,7 @@ impl RetrievalEngine {
                 }
             }
         };
-        let include_data_files = embed_data_files_enabled();
 
-        if hits.is_empty() {
-            // vector sonuç yoksa graph üzerinden lexical arama ile fallback yap
-            let results = self.find_graph_nodes(query, limit).await;
-            record_search_event(
-                query,
-                &results,
-                self.active_policy.version,
-                self.active_policy.task_type,
-                started.elapsed().as_millis() as u64,
-            );
-            return Ok(results);
-        }
-
-        let scorer = HybridScorer::from_policy(&self.active_policy);
         let mut semantic_scores: HashMap<String, f32> = HashMap::new();
         let mut semantic_content: HashMap<String, String> = HashMap::new();
 
@@ -760,6 +808,22 @@ impl RetrievalEngine {
                 }
             }
         }
+
+        Ok(SemanticSeeds {
+            scores: semantic_scores,
+            content: semantic_content,
+        })
+    }
+
+    /// Üretimdeki hibrit sıralama (H0): graf, semantik ve yol skorlarını
+    /// birleştirir; düşük güvende docs/hybrid-ranking.md fallback'ini uygular.
+    async fn rank_hybrid(&self, seeds: SemanticSeeds, limit: usize) -> Vec<ContextSuggestion> {
+        let include_data_files = embed_data_files_enabled();
+        let scorer = HybridScorer::from_policy(&self.active_policy);
+        let SemanticSeeds {
+            scores: semantic_scores,
+            content: semantic_content,
+        } = seeds;
 
         let seed_ids: Vec<String> = semantic_scores.keys().cloned().collect();
         let graph = self.graph.read().await;
@@ -910,14 +974,7 @@ impl RetrievalEngine {
             }
         }
 
-        record_search_event(
-            query,
-            &results,
-            self.active_policy.version,
-            self.active_policy.task_type,
-            started.elapsed().as_millis() as u64,
-        );
-        Ok(results)
+        results
     }
 
     /// Retrieves a node from the graph by its ID.
@@ -1541,6 +1598,56 @@ pub fn node_suggestion(node: &CodeNode, reason: String) -> ContextSuggestion {
         relevance_score: 1.0,
         reason,
     }
+}
+
+/// S ve H1 sıralamalarını sonuç listesine çevirir: File düğümleri ve veri
+/// dosyası embedding'i kapalıyken DataFile düğümleri atlanır, en çok `limit`
+/// sonuç döner. Grafta olmayan vektör sonuçları "Semantic Match" olarak kalır.
+fn ranked_suggestions(
+    graph: &CodeGraph,
+    ranked: Vec<RankedCandidate>,
+    semantic_content: &HashMap<String, String>,
+    limit: usize,
+    reason: impl Fn(&RankedCandidate) -> String,
+) -> Vec<ContextSuggestion> {
+    let include_data_files = embed_data_files_enabled();
+    let mut results = Vec::new();
+    for candidate in ranked {
+        if results.len() >= limit {
+            break;
+        }
+        if let Some(node) = graph.find_node_by_id(&candidate.id) {
+            if node.node_type == NodeType::File
+                || (!include_data_files && node.node_type == NodeType::DataFile)
+            {
+                continue;
+            }
+            results.push(ContextSuggestion {
+                node_id: Some(node.id.clone()),
+                file_path: Some(extract_file_path(&node.id)),
+                start_line: Some(node.start_line),
+                end_line: Some(node.end_line),
+                node_type: Some(format!("{:?}", node.node_type)),
+                title: node_title(&node),
+                content: node.content.to_string(),
+                relevance_score: candidate.score,
+                reason: reason(&candidate),
+            });
+        } else if let Some(content) = semantic_content.get(&candidate.id) {
+            results.push(ContextSuggestion {
+                node_id: Some(candidate.id.clone()),
+                file_path: Some(extract_file_path(&candidate.id)),
+                start_line: None,
+                end_line: None,
+                node_type: None,
+                title: "Semantic Match".to_string(),
+                content: content.clone(),
+                relevance_score: candidate.score,
+                reason: reason(&candidate),
+            });
+        }
+    }
+    results
 }
 
 /// Sonuç satırının başlığı: `Tür: ad`; dosya düğümünün adı yolun kendisi

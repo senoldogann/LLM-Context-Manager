@@ -12,6 +12,7 @@ pub mod parser;
 
 pub mod optimize;
 pub mod policy;
+pub mod retrieval_eval;
 pub mod rng;
 pub mod trajectory;
 pub mod vector;

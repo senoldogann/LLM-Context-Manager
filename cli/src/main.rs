@@ -61,6 +61,36 @@ enum Commands {
         #[arg(long)]
         policy: Option<PathBuf>,
     },
+    /// Measure retrieval quality and latency of ranking methods on golden search tasks
+    RetrievalEval {
+        /// Golden task JSON file; only search_code tasks are measured (repeatable)
+        #[arg(long, required = true)]
+        tasks: Vec<PathBuf>,
+
+        /// Comma-separated ranking methods: semantic, hybrid, propagation
+        #[arg(long, value_delimiter = ',', required = true)]
+        methods: Vec<String>,
+
+        /// Result limit per query (at least 10 for Recall@10 and MRR@10)
+        #[arg(long)]
+        limit: usize,
+
+        /// Share of neighbour support in propagation ranking (lambda, 0..=1)
+        #[arg(long)]
+        propagation_weight: f32,
+
+        /// Timed repetitions of every query and method
+        #[arg(long)]
+        repeats: usize,
+
+        /// Commit of the measured CCM code (7-40 lowercase hex characters)
+        #[arg(long)]
+        commit: String,
+
+        /// Path of the JSON report to write
+        #[arg(long)]
+        report: PathBuf,
+    },
     /// Learn: deterministic synthetic fixture generation and policy optimization
     Learn {
         #[command(subcommand)]
@@ -289,6 +319,34 @@ async fn main() -> anyhow::Result<()> {
                             })?;
                     }
                 }
+            }
+        }
+        Commands::RetrievalEval {
+            tasks,
+            methods,
+            limit,
+            propagation_weight,
+            repeats,
+            commit,
+            report,
+        } => {
+            let methods = methods
+                .iter()
+                .map(|raw| ccm_core::policy::RankingMethod::parse(raw))
+                .collect::<anyhow::Result<Vec<_>>>()?;
+            let settings = ccm_core::retrieval_eval::RetrievalEvalSettings {
+                task_files: tasks,
+                methods,
+                limit,
+                propagation_weight,
+                repeats,
+                commit,
+            };
+            let report_data = ccm_core::retrieval_eval::run_retrieval_eval(&settings).await?;
+            ccm_core::retrieval_eval::write_report(&report_data, &report)?;
+            println!("Report written to {}", report.display());
+            for line in ccm_core::retrieval_eval::summary_lines(&report_data) {
+                println!("{}", line);
             }
         }
         Commands::Eval {

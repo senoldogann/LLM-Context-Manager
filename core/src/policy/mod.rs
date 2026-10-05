@@ -16,6 +16,53 @@ use crate::graph::EdgeType;
 
 pub const POLICY_SCHEMA_VERSION: u32 = 1;
 
+/// H1 graf skor yayılımında komşu desteğinin payı (λ). Eski policy
+/// dosyalarında alan yoksa bu değer yüklenir.
+pub const DEFAULT_PROPAGATION_WEIGHT: f32 = 0.3;
+
+/// `search_code_hybrid` sonuçlarının sıralama yöntemi.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum RankingMethod {
+    /// Yalnızca semantik benzerlik (S): vektör aramasının düğüm tohumları
+    /// semantik skora göre sıralanır, graf sıralamaya katılmaz.
+    Semantic,
+    /// Üretimdeki hibrit sıralama (H0): graf, semantik ve yol skorlarının
+    /// doğrusal birleşimi ve güven fallback'i.
+    #[default]
+    Hybrid,
+    /// Graf skor yayılımı (H1): tohumların semantik skoru tek adımlık
+    /// komşuluk kenarları boyunca yayılır ve sıralamayı değiştirir.
+    Propagation,
+}
+
+impl RankingMethod {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            RankingMethod::Semantic => "semantic",
+            RankingMethod::Hybrid => "hybrid",
+            RankingMethod::Propagation => "propagation",
+        }
+    }
+
+    /// Yöntem adını çözer; bilinmeyen ad açık bir hatadır.
+    pub fn parse(raw: &str) -> anyhow::Result<RankingMethod> {
+        match raw {
+            "semantic" => Ok(RankingMethod::Semantic),
+            "hybrid" => Ok(RankingMethod::Hybrid),
+            "propagation" => Ok(RankingMethod::Propagation),
+            other => Err(anyhow::anyhow!(
+                "Unknown ranking method '{}'; expected semantic, hybrid or propagation",
+                other
+            )),
+        }
+    }
+}
+
+fn default_propagation_weight() -> f32 {
+    DEFAULT_PROPAGATION_WEIGHT
+}
+
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum TaskType {
@@ -74,6 +121,12 @@ pub struct RetrievalPolicy {
     pub primary_window_chars: usize,
     pub related_window_lines: usize,
     pub related_window_chars: usize,
+    /// Sıralama yöntemi; eski policy dosyalarında alan yoksa üretim hibriti.
+    #[serde(default)]
+    pub ranking: RankingMethod,
+    /// H1'de komşu desteğinin payı λ ∈ [0, 1]: skor = (1 − λ)·semantik + λ·destek.
+    #[serde(default = "default_propagation_weight")]
+    pub propagation_weight: f32,
 }
 
 impl RetrievalPolicy {
@@ -98,6 +151,8 @@ impl RetrievalPolicy {
             primary_window_chars: 12_000,
             related_window_lines: 80,
             related_window_chars: 8_000,
+            ranking: RankingMethod::Hybrid,
+            propagation_weight: DEFAULT_PROPAGATION_WEIGHT,
         }
     }
 
@@ -177,7 +232,7 @@ fn normalize_hybrid_weights(weights: HybridWeights) -> Option<HybridWeights> {
 
 #[cfg(test)]
 mod tests {
-    use super::{RetrievalPolicy, TaskType};
+    use super::{RankingMethod, RetrievalPolicy, TaskType, DEFAULT_PROPAGATION_WEIGHT};
 
     #[test]
     fn baseline_matches_production_defaults() {
@@ -190,6 +245,33 @@ mod tests {
         assert_eq!(policy.semantic_hits, 2);
         assert_eq!(policy.semantic_discount, 0.7);
         assert_eq!(policy.two_hop_decay, 0.60);
+        assert_eq!(policy.ranking, RankingMethod::Hybrid);
+    }
+
+    #[test]
+    fn ranking_method_parse_roundtrip() {
+        for method in [
+            RankingMethod::Semantic,
+            RankingMethod::Hybrid,
+            RankingMethod::Propagation,
+        ] {
+            assert_eq!(
+                RankingMethod::parse(method.as_str()).expect("known method"),
+                method
+            );
+        }
+        assert!(RankingMethod::parse("bm25").is_err());
+    }
+
+    #[test]
+    fn policy_without_ranking_fields_loads_production_defaults() {
+        let mut value = serde_json::to_value(RetrievalPolicy::baseline()).expect("serialize");
+        let object = value.as_object_mut().expect("policy object");
+        object.remove("ranking");
+        object.remove("propagation_weight");
+        let loaded: RetrievalPolicy = serde_json::from_value(value).expect("deserialize");
+        assert_eq!(loaded.ranking, RankingMethod::Hybrid);
+        assert_eq!(loaded.propagation_weight, DEFAULT_PROPAGATION_WEIGHT);
     }
 
     #[test]

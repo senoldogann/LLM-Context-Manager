@@ -1307,7 +1307,7 @@ fn query_type_pass_rate(report: &EvalReport) -> BTreeMap<String, f64> {
         .collect()
 }
 
-fn normalize_repo_path(path: &str) -> Result<PathBuf> {
+pub(crate) fn normalize_repo_path(path: &str) -> Result<PathBuf> {
     let raw = PathBuf::from(path);
     if raw.is_absolute() {
         return Ok(raw);
@@ -1316,7 +1316,7 @@ fn normalize_repo_path(path: &str) -> Result<PathBuf> {
     Ok(cwd.join(raw))
 }
 
-fn normalize_task_node_id(repo_path: &Path, node_id: &str) -> String {
+pub(crate) fn normalize_task_node_id(repo_path: &Path, node_id: &str) -> String {
     let cleaned = node_id.replace('\\', "/");
     if let Some((path_and_kind, suffix)) = cleaned.split_once(":symbol:") {
         if let Some((file, kind)) = path_and_kind.rsplit_once(':') {
@@ -1342,7 +1342,7 @@ fn normalize_task_node_id(repo_path: &Path, node_id: &str) -> String {
     normalize_path(repo_path, &cleaned)
 }
 
-fn normalize_path(repo_path: &Path, raw: &str) -> String {
+pub(crate) fn normalize_path(repo_path: &Path, raw: &str) -> String {
     let path = Path::new(raw);
     if path.is_absolute() {
         if let Ok(rel) = path.strip_prefix(repo_path) {
@@ -1383,7 +1383,7 @@ fn gather_context_hits(graph: &CodeGraph, file_path: &str, line: usize) -> Optio
     gather_graph_hits(graph, &node_id)
 }
 
-fn node_id_to_file_path(id: &str) -> String {
+pub(crate) fn node_id_to_file_path(id: &str) -> String {
     let cleaned = crate::normalize_node_id(id);
     if let Some((file_path, _)) = cleaned.split_once(':') {
         file_path.to_string()
