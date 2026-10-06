@@ -16,9 +16,10 @@ use crate::graph::EdgeType;
 
 pub const POLICY_SCHEMA_VERSION: u32 = 1;
 
-/// H1 graf skor yayılımında komşu desteğinin payı (λ). Eski policy
-/// dosyalarında alan yoksa bu değer yüklenir.
-pub const DEFAULT_PROPAGATION_WEIGHT: f32 = 0.3;
+/// H1 graf skor yayılımında komşu desteğinin payı (λ); geliştirme setinde
+/// önceden yazılmış kuralla seçilen değer. Eski policy dosyalarında alan
+/// yoksa bu değer yüklenir.
+pub const DEFAULT_PROPAGATION_WEIGHT: f32 = 0.1;
 
 /// `search_code_hybrid` sonuçlarının sıralama yöntemi.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -27,8 +28,9 @@ pub enum RankingMethod {
     /// Yalnızca semantik benzerlik (S): vektör aramasının düğüm tohumları
     /// semantik skora göre sıralanır, graf sıralamaya katılmaz.
     Semantic,
-    /// Üretimdeki hibrit sıralama (H0): graf, semantik ve yol skorlarının
-    /// doğrusal birleşimi ve güven fallback'i.
+    /// Hibrit sıralama (H0): graf, semantik ve yol skorlarının doğrusal
+    /// birleşimi ve güven fallback'i. Alanı olmayan eski policy dosyaları bu
+    /// yöntemle oluşturulduğundan serde varsayılanıdır.
     #[default]
     Hybrid,
     /// Graf skor yayılımı (H1): tohumların semantik skoru tek adımlık
@@ -121,7 +123,7 @@ pub struct RetrievalPolicy {
     pub primary_window_chars: usize,
     pub related_window_lines: usize,
     pub related_window_chars: usize,
-    /// Sıralama yöntemi; eski policy dosyalarında alan yoksa üretim hibriti.
+    /// Sıralama yöntemi; alanı olmayan eski policy dosyalarında hibrit (H0).
     #[serde(default)]
     pub ranking: RankingMethod,
     /// H1'de komşu desteğinin payı λ ∈ [0, 1]: skor = (1 − λ)·semantik + λ·destek.
@@ -130,7 +132,9 @@ pub struct RetrievalPolicy {
 }
 
 impl RetrievalPolicy {
-    /// Bugünkü üretim davranışının birebir anlık görüntüsü.
+    /// Bugünkü üretim davranışının birebir anlık görüntüsü. Sıralama yöntemi,
+    /// SWE-bench Lite test setinde dosya düzeyinde en yüksek MRR@10'u veren
+    /// yöntemdir.
     pub fn baseline() -> Self {
         Self {
             version: 1,
@@ -151,7 +155,7 @@ impl RetrievalPolicy {
             primary_window_chars: 12_000,
             related_window_lines: 80,
             related_window_chars: 8_000,
-            ranking: RankingMethod::Hybrid,
+            ranking: RankingMethod::Propagation,
             propagation_weight: DEFAULT_PROPAGATION_WEIGHT,
         }
     }
@@ -245,7 +249,8 @@ mod tests {
         assert_eq!(policy.semantic_hits, 2);
         assert_eq!(policy.semantic_discount, 0.7);
         assert_eq!(policy.two_hop_decay, 0.60);
-        assert_eq!(policy.ranking, RankingMethod::Hybrid);
+        assert_eq!(policy.ranking, RankingMethod::Propagation);
+        assert_eq!(policy.propagation_weight, 0.1);
     }
 
     #[test]
@@ -264,7 +269,7 @@ mod tests {
     }
 
     #[test]
-    fn policy_without_ranking_fields_loads_production_defaults() {
+    fn policy_without_ranking_fields_loads_hybrid() {
         let mut value = serde_json::to_value(RetrievalPolicy::baseline()).expect("serialize");
         let object = value.as_object_mut().expect("policy object");
         object.remove("ranking");

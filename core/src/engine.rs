@@ -699,9 +699,9 @@ impl RetrievalEngine {
 
     /// Performs a hybrid search by combining semantic vector hits with structural graph neighbors.
     ///
-    /// Sıralama yöntemi etkin policy'den gelir: `Hybrid` (H0, üretim), `Semantic`
-    /// (S, yalnızca vektör tohumları) ya da `Propagation` (H1, graf skor
-    /// yayılımı). Üç yöntem de aynı vektör tohumlarını, aynı File/DataFile
+    /// Sıralama yöntemi etkin policy'den gelir: `Propagation` (H1, graf skor
+    /// yayılımı; varsayılan), `Hybrid` (H0) ya da `Semantic` (S, yalnızca vektör
+    /// tohumları). Üç yöntem de aynı vektör tohumlarını, aynı File/DataFile
     /// filtresini ve aynı `limit` değerini kullanır.
     pub async fn search_code_hybrid(
         &self,
@@ -815,7 +815,7 @@ impl RetrievalEngine {
         })
     }
 
-    /// Üretimdeki hibrit sıralama (H0): graf, semantik ve yol skorlarını
+    /// Hibrit sıralama (H0): graf, semantik ve yol skorlarını
     /// birleştirir; düşük güvende docs/hybrid-ranking.md fallback'ini uygular.
     async fn rank_hybrid(&self, seeds: SemanticSeeds, limit: usize) -> Vec<ContextSuggestion> {
         let include_data_files = embed_data_files_enabled();
@@ -2003,7 +2003,7 @@ mod retrieval_regression_tests {
     use crate::engine::hybrid::HybridWeights;
     use crate::engine::RetrievalEngine;
     use crate::graph::{CodeGraph, CodeNode, EdgeType, NodeType};
-    use crate::policy::RetrievalPolicy;
+    use crate::policy::{RankingMethod, RetrievalPolicy};
     use crate::trajectory::{with_context, RetrievalEvent, TrajectoryContext};
     use crate::vector::store::LanceDbStore;
     use std::sync::Arc;
@@ -2160,6 +2160,7 @@ mod retrieval_regression_tests {
         graph.add_edge(scan_idx, secret_idx, EdgeType::Calls);
 
         let mut policy = RetrievalPolicy::baseline();
+        policy.ranking = RankingMethod::Hybrid;
         policy.weights = HybridWeights {
             graph: 0.2,
             semantic: 0.2,

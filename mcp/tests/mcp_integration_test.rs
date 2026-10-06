@@ -1730,7 +1730,7 @@ fn local_model_serves_semantic_search_over_mcp() -> Result<(), Box<dyn std::erro
 /// sahte embedding sunucusuyla indekslenir, `data/ccm_learn/policies.json`
 /// dosyasında graf skor yayılımı (H1, λ = 0.4) seçili aday etkinleştirilir. Yeni
 /// sunucu oturumunun bütün sonuçları H1 gerekçesini ve policy'deki λ'yı taşır;
-/// varsayılan λ 0.3 olduğundan `weight 0.40` dosyanın okunduğunu kanıtlar. En
+/// varsayılan λ 0.1 olduğundan `weight 0.40` dosyanın okunduğunu kanıtlar. En
 /// üstteki sonuç `explain` ile açılabilir.
 #[test]
 fn mcp_search_code_uses_active_propagation_policy() -> Result<(), Box<dyn std::error::Error>> {
@@ -1784,5 +1784,66 @@ fn mcp_search_code_uses_active_propagation_policy() -> Result<(), Box<dyn std::e
         json!({"target": location, "project_path": project}),
     )?;
     assert!(explained.contains("settings.rs"), "{explained}");
+    Ok(())
+}
+
+/// Policy dosyası yokken MCP `context` ve `search_code` araçları varsayılan
+/// sıralama yöntemini kullanır: proje sahte embedding sunucusuyla indekslenir,
+/// `data/ccm_learn/policies.json` yazılmaz ve sunucu
+/// `RetrievalPolicy::baseline()` ile çalışır. `context` doğal dil sorgusunu
+/// aramaya yönlendirir; ilgili eşleşmelerin ve `search_code` sonuçlarının
+/// hepsi graf skor yayılımının (H1) gerekçesini ve varsayılan λ'yı
+/// (`weight 0.10`) taşır.
+#[test]
+fn mcp_context_and_search_code_use_default_ranking() -> Result<(), Box<dyn std::error::Error>> {
+    let dir = tempdir()?;
+    let project = dir.path().join("project");
+    fs::create_dir_all(&project)?;
+    fs::write(
+        project.join("settings.rs"),
+        "fn load_settings() -> u32 {\n    read_settings_file() + 1\n}\n\n\
+         fn read_settings_file() -> u32 {\n    41\n}\n\n\
+         fn render_report() -> u32 {\n    load_settings() * 2\n}\n",
+    )?;
+    let host = start_embed_server(&[])?;
+    let model = "ccm-test-embed-a";
+    index_with_model(&project, &host, model)?;
+    assert!(!project.join("data/ccm_learn/policies.json").exists());
+
+    let mut session = McpSession::start(&project, &embedding_env(&host, model))?;
+    let context_text = session.call_tool(
+        "context",
+        json!({"query": "load settings", "project_path": project, "max_tokens": 4000}),
+    )?;
+    let (_, related_text) = context_text
+        .split_once("related matches:\n")
+        .ok_or_else(|| format!("context has no related matches: {context_text}"))?;
+    let related: Vec<&str> = related_text
+        .lines()
+        .filter(|line| line.starts_with("- "))
+        .collect();
+    assert!(!related.is_empty(), "{context_text}");
+    assert!(
+        related.iter().all(|line| {
+            line.contains(" · Propagation (semantic ") && line.ends_with(", weight 0.10)")
+        }),
+        "every related match must come from the default H1 ranking: {context_text}"
+    );
+
+    let search_text = session.call_tool(
+        "search_code",
+        json!({"query": "load settings", "project_path": project, "limit": 10}),
+    )?;
+    let results: Vec<&str> = search_text
+        .lines()
+        .filter(|line| line.starts_with("- "))
+        .collect();
+    assert!(!results.is_empty(), "{search_text}");
+    assert!(
+        results.iter().all(|line| {
+            line.contains(" · Propagation (semantic ") && line.ends_with(", weight 0.10)")
+        }),
+        "every result must come from the default H1 ranking: {search_text}"
+    );
     Ok(())
 }
