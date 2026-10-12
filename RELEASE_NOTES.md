@@ -1,6 +1,17 @@
 # Release Notes
 
-## Unreleased
+## v0.5.0 - Context-First MCP Surface
+
+v0.4.0 was tagged but never published: its release build failed in the MCP
+smoke test, which still required the removed `get_context` and `read_graph`
+tools. This release ships the v0.4.0 changes together with the changes since,
+and the smoke test now checks both the default and the legacy tool surface.
+
+**Breaking changes**
+
+- The default `tools/list` exposes only `context` and `index_project`; set
+  `CCM_MCP_LEGACY_TOOLS=1` to list the full surface again (see below).
+- Index schema 11: existing indexes are rebuilt once on first use.
 
 **Single-entry agent context**
 

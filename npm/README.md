@@ -274,6 +274,19 @@ Enable `CCM_EMBED_DATA_FILES=1` to include them in semantic search.
 
 ## 📝 Changelog
 
+### v0.5.0
+_v0.4.0 was tagged but never published; its changes ship in this release._
+- ⚠️ Breaking: the default MCP `tools/list` exposes only `context` and
+  `index_project`; set `CCM_MCP_LEGACY_TOOLS=1` to list the structural tools
+  again (they stay callable either way); indexes are rebuilt once (schema 11)
+- ✅ `context {query, max_tokens?}` is the single agent-facing entry point:
+  exact symbols, files and `path:line` resolve through the graph, natural-language
+  tasks use hybrid retrieval, and the best match comes with its definition,
+  callers, callees and tests in one call
+- ✅ Saved edits are detected before the filesystem watcher delivers its event:
+  reads validate the indexed sources against the live manifest within the
+  two-second read budget
+
 ### v0.4.0
 - ⚠️ Breaking: `get_context` and `read_graph` are replaced by `explain`; graph
   tools return compact `path:line` lines with a `max_tokens` budget; indexes
