@@ -135,6 +135,22 @@ are parked. The owner's strategy notes are `docs/productization-plan.md`,
 L3 has 24 tasks × 3 repetitions per arm and agent: the report gives intervals, and differences
 inside them are not evidence either way.
 
+## Two-agent pilot (2026-11-09)
+
+Same three tasks, `context-first-pilot` profile, one repetition, release binaries at `be48997`,
+local embeddings, subscriptions. Reports: `benchmarks/results/agent/pilot-claude-20261109/` and
+`pilot-codex-luna-20261109/`. All 18 answers correct (recall = precision = 1.00).
+
+- Claude Code 2.1.319, `claude-opus-5-5` high: B and C never called a CCM tool (Grep/Bash/Read
+  only), so the B/A input-token ratio 0.96 (0.77–1.02) is run-to-run variation, not a CCM effect.
+- Codex CLI 0.167.0, `gpt-6-luna` high: B made 1–2 `context` calls per task; B/A input tokens
+  1.11 (0.98–1.14), C/A 2.07 (1.66–2.59). No API price is recorded for `gpt-6-luna`, so cost is
+  unknown.
+- The first Codex attempt failed on a revoked login before any model call; its records are kept
+  in `pilot-codex-luna-20261109-authfail/` and are not part of the result.
+
+Pilot only: three tasks and one repetition do not support a token-saving claim either way.
+
 ## Claude pilot result (2026-10-02)
 
 `benchmarks/results/agent/pilot-claude/`: 3 tasks × 3 arms, Claude Code with Opus 5.5 at effort

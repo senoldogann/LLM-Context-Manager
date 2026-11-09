@@ -1,0 +1,45 @@
+{
+  "run_id": "serde-edit-with-bound__A__1",
+  "task_id": "serde-edit-with-bound",
+  "repo": "serde",
+  "category": "edit",
+  "arm": "A",
+  "rep": 1,
+  "model": "gpt-6-luna",
+  "effort": "high",
+  "embedding": "local",
+  "index_s": null,
+  "wall_s": 4.092904374934733,
+  "transcript": {
+    "result_text": "Your access token could not be refreshed because your refresh token was revoked. Please log out and sign in again.",
+    "subtype": "failed",
+    "is_error": true,
+    "num_turns": null,
+    "duration_ms": 4093,
+    "cost_usd": null,
+    "usage": {
+      "input_tokens": 0,
+      "output_tokens": 0,
+      "cache_creation_input_tokens": 0,
+      "cache_read_input_tokens": 0
+    },
+    "tool_calls": {},
+    "mcp_status": "unreported",
+    "api_key_source": "chatgpt",
+    "tools": []
+  },
+  "score": {
+    "answered": false,
+    "recall": 0.0,
+    "precision": 0.0,
+    "missing": [
+      "serde_derive/src/de.rs:build_generics",
+      "serde_derive/src/ser.rs:with_serialize_bound"
+    ],
+    "extra": [],
+    "edit_applied": false,
+    "stale": [],
+    "success": false
+  },
+  "failure": "codex result error (failed)"
+}
