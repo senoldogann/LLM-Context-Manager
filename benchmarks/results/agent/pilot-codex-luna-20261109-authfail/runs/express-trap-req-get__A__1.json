@@ -1,0 +1,48 @@
+{
+  "run_id": "express-trap-req-get__A__1",
+  "task_id": "express-trap-req-get",
+  "repo": "express",
+  "category": "trap",
+  "arm": "A",
+  "rep": 1,
+  "model": "gpt-6-luna",
+  "effort": "high",
+  "embedding": "local",
+  "index_s": null,
+  "wall_s": 3.8662942082155496,
+  "transcript": {
+    "result_text": "Your access token could not be refreshed because your refresh token was revoked. Please log out and sign in again.",
+    "subtype": "failed",
+    "is_error": true,
+    "num_turns": null,
+    "duration_ms": 3866,
+    "cost_usd": null,
+    "usage": {
+      "input_tokens": 0,
+      "output_tokens": 0,
+      "cache_creation_input_tokens": 0,
+      "cache_read_input_tokens": 0
+    },
+    "tool_calls": {},
+    "mcp_status": "unreported",
+    "api_key_source": "chatgpt",
+    "tools": []
+  },
+  "score": {
+    "answered": false,
+    "recall": 0.0,
+    "precision": 0.0,
+    "missing": [
+      "lib/request.js:range",
+      "lib/request.js:protocol",
+      "lib/request.js:hostname",
+      "lib/request.js:xhr",
+      "lib/response.js:location"
+    ],
+    "extra": [],
+    "edit_applied": null,
+    "stale": [],
+    "success": false
+  },
+  "failure": "codex result error (failed)"
+}

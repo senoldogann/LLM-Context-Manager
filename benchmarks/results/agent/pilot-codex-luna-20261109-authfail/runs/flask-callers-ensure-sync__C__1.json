@@ -1,0 +1,55 @@
+{
+  "run_id": "flask-callers-ensure-sync__C__1",
+  "task_id": "flask-callers-ensure-sync",
+  "repo": "flask",
+  "category": "callers",
+  "arm": "C",
+  "rep": 1,
+  "model": "gpt-6-luna",
+  "effort": "high",
+  "embedding": "local",
+  "index_s": 39.874235375085846,
+  "wall_s": 4.093612542143092,
+  "transcript": {
+    "result_text": "Your access token could not be refreshed because your refresh token was revoked. Please log out and sign in again.",
+    "subtype": "failed",
+    "is_error": true,
+    "num_turns": null,
+    "duration_ms": 4094,
+    "cost_usd": null,
+    "usage": {
+      "input_tokens": 0,
+      "output_tokens": 0,
+      "cache_creation_input_tokens": 0,
+      "cache_read_input_tokens": 0
+    },
+    "tool_calls": {},
+    "mcp_status": "unreported",
+    "api_key_source": "chatgpt",
+    "tools": []
+  },
+  "score": {
+    "answered": false,
+    "recall": 0.0,
+    "precision": 0.0,
+    "missing": [
+      "src/flask/app.py:update_template_context",
+      "src/flask/app.py:handle_http_exception",
+      "src/flask/app.py:handle_user_exception",
+      "src/flask/app.py:handle_exception",
+      "src/flask/app.py:dispatch_request",
+      "src/flask/app.py:preprocess_request",
+      "src/flask/app.py:process_response",
+      "src/flask/app.py:do_teardown_request",
+      "src/flask/app.py:do_teardown_appcontext",
+      "src/flask/ctx.py:copy_current_request_context",
+      "src/flask/views.py:as_view",
+      "src/flask/views.py:dispatch_request"
+    ],
+    "extra": [],
+    "edit_applied": null,
+    "stale": [],
+    "success": false
+  },
+  "failure": "codex result error (failed)"
+}
