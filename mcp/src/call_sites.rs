@@ -40,6 +40,10 @@ pub(crate) enum CheckKind {
     /// `self` almayan Rust fonksiyonu: `NameUses` gibi, ama `x.ad(` metot sözdizimi
     /// onu çağıramaz; bu geçişler başka bir tipin metodudur.
     RustNoSelfUses,
+    /// Sınıf dışındaki Python fonksiyonu: `NameUses` gibi, ama `x.ad(` yalnız `x` o
+    /// dosyada bir import'la bağlanmış bir adsa (modül) ona ulaşabilir; yerel nesne,
+    /// parametre ya da `self` üzerindeki çağrı başka bir nesnenin metodudur.
+    PythonModuleFunctionUses,
 }
 
 /// Denetimin tanımı: aranan metinler, sayım türü ve isteğe bağlı yol kapsamı.
@@ -142,6 +146,9 @@ pub(crate) struct CheckCounts {
     pub recursive: usize,
     /// `self` almayan Rust hedefinde `x.ad(` metot çağrıları (başka tip).
     pub other_type_methods: usize,
+    /// Sınıf dışı Python fonksiyonunda, caller'ların dışında kalan ve import edilmemiş
+    /// bir ad üzerinden yapılan `x.ad(` çağrıları (nesne modül değilse başka metottur).
+    pub object_method_hits: Vec<Hit>,
 }
 
 /// Dosya uzantısından dil.
@@ -432,6 +439,8 @@ pub(crate) struct PythonExternals {
     pub names: HashMap<String, String>,
     /// Parantezli `from … import (` bildiriminin devam satırları (1 tabanlı).
     pub import_lines: HashSet<usize>,
+    /// Dosyada herhangi bir import'un bağladığı adlar (iç ve dış modüller).
+    pub imported: HashSet<String>,
     /// Proje dışı modülden import eden bildirimlerin tüm satırları (1 tabanlı).
     pub external_lines: HashSet<usize>,
 }
@@ -489,6 +498,7 @@ pub(crate) fn python_externals(source: &str, roots: &HashSet<String>) -> PythonE
                     (Some("as"), Some(alias)) => alias.to_string(),
                     _ => module.split('.').next().unwrap_or(module).to_string(),
                 };
+                externals.imported.insert(bound.clone());
                 if module_is_external(module, roots) {
                     externals.modules.insert(bound, module.to_string());
                     externals.external_lines.insert(first_line);
@@ -512,16 +522,22 @@ pub(crate) fn python_externals(source: &str, roots: &HashSet<String>) -> PythonE
                     }
                 }
             }
-            if module_is_external(module, roots) {
+            let external = module_is_external(module, roots);
+            if external {
                 externals.external_lines.extend(first_line..=index + 1);
-                let cleaned = names.replace(['(', ')'], " ");
-                for part in cleaned.split(',') {
-                    let mut words = part.split_whitespace();
-                    let Some(name) = words.next() else { continue };
-                    let bound = match (words.next(), words.next()) {
-                        (Some("as"), Some(alias)) => alias,
-                        _ => name,
-                    };
+            }
+            let cleaned = names.replace(['(', ')'], " ");
+            for part in cleaned.split(',') {
+                let mut words = part.split_whitespace();
+                let Some(name) = words.next() else { continue };
+                let bound = match (words.next(), words.next()) {
+                    (Some("as"), Some(alias)) => alias,
+                    _ => name,
+                };
+                // İç modüllerden alınan adlar da (`from django.utils import http`) modül
+                // olabilir: `http.ad(` çağrısı başka nesne sayılmaz.
+                externals.imported.insert(bound.to_string());
+                if external {
                     externals
                         .names
                         .insert(bound.to_string(), module.to_string());
@@ -675,6 +691,13 @@ pub(crate) fn file_hits(
                     && lang == Lang::Rust
                     && line[..position].ends_with('.')
                 {
+                    HitKind::OtherTypeMethod
+                } else if spec.kind == CheckKind::PythonModuleFunctionUses
+                    && lang == Lang::Python
+                    && receiver_before(line, position)
+                        .is_some_and(|receiver| !externals.imported.contains(receiver))
+                {
+                    // Zincirli alıcı (`a.b.ad(`) modül yolu olabilir; sayılmaya devam eder.
                     HitKind::OtherTypeMethod
                 } else if call {
                     HitKind::Call
@@ -844,6 +867,7 @@ pub(crate) fn reconcile(
         text: 0,
         recursive: 0,
         other_type_methods: 0,
+        object_method_hits: Vec::new(),
     };
     let mut outside = Vec::new();
     for scanned_file in scanned {
@@ -894,6 +918,16 @@ pub(crate) fn reconcile(
                 }
                 HitKind::Text => {
                     counts.text += 1;
+                    continue;
+                }
+                HitKind::OtherTypeMethod if spec.kind == CheckKind::PythonModuleFunctionUses => {
+                    // Python'da parametre ya da yerel nesne bir modül de olabilir: satır
+                    // gizlenmez, listelenmiş caller'ların dışındaysa başlıkta gösterilir.
+                    let scope = innermost(&file.symbols, hit.line);
+                    let key = scope.map_or(file.file_key.as_str(), |symbol| symbol.key.as_str());
+                    if !listed.contains(key) {
+                        counts.object_method_hits.push(hit);
+                    }
                     continue;
                 }
                 HitKind::OtherTypeMethod => {
@@ -1047,10 +1081,20 @@ fn needle_label(spec: &CheckSpec) -> String {
         .map(|needle| match (&needle.only_file, spec.kind) {
             (Some(file), CheckKind::MemberCalls) => format!("`{}(` ({file})", needle.text),
             (None, CheckKind::MemberCalls) => format!("`{}(`", needle.text),
-            (Some(file), CheckKind::NameUses | CheckKind::RustNoSelfUses) => {
+            (
+                Some(file),
+                CheckKind::NameUses
+                | CheckKind::RustNoSelfUses
+                | CheckKind::PythonModuleFunctionUses,
+            ) => {
                 format!("`{}` ({file})", needle.text)
             }
-            (None, CheckKind::NameUses | CheckKind::RustNoSelfUses) => format!("`{}`", needle.text),
+            (
+                None,
+                CheckKind::NameUses
+                | CheckKind::RustNoSelfUses
+                | CheckKind::PythonModuleFunctionUses,
+            ) => format!("`{}`", needle.text),
         })
         .collect::<Vec<_>>()
         .join(", ")
@@ -1107,6 +1151,17 @@ pub(crate) fn outcome_text(
         );
         text.push_str(&hit_lines(&elsewhere_calls));
         text
+    } else if calls_out.is_empty() && !counts.object_method_hits.is_empty() {
+        let objects: Vec<&Hit> = counts.object_method_hits.iter().collect();
+        let mut text = format!(
+            "Check: call list complete for direct and module-qualified calls: a grep for {label} in the {} indexed non-test files{scope} finds {} such call sites, all inside the {caller_count} callers below. {} `.{}(` call(s) on parameters or local objects reach this module-level function only if that object is its module:\n",
+            counts.files,
+            counts.calls,
+            objects.len(),
+            spec.needles.first().map_or("", |needle| needle.text.as_str())
+        );
+        text.push_str(&hit_lines(&objects));
+        text
     } else if calls_out.is_empty() {
         format!(
             "Check: call list complete. A grep for {label} in the {} indexed non-test files{scope} finds {} call sites, all inside the {caller_count} callers below; no other grep is needed.\n",
@@ -1127,6 +1182,17 @@ pub(crate) fn outcome_text(
             uses_out.len()
         ));
         text.push_str(&hit_lines(&uses_out));
+    }
+    // Nesne üzerindeki çağrılar başlık bunları anlatmadıysa da gösterilir: hiçbir
+    // başlık dalında gizli kalmazlar.
+    if !counts.object_method_hits.is_empty() && !text.contains("on parameters or local objects") {
+        let objects: Vec<&Hit> = counts.object_method_hits.iter().collect();
+        text.push_str(&format!(
+            "{} `.{}(` call(s) on parameters or local objects reach this module-level function only if that object is its module:\n",
+            objects.len(),
+            spec.needles.first().map_or("", |needle| needle.text.as_str())
+        ));
+        text.push_str(&hit_lines(&objects));
     }
     let suffix = counts_suffix(spec, counts);
     if !suffix.is_empty() {
@@ -1202,11 +1268,15 @@ fn counts_suffix(spec: &CheckSpec, counts: &CheckCounts) -> String {
         text.push_str(&format!(
             " {} `.{}(` method call(s) belong to other types (this function takes no `self`) and are not listed.",
             counts.other_type_methods,
-            spec.needles.first().map_or("", |needle| needle.text.as_str())
+            spec.needles
+                .first()
+                .map_or("", |needle| needle.text.as_str())
         ));
     }
     match spec.kind {
-        CheckKind::NameUses | CheckKind::RustNoSelfUses => text.push_str(
+        CheckKind::NameUses
+        | CheckKind::RustNoSelfUses
+        | CheckKind::PythonModuleFunctionUses => text.push_str(
             " Calls that never name it in source (getattr, runtime aliases) are not visible to text or graph.",
         ),
         CheckKind::MemberCalls => text.push_str(
@@ -1483,6 +1553,36 @@ mod tests {
             "capfirst",
             "a/b.py:1"
         ));
+    }
+
+    #[test]
+    fn python_method_calls_on_local_objects_are_not_module_function_calls() {
+        let roots: HashSet<String> = ["django".to_string()].into_iter().collect();
+        let source = "from django.utils import http\nfrom django.utils.http import urlencode\n\ndef f(request, query_dict):\n    a = urlencode(x)\n    b = http.urlencode(x)\n    c = query_dict.urlencode()\n    d = self.urlencode()\n    e = django.utils.http.urlencode(x)\n";
+        let spec = CheckSpec {
+            needles: vec![Needle {
+                text: "urlencode".to_string(),
+                only_file: None,
+            }],
+            kind: CheckKind::PythonModuleFunctionUses,
+            scope: None,
+        };
+        let externals = python_externals(source, &roots);
+        let kinds: Vec<HitKind> = file_hits("django/x.py", source, &spec, "urlencode", &externals)
+            .iter()
+            .filter(|hit| hit.line > 2)
+            .map(|hit| hit.kind)
+            .collect();
+        assert_eq!(
+            kinds,
+            vec![
+                HitKind::Call,
+                HitKind::Call,
+                HitKind::OtherTypeMethod,
+                HitKind::OtherTypeMethod,
+                HitKind::Call
+            ]
+        );
     }
 
     #[test]
