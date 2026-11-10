@@ -183,3 +183,12 @@ the final run is complete.
    standard-library `urlencode`, `QueryDict.urlencode` and the template filter). Both gold answers
    come from Python `ast` over `django/`. They are run with three repetitions, arms Codex A and B and
    Claude A, B, F and H, at a commit without product changes since iteration 5.
+10. 2026-11-10: to test whether the large-repository result is specific to Django (Python), a second
+    large repository in another language is added to the corpus: Tokio `tokio-1.41.1` (Rust,
+    about 112 k non-test lines). Two held-out tasks are written before they are run or any CCM
+    packet for them is looked at; their gold answers come from `rg` over the workspace's library
+    crates and reading each call site's enclosing function: `tokio-callers-sleep-until` (11 call
+    sites in 10 functions across four crates) and `tokio-trap-catch-unwind` (the helper nested in
+    `AtomicWaker::do_register`, called only there, next to eleven `std::panic::catch_unwind`
+    calls). They run with three repetitions, arms Codex A and B and Claude A, B, F and H, together
+    with a re-run of the now tuned `django-trap-urlencode` that measures PR #17.
