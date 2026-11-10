@@ -1,0 +1,48 @@
+{
+  "record_version": 3,
+  "run_id": "django-trap-capfirst__B__1",
+  "task_id": "django-trap-capfirst",
+  "repo": "django",
+  "category": "trap",
+  "arm": "B",
+  "rep": 1,
+  "model": "gpt-6-luna",
+  "effort": "high",
+  "embedding": "local",
+  "index_copy_s": 1.5141725419089198,
+  "index_build_s": 4468.590688791126,
+  "wall_s": 75.02617554203607,
+  "transcript": {
+    "result_text": "```json\n{\"answer\":[\"django/test/selenium.py:SeleniumTestCaseBase.__new__\",\"django/db/models/base.py:Model.date_error_message\",\"django/db/models/base.py:Model.unique_error_message\",\"django/db/models/fields/__init__.py:Field.formfield\",\"django/forms/models.py:BaseInlineFormSet.add_fields\",\"django/contrib/admin/options.py:ModelAdmin._get_action_description\",\"django/contrib/admin/options.py:ModelAdmin.history_view\",\"django/contrib/admin/sites.py:AdminSite._build_app_dict\",\"django/contrib/admin/templatetags/admin_list.py:date_hierarchy\",\"django/contrib/admin/utils.py:get_deleted_objects\",\"django/contrib/auth/forms.py:AuthenticationForm.__init__\",\"django/contrib/auth/management/commands/createsuperuser.py:Command.handle\",\"django/contrib/auth/management/commands/createsuperuser.py:Command._get_input_message\",\"django/contrib/auth/management/commands/createsuperuser.py:Command._validate_username\"]}\n```",
+    "subtype": "completed",
+    "is_error": false,
+    "num_turns": null,
+    "duration_ms": 75026,
+    "cost_usd": null,
+    "usage": {
+      "input_tokens": 37328,
+      "output_tokens": 2127,
+      "cache_creation_input_tokens": 0,
+      "cache_read_input_tokens": 91008
+    },
+    "tool_calls": {
+      "command_execution": 3,
+      "mcp__context-manager__context": 3
+    },
+    "mcp_status": "unreported",
+    "api_key_source": "chatgpt",
+    "tools": []
+  },
+  "score": {
+    "answered": true,
+    "recall": 1.0,
+    "precision": 1.0,
+    "missing": [],
+    "extra": [],
+    "edit_applied": null,
+    "stale": [],
+    "success": true
+  },
+  "failure": null,
+  "hook": null
+}

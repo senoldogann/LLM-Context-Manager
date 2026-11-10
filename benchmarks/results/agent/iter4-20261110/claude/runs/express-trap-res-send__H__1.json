@@ -1,0 +1,60 @@
+{
+  "record_version": 3,
+  "run_id": "express-trap-res-send__H__1",
+  "task_id": "express-trap-res-send",
+  "repo": "express",
+  "category": "trap",
+  "arm": "H",
+  "rep": 1,
+  "model": "claude-opus-5-5",
+  "effort": "high",
+  "embedding": "local",
+  "index_copy_s": 0.06571004190482199,
+  "index_build_s": 82.88992095901631,
+  "wall_s": 17.081735000014305,
+  "transcript": {
+    "result_text": "Five functions in `lib/` call the response method `res.send`. I searched every `send` reference in `lib/` and matched each call to the function around it:\n\n- **`lib/response.js`**\n  - `res.json`: calls `this.send(body)` at line 279.\n  - `res.jsonp`: calls `this.send(body)` at line 352.\n  - `res.sendStatus`: calls `this.send(body)` at line 376.\n  - `res.render`: its default callback calls `self.send(str)` at line 1044.\n- **`lib/router/index.js`**\n  - `sendOptionsResponse`: calls `res.send(body)` at line 655.\n\nI left out:\n- the calls to the `send` package in `res.sendFile` (line 447) and `res.sendfile` (line 516);\n- the `require('send')` in `lib/utils.js`;\n- `res.send(...)` examples that only appear in comments.\n\n```json\n{\"answer\": [\"lib/response.js:res.json\", \"lib/response.js:res.jsonp\", \"lib/response.js:res.sendStatus\", \"lib/response.js:res.render\", \"lib/router/index.js:sendOptionsResponse\"]}\n```",
+    "subtype": "success",
+    "is_error": false,
+    "num_turns": 3,
+    "duration_ms": 12547,
+    "cost_usd": 0.0660724,
+    "usage": {
+      "input_tokens": 6,
+      "output_tokens": 878,
+      "cache_creation_input_tokens": 5503,
+      "cache_read_input_tokens": 22322
+    },
+    "tool_calls": {
+      "Bash": 1,
+      "Grep": 1
+    },
+    "mcp_status": "connected",
+    "api_key_source": "none",
+    "tools": [
+      "Bash",
+      "Edit",
+      "Glob",
+      "Grep",
+      "Read",
+      "Write",
+      "mcp__context-manager__context",
+      "mcp__context-manager__index_project"
+    ]
+  },
+  "score": {
+    "answered": true,
+    "recall": 1.0,
+    "precision": 1.0,
+    "missing": [],
+    "extra": [],
+    "edit_applied": null,
+    "stale": [],
+    "success": true
+  },
+  "failure": null,
+  "hook": {
+    "deny": 0,
+    "pass_": 1
+  }
+}

@@ -1,0 +1,47 @@
+{
+  "record_version": 3,
+  "run_id": "django-trap-capfirst__A__1",
+  "task_id": "django-trap-capfirst",
+  "repo": "django",
+  "category": "trap",
+  "arm": "A",
+  "rep": 1,
+  "model": "gpt-6-luna",
+  "effort": "high",
+  "embedding": "local",
+  "index_copy_s": null,
+  "index_build_s": null,
+  "wall_s": 46.541916833026335,
+  "transcript": {
+    "result_text": "```json\n{\"answer\":[\"django/test/selenium.py:SeleniumTestCaseBase.__new__\",\"django/db/models/base.py:date_error_message\",\"django/db/models/base.py:unique_error_message\",\"django/db/models/fields/__init__.py:formfield\",\"django/forms/models.py:add_fields\",\"django/contrib/admin/options.py:_get_action_description\",\"django/contrib/admin/options.py:history_view\",\"django/contrib/admin/templatetags/admin_list.py:date_hierarchy\",\"django/contrib/admin/utils.py:get_deleted_objects\",\"django/contrib/admin/sites.py:_build_app_dict\",\"django/contrib/auth/forms.py:__init__\",\"django/contrib/auth/management/commands/createsuperuser.py:handle\",\"django/contrib/auth/management/commands/createsuperuser.py:_get_input_message\",\"django/contrib/auth/management/commands/createsuperuser.py:_validate_username\"]}\n```",
+    "subtype": "completed",
+    "is_error": false,
+    "num_turns": null,
+    "duration_ms": 46542,
+    "cost_usd": null,
+    "usage": {
+      "input_tokens": 30138,
+      "output_tokens": 1824,
+      "cache_creation_input_tokens": 0,
+      "cache_read_input_tokens": 50048
+    },
+    "tool_calls": {
+      "command_execution": 5
+    },
+    "mcp_status": "unreported",
+    "api_key_source": "chatgpt",
+    "tools": []
+  },
+  "score": {
+    "answered": true,
+    "recall": 1.0,
+    "precision": 1.0,
+    "missing": [],
+    "extra": [],
+    "edit_applied": null,
+    "stale": [],
+    "success": true
+  },
+  "failure": null,
+  "hook": null
+}

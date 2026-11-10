@@ -1,0 +1,41 @@
+{
+  "schema_version": 1,
+  "harness_revision": "ed0f4e80ec472ba76105fe9fef1534750bae2a9d",
+  "preregistration": "benchmarks/agent/PREREGISTRATION.md",
+  "settings": {
+    "model": "claude-opus-5-5",
+    "effort": "high",
+    "embedding": "local",
+    "auth": "subscription",
+    "profile": "context-first-pilot",
+    "agent": "claude",
+    "max_budget_usd": 2.0,
+    "timeout_s": 1800,
+    "repetitions": 1,
+    "arms": [
+      "A",
+      "B",
+      "F",
+      "H"
+    ],
+    "tasks": [
+      "flask-locate-app-string",
+      "flask-edit-error-handler",
+      "express-trap-res-send",
+      "express-edit-normalize-type",
+      "serde-trap-deserialize-struct",
+      "serde-edit-wrap-field",
+      "django-callers-make-aware",
+      "django-trap-capfirst"
+    ]
+  },
+  "environment": {
+    "agent_version": "2.1.319 (Claude Code)",
+    "agent_login": "environment",
+    "ccm_version": "ccm-cli 0.5.0",
+    "ccm_commit": "ed0f4e80ec472ba76105fe9fef1534750bae2a9d",
+    "ccm_dirty": false,
+    "ccm_cli_sha256": "c9d433824eb0a569214a7559c0f307ae5634f63a6ee2e06c9ecaaf41c182f5a0",
+    "ccm_mcp_sha256": "45563a67963ab9fb98c822d9bfdad649b53860ee8b82e467ab8c1f62706efecb"
+  }
+}

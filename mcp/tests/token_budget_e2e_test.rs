@@ -127,6 +127,11 @@ fn fixture_files() -> Vec<(String, String)> {
         "app/late.py".into(),
         "def late(handler):\n    return handler.escape(1)\n".into(),
     ));
+    // `var self = this` takma adıyla yapılan alıcı çağrısı (express res.render deseni).
+    files.push((
+        "web/res.js".into(),
+        "var res = {};\n\nres.send = function send(body) {\n  return body;\n};\n\nres.render = function render(view) {\n  var self = this;\n  var done = function (err, str) {\n    self.send(str);\n  };\n  return done;\n};\n".into(),
+    ));
     // `exports.f = function`: çağıranlar başka adla çağırır; graf yolunda kalmalı.
     files.push((
         "lib/utils.js".into(),
@@ -839,4 +844,16 @@ fn context_keeps_callers_of_exported_functions() {
         !text.contains("0 call sites, all inside the 0 callers"),
         "no completeness claim over an empty list: {text}"
     );
+}
+
+#[test]
+fn context_follows_self_aliases_of_this_in_the_definition_file() {
+    let mut server = Server::start();
+    let (text, is_error) = server.call("context", json!({"query": "res.send"}));
+    assert!(!is_error, "{text}");
+    assert!(
+        text.contains("render · web/res.js"),
+        "a call through `var self = this` is a caller: {text}"
+    );
+    assert!(text.contains("Check: call list complete."), "{text}");
 }

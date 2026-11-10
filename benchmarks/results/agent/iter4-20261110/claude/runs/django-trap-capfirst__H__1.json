@@ -1,0 +1,60 @@
+{
+  "record_version": 3,
+  "run_id": "django-trap-capfirst__H__1",
+  "task_id": "django-trap-capfirst",
+  "repo": "django",
+  "category": "trap",
+  "arm": "H",
+  "rep": 1,
+  "model": "claude-opus-5-5",
+  "effort": "high",
+  "embedding": "local",
+  "index_copy_s": 0.8177559999749064,
+  "index_build_s": 4468.590688791126,
+  "wall_s": 28.654161042068154,
+  "transcript": {
+    "result_text": "I found 15 functions and methods in `django/` that call `django.utils.text.capfirst` directly. I searched every use of `capfirst` and checked each file's imports. I also checked for aliased imports (`capfirst as …`) and module-style calls (`text.capfirst`), and there were none.\n\n**Excluded because they use the template filter instead:**\n- `django/contrib/admin/helpers.py` imports `capfirst` from `django.template.defaultfilters`.\n- The `|capfirst` uses in the admin HTML templates.\n- `django/template/defaultfilters.py` defines its own `capfirst` and doesn't import the one from `django.utils.text`.\n\n**Callers, by file:**\n- `django/test/selenium.py`: `SeleniumTestCaseBase.__new__`\n- `django/db/models/base.py`: `Model.date_error_message`, `Model.unique_error_message`\n- `django/db/models/fields/__init__.py`: `Field.formfield`\n- `django/forms/models.py`: `BaseInlineFormSet.add_fields`\n- `django/contrib/admin/options.py`: `ModelAdmin._get_action_description`, `ModelAdmin.history_view`\n- `django/contrib/admin/templatetags/admin_list.py`: `date_hierarchy`\n- `django/contrib/admin/sites.py`: `AdminSite._build_app_dict`\n- `django/contrib/admin/utils.py`: `get_deleted_objects` (the call is in its nested `format_callback`)\n- `django/contrib/auth/forms.py`: `AuthenticationForm.__init__`\n- `django/contrib/auth/management/commands/createsuperuser.py`: `Command.handle`, `Command._get_input_message`, `Command._validate_username`\n\n```json\n{\"answer\": [\"django/test/selenium.py:SeleniumTestCaseBase.__new__\", \"django/db/models/base.py:Model.date_error_message\", \"django/db/models/base.py:Model.unique_error_message\", \"django/db/models/fields/__init__.py:Field.formfield\", \"django/forms/models.py:BaseInlineFormSet.add_fields\", \"django/contrib/admin/options.py:ModelAdmin._get_action_description\", \"django/contrib/admin/options.py:ModelAdmin.history_view\", \"django/contrib/admin/templatetags/admin_list.py:date_hierarchy\", \"django/contrib/admin/sites.py:AdminSite._build_app_dict\", \"django/contrib/admin/utils.py:get_deleted_objects\", \"django/contrib/auth/forms.py:AuthenticationForm.__init__\", \"django/contrib/auth/management/commands/createsuperuser.py:Command.handle\", \"django/contrib/auth/management/commands/createsuperuser.py:Command._get_input_message\", \"django/contrib/auth/management/commands/createsuperuser.py:Command._validate_username\"]}\n```",
+    "subtype": "success",
+    "is_error": false,
+    "num_turns": 6,
+    "duration_ms": 27574,
+    "cost_usd": 0.1437624,
+    "usage": {
+      "input_tokens": 12,
+      "output_tokens": 2591,
+      "cache_creation_input_tokens": 9935,
+      "cache_read_input_tokens": 62072
+    },
+    "tool_calls": {
+      "Bash": 4,
+      "Grep": 1
+    },
+    "mcp_status": "connected",
+    "api_key_source": "none",
+    "tools": [
+      "Bash",
+      "Edit",
+      "Glob",
+      "Grep",
+      "Read",
+      "Write",
+      "mcp__context-manager__context",
+      "mcp__context-manager__index_project"
+    ]
+  },
+  "score": {
+    "answered": true,
+    "recall": 1.0,
+    "precision": 1.0,
+    "missing": [],
+    "extra": [],
+    "edit_applied": null,
+    "stale": [],
+    "success": true
+  },
+  "failure": null,
+  "hook": {
+    "deny": 0,
+    "pass_": 1
+  }
+}

@@ -1,0 +1,56 @@
+{
+  "record_version": 3,
+  "run_id": "django-callers-make-aware__F__1",
+  "task_id": "django-callers-make-aware",
+  "repo": "django",
+  "category": "callers",
+  "arm": "F",
+  "rep": 1,
+  "model": "claude-opus-5-5",
+  "effort": "high",
+  "embedding": "local",
+  "index_copy_s": 2.112034333869815,
+  "index_build_s": 4468.590688791126,
+  "wall_s": 20.754883166169748,
+  "transcript": {
+    "result_text": "I found 16 functions and methods in `django/` that call `make_aware` directly, at 19 call sites. I got this from the code index, which also ran a text search across all non-test files; that search confirmed the list is complete. Matches inside strings and test files are left out.\n\n| File | Function / method | Call form |\n|---|---|---|\n| `django/contrib/admin/views/main.py:261-262` | `ChangeList.get_filters` | `make_aware(...)` ×2 |\n| `django/contrib/sitemaps/views.py:38` | `_get_latest_lastmod` | `timezone.make_aware` |\n| `django/contrib/syndication/views.py:209,213` | `Feed.get_feed` | `make_aware(...)` ×2 |\n| `django/db/backends/base/operations.py:640-641` | `BaseDatabaseOperations.year_lookup_bounds_for_datetime_field` | `timezone.make_aware` ×2 |\n| `django/db/backends/mysql/operations.py:325` | `DatabaseOperations.convert_datetimefield_value` | `timezone.make_aware` |\n| `django/db/backends/oracle/operations.py:265` | `DatabaseOperations.convert_datetimefield_value` | `timezone.make_aware` |\n| `django/db/backends/sqlite3/operations.py:310` | `DatabaseOperations.convert_datetimefield_value` | `timezone.make_aware` |\n| `django/db/models/fields/__init__.py:1612` | `DateTimeField.to_python` | `timezone.make_aware` |\n| `django/db/models/fields/__init__.py:1671` | `DateTimeField.get_prep_value` | `timezone.make_aware` |\n| `django/db/models/functions/datetime.py:351` | `TruncBase.convert_value` | `timezone.make_aware` |\n| `django/forms/utils.py:223` | `from_current_timezone` | `timezone.make_aware` |\n| `django/http/response.py:242` | `HttpResponseBase.set_cookie` | `timezone.make_aware` |\n| `django/templatetags/tz.py:55` | `do_timezone` | `timezone.make_aware` |\n| `django/utils/dateformat.py:271` | `DateFormat.r` | `make_aware(...)` |\n| `django/views/decorators/http.py:113` | `condition` (the call is in the nested `_pre_process_request`) | `timezone.make_aware` |\n| `django/views/generic/dates.py:279` | `DateMixin._make_date_lookup_arg` | `timezone.make_aware` |\n\n```json\n{\"answer\": [\n\"django/contrib/admin/views/main.py:ChangeList.get_filters\",\n\"django/contrib/sitemaps/views.py:_get_latest_lastmod\",\n\"django/contrib/syndication/views.py:Feed.get_feed\",\n\"django/db/backends/base/operations.py:BaseDatabaseOperations.year_lookup_bounds_for_datetime_field\",\n\"django/db/backends/mysql/operations.py:DatabaseOperations.convert_datetimefield_value\",\n\"django/db/backends/oracle/operations.py:DatabaseOperations.convert_datetimefield_value\",\n\"django/db/backends/sqlite3/operations.py:DatabaseOperations.convert_datetimefield_value\",\n\"django/db/models/fields/__init__.py:DateTimeField.to_python\",\n\"django/db/models/fields/__init__.py:DateTimeField.get_prep_value\",\n\"django/db/models/functions/datetime.py:TruncBase.convert_value\",\n\"django/forms/utils.py:from_current_timezone\",\n\"django/http/response.py:HttpResponseBase.set_cookie\",\n\"django/templatetags/tz.py:do_timezone\",\n\"django/utils/dateformat.py:DateFormat.r\",\n\"django/views/decorators/http.py:condition\",\n\"django/views/generic/dates.py:DateMixin._make_date_lookup_arg\"\n]}\n```",
+    "subtype": "success",
+    "is_error": false,
+    "num_turns": 2,
+    "duration_ms": 17837,
+    "cost_usd": 0.1354218,
+    "usage": {
+      "input_tokens": 4,
+      "output_tokens": 1538,
+      "cache_creation_input_tokens": 12880,
+      "cache_read_input_tokens": 8029
+    },
+    "tool_calls": {
+      "mcp__context-manager__context": 1
+    },
+    "mcp_status": "connected",
+    "api_key_source": "none",
+    "tools": [
+      "Bash",
+      "Edit",
+      "Glob",
+      "Grep",
+      "Read",
+      "Write",
+      "mcp__context-manager__context",
+      "mcp__context-manager__index_project"
+    ]
+  },
+  "score": {
+    "answered": true,
+    "recall": 1.0,
+    "precision": 1.0,
+    "missing": [],
+    "extra": [],
+    "edit_applied": null,
+    "stale": [],
+    "success": true
+  },
+  "failure": null,
+  "hook": null
+}

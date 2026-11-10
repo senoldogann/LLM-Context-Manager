@@ -169,3 +169,8 @@ the final run is complete.
    definitions, so natural-use results stay comparable across pilots; (c) one Django task
    (`django-trap-html-escape`, outside the preregistered 24) was added for a larger repository.
    `--tasks all` and the preregistered profile are unchanged.
+8. 2026-11-10: for the `context-first-pilot` profile and Claude Code only, an optional arm H
+   (`--arms ...,H`) gives B's tools and note plus the opt-in Grep hook that CCM installs
+   (`ccm-mcp hook claude-pre-tool-use`, passed with `--settings`). H is an installed product
+   configuration, neither natural use nor forced use, and is reported apart; each record (version 3)
+   carries how many greps the hook answered and let through. A, B, C and F are unchanged.

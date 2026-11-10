@@ -1060,8 +1060,46 @@ DJANGO_ITERATION3_TASKS: tuple[Task, ...] = (
     ),
 )
 
+DJANGO_ITERATION4_TASKS: tuple[Task, ...] = (
+    Task(
+        id="django-trap-capfirst",
+        repo="django",
+        category="trap",
+        answer_kind="symbols",
+        question=(
+            "Which functions or methods in `django/` call `django.utils.text.capfirst` directly? "
+            "Calls to the template filter `django.template.defaultfilters.capfirst` do not count."
+        ),
+        expected=(
+            *symbols(
+                "django/contrib/admin/options.py", ("_get_action_description", "history_view")
+            ),
+            sym("django/contrib/admin/sites.py", "_build_app_dict"),
+            sym("django/contrib/admin/templatetags/admin_list.py", "date_hierarchy"),
+            sym_with("django/contrib/admin/utils.py", "get_deleted_objects", ("format_callback",)),
+            sym("django/contrib/auth/forms.py", "__init__"),
+            *symbols(
+                "django/contrib/auth/management/commands/createsuperuser.py",
+                ("handle", "_get_input_message", "_validate_username"),
+            ),
+            *symbols("django/db/models/base.py", ("date_error_message", "unique_error_message")),
+            sym("django/db/models/fields/__init__.py", "formfield"),
+            sym("django/forms/models.py", "add_fields"),
+            sym("django/test/selenium.py", "__new__"),
+        ),
+        edit=None,
+        notes=(
+            "Python ast over django/**/*.py: names bound by `from django.utils.text import "
+            "capfirst` (and module-attribute calls); 22 call sites in 14 functions. "
+            "django/contrib/admin/helpers.py imports the template filter capfirst from "
+            "django.template.defaultfilters (two calls), which does not count. Held out for the "
+            "2026-11-10 iteration-4 pilot: chosen before any CCM packet for it was looked at."
+        ),
+    ),
+)
+
 TASKS: tuple[Task, ...] = FLASK_TASKS + EXPRESS_TASKS + SERDE_TASKS
 # Ürün pilotlarının seçebildiği tüm görevler; `--tasks all` yalnız ön kayıtlı 24 görevdir.
 KNOWN_TASKS: tuple[Task, ...] = (
-    TASKS + DJANGO_TASKS + DJANGO_HELD_OUT_TASKS + DJANGO_ITERATION3_TASKS
+    TASKS + DJANGO_TASKS + DJANGO_HELD_OUT_TASKS + DJANGO_ITERATION3_TASKS + DJANGO_ITERATION4_TASKS
 )
