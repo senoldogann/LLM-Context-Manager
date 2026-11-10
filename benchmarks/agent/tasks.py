@@ -1299,6 +1299,69 @@ TOKIO_HELD_OUT_TASKS: tuple[Task, ...] = (
     ),
 )
 
+TOKIO_MACRO_TASKS: tuple[Task, ...] = (
+    Task(
+        id="tokio-callers-with-scheduler",
+        repo="tokio",
+        category="callers",
+        answer_kind="symbols",
+        question=(
+            "Which functions or methods in the library crates of this workspace call "
+            "`with_scheduler` (defined in `tokio/src/runtime/context.rs`) directly?"
+        ),
+        expected=(
+            sym("tokio/src/runtime/context.rs", "defer"),
+            sym("tokio/src/runtime/task/trace/mod.rs", "trace_leaf"),
+            *symbols(
+                "tokio/src/runtime/scheduler/current_thread/mod.rs",
+                ("dump", "schedule", "unhandled_panic"),
+            ),
+            sym("tokio/src/runtime/time/entry.rs", "generate_shard_id"),
+            sym("tokio/src/runtime/scheduler/multi_thread/worker.rs", "with_current"),
+            sym("tokio/src/runtime/scheduler/multi_thread_alt/worker.rs", "with_current"),
+        ),
+        edit=None,
+        notes=(
+            "with_scheduler is defined inside a `cfg_rt! { … }` block. rg over the library "
+            "crates, each call read in its enclosing function: 8 calls in 8 functions, none in a "
+            "test module. Held out (preregistration amendment 13)."
+        ),
+    ),
+    Task(
+        id="tokio-callers-poll-proceed",
+        repo="tokio",
+        category="callers",
+        answer_kind="symbols",
+        question=(
+            "Which functions or methods in the library crates of this workspace call "
+            "`poll_proceed_and_make_progress` (defined in `tokio/src/io/util/mod.rs`) directly?"
+        ),
+        expected=(
+            sym("tokio/src/io/util/repeat.rs", "poll_read"),
+            *symbols("tokio/src/io/util/sink.rs", ("poll_write", "poll_flush", "poll_shutdown")),
+            *symbols(
+                "tokio/src/io/util/empty.rs",
+                (
+                    "poll_read",
+                    "poll_fill_buf",
+                    "poll_write",
+                    "poll_flush",
+                    "poll_shutdown",
+                    "poll_write_vectored",
+                    "poll_complete",
+                ),
+            ),
+        ),
+        edit=None,
+        notes=(
+            "The function is defined twice in io/util/mod.rs, inside `cfg_coop! { … }` and "
+            "`cfg_not_coop! { … }`. rg over the library crates, each call read in its enclosing "
+            "method: 11 calls in 11 AsyncRead/AsyncWrite methods of Repeat, Sink and Empty, none "
+            "in a test module. Held out (preregistration amendment 13)."
+        ),
+    ),
+)
+
 TASKS: tuple[Task, ...] = FLASK_TASKS + EXPRESS_TASKS + SERDE_TASKS
 # Ürün pilotlarının seçebildiği tüm görevler; `--tasks all` yalnız ön kayıtlı 24 görevdir.
 KNOWN_TASKS: tuple[Task, ...] = (
@@ -1311,4 +1374,5 @@ KNOWN_TASKS: tuple[Task, ...] = (
     + DJANGO_ITERATION6_TASKS
     + TOKIO_TASKS
     + TOKIO_HELD_OUT_TASKS
+    + TOKIO_MACRO_TASKS
 )
