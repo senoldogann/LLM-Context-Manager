@@ -1846,6 +1846,29 @@ async fn sole_assigned_member_target(
     }))
 }
 
+/// `context` paketinde gösterilen en çok callee satırı. "Kim çağırıyor" cevabında
+/// callee'ler ikincildir; serde `deserialize_struct` paketinde 25 satır tutuyordu.
+const CONTEXT_CALLEES: usize = 10;
+
+/// Callee satırları: önce kesin çağrılar, sonra diğerleri; en çok `CONTEXT_CALLEES`
+/// satır ve kalanların sayısı.
+fn capped_callee_lines(callees: &[ccm_core::graph::Usage]) -> Vec<String> {
+    let mut ordered: Vec<&ccm_core::graph::Usage> = callees.iter().collect();
+    ordered.sort_by_key(|usage| usage.relation != ccm_core::graph::UsageRelation::Calls);
+    let mut lines: Vec<String> = ordered
+        .iter()
+        .take(CONTEXT_CALLEES)
+        .map(|usage| suggestion_line(&ccm_core::engine::usage_suggestion(usage)))
+        .collect();
+    if ordered.len() > CONTEXT_CALLEES {
+        lines.push(format!(
+            "  + {} more callees not listed",
+            ordered.len() - CONTEXT_CALLEES
+        ));
+    }
+    lines
+}
+
 /// `context` paketinde gösterilen en çok gövde satırı. Uzun gövdeler (220 satırlık
 /// `with_bound`) "kim çağırıyor" cevabını büyütüyordu; kalan satırların aralığı yazılır.
 const CONTEXT_BODY_LINES: usize = 40;
@@ -2231,12 +2254,21 @@ fn check_spec(
     ) {
         return None;
     }
+    let path = ccm_core::engine::extract_file_path(&node.id);
+    let kind = match crate::call_sites::lang_of(path.trim_start_matches("./")) {
+        crate::call_sites::Lang::Rust
+            if !crate::call_sites::rust_takes_self(&node.content, &node.name) =>
+        {
+            CheckKind::RustNoSelfUses
+        }
+        _ => CheckKind::NameUses,
+    };
     Some(CheckSpec {
         needles: vec![Needle {
             text: node.name.clone(),
             only_file: None,
         }],
-        kind: CheckKind::NameUses,
+        kind,
         scope: None,
     })
 }
@@ -2534,14 +2566,7 @@ async fn context_packet(
     }
 
     let sections: Vec<(&str, Vec<String>)> = vec![
-        (
-            "callees",
-            explanation
-                .callees
-                .iter()
-                .map(|usage| suggestion_line(&usage_suggestion(usage)))
-                .collect(),
-        ),
+        ("callees", capped_callee_lines(&explanation.callees)),
         (
             "members",
             explanation

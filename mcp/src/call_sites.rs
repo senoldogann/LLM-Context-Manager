@@ -37,6 +37,9 @@ pub(crate) enum CheckKind {
     NameUses,
     /// Receiver ifadeleri: yalnız çağrılar sayılır; `req.get = …` tanımdır.
     MemberCalls,
+    /// `self` almayan Rust fonksiyonu: `NameUses` gibi, ama `x.ad(` metot sözdizimi
+    /// onu çağıramaz; bu geçişler başka bir tipin metodudur.
+    RustNoSelfUses,
 }
 
 /// Denetimin tanımı: aranan metinler, sayım türü ve isteğe bağlı yol kapsamı.
@@ -71,6 +74,8 @@ pub(crate) enum HitKind {
     External,
     /// Dizgi ya da docstring içindeki sözcük: kod değildir.
     Text,
+    /// Rust'ta `x.ad(` metot çağrısı; hedef serbest fonksiyon olduğu için başka tiptir.
+    OtherTypeMethod,
 }
 
 /// Bir dosyadaki tek geçiş; `line` 1 tabanlıdır.
@@ -130,6 +135,8 @@ pub(crate) struct CheckCounts {
     pub text: usize,
     /// Hedefin kendi gövdesindeki (özyinelemeli) çağrılar.
     pub recursive: usize,
+    /// `self` almayan Rust hedefinde `x.ad(` metot çağrıları (başka tip).
+    pub other_type_methods: usize,
 }
 
 /// Dosya uzantısından dil.
@@ -441,7 +448,7 @@ pub(crate) fn file_hits(
                 if in_text(line, position, lang, doc_states[index]) {
                     // Dizgideki noktalı yol (`"pkg.mod.ad"`) dinamik referans olabilir.
                     let dotted = line[..position].ends_with('.');
-                    if spec.kind == CheckKind::NameUses {
+                    if spec.kind != CheckKind::MemberCalls {
                         hits.push(Hit {
                             file: path.to_string(),
                             line: number,
@@ -469,6 +476,11 @@ pub(crate) fn file_hits(
                     }
                 {
                     HitKind::External
+                } else if spec.kind == CheckKind::RustNoSelfUses
+                    && lang == Lang::Rust
+                    && line[..position].ends_with('.')
+                {
+                    HitKind::OtherTypeMethod
                 } else if call {
                     HitKind::Call
                 } else {
@@ -488,6 +500,60 @@ pub(crate) fn file_hits(
     }
     hits.dedup_by(|right, left| right.line == left.line && right.kind == left.kind);
     hits
+}
+
+/// Rust fonksiyon imzası `self` alıyor mu (`self`, `&self`, `&mut self`, `self: T`).
+/// Almayan fonksiyon metot sözdizimiyle (`x.ad(`) çağrılamaz.
+/// İmza `fn <ad>` ile bulunur (belge yorumundaki bir `fn ` metni yanıltmasın);
+/// imza bulunamazsa `true` döner: metot olabilecek hedefte iddia daralmaz.
+pub(crate) fn rust_takes_self(content: &str, name: &str) -> bool {
+    let signature = format!("fn {name}");
+    let Some(fn_at) = content
+        .match_indices(&signature)
+        .map(|(index, _)| index)
+        .find(|index| {
+            let line_start = content[..*index].rfind('\n').map_or(0, |at| at + 1);
+            let line = content[line_start..].trim_start();
+            !line.starts_with("//")
+                && !line.starts_with('*')
+                && !line.starts_with("/*")
+                && content[index + signature.len()..]
+                    .chars()
+                    .next()
+                    .is_some_and(|next| next == '(' || next == '<' || next.is_whitespace())
+        })
+    else {
+        return true;
+    };
+    let after = &content[fn_at..];
+    let Some(open) = after.find('(') else {
+        return false;
+    };
+    let params = &after[open + 1..];
+    let mut depth = 1usize;
+    let mut end = params.len();
+    for (index, character) in params.char_indices() {
+        match character {
+            '(' | '<' | '[' => depth += 1,
+            ')' | '>' | ']' => {
+                depth -= 1;
+                if depth == 0 {
+                    end = index;
+                    break;
+                }
+            }
+            _ => {}
+        }
+    }
+    let first = params[..end].split(',').next().unwrap_or("").trim();
+    let first = first.trim_start_matches('&').trim_start();
+    let first = first.strip_prefix("mut ").unwrap_or(first).trim_start();
+    let first = first.strip_prefix('\'').map_or(first, |rest| {
+        rest.split_once(' ')
+            .map_or(rest, |(_, after)| after.trim_start())
+    });
+    let first = first.strip_prefix("mut ").unwrap_or(first);
+    first == "self" || first.starts_with("self:") || first.starts_with("self ")
 }
 
 /// Gösterilecek kaynak satırı: baştaki boşluksuz ve sınırlı uzunlukta.
@@ -579,6 +645,7 @@ pub(crate) fn reconcile(
         elsewhere_targets: BTreeSet::new(),
         text: 0,
         recursive: 0,
+        other_type_methods: 0,
     };
     let mut outside = Vec::new();
     for scanned_file in scanned {
@@ -629,6 +696,10 @@ pub(crate) fn reconcile(
                 }
                 HitKind::Text => {
                     counts.text += 1;
+                    continue;
+                }
+                HitKind::OtherTypeMethod => {
+                    counts.other_type_methods += 1;
                     continue;
                 }
                 HitKind::AliasImport => {
@@ -763,8 +834,10 @@ fn needle_label(spec: &CheckSpec) -> String {
         .map(|needle| match (&needle.only_file, spec.kind) {
             (Some(file), CheckKind::MemberCalls) => format!("`{}(` ({file})", needle.text),
             (None, CheckKind::MemberCalls) => format!("`{}(`", needle.text),
-            (Some(file), CheckKind::NameUses) => format!("`{}` ({file})", needle.text),
-            (None, CheckKind::NameUses) => format!("`{}`", needle.text),
+            (Some(file), CheckKind::NameUses | CheckKind::RustNoSelfUses) => {
+                format!("`{}` ({file})", needle.text)
+            }
+            (None, CheckKind::NameUses | CheckKind::RustNoSelfUses) => format!("`{}`", needle.text),
         })
         .collect::<Vec<_>>()
         .join(", ")
@@ -884,8 +957,15 @@ fn counts_suffix(spec: &CheckSpec, counts: &CheckCounts) -> String {
             counts.test_hits
         ));
     }
+    if counts.other_type_methods > 0 {
+        text.push_str(&format!(
+            " {} `.{}(` method call(s) belong to other types (this function takes no `self`) and are not listed.",
+            counts.other_type_methods,
+            spec.needles.first().map_or("", |needle| needle.text.as_str())
+        ));
+    }
     match spec.kind {
-        CheckKind::NameUses => text.push_str(
+        CheckKind::NameUses | CheckKind::RustNoSelfUses => text.push_str(
             " Calls that never name it in source (getattr, runtime aliases) are not visible to text or graph.",
         ),
         CheckKind::MemberCalls => text.push_str(
@@ -1026,6 +1106,40 @@ mod tests {
         );
         assert_eq!(hits.len(), 1);
         assert_eq!(hits[0].kind, HitKind::Call);
+    }
+
+    #[test]
+    fn rust_self_detection_and_method_calls_of_other_types() {
+        assert!(rust_takes_self("pub fn f(&self, x: u8) {}", "f"));
+        assert!(rust_takes_self("fn f(&'a mut self) {}", "f"));
+        assert!(rust_takes_self("fn f(self: Box<Self>) {}", "f"));
+        assert!(rust_takes_self("/// like fn f(x)\nfn f(&self) {}", "f"));
+        assert!(rust_takes_self("fn other(x: u8) {}", "f"));
+        assert!(!rust_takes_self(
+            "fn deserialize_struct(params: &Parameters, fields: &[Field]) {}",
+            "deserialize_struct"
+        ));
+        assert!(!rust_takes_self("fn f<T: Into<u8>>(selfish: T) {}", "f"));
+        let spec = CheckSpec {
+            needles: vec![Needle {
+                text: "deserialize_struct".to_string(),
+                only_file: None,
+            }],
+            kind: CheckKind::RustNoSelfUses,
+            scope: None,
+        };
+        let source = "fn a() { d.deserialize_struct(1); deserialize_struct(2); }\n";
+        let kinds: Vec<HitKind> = file_hits(
+            "src/a.rs",
+            source,
+            &spec,
+            "deserialize_struct",
+            &PythonExternals::default(),
+        )
+        .iter()
+        .map(|hit| hit.kind)
+        .collect();
+        assert_eq!(kinds, vec![HitKind::OtherTypeMethod, HitKind::Call]);
     }
 
     #[test]

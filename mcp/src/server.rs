@@ -24,6 +24,18 @@ const SUPPORTED_PROTOCOL_VERSIONS: [&str; 3] =
     [LATEST_PROTOCOL_VERSION, "2025-06-18", "2025-03-26"];
 /// Okuma araçlarının süren yenilemeyi bekleyeceği en uzun süre.
 const FRESHNESS_WAIT_BUDGET: std::time::Duration = std::time::Duration::from_secs(2);
+/// `context` bekleyen yenilemeyi daha uzun bekler: ajan çoğu zaman düzenlemeden hemen
+/// sonra sorar ve embedding'li yenileme 2 saniyeyi aşınca bayat cevap ikinci bir çağrıya
+/// yol açıyordu (iterasyon 2, flask-edit-error-handler).
+const CONTEXT_FRESHNESS_WAIT_BUDGET: std::time::Duration = std::time::Duration::from_secs(10);
+
+/// Aracın okuma öncesi tazelik bekleme bütçesi.
+fn freshness_budget(tool_name: &str) -> std::time::Duration {
+    match tool_name {
+        "context" => CONTEXT_FRESHNESS_WAIT_BUDGET,
+        _ => FRESHNESS_WAIT_BUDGET,
+    }
+}
 /// Okuma araçları indeksi yalnızca okur; etki alanı yerel projedir.
 const READ_ONLY_TOOL: ToolAnnotations = ToolAnnotations {
     read_only_hint: true,
@@ -1651,7 +1663,7 @@ async fn run_tool(
     if let Some(key) = &project_key {
         state.ensure_auto_refresh(key);
         if let Err(error) = state
-            .wait_until_fresh(key, &initial, FRESHNESS_WAIT_BUDGET)
+            .wait_until_fresh(key, &initial, freshness_budget(tool_name))
             .await
         {
             return Ok(engine_error_result(tool_name, &error));
