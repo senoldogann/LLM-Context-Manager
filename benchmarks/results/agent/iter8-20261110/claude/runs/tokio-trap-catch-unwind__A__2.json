@@ -1,0 +1,55 @@
+{
+  "record_version": 3,
+  "run_id": "tokio-trap-catch-unwind__A__2",
+  "task_id": "tokio-trap-catch-unwind",
+  "repo": "tokio",
+  "category": "trap",
+  "arm": "A",
+  "rep": 2,
+  "model": "claude-opus-5-5",
+  "effort": "high",
+  "embedding": "local",
+  "index_copy_s": null,
+  "index_build_s": null,
+  "wall_s": 7.863704999908805,
+  "transcript": {
+    "result_text": "The helper is nested inside `do_register`, so nothing outside that function can call it. Every call in the file is at lines 195, 224 and 252, and all three are inside `do_register`.\n\n```json\n{\"answer\": [\"tokio/src/sync/task/atomic_waker.rs:AtomicWaker.do_register\"]}\n```",
+    "subtype": "success",
+    "is_error": false,
+    "num_turns": 3,
+    "duration_ms": 7203,
+    "cost_usd": 0.05684,
+    "usage": {
+      "input_tokens": 6,
+      "output_tokens": 514,
+      "cache_creation_input_tokens": 5311,
+      "cache_read_input_tokens": 20240
+    },
+    "tool_calls": {
+      "Grep": 1,
+      "Read": 1
+    },
+    "mcp_status": "none",
+    "api_key_source": "none",
+    "tools": [
+      "Bash",
+      "Edit",
+      "Glob",
+      "Grep",
+      "Read",
+      "Write"
+    ]
+  },
+  "score": {
+    "answered": true,
+    "recall": 1.0,
+    "precision": 1.0,
+    "missing": [],
+    "extra": [],
+    "edit_applied": null,
+    "stale": [],
+    "success": true
+  },
+  "failure": null,
+  "hook": null
+}

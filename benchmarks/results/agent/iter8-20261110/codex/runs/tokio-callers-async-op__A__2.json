@@ -1,0 +1,47 @@
+{
+  "record_version": 3,
+  "run_id": "tokio-callers-async-op__A__2",
+  "task_id": "tokio-callers-async-op",
+  "repo": "tokio",
+  "category": "callers",
+  "arm": "A",
+  "rep": 2,
+  "model": "gpt-6-luna",
+  "effort": "high",
+  "embedding": "local",
+  "index_copy_s": null,
+  "index_build_s": null,
+  "wall_s": 21.890880290884525,
+  "transcript": {
+    "result_text": "```json\n{\"answer\":[\"tokio/src/sync/barrier.rs:Barrier.wait\",\"tokio/src/sync/mutex.rs:Mutex.lock\",\"tokio/src/sync/mutex.rs:Mutex.lock_owned\",\"tokio/src/sync/oneshot.rs:Sender.closed\",\"tokio/src/sync/rwlock.rs:RwLock.read\",\"tokio/src/sync/rwlock.rs:RwLock.read_owned\",\"tokio/src/sync/rwlock.rs:RwLock.write\",\"tokio/src/sync/rwlock.rs:RwLock.write_owned\",\"tokio/src/sync/semaphore.rs:Semaphore.acquire\",\"tokio/src/sync/semaphore.rs:Semaphore.acquire_many\",\"tokio/src/sync/semaphore.rs:Semaphore.acquire_many_owned\",\"tokio/src/sync/semaphore.rs:Semaphore.acquire_owned\",\"tokio/src/time/interval.rs:Interval.tick\"]}\n```",
+    "subtype": "completed",
+    "is_error": false,
+    "num_turns": null,
+    "duration_ms": 21891,
+    "cost_usd": null,
+    "usage": {
+      "input_tokens": 33783,
+      "output_tokens": 800,
+      "cache_creation_input_tokens": 0,
+      "cache_read_input_tokens": 9728
+    },
+    "tool_calls": {
+      "command_execution": 2
+    },
+    "mcp_status": "unreported",
+    "api_key_source": "chatgpt",
+    "tools": []
+  },
+  "score": {
+    "answered": true,
+    "recall": 1.0,
+    "precision": 1.0,
+    "missing": [],
+    "extra": [],
+    "edit_applied": null,
+    "stale": [],
+    "success": true
+  },
+  "failure": null,
+  "hook": null
+}

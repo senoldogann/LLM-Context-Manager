@@ -1,0 +1,48 @@
+{
+  "record_version": 3,
+  "run_id": "tokio-trap-yield-now__B__1",
+  "task_id": "tokio-trap-yield-now",
+  "repo": "tokio",
+  "category": "trap",
+  "arm": "B",
+  "rep": 1,
+  "model": "gpt-6-luna",
+  "effort": "high",
+  "embedding": "local",
+  "index_copy_s": 0.1754346250090748,
+  "index_build_s": 239.83752362499945,
+  "wall_s": 101.93957016686909,
+  "transcript": {
+    "result_text": "```json\n{\"answer\":[\"tokio/src/time/clock.rs:advance\",\"tokio/src/runtime/scheduler/multi_thread/trace.rs:TraceStatus.start_trace_request\",\"tokio/src/runtime/scheduler/multi_thread/trace.rs:TraceStatus.end_trace_request\",\"tokio/src/runtime/scheduler/multi_thread_alt/trace.rs:TraceStatus.start_trace_request\",\"tokio/src/runtime/scheduler/multi_thread_alt/trace.rs:TraceStatus.end_trace_request\",\"tokio-util/src/task/spawn_pinned.rs:LocalWorkerHandle.run\"]}\n```",
+    "subtype": "completed",
+    "is_error": false,
+    "num_turns": null,
+    "duration_ms": 101940,
+    "cost_usd": null,
+    "usage": {
+      "input_tokens": 26330,
+      "output_tokens": 2443,
+      "cache_creation_input_tokens": 0,
+      "cache_read_input_tokens": 161792
+    },
+    "tool_calls": {
+      "command_execution": 6,
+      "mcp__context-manager__context": 7
+    },
+    "mcp_status": "unreported",
+    "api_key_source": "chatgpt",
+    "tools": []
+  },
+  "score": {
+    "answered": true,
+    "recall": 1.0,
+    "precision": 1.0,
+    "missing": [],
+    "extra": [],
+    "edit_applied": null,
+    "stale": [],
+    "success": true
+  },
+  "failure": null,
+  "hook": null
+}

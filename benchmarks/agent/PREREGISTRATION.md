@@ -192,3 +192,19 @@ the final run is complete.
     `AtomicWaker::do_register`, called only there, next to eleven `std::panic::catch_unwind`
     calls). They run with three repetitions, arms Codex A and B and Claude A, B, F and H, together
     with a re-run of the now tuned `django-trap-urlencode` that measures PR #17.
+11. 2026-11-10: to measure #19 (path:name targets, Rust standard-library calls as external) on
+    tasks it was not made for, two more Tokio held-out tasks are written before they are run or any
+    CCM packet for them is looked at, gold from `rg` over the library crates and reading each
+    enclosing function: `tokio-callers-async-op` (13 calls of `util/trace.rs` `async_op` in 13
+    methods) and `tokio-trap-yield-now` (7 calls of `tokio::task::yield_now` in 5 files, next to
+    `std::thread::yield_now`, the `loom` wrapper `crate::loom::thread::yield_now` and three
+    scheduler `yield_now` methods). They run with three repetitions, arms Codex A and B and Claude
+    A, B, F and H, together with a re-run of the now tuned `tokio-trap-catch-unwind`.
+12. 2026-11-10: gold correction found after the iteration-8 runs. The preregistered gold of
+    `tokio-trap-yield-now` listed `tokio/src/signal/registry.rs:smoke`, but that call sits in a
+    `#[cfg(test)] mod tests` test, which the question excludes; four of the runs (Codex A and B,
+    Claude F) left it out and were scored as failures for it. The gold now has six library calls
+    in five functions. The iteration-8 records of that task were rescored with
+    `scripts/rescore.py` from the stored answers; the originals are kept unchanged in
+    `results/agent/iter8-20261110/<agent>/runs-preregistered-gold/` and both results are reported.
+    A check of all other Tokio gold call sites found no other call inside a test module.

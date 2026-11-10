@@ -1,0 +1,57 @@
+{
+  "record_version": 3,
+  "run_id": "tokio-callers-async-op__B__2",
+  "task_id": "tokio-callers-async-op",
+  "repo": "tokio",
+  "category": "callers",
+  "arm": "B",
+  "rep": 2,
+  "model": "claude-opus-5-5",
+  "effort": "high",
+  "embedding": "local",
+  "index_copy_s": 0.11631916696205735,
+  "index_build_s": 239.83752362499945,
+  "wall_s": 17.913867624942213,
+  "transcript": {
+    "result_text": "I found 13 direct calls to `trace::async_op`, all in the `tokio` crate. Each is inside a public async method:\n\n- `tokio/src/sync/mutex.rs`: `Mutex::lock` and `Mutex::lock_owned`\n- `tokio/src/sync/rwlock.rs`: `RwLock::read`, `RwLock::read_owned`, `RwLock::write` and `RwLock::write_owned`\n- `tokio/src/sync/oneshot.rs`: `Sender::closed`\n- `tokio/src/sync/barrier.rs`: `Barrier::wait`\n- `tokio/src/time/interval.rs`: `Interval::tick`\n- `tokio/src/sync/semaphore.rs`: `Semaphore::acquire`, `Semaphore::acquire_many`, `Semaphore::acquire_owned` and `Semaphore::acquire_many_owned`\n\nI named each method's type from its source file, and only checked the `impl` block for the `oneshot` one. Some other code, such as `oneshot.rs`, `batch_semaphore.rs` and `time/sleep.rs`, creates `runtime.resource.async_op` tracing spans by hand without calling the function, so I left it out. The matches in `tests/` are test code that only checks those span names.\n\n```json\n{\"answer\": [\"tokio/src/sync/mutex.rs:Mutex.lock\", \"tokio/src/sync/mutex.rs:Mutex.lock_owned\", \"tokio/src/sync/rwlock.rs:RwLock.read\", \"tokio/src/sync/rwlock.rs:RwLock.read_owned\", \"tokio/src/sync/rwlock.rs:RwLock.write\", \"tokio/src/sync/rwlock.rs:RwLock.write_owned\", \"tokio/src/sync/oneshot.rs:Sender.closed\", \"tokio/src/sync/barrier.rs:Barrier.wait\", \"tokio/src/time/interval.rs:Interval.tick\", \"tokio/src/sync/semaphore.rs:Semaphore.acquire\", \"tokio/src/sync/semaphore.rs:Semaphore.acquire_many\", \"tokio/src/sync/semaphore.rs:Semaphore.acquire_owned\", \"tokio/src/sync/semaphore.rs:Semaphore.acquire_many_owned\"]}\n```",
+    "subtype": "success",
+    "is_error": false,
+    "num_turns": 4,
+    "duration_ms": 17132,
+    "cost_usd": 0.08343439999999999,
+    "usage": {
+      "input_tokens": 8,
+      "output_tokens": 1487,
+      "cache_creation_input_tokens": 5864,
+      "cache_read_input_tokens": 33752
+    },
+    "tool_calls": {
+      "Bash": 2,
+      "Grep": 1
+    },
+    "mcp_status": "connected",
+    "api_key_source": "none",
+    "tools": [
+      "Bash",
+      "Edit",
+      "Glob",
+      "Grep",
+      "Read",
+      "Write",
+      "mcp__context-manager__context",
+      "mcp__context-manager__index_project"
+    ]
+  },
+  "score": {
+    "answered": true,
+    "recall": 1.0,
+    "precision": 1.0,
+    "missing": [],
+    "extra": [],
+    "edit_applied": null,
+    "stale": [],
+    "success": true
+  },
+  "failure": null,
+  "hook": null
+}

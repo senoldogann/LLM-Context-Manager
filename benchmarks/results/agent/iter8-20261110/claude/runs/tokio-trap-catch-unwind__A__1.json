@@ -1,0 +1,55 @@
+{
+  "record_version": 3,
+  "run_id": "tokio-trap-catch-unwind__A__1",
+  "task_id": "tokio-trap-catch-unwind",
+  "repo": "tokio",
+  "category": "trap",
+  "arm": "A",
+  "rep": 1,
+  "model": "claude-opus-5-5",
+  "effort": "high",
+  "embedding": "local",
+  "index_copy_s": null,
+  "index_build_s": null,
+  "wall_s": 15.23335662484169,
+  "transcript": {
+    "result_text": "Only one function calls the helper directly: `AtomicWaker::do_register` in `tokio/src/sync/task/atomic_waker.rs`.\n\nThe helper `catch_unwind` is defined inside `do_register` itself (line 179), so nothing outside that method can call it. `do_register` calls it three times:\n- **Line 195:** wraps `waker.into_waker()`.\n- **Line 224:** wraps `drop(old_waker)`.\n- **Line 252:** wraps `old_waker.wake()`.\n\nThe two closures at lines 224 and 252 belong to `do_register`, so they count under it. Every other `catch_unwind` in the workspace's library sources is `std::panic::catch_unwind`, either written out in full or reached through `use std::panic`. That includes the in-crate tests `sync/tests/atomic_waker.rs` and `loom_atomic_waker.rs`.\n\n```json\n{\"answer\": [\"tokio/src/sync/task/atomic_waker.rs:AtomicWaker.do_register\"]}\n```",
+    "subtype": "success",
+    "is_error": false,
+    "num_turns": 4,
+    "duration_ms": 14100,
+    "cost_usd": 0.08628720000000001,
+    "usage": {
+      "input_tokens": 6,
+      "output_tokens": 1005,
+      "cache_creation_input_tokens": 7725,
+      "cache_read_input_tokens": 21816
+    },
+    "tool_calls": {
+      "Grep": 2,
+      "Read": 1
+    },
+    "mcp_status": "none",
+    "api_key_source": "none",
+    "tools": [
+      "Bash",
+      "Edit",
+      "Glob",
+      "Grep",
+      "Read",
+      "Write"
+    ]
+  },
+  "score": {
+    "answered": true,
+    "recall": 1.0,
+    "precision": 1.0,
+    "missing": [],
+    "extra": [],
+    "edit_applied": null,
+    "stale": [],
+    "success": true
+  },
+  "failure": null,
+  "hook": null
+}

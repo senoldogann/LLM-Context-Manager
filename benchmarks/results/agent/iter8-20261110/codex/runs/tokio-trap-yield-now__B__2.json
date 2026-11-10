@@ -1,0 +1,47 @@
+{
+  "record_version": 3,
+  "run_id": "tokio-trap-yield-now__B__2",
+  "task_id": "tokio-trap-yield-now",
+  "repo": "tokio",
+  "category": "trap",
+  "arm": "B",
+  "rep": 2,
+  "model": "gpt-6-luna",
+  "effort": "high",
+  "embedding": "local",
+  "index_copy_s": 0.15988199994899333,
+  "index_build_s": 239.83752362499945,
+  "wall_s": 153.40298329107463,
+  "transcript": {
+    "result_text": "The library code calls the function in `advance`, both trace request methods in each scheduler implementation, and `LocalWorkerHandle::run`.\n\n```json\n{\"answer\":[\"tokio/src/time/clock.rs:advance\",\"tokio/src/runtime/scheduler/multi_thread/trace.rs:TraceStatus.start_trace_request\",\"tokio/src/runtime/scheduler/multi_thread/trace.rs:TraceStatus.end_trace_request\",\"tokio/src/runtime/scheduler/multi_thread_alt/trace.rs:TraceStatus.start_trace_request\",\"tokio/src/runtime/scheduler/multi_thread_alt/trace.rs:TraceStatus.end_trace_request\",\"tokio-util/src/task/spawn_pinned.rs:LocalWorkerHandle.run\"]}\n```",
+    "subtype": "completed",
+    "is_error": false,
+    "num_turns": null,
+    "duration_ms": 153403,
+    "cost_usd": null,
+    "usage": {
+      "input_tokens": 10419,
+      "output_tokens": 1018,
+      "cache_creation_input_tokens": 0,
+      "cache_read_input_tokens": 47104
+    },
+    "tool_calls": {
+      "command_execution": 3
+    },
+    "mcp_status": "unreported",
+    "api_key_source": "chatgpt",
+    "tools": []
+  },
+  "score": {
+    "answered": true,
+    "recall": 1.0,
+    "precision": 1.0,
+    "missing": [],
+    "extra": [],
+    "edit_applied": null,
+    "stale": [],
+    "success": true
+  },
+  "failure": null,
+  "hook": null
+}

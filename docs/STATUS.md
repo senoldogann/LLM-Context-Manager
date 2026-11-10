@@ -4,17 +4,16 @@ The current state of CCM and the next steps, for the owner and for any agent tha
 work. Keep it current: replace lines that stop being true instead of appending history (git log and
 `benchmarks/results/` are the history).
 
-Last updated: 2026-11-10. Where work stopped: **seven measured iterations; a second large
-repository (Tokio, Rust, 112 k non-test lines) added and measured.** The large-repository saving
-on caller questions is not specific to Django: on Tokio `sleep_until` every Codex B run was below
-the A mean (B/A 0.65), and on Django all three caller tasks held for Codex (0.61, 0.67 and the
-`urlencode` trap 0.51, now 0.30 after #17). Claude Code met the saving rule on the two Django
-caller tasks, where it chose CCM in all six B runs; on Tokio `sleep_until` it did not (B runs 19 k
-with CCM, 28 k without, 39 k without, against an A mean of 34 k). Name-collision traps remain a loss
-when the check cannot rule out the other definition (Tokio `catch_unwind`: Codex 1.36, Claude
-1.30), and small-repository tasks cost more for Codex (1.16–1.77) because a CCM call adds a turn.
-Across held-out sets as a whole B/A stays above 1. The commits behind each figure are in "Agent
-pilots" below.
+Last updated: 2026-11-10. Where work stopped: **eight measured iterations; iteration 8 (two
+more Tokio held-out tasks) found that CCM does not see functions defined inside macro bodies, and
+that a name it cannot find is answered with a different function's packet.** The
+large-repository saving on caller questions held for Codex on Django (three tasks) and Tokio
+`sleep_until`, not on Tokio `async_op` (B/A 2.28), whose definition sits in a `cfg_trace! { … }`
+block: 441 of Tokio's 4,782 non-test `fn` definitions (9 %) are inside such macro bodies and are
+not indexed. Claude Code met the saving rule only on the two Django caller tasks. Name-collision
+traps remain a loss, and small-repository tasks cost more for Codex because a CCM call adds a
+turn. Across held-out sets as a whole B/A stays above 1. The commits behind each figure are in
+"Agent pilots" below.
 
 ## Goal
 
@@ -119,12 +118,30 @@ wide and one repetition cannot separate small effects from run-to-run noise.
 | iteration 7 (`e805025`) | Codex | Tokio 2 held-out + Django urlencode tuned, 3 reps | 18/18 | | tokio sleep_until 0.65, tokio catch_unwind trap 1.36; tuned django urlencode 0.30 (was 0.51) | |
 | iteration 7 (`e805025`) | Claude | Tokio 2 held-out + Django urlencode tuned, 3 reps | 36/36 | B called CCM in 1 of 9 runs (tokio sleep_until) | tokio sleep_until 0.84, catch_unwind trap 1.30; tuned urlencode 0.91 | F 0.87, 1.33, 0.66 (urlencode was 1.10); H 0.77, 1.22, 0.91 |
 
+| iteration 8 (`4c5f193`) | Codex | Tokio 2 held-out + catch_unwind tuned, 3 reps | 18/18 | | tokio async_op 2.28, tokio yield_now trap 1.46; tuned catch_unwind 1.29 (was 1.36) | |
+| iteration 8 (`4c5f193`) | Claude | Tokio 2 held-out + catch_unwind tuned, 3 reps | 34/36 | B called CCM in 2 of 9 runs | tokio async_op 1.02, yield_now trap 0.98; tuned catch_unwind 1.17 | F 1.01, 0.91, 0.93; H 0.86, 0.65, 1.12 |
+
+Iteration 8 (`iter8-20261110/`, reading rule in its `PLAN.md`): the saving held for no agent and
+task. Tokio `async_op` is defined inside `cfg_trace! { … }` and is not in the index, so
+`util/trace.rs:async_op` and `async_op` were answered with other functions' packets
+(`async_trace_leaf`, which even said "call list complete", and `async_io`); Codex made six CCM calls
+and then grepped (B 92–147 k against A 43–59 k). The preregistered gold of `tokio-trap-yield-now`
+wrongly listed a call inside a `#[cfg(test)]` test (`signal/registry.rs:smoke`); it was corrected
+after the runs (amendment 12) and the task's records were rescored from the stored answers with
+`scripts/rescore.py`. With the preregistered gold, Codex failed all six runs of that task (each
+correctly leaving the test out) and Claude 6 of 12; with the corrected gold, Codex passes all six
+and Claude fails 2 (answers that included test functions). The original records and a report on
+them are kept in `runs-preregistered-gold/` and `report-preregistered-gold.md`.
+
 Scoring caveat (all pilots): answers are scored per file and function name. Two methods with the
 same name in one file count as one expected item (`RequestFactory.generic` and
 `AsyncRequestFactory.generic` in the `urlencode` trap), and the class name in an answer is not
 checked (`BaseModelAdmin.get_preserved_filters` passes for `ModelAdmin.get_preserved_filters`).
-The preregistered scorer is kept so results stay comparable; a class-aware rescoring would be
-reported separately.
+The preregistered scorer is kept so results stay comparable. An owner audit of all 2026-11-10
+result sets (`owner-audit-20261110/`, `scripts/owner_audit.py`, edit tasks excluded) found 6 runs
+that passed but name a wrong owner or miss a same-named copy: 4 Claude runs of the Django
+`urlencode` trap (iterations 6 and 7) and 2 Codex runs of Tokio `async_op` (iteration 8). Success
+rates for those cells would be lower under owner-aware scoring; token ratios are unaffected.
 
 Per-run input tokens for iteration 7 (`iter7-20261110/`, reading rule in its `PLAN.md`): Tokio
 `sleep_until` Codex A 51 k, 80 k, 53 k and B 44 k, 43 k, 33 k; Claude A 26–38 k and B 19 k (with
@@ -177,7 +194,8 @@ with 35 % less text (`hook-replay-20261110/`).
 
 Results, reports, run records and task selections are in `benchmarks/results/agent/`
 (`heldout-20261110/`, `pilot-*-20261110/`, `iter2-20261110/`, `iter3-20261110/`,
-`iter4-20261110/`, `iter5-20261110/`, `iter5-reps-20261110/`, `iter6-20261110/`, `iter7-20261110/`, `hook-replay-20261110/`); transcripts stay
+`iter4-20261110/`, `iter5-20261110/`, `iter5-reps-20261110/`, `iter6-20261110/`, `iter7-20261110/`, `iter8-20261110/`,
+`hook-replay-20261110/`, `owner-audit-20261110/`); transcripts stay
 local. Failures kept in the records:
 
 - Iteration-1 tuned sets stopped at the Django task: the frozen harness rebuilt the index with local
@@ -240,24 +258,30 @@ What the transcripts show:
 
 ## Next steps, in order
 
-1. **Rust path targets and standard-library calls** (generic, from the Tokio trap): resolve
-   `path.rs:name` queries as a symbol in that file, and treat calls qualified by `std::`, `core::`
-   or `alloc::` (directly or through a `use std::…` binding in the file) as external, as Python
-   standard-library calls already are. Measure on new held-out tasks, not on the trap it came from.
-2. **Python method calls on other objects: done in #17.** Calls `x.name(` on objects that no import
+1. **Never answer an unknown name with another symbol's packet.** When a code-like name or a
+   `path:name` target is not in the index, `context` falls back to semantic search and presents
+   the nearest symbol, with its own completeness check, as if it were the answer (iteration 8). It
+   should say that the name is not indexed and give the grep-equivalent call sites of that name,
+   grouped by the indexed functions that contain them.
+2. **Index items inside macro bodies.** 9 % of Tokio's non-test functions are defined in
+   `cfg_*! { … }` blocks and are invisible to the graph; items in an item-level macro invocation's
+   brace body can be parsed as Rust source with their line offsets. Measure on new held-out tasks.
+3. **Rust path targets and standard-library calls: done in #19.** Not yet shown to help: on the
+   tuned Tokio trap Codex went from 1.36 to 1.29 and Claude B stayed above A.
+4. **Python method calls on other objects: done in #17.** Calls `x.name(` on objects that no import
    binds are listed under their own headline instead of making the check "NOT complete"; on the
    tuned `urlencode` trap Codex B/A went from 0.51 to 0.30 and Claude F from 1.10 to 0.66.
-3. **Small repositories: documented limit.** In the repeated Codex runs B costs more than A on
+5. **Small repositories: documented limit.** In the repeated Codex runs B costs more than A on
    Flask edits (1.69) and Serde trait implementors (1.77) in all three repetitions. The transcripts
    show why: A answers with one or two `rg` calls; B makes the same calls plus a CCM call (a
    natural-language query that missed on Serde, a confirmation after the edit on Flask), and each
    extra turn re-sends the whole context (about 15–20 k input tokens with cache). CCM can only save
    where its answer replaces at least one search turn, which on these repositories it rarely does.
-4. **Hook alternations: not pursued.** Of the 49 recorded greps the hook could not parse, 10 are one
+6. **Hook alternations: not pursued.** Of the 49 recorded greps the hook could not parse, 10 are one
    tuned task's `_find_error_handler|def handle_exception`; the rest are varied regexes (alias and
    import checks, receivers, look-arounds). Supporting them would fit one task, not a pattern.
-5. Release the fixes (npm launcher roots bug, refresh retry) as 0.5.1 after owner approval.
-6. After the product configuration is stable, the preregistered L3 final experiment (24 tasks × 3
+7. Release the fixes (npm launcher roots bug, refresh retry) as 0.5.1 after owner approval.
+8. After the product configuration is stable, the preregistered L3 final experiment (24 tasks × 3
    arms × 3 repetitions per agent) with separate quota approval.
 
 ## Running the L3 experiment

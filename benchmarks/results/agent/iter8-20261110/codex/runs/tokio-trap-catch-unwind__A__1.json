@@ -1,0 +1,47 @@
+{
+  "record_version": 3,
+  "run_id": "tokio-trap-catch-unwind__A__1",
+  "task_id": "tokio-trap-catch-unwind",
+  "repo": "tokio",
+  "category": "trap",
+  "arm": "A",
+  "rep": 1,
+  "model": "gpt-6-luna",
+  "effort": "high",
+  "embedding": "local",
+  "index_copy_s": null,
+  "index_build_s": null,
+  "wall_s": 29.67352791619487,
+  "transcript": {
+    "result_text": "The direct calls are all inside `AtomicWaker::do_register`.\n\n```json\n{\"answer\":[\"tokio/src/sync/task/atomic_waker.rs:AtomicWaker.do_register\"]}\n```",
+    "subtype": "completed",
+    "is_error": false,
+    "num_turns": null,
+    "duration_ms": 29674,
+    "cost_usd": null,
+    "usage": {
+      "input_tokens": 15730,
+      "output_tokens": 818,
+      "cache_creation_input_tokens": 0,
+      "cache_read_input_tokens": 32768
+    },
+    "tool_calls": {
+      "command_execution": 3
+    },
+    "mcp_status": "unreported",
+    "api_key_source": "chatgpt",
+    "tools": []
+  },
+  "score": {
+    "answered": true,
+    "recall": 1.0,
+    "precision": 1.0,
+    "missing": [],
+    "extra": [],
+    "edit_applied": null,
+    "stale": [],
+    "success": true
+  },
+  "failure": null,
+  "hook": null
+}

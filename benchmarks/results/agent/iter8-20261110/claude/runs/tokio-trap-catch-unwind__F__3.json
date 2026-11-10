@@ -1,0 +1,58 @@
+{
+  "record_version": 3,
+  "run_id": "tokio-trap-catch-unwind__F__3",
+  "task_id": "tokio-trap-catch-unwind",
+  "repo": "tokio",
+  "category": "trap",
+  "arm": "F",
+  "rep": 3,
+  "model": "claude-opus-5-5",
+  "effort": "high",
+  "embedding": "local",
+  "index_copy_s": 0.08338687499053776,
+  "index_build_s": 239.83752362499945,
+  "wall_s": 11.658773167058825,
+  "transcript": {
+    "result_text": "Only one function calls the helper directly: `AtomicWaker.do_register` in `tokio/src/sync/task/atomic_waker.rs`.\n\n- The helper is a nested function defined inside `do_register` itself (line 179). It's a thin wrapper around `std::panic::catch_unwind(AssertUnwindSafe(f))`.\n- `do_register` calls it three times, at lines 195, 224 and 252. The last two are nested inside its body, but `do_register` is still the outermost named function containing them.\n- Every other `catch_unwind` call in the workspace calls `std::panic::catch_unwind` (or `panic::catch_unwind`), for example in `watch.rs`, `harness.rs`, `reusable_box.rs` and `tokio-test/src/io.rs`. The rest are in test files. None of these count.\n\n```json\n{\"answer\": [\"tokio/src/sync/task/atomic_waker.rs:AtomicWaker.do_register\"]}\n```",
+    "subtype": "success",
+    "is_error": false,
+    "num_turns": 4,
+    "duration_ms": 10778,
+    "cost_usd": 0.06544900000000001,
+    "usage": {
+      "input_tokens": 6,
+      "output_tokens": 727,
+      "cache_creation_input_tokens": 5766,
+      "cache_read_input_tokens": 23785
+    },
+    "tool_calls": {
+      "Grep": 1,
+      "Read": 1,
+      "mcp__context-manager__context": 1
+    },
+    "mcp_status": "connected",
+    "api_key_source": "none",
+    "tools": [
+      "Bash",
+      "Edit",
+      "Glob",
+      "Grep",
+      "Read",
+      "Write",
+      "mcp__context-manager__context",
+      "mcp__context-manager__index_project"
+    ]
+  },
+  "score": {
+    "answered": true,
+    "recall": 1.0,
+    "precision": 1.0,
+    "missing": [],
+    "extra": [],
+    "edit_applied": null,
+    "stale": [],
+    "success": true
+  },
+  "failure": null,
+  "hook": null
+}
