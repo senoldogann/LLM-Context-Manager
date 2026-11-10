@@ -1273,7 +1273,6 @@ TOKIO_HELD_OUT_TASKS: tuple[Task, ...] = (
             "and to scheduler `yield_now` methods do not count."
         ),
         expected=(
-            sym("tokio/src/signal/registry.rs", "smoke"),
             sym("tokio/src/time/clock.rs", "advance"),
             sym("tokio-util/src/task/spawn_pinned.rs", "run"),
             *symbols(
@@ -1287,9 +1286,12 @@ TOKIO_HELD_OUT_TASKS: tuple[Task, ...] = (
         ),
         edit=None,
         notes=(
-            "Seven calls in five files: `crate::task::yield_now()` in signal/registry.rs, "
-            "time/clock.rs and both scheduler trace.rs files, `tokio::task::yield_now()` in "
-            "tokio-util spawn_pinned.rs. Not counted: std::thread::yield_now in "
+            "Six library calls in four files: `crate::task::yield_now()` in time/clock.rs and "
+            "both scheduler trace.rs files, `tokio::task::yield_now()` in tokio-util "
+            "spawn_pinned.rs. The call in signal/registry.rs is in the `#[cfg(test)] mod tests` "
+            "test `smoke` and does not count; the preregistered gold listed it by mistake and was "
+            "corrected after the iteration-8 runs (amendment 12). Not counted: "
+            "std::thread::yield_now in "
             "loom/std/barrier.rs, `thread::yield_now()` in sync/mpsc/list.rs and "
             "`crate::loom::thread::yield_now()` in sync/mpsc/block.rs (both the loom wrapper, "
             "which calls std::hint::spin_loop). Held out (preregistration amendment 11)."

@@ -1,0 +1,58 @@
+{
+  "record_version": 3,
+  "run_id": "tokio-callers-async-op__F__3",
+  "task_id": "tokio-callers-async-op",
+  "repo": "tokio",
+  "category": "callers",
+  "arm": "F",
+  "rep": 3,
+  "model": "claude-opus-5-5",
+  "effort": "high",
+  "embedding": "local",
+  "index_copy_s": 0.047833916964009404,
+  "index_build_s": 239.83752362499945,
+  "wall_s": 19.24056000006385,
+  "transcript": {
+    "result_text": "I found 13 direct calls to `async_op`, all written as `trace::async_op(`. They sit in 13 different methods spread across 7 library files. The 13 calls came from a text search of the whole repository for `async_op`, and each enclosing method was taken from the nearest `fn` above the call.\n\nThe function is defined only once, at `tokio/src/util/trace.rs:111`. The other matches for `async_op` are tracing span names and targets in strings like `\"runtime.resource.async_op\"`, not calls.\n\n| File | Methods |\n|---|---|\n| `tokio/src/time/interval.rs` | `Interval.tick` |\n| `tokio/src/sync/oneshot.rs` | `Sender.closed` |\n| `tokio/src/sync/barrier.rs` | `Barrier.wait` |\n| `tokio/src/sync/mutex.rs` | `Mutex.lock`, `Mutex.lock_owned` |\n| `tokio/src/sync/rwlock.rs` | `RwLock.read`, `RwLock.read_owned`, `RwLock.write`, `RwLock.write_owned` |\n| `tokio/src/sync/semaphore.rs` | `Semaphore.acquire`, `Semaphore.acquire_many`, `Semaphore.acquire_owned`, `Semaphore.acquire_many_owned` |\n\n```json\n{\"answer\": [\"tokio/src/time/interval.rs:Interval.tick\", \"tokio/src/sync/oneshot.rs:Sender.closed\", \"tokio/src/sync/mutex.rs:Mutex.lock\", \"tokio/src/sync/mutex.rs:Mutex.lock_owned\", \"tokio/src/sync/rwlock.rs:RwLock.read\", \"tokio/src/sync/rwlock.rs:RwLock.read_owned\", \"tokio/src/sync/rwlock.rs:RwLock.write\", \"tokio/src/sync/rwlock.rs:RwLock.write_owned\", \"tokio/src/sync/barrier.rs:Barrier.wait\", \"tokio/src/sync/semaphore.rs:Semaphore.acquire\", \"tokio/src/sync/semaphore.rs:Semaphore.acquire_many\", \"tokio/src/sync/semaphore.rs:Semaphore.acquire_owned\", \"tokio/src/sync/semaphore.rs:Semaphore.acquire_many_owned\"]}\n```",
+    "subtype": "success",
+    "is_error": false,
+    "num_turns": 4,
+    "duration_ms": 18589,
+    "cost_usd": 0.0956782,
+    "usage": {
+      "input_tokens": 8,
+      "output_tokens": 1457,
+      "cache_creation_input_tokens": 7480,
+      "cache_read_input_tokens": 33331
+    },
+    "tool_calls": {
+      "Bash": 1,
+      "Grep": 1,
+      "mcp__context-manager__context": 1
+    },
+    "mcp_status": "connected",
+    "api_key_source": "none",
+    "tools": [
+      "Bash",
+      "Edit",
+      "Glob",
+      "Grep",
+      "Read",
+      "Write",
+      "mcp__context-manager__context",
+      "mcp__context-manager__index_project"
+    ]
+  },
+  "score": {
+    "answered": true,
+    "recall": 1.0,
+    "precision": 1.0,
+    "missing": [],
+    "extra": [],
+    "edit_applied": null,
+    "stale": [],
+    "success": true
+  },
+  "failure": null,
+  "hook": null
+}

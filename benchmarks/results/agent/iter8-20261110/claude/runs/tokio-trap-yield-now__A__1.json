@@ -1,0 +1,75 @@
+{
+  "record_version": 3,
+  "run_id": "tokio-trap-yield-now__A__1",
+  "task_id": "tokio-trap-yield-now",
+  "repo": "tokio",
+  "category": "trap",
+  "arm": "A",
+  "rep": 1,
+  "model": "claude-opus-5-5",
+  "effort": "high",
+  "embedding": "local",
+  "index_copy_s": null,
+  "index_build_s": null,
+  "wall_s": 43.775329124880955,
+  "transcript": {
+    "result_text": "I found 27 functions and methods in the library crates' `src/` directories that call `tokio::task::yield_now` directly. Ten are in regular library code and 17 are in unit tests inside `tokio/src`.\n\nI excluded `benches/` and the integration-test directories (`tokio/tests`, `tokio-util/tests` and so on), because they aren't library crates. I also excluded doc comments, the scheduler `yield_now` methods, `std::thread::yield_now` and `crate::loom::thread::yield_now`.\n\n**Regular library code (10):**\n- `tokio/src/time/clock.rs`: the free function `advance`, which calls `crate::task::yield_now().await`.\n- `tokio/src/runtime/scheduler/multi_thread/trace.rs`: `TraceStatus.start_trace_request` and `TraceStatus.end_trace_request`.\n- `tokio/src/runtime/scheduler/multi_thread_alt/trace.rs`: the same two `TraceStatus` methods.\n- `tokio/src/signal/registry.rs`: the unit test `smoke`, which calls it inside a spawned closure.\n- `tokio-util/src/task/spawn_pinned.rs`: `LocalWorkerHandle.run`, which calls `runtime.block_on(tokio::task::yield_now())`.\n\n**Unit tests under `tokio/src/**/tests/` (17):**\n- The `loom_multi_thread` and `loom_multi_thread_alt` modules each have three: `only_blocking_inner`, `blocking_and_regular_inner` and `complete_block_on_under_load`. These call it as `task::yield_now`, where `task` is imported with `use crate::{spawn, task}`.\n- Each of the three `yield_now.rs` submodules has `yield_calls_park_before_scheduling_again`.\n- `loom_current_thread.rs` has `assert_at_most_num_polls` and `assert_no_unnecessary_polls`.\n- `task.rs` has four tests, all calling it inside spawned closures.\n- `task_combinations.rs`: the call is in the nested `my_task`, so the outermost named function is `test_combination`.\n- `loom_local.rs` has `wake_during_shutdown`.\n- `loom_mpsc.rs`: the call is in the nested `run`, so the outermost named function is `try_recv`.\n\n```json\n{\"answer\": [\n\"tokio/src/time/clock.rs:advance\",\n\"tokio/src/runtime/scheduler/multi_thread/trace.rs:TraceStatus.start_trace_request\",\n\"tokio/src/runtime/scheduler/multi_thread/trace.rs:TraceStatus.end_trace_request\",\n\"tokio/src/runtime/scheduler/multi_thread_alt/trace.rs:TraceStatus.start_trace_request\",\n\"tokio/src/runtime/scheduler/multi_thread_alt/trace.rs:TraceStatus.end_trace_request\",\n\"tokio/src/signal/registry.rs:smoke\",\n\"tokio-util/src/task/spawn_pinned.rs:LocalWorkerHandle.run\",\n\"tokio/src/runtime/tests/loom_multi_thread.rs:only_blocking_inner\",\n\"tokio/src/runtime/tests/loom_multi_thread.rs:blocking_and_regular_inner\",\n\"tokio/src/runtime/tests/loom_multi_thread.rs:complete_block_on_under_load\",\n\"tokio/src/runtime/tests/loom_multi_thread_alt.rs:only_blocking_inner\",\n\"tokio/src/runtime/tests/loom_multi_thread_alt.rs:blocking_and_regular_inner\",\n\"tokio/src/runtime/tests/loom_multi_thread_alt.rs:complete_block_on_under_load\",\n\"tokio/src/runtime/tests/loom_multi_thread/yield_now.rs:yield_calls_park_before_scheduling_again\",\n\"tokio/src/runtime/tests/loom_multi_thread_alt/yield_now.rs:yield_calls_park_before_scheduling_again\",\n\"tokio/src/runtime/tests/loom_current_thread/yield_now.rs:yield_calls_park_before_scheduling_again\",\n\"tokio/src/runtime/tests/loom_current_thread.rs:assert_at_most_num_polls\",\n\"tokio/src/runtime/tests/loom_current_thread.rs:assert_no_unnecessary_polls\",\n\"tokio/src/runtime/tests/task.rs:schedule\",\n\"tokio/src/runtime/tests/task.rs:shutdown\",\n\"tokio/src/runtime/tests/task.rs:shutdown_immediately\",\n\"tokio/src/runtime/tests/task.rs:spawn_during_shutdown\",\n\"tokio/src/runtime/tests/task_combinations.rs:test_combination\",\n\"tokio/src/runtime/tests/loom_local.rs:wake_during_shutdown\",\n\"tokio/src/sync/tests/loom_mpsc.rs:try_recv\"\n]}\n```",
+    "subtype": "success",
+    "is_error": false,
+    "num_turns": 7,
+    "duration_ms": 43200,
+    "cost_usd": 0.22016999999999998,
+    "usage": {
+      "input_tokens": 14,
+      "output_tokens": 4419,
+      "cache_creation_input_tokens": 14382,
+      "cache_read_input_tokens": 83390
+    },
+    "tool_calls": {
+      "Bash": 5,
+      "Grep": 1
+    },
+    "mcp_status": "none",
+    "api_key_source": "none",
+    "tools": [
+      "Bash",
+      "Edit",
+      "Glob",
+      "Grep",
+      "Read",
+      "Write"
+    ]
+  },
+  "score": {
+    "answered": true,
+    "recall": 1.0,
+    "precision": 0.24,
+    "missing": [],
+    "extra": [
+      "tokio/src/signal/registry.rs:smoke",
+      "tokio/src/runtime/tests/loom_multi_thread.rs:only_blocking_inner",
+      "tokio/src/runtime/tests/loom_multi_thread.rs:blocking_and_regular_inner",
+      "tokio/src/runtime/tests/loom_multi_thread.rs:complete_block_on_under_load",
+      "tokio/src/runtime/tests/loom_multi_thread_alt.rs:only_blocking_inner",
+      "tokio/src/runtime/tests/loom_multi_thread_alt.rs:blocking_and_regular_inner",
+      "tokio/src/runtime/tests/loom_multi_thread_alt.rs:complete_block_on_under_load",
+      "tokio/src/runtime/tests/loom_multi_thread/yield_now.rs:yield_calls_park_before_scheduling_again",
+      "tokio/src/runtime/tests/loom_multi_thread_alt/yield_now.rs:yield_calls_park_before_scheduling_again",
+      "tokio/src/runtime/tests/loom_current_thread/yield_now.rs:yield_calls_park_before_scheduling_again",
+      "tokio/src/runtime/tests/loom_current_thread.rs:assert_at_most_num_polls",
+      "tokio/src/runtime/tests/loom_current_thread.rs:assert_no_unnecessary_polls",
+      "tokio/src/runtime/tests/task.rs:schedule",
+      "tokio/src/runtime/tests/task.rs:shutdown",
+      "tokio/src/runtime/tests/task.rs:shutdown_immediately",
+      "tokio/src/runtime/tests/task.rs:spawn_during_shutdown",
+      "tokio/src/runtime/tests/task_combinations.rs:test_combination",
+      "tokio/src/runtime/tests/loom_local.rs:wake_during_shutdown",
+      "tokio/src/sync/tests/loom_mpsc.rs:try_recv"
+    ],
+    "edit_applied": null,
+    "stale": [],
+    "success": false
+  },
+  "failure": null,
+  "hook": null
+}
