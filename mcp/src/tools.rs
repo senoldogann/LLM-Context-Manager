@@ -1846,6 +1846,20 @@ async fn sole_assigned_member_target(
     }))
 }
 
+/// `context` paketinde gösterilen en çok gövde satırı. Uzun gövdeler (220 satırlık
+/// `with_bound`) "kim çağırıyor" cevabını büyütüyordu; kalan satırların aralığı yazılır.
+const CONTEXT_BODY_LINES: usize = 40;
+
+/// Gövdenin ilk `max_lines` satırı ve gösterilmeyen satır sayısı.
+fn body_head(content: &str, max_lines: usize) -> (String, usize) {
+    let total = content.lines().count();
+    if total <= max_lines {
+        return (content.to_string(), 0);
+    }
+    let head: Vec<&str> = content.lines().take(max_lines).collect();
+    (head.join("\n"), total - max_lines)
+}
+
 /// Tool: context
 /// Ajanın araç seçmesini istemeden tek sorgudan yeterli görev bağlamı üretir.
 /// Kesin hedefler doğrudan graf açıklamasına gider; doğal dil sorguları hibrit
@@ -2078,6 +2092,26 @@ async fn context_callers(
         );
         lang == target_lang || target_lang == crate::call_sites::Lang::Other
     });
+    // Atamayla tanımlı JS/TS caller (`res.sendfile = function`) atandığı ifadeyle
+    // de anılır: aynı adlı yardımcı fonksiyonla (`function sendfile`) karışmasın.
+    for caller in &mut callers {
+        let path = caller
+            .file_path
+            .as_deref()
+            .unwrap_or_default()
+            .trim_start_matches("./")
+            .to_string();
+        if !is_js_ts_path(&path) || caller.content.is_empty() {
+            continue;
+        }
+        let tree =
+            ccm_core::parser::CodeParser::new().parse_tree(&caller.content, js_language(&path))?;
+        if let Some(members) = assignment_members(&tree, &caller.content) {
+            caller
+                .reason
+                .push_str(&format!("; assigned as {}", members.join(" = ")));
+        }
+    }
     let graph = engine.graph.read().await;
     for caller in &mut callers {
         let Some(id) = caller.node_id.as_deref() else {
@@ -2475,14 +2509,24 @@ async fn context_packet(
             .saturating_sub(used)
             .saturating_div(2)
             .saturating_sub(8);
-        let body = clip(&node.content, limit);
+        let (head, hidden_lines) = body_head(&node.content, CONTEXT_BODY_LINES);
+        let body = clip(&head, limit);
         if !body.is_empty() {
             output.push_str("```\n");
             output.push_str(&body);
             output.push_str("\n```\n");
             used += char_count(&body) + 8;
         }
-        if char_count(&node.content) > limit {
+        if hidden_lines > 0 {
+            let first = node.end_line.saturating_sub(hidden_lines) + 1;
+            let notice = format!(
+                "… body continues for {hidden_lines} more lines ({}:{first}-{}); read them only if needed\n",
+                extract_file_path(&node.id).trim_start_matches("./"),
+                node.end_line
+            );
+            used += char_count(&notice);
+            output.push_str(&notice);
+        } else if char_count(&head) > limit {
             let notice = "… body clipped (raise max_tokens)\n";
             output.push_str(notice);
             used += char_count(notice);
@@ -2980,6 +3024,12 @@ pub async fn diff_context(engine: &Arc<RetrievalEngine>, args: &Value) -> Result
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn body_head_keeps_short_bodies_and_counts_hidden_lines() {
+        assert_eq!(super::body_head("a\nb", 3), ("a\nb".to_string(), 0));
+        assert_eq!(super::body_head("a\nb\nc\nd", 2), ("a\nb".to_string(), 2));
+    }
+
     #[test]
     fn index_job_claims_never_return_another_mode_or_join_it() {
         use super::{decide_claim, ClaimDecision, ExistingJob, IndexModeArg};
