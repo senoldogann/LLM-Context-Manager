@@ -13,7 +13,8 @@ B/A was 0.30–0.80 in iterations 2–4 and Claude's forced F/A 0.49–0.60; the
 iteration 4 (`capfirst`) still cost Codex 1.60. Claude Code never calls CCM on its own (0 of 33 B
 runs), and the opt-in hook answered no grep in iteration 4 because Claude's greps are cheaper than
 the packet. Single runs move by up to ±50 % between identical configurations (arm H vs B on tasks
-where the hook passed every grep), so per-task differences below that are not evidence.
+where the hook passed every grep), so per-task differences below that are not evidence. The
+commits behind each figure are in "Agent pilots" below.
 
 ## Goal
 
@@ -39,7 +40,7 @@ are parked. The owner's strategy notes are `docs/productization-plan.md`,
 | Rust | resolved through modules, `use` paths, workspace crates and impl blocks | `benchmarks/README.md`, "Rust edges (M3)" |
 | Other languages | matched by name and labelled `calls (inferred …)` or `may call`; JS/TS members defined by assignment get receiver-aware evidence | `core/tests/lexical_labels_test.rs`, `mcp/tests/token_budget_e2e_test.rs` |
 | Freshness after an edit (L1) | first-read validation since `fb0ecd4`; a failed refresh now retries with backoff, `context` waits up to 10 s for a pending refresh | `mcp/tests/auto_refresh_test.rs` |
-| Claude Code Grep hook | opt-in `ccm-mcp hook claude-pre-tool-use` (PreToolUse); answers a single-symbol Grep with the `context` packet only when the index is fresh, the packet claims a complete list and is shorter than the grep output; otherwise the grep runs. Not installed by the npm launcher | `mcp/src/hook.rs` |
+| Claude Code Grep hook | opt-in `ccm-mcp hook claude-pre-tool-use` (PreToolUse); answers a single-symbol Grep with a compact answer (target, completeness check, one line per caller) only when the index is fresh, the check says the list is complete and the whole answer is shorter than a lower bound of the grep output in the requested mode; otherwise the grep runs. Offline replay of 119 recorded Claude greps: 16 answered, 35 % less text on those. Not installed by the npm launcher | `mcp/src/hook.rs`, `benchmarks/results/agent/hook-replay-20261110/` |
 | Agent interface | default discovery `context + index_project` (1,134-byte `tools/list`, 266 o200k tokens, plus 65-token server instructions); legacy tools callable, discoverable with `CCM_MCP_LEGACY_TOOLS=1` | `mcp/src/server.rs` |
 | Agent experiment (L3) | product pilots on 2026-11-10 with tuned and held-out tasks, both agents; final preregistered L3 not run | "Agent pilots" below |
 
@@ -173,12 +174,13 @@ What the transcripts show:
    directory (`in lib/`), report outside lines only inside it and count the rest; route a
    natural-language query that contains exactly one resolvable dotted path to that target; drop
    duplicate needles in the headline.
-2. **Claude Code adoption.** The hook as built cannot help: Claude's Grep output (files or a few
-   lines) is already shorter than a caller packet, so the "shorter than grep" rule never lets it
-   answer, and without that rule it would add tokens on small repositories (F). The evidence points
-   to the follow-up Reads, not the grep, as Claude's cost; a next experiment would compare the
-   packet with grep output plus the reads that follow it, measured first offline on the recorded A
-   transcripts before any new arm. Until then H is not worth running again.
+2. **Claude Code adoption through the hook.** Iteration 4's hook answered no grep because it
+   compared the full packet with Claude's short `content` greps (median 718 chars). It now answers
+   with a compact text (target, check, one line per caller) and only when that is shorter than the
+   grep output; replayed offline on the 119 recorded greps it answers 16 with 35 % less text
+   (`benchmarks/results/agent/hook-replay-20261110/`). Whether Claude then stops searching is
+   measured by arm H in the next pilot. Alternation patterns (`a|def b`, 49 of 119) are not
+   answered yet.
 3. **Repetitions**: three repetitions of the held-out sets per agent before any claim beyond "pilot";
    iteration 4 shows identical configurations differing by up to ±50 % in a single run.
 4. Release the fixes (npm launcher roots bug, refresh retry) as 0.5.1 after owner approval.

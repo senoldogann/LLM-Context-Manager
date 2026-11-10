@@ -1,0 +1,121 @@
+deny django-callers-get-random-string__A__1     get_random_string            grep=  1525 answer=1115 
+deny django-callers-get-random-string__B__1     get_random_string            grep=  1525 answer=1115 
+deny django-callers-make-aware__A__1            make_aware                   grep=  2400 answer=1658 
+deny django-callers-make-aware__A__1            make_aware\b                 grep=  2400 answer=1658 
+deny django-callers-make-aware__A__1            make_aware                   grep=  2400 answer=1658 
+deny django-callers-make-aware__B__1            make_aware\(                 grep=  2000 answer=1658 
+deny django-callers-make-aware__B__1            make_aware\(                 grep=  2000 answer=1658 
+deny django-callers-make-aware__B__1            make_aware\(                 grep=  2000 answer=1658 
+deny django-callers-make-aware__F__1            make_aware\(                 grep=  2000 answer=1658 
+deny django-callers-make-aware__H__1            make_aware\(                 grep=  2000 answer=1658 
+deny flask-callers-ensure-sync__A__1            ensure_sync                  grep=  2663 answer=1072 
+deny flask-callers-ensure-sync__B__1            ensure_sync                  grep=  2663 answer=1072 
+deny flask-callers-ensure-sync__F__1            ensure_sync                  grep=  2663 answer=1072 
+deny flask-trap-load-dotenv__A__1               load_dotenv                  grep=  1072 answer=612 
+deny flask-trap-load-dotenv__B__1               load_dotenv                  grep=  1072 answer=612 
+deny flask-trap-load-dotenv__F__1               load_dotenv                  grep=  1072 answer=612 
+pass django-callers-make-aware__B__1            make_aware\b(?!\()           grep=   328 answer=None pattern is not a single symbol
+pass django-callers-make-aware__B__1            make_aware[^(]|make_aware$   grep=   399 answer=None pattern is not a single symbol
+pass django-callers-make-aware__B__1            import.*make_aware|make_awar grep=   244 answer=None pattern is not a single symbol
+pass django-trap-capfirst__A__1                 capfirst                     grep=  5943 answer=None packet does not claim a complete call list
+pass django-trap-capfirst__B__1                 capfirst                     grep=  5943 answer=None packet does not claim a complete call list
+pass django-trap-capfirst__B__1                 import text\b|text\.capfirst grep=    16 answer=None pattern is not a single symbol
+pass django-trap-capfirst__F__1                 import.*capfirst|capfirst\s* grep=  3483 answer=None pattern is not a single symbol
+pass django-trap-capfirst__F__1                 capfirst|^from django.utils. grep=   733 answer=None pattern is not a single symbol
+pass django-trap-capfirst__F__1                 ^class                       grep=   164 answer=None pattern is not a single symbol
+pass django-trap-capfirst__H__1                 capfirst                     grep=  5943 answer=None packet does not claim a complete call list
+pass django-trap-html-escape__A__1              import.*\bescape\b|html\.esc grep=   850 answer=None pattern is not a single symbol
+pass django-trap-html-escape__A__1              (?<![\w.])escape\(|html\.esc grep=   377 answer=None pattern is not a single symbol
+pass django-trap-html-escape__A__1              (^|[^\w.])escape\b|html\.esc grep=  4173 answer=None grep uses -i, glob or type
+pass django-trap-html-escape__B__1              import.*\bescape\b|html\.esc grep=   850 answer=None pattern is not a single symbol
+pass django-trap-html-escape__B__1              (?<![\w.])escape\(|from djan grep=   378 answer=None pattern is not a single symbol
+pass django-trap-html-escape__B__1              (^|[^\w.])escape\(|from djan grep=  2193 answer=None pattern is not a single symbol
+pass django-trap-html-escape__F__1              from django\.utils\.html imp grep=   803 answer=None pattern is not a single symbol
+pass django-trap-html-escape__F__1              ^\s+escape,?\s*$|import \($  grep= 11900 answer=None grep uses -i, glob or type
+pass django-trap-html-escape__F__1              (?<![\w.])escape\b(?!\()     grep=   323 answer=None grep uses -i, glob or type
+pass express-callers-res-set__A__1              \.(set|header)\(             grep=  2607 answer=None pattern is not a single symbol
+pass express-callers-res-set__A__1              ^(res\.\w+|res\.\w+ = res\.\ grep=  2470 answer=None grep uses -i, glob or type
+pass express-callers-res-set__B__1              \.(set|header)\(             grep=  2607 answer=None pattern is not a single symbol
+pass express-callers-res-set__F__1              \.(set|header)\(             grep=  2607 answer=None pattern is not a single symbol
+pass express-edit-normalize-type__A__1          normalizeType\b              grep=   267 answer=None answer (486 chars) is not shorter than the grep output (at least 247 c
+pass express-edit-normalize-type__B__1          normalizeType\b              grep=   267 answer=None answer (486 chars) is not shorter than the grep output (at least 247 c
+pass express-edit-normalize-type__F__1          normalizeType\b              grep=   267 answer=None answer (486 chars) is not shorter than the grep output (at least 247 c
+pass express-edit-normalize-type__H__1          normalizeType\b              grep=   267 answer=None answer (486 chars) is not shorter than the grep output (at least 247 c
+pass express-trap-req-get__A__1                 \.get\(|\.header\(|\bget\(|h grep=  3014 answer=None pattern is not a single symbol
+pass express-trap-req-get__B__1                 \.(get|header)\(|\[['"](get| grep=  2896 answer=None pattern is not a single symbol
+pass express-trap-req-get__F__1                 \.(get|header)\(|\[['"](get| grep=  2896 answer=None pattern is not a single symbol
+pass express-trap-req-get__F__1                 (get|header)\.(call|apply|bi grep=   520 answer=None pattern is not a single symbol
+pass express-trap-res-send__A__1                \.send\(|send\b              grep=  2242 answer=None pattern is not a single symbol
+pass express-trap-res-send__A__1                ^res\.\w+ = function         grep=   186 answer=None pattern is not a single symbol
+pass express-trap-res-send__A__1                ^res\.\w+ = function         grep=   523 answer=None pattern is not a single symbol
+pass express-trap-res-send__A__1                \.send\(|send\b              grep=  2242 answer=None pattern is not a single symbol
+pass express-trap-res-send__B__1                \.send\(|\bsend\(            grep=  1628 answer=None pattern is not a single symbol
+pass express-trap-res-send__B__1                send\b(?!\()|\.send\b        grep=   325 answer=None pattern is not a single symbol
+pass express-trap-res-send__B__1                \bsend\b                     grep=  2242 answer=None packet does not claim a complete call list
+pass express-trap-res-send__B__1                \.send\(|send\(              grep=  1628 answer=None pattern is not a single symbol
+pass express-trap-res-send__F__1                \.send\(|\[['"]send['"]\]|se grep=  1459 answer=None pattern is not a single symbol
+pass express-trap-res-send__F__1                \bsend\b                     grep=  2242 answer=None packet does not claim a complete call list
+pass express-trap-res-send__F__1                \.send\b|\[['"]send['"]\]    grep=  1512 answer=None pattern is not a single symbol
+pass express-trap-res-send__F__1                send(?!Status|File|file|Opti grep=   337 answer=None grep uses -i, glob or type
+pass express-trap-res-send__F__1                send                         grep=  4050 answer=None packet does not claim a complete call list
+pass express-trap-res-send__H__1                \.send\(|\bsend\b            grep=  2242 answer=None pattern is not a single symbol
+pass express-trap-sendfile-helper__A__1         sendfile\s*\(|function sendf grep=   657 answer=None pattern is not a single symbol
+pass express-trap-sendfile-helper__A__1         sendfile\s*\(                grep=   452 answer=None packet does not claim a complete call list
+pass express-trap-sendfile-helper__A__1         sendfile\b|^res\.\w+ = funct grep=  3169 answer=None pattern is not a single symbol
+pass express-trap-sendfile-helper__B__1         sendfile\s*\(                grep=   452 answer=None packet does not claim a complete call list
+pass express-trap-sendfile-helper__B__1         \bsendfile\b                 grep=   657 answer=None packet does not claim a complete call list
+pass express-trap-sendfile-helper__B__1         sendfile\(                   grep=   452 answer=None packet does not claim a complete call list
+pass express-trap-sendfile-helper__B__1         sendfile\b|^res\.\w+ = funct grep=  3169 answer=None pattern is not a single symbol
+pass express-trap-sendfile-helper__F__1         sendfile\(                   grep=  1001 answer=None grep uses -i, glob or type
+pass express-trap-sendfile-helper__F__1         sendfile\(                   grep=  1001 answer=None grep uses -i, glob or type
+pass express-trap-sendfile-helper__F__1         \bsendfile\b                 grep=   657 answer=None packet does not claim a complete call list
+pass flask-edit-debug-flag__A__1                get_debug_flag               grep=   481 answer=None answer (663 chars) is not shorter than the grep output (at least 414 c
+pass flask-edit-debug-flag__B__1                get_debug_flag               grep=   481 answer=None answer (663 chars) is not shorter than the grep output (at least 414 c
+pass flask-edit-debug-flag__F__1                get_debug_flag               grep=   481 answer=None answer (663 chars) is not shorter than the grep output (at least 414 c
+pass flask-edit-debug-flag__F__1                get_debug_flag\(|_debug_from grep=   409 answer=None pattern is not a single symbol
+pass flask-edit-error-handler__A__1             _find_error_handler|def hand grep=   511 answer=None pattern is not a single symbol
+pass flask-edit-error-handler__A__1             _find_error_handler          grep=   318 answer=None answer (605 chars) is not shorter than the grep output (at least 285 c
+pass flask-edit-error-handler__A__1             _find_error_handler|def hand grep=   766 answer=None pattern is not a single symbol
+pass flask-edit-error-handler__A__1             find_error_handler           grep=   328 answer=None answer (604 chars) is not shorter than the grep output (at least 0 cha
+pass flask-edit-error-handler__A__1             _find_error_handler|def hand grep=   407 answer=None pattern is not a single symbol
+pass flask-edit-error-handler__A__1             _find_error_handler          grep=   318 answer=None answer (605 chars) is not shorter than the grep output (at least 285 c
+pass flask-edit-error-handler__B__1             _find_error_handler|def hand grep=   407 answer=None pattern is not a single symbol
+pass flask-edit-error-handler__B__1             _find_error_handler|def hand grep=   555 answer=None pattern is not a single symbol
+pass flask-edit-error-handler__B__1             _find_error_handler|def hand grep=   407 answer=None pattern is not a single symbol
+pass flask-edit-error-handler__F__1             _find_error_handler|def hand grep=   451 answer=None pattern is not a single symbol
+pass flask-edit-error-handler__F__1             _find_error_handler\(        grep=   318 answer=None answer (605 chars) is not shorter than the grep output (at least 285 c
+pass flask-edit-error-handler__F__1             _find_error_handler|def hand grep=   451 answer=None pattern is not a single symbol
+pass flask-edit-error-handler__F__1             _find_error_handler|def hand grep=   451 answer=None pattern is not a single symbol
+pass flask-edit-error-handler__H__1             _find_error_handler|def hand grep=   407 answer=None pattern is not a single symbol
+pass flask-locate-app-string__A__1              def \w*(app_by_string|by_str grep=   170 answer=None definition search
+pass flask-locate-app-string__B__1              def find_app_by_string|ast.p grep=   420 answer=None definition search
+pass flask-locate-app-string__H__1              def find_app_by_string|def f grep=   267 answer=None definition search
+pass serde-callers-expr-is-missing__A__1        expr_is_missing              grep=  1177 answer=None answer (864 chars) is not shorter than the grep output (at least 700 c
+pass serde-callers-expr-is-missing__B__1        expr_is_missing              grep=  1177 answer=None answer (864 chars) is not shorter than the grep output (at least 700 c
+pass serde-edit-with-bound__A__1                with_bound                   grep=   241 answer=None answer (535 chars) is not shorter than the grep output (at least 195 c
+pass serde-edit-with-bound__A__1                with_bound|with_serialize_bo grep=   302 answer=None pattern is not a single symbol
+pass serde-edit-with-bound__B__1                with_bound\(                 grep=   241 answer=None answer (535 chars) is not shorter than the grep output (at least 195 c
+pass serde-edit-with-bound__F__1                with_bound\(                 grep=   241 answer=None answer (535 chars) is not shorter than the grep output (at least 195 c
+pass serde-edit-with-bound__F__1                with_bound\(                 grep=   208 answer=None answer (535 chars) is not shorter than the grep output (at least 195 c
+pass serde-edit-wrap-field__A__1                wrap_serialize_field_with|^f grep=  3592 answer=None grep uses -i, glob or type
+pass serde-edit-wrap-field__A__1                wrap_serialize_field_with    grep=    36 answer=None answer (913 chars) is not shorter than the grep output (at least 24 ch
+pass serde-edit-wrap-field__A__1                wrap_serialize_field_with\(| grep=  1053 answer=None pattern is not a single symbol
+pass serde-edit-wrap-field__B__1                wrap_serialize_field_with|^f grep= 18380 answer=None pattern is not a single symbol
+pass serde-edit-wrap-field__F__1                wrap_serialize_field_with|^f grep= 16804 answer=None pattern is not a single symbol
+pass serde-edit-wrap-field__H__1                wrap_serialize_field_with|^f grep=  2584 answer=None pattern is not a single symbol
+pass serde-edit-wrap-field__H__1                wrap_serialize_field_with    grep=   903 answer=None answer (913 chars) is not shorter than the grep output (at least 761 c
+pass serde-trap-deserialize-struct__A__1        deserialize_struct\b         grep=   718 answer=None packet does not claim a complete call list
+pass serde-trap-deserialize-struct__A__1        deserialize_struct\b         grep=   718 answer=None packet does not claim a complete call list
+pass serde-trap-deserialize-struct__A__1        deserialize_struct\b         grep=   718 answer=None packet does not claim a complete call list
+pass serde-trap-deserialize-struct__B__1        deserialize_struct\b         grep=   718 answer=None packet does not claim a complete call list
+pass serde-trap-deserialize-struct__B__1        deserialize_struct\b         grep=   718 answer=None packet does not claim a complete call list
+pass serde-trap-deserialize-struct__B__1        deserialize_struct\b         grep=   718 answer=None packet does not claim a complete call list
+pass serde-trap-deserialize-struct__F__1        deserialize_struct\b         grep=   718 answer=None packet does not claim a complete call list
+pass serde-trap-deserialize-struct__F__1        deserialize_struct\b         grep=   718 answer=None packet does not claim a complete call list
+pass serde-trap-deserialize-struct__F__1        deserialize_struct\b         grep=   718 answer=None packet does not claim a complete call list
+pass serde-trap-deserialize-struct__H__1        deserialize_struct\b         grep=   718 answer=None packet does not claim a complete call list
+pass serde-trap-effective-style__A__1           effective_style              grep=   548 answer=None packet does not claim a complete call list
+pass serde-trap-effective-style__B__1           effective_style              grep=   548 answer=None packet does not claim a complete call list
+pass serde-trap-effective-style__F__1           effective_style              grep=   548 answer=None packet does not claim a complete call list
+{'deny': 16, 'pass': 103}
+answered greps: recorded grep output 31455 chars, hook answers 20546 chars
