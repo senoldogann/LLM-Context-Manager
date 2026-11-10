@@ -8,8 +8,9 @@ Last updated: 2026-11-10. Where work stopped: **seven measured iterations; a sec
 repository (Tokio, Rust, 112 k non-test lines) added and measured.** The large-repository saving
 on caller questions is not specific to Django: on Tokio `sleep_until` every Codex B run was below
 the A mean (B/A 0.65), and on Django all three caller tasks held for Codex (0.61, 0.67 and the
-`urlencode` trap 0.51, now 0.30 after #17). Claude Code saves on these tasks only in the runs where
-it chooses CCM (6 of 6 Django caller runs, 1 of 3 Tokio runs). Name-collision traps remain a loss
+`urlencode` trap 0.51, now 0.30 after #17). Claude Code met the saving rule on the two Django
+caller tasks, where it chose CCM in all six B runs; on Tokio `sleep_until` it did not (B runs 19 k
+with CCM, 28 k without, 39 k without, against an A mean of 34 k). Name-collision traps remain a loss
 when the check cannot rule out the other definition (Tokio `catch_unwind`: Codex 1.36, Claude
 1.30), and small-repository tasks cost more for Codex (1.16–1.77) because a CCM call adds a turn.
 Across held-out sets as a whole B/A stays above 1. The commits behind each figure are in "Agent
@@ -117,6 +118,13 @@ wide and one repetition cannot separate small effects from run-to-run noise.
 
 | iteration 7 (`e805025`) | Codex | Tokio 2 held-out + Django urlencode tuned, 3 reps | 18/18 | | tokio sleep_until 0.65, tokio catch_unwind trap 1.36; tuned django urlencode 0.30 (was 0.51) | |
 | iteration 7 (`e805025`) | Claude | Tokio 2 held-out + Django urlencode tuned, 3 reps | 36/36 | B called CCM in 1 of 9 runs (tokio sleep_until) | tokio sleep_until 0.84, catch_unwind trap 1.30; tuned urlencode 0.91 | F 0.87, 1.33, 0.66 (urlencode was 1.10); H 0.77, 1.22, 0.91 |
+
+Scoring caveat (all pilots): answers are scored per file and function name. Two methods with the
+same name in one file count as one expected item (`RequestFactory.generic` and
+`AsyncRequestFactory.generic` in the `urlencode` trap), and the class name in an answer is not
+checked (`BaseModelAdmin.get_preserved_filters` passes for `ModelAdmin.get_preserved_filters`).
+The preregistered scorer is kept so results stay comparable; a class-aware rescoring would be
+reported separately.
 
 Per-run input tokens for iteration 7 (`iter7-20261110/`, reading rule in its `PLAN.md`): Tokio
 `sleep_until` Codex A 51 k, 80 k, 53 k and B 44 k, 43 k, 33 k; Claude A 26–38 k and B 19 k (with
