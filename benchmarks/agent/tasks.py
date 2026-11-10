@@ -1098,8 +1098,44 @@ DJANGO_ITERATION4_TASKS: tuple[Task, ...] = (
     ),
 )
 
+DJANGO_ITERATION5_TASKS: tuple[Task, ...] = (
+    Task(
+        id="django-callers-iri-to-uri",
+        repo="django",
+        category="callers",
+        answer_kind="symbols",
+        question=(
+            "Which functions or methods in `django/` call `django.utils.encoding.iri_to_uri` "
+            "directly?"
+        ),
+        expected=(
+            sym("django/contrib/flatpages/models.py", "get_absolute_url"),
+            sym("django/contrib/syndication/views.py", "add_domain"),
+            *symbols("django/http/request.py", ("_get_full_path", "build_absolute_uri")),
+            sym("django/http/response.py", "__init__"),
+            sym("django/template/defaultfilters.py", "iriencode"),
+            sym("django/templatetags/static.py", "handle_simple"),
+            *symbols("django/utils/feedgenerator.py", ("__init__", "add_item")),
+        ),
+        edit=None,
+        notes=(
+            "Python ast over django/**/*.py: names bound by `from django.utils.encoding import "
+            "iri_to_uri` (and module-attribute calls); 13 call sites in 10 functions "
+            "(feedgenerator has two __init__ methods, SyndicationFeed and Enclosure, scored as "
+            "one file-level name). A mention in a docstring in django/utils/http.py is not a "
+            "call. Held out for the 2026-11-10 iteration-5 pilot: chosen before any CCM packet "
+            "for it was looked at."
+        ),
+    ),
+)
+
 TASKS: tuple[Task, ...] = FLASK_TASKS + EXPRESS_TASKS + SERDE_TASKS
 # Ürün pilotlarının seçebildiği tüm görevler; `--tasks all` yalnız ön kayıtlı 24 görevdir.
 KNOWN_TASKS: tuple[Task, ...] = (
-    TASKS + DJANGO_TASKS + DJANGO_HELD_OUT_TASKS + DJANGO_ITERATION3_TASKS + DJANGO_ITERATION4_TASKS
+    TASKS
+    + DJANGO_TASKS
+    + DJANGO_HELD_OUT_TASKS
+    + DJANGO_ITERATION3_TASKS
+    + DJANGO_ITERATION4_TASKS
+    + DJANGO_ITERATION5_TASKS
 )

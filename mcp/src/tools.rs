@@ -1366,10 +1366,18 @@ fn scoped_symbol_hints(query: &str) -> Vec<ScopedSymbolHint> {
 /// kapsam) veya kapsamsız kod-benzeri adın projedeki tek tanımıyla çözülür. Ancak
 /// tek bir ipucu tek bir düğüme çözülürse hedef döner; birden çok farklı hedef ya
 /// da belirsiz ad sessizce seçilmez.
-async fn scoped_symbol_target_id(engine: &Arc<RetrievalEngine>, query: &str) -> Option<String> {
+/// Sorgudaki açık sembollerin çözümü: hiç, tek ya da birden çok farklı hedef.
+enum ScopedTargets {
+    None,
+    One(String),
+    /// Birden çok farklı hedef (`yol:satır Tür ad` satırları); sessiz seçim yapılmaz.
+    Many(Vec<String>),
+}
+
+async fn scoped_symbol_targets(engine: &Arc<RetrievalEngine>, query: &str) -> ScopedTargets {
     let hints = scoped_symbol_hints(query);
     if hints.is_empty() {
-        return None;
+        return ScopedTargets::None;
     }
     let graph = engine.graph.read().await;
     let callables: Vec<petgraph::graph::NodeIndex> = graph
@@ -1415,9 +1423,36 @@ async fn scoped_symbol_target_id(engine: &Arc<RetrievalEngine>, query: &str) -> 
         }
     }
     match resolved.as_slice() {
-        [only] => Some(graph.graph[*only].id.clone()),
-        _ => None,
+        [] => ScopedTargets::None,
+        [only] => ScopedTargets::One(graph.graph[*only].id.clone()),
+        many => ScopedTargets::Many(
+            many.iter()
+                .map(|idx| {
+                    let node = &graph.graph[*idx];
+                    format!(
+                        "{}:{} {:?} {}",
+                        ccm_core::engine::extract_file_path(&node.id).trim_start_matches("./"),
+                        node.start_line,
+                        node.node_type,
+                        node.name
+                    )
+                })
+                .collect(),
+        ),
     }
+}
+
+/// Sorgu birden çok açık hedef adlandırdığında dönen metin: anlamsal aramaya
+/// düşmek yerine adaylar listelenir (yanlış paket, doğru soruyu tekrar sordurur).
+fn several_targets_text(candidates: &[String]) -> String {
+    let mut text = format!(
+        "The query names {} different code targets; ask `context` about one of them (path:line or the dotted name):",
+        candidates.len()
+    );
+    for candidate in candidates {
+        text.push_str(&format!("\n- {candidate}"));
+    }
+    text
 }
 
 fn is_js_ts_path(path: &str) -> bool {
@@ -1771,22 +1806,31 @@ async fn receiver_call_evidence(
         }
         let tree =
             ccm_core::parser::CodeParser::new().parse_tree(&node.content, js_language(path))?;
-        let matching_expression = target.expressions.iter().find(|expression| {
-            contains_member_call(&tree, &node.content, expression, true)
-                || (hint.definition_file.as_deref() == Some(path)
-                    && expression.rsplit_once('.').is_some_and(|(_, member)| {
-                        std::iter::once("this")
-                            .chain(target.this_aliases.iter().map(String::as_str))
-                            .any(|receiver| {
-                                contains_member_call(
-                                    &tree,
-                                    &node.content,
-                                    &format!("{receiver}.{member}"),
-                                    false,
-                                )
-                            })
-                    }))
-        });
+        let matching_expression =
+            target.expressions.iter().find(|expression| {
+                contains_member_call(&tree, &node.content, expression, true)
+                    || (hint.definition_file.as_deref() == Some(path)
+                        && expression.rsplit_once('.').is_some_and(|(_, member)| {
+                            // Takma ad yalnız onu bildiren gövdede geçerlidir (`var self = this`
+                            // başka bir fonksiyondaki `self`'i bağlamaz).
+                            std::iter::once("this")
+                                .chain(target.this_aliases.iter().map(String::as_str).filter(
+                                    |alias| {
+                                        node.content
+                                            .lines()
+                                            .any(|line| this_alias_of(line) == Some(*alias))
+                                    },
+                                ))
+                                .any(|receiver| {
+                                    contains_member_call(
+                                        &tree,
+                                        &node.content,
+                                        &format!("{receiver}.{member}"),
+                                        false,
+                                    )
+                                })
+                        }))
+            });
         let Some(expression) = matching_expression else {
             continue;
         };
@@ -2047,7 +2091,19 @@ pub async fn context(
         Ok(target) => target,
         Err(error) => return Ok(tool_error(error.to_string())),
     };
-    let scoped_target = scoped_symbol_target_id(engine, query).await;
+    let scoped_target = match scoped_symbol_targets(engine, query).await {
+        ScopedTargets::Many(candidates) if member_target.is_none() => {
+            return Ok(ToolResult {
+                content: vec![ToolResultContent {
+                    content_type: "text".to_string(),
+                    text: several_targets_text(&candidates),
+                }],
+                is_error: None,
+            });
+        }
+        ScopedTargets::One(id) => Some(id),
+        ScopedTargets::Many(_) | ScopedTargets::None => None,
+    };
     let hinted_target = member_target
         .as_ref()
         .map(|target| target.node_id.clone())
@@ -2311,8 +2367,13 @@ fn check_spec(
             for receiver in
                 std::iter::once("this").chain(target.this_aliases.iter().map(String::as_str))
             {
+                let text = format!("{receiver}.{member}");
+                // Dosyasız aynı metin (`res.send(` her dosyada) dosyalıyı zaten kapsar.
+                if needles.iter().any(|needle| needle.text == text) {
+                    continue;
+                }
                 needles.push(Needle {
-                    text: format!("{receiver}.{member}"),
+                    text,
                     only_file: target.hint.definition_file.clone(),
                 });
             }
@@ -2914,8 +2975,12 @@ fn is_test_path(path: &str) -> bool {
     let name = rooted
         .rsplit_once('/')
         .map_or(rooted.as_str(), |(_, name)| name);
+    // Python'da `test/` dizini çoğu zaman üretim paketidir (`django/test/`,
+    // `unittest`); Python testleri `tests/` dizininde ya da `test_*.py` adındadır.
+    let python = name.ends_with(".py");
     ["/tests/", "/test/", "/__tests__/", "/spec/"]
         .iter()
+        .filter(|directory| !(python && **directory == "/test/"))
         .any(|directory| rooted.contains(directory))
         || name.starts_with("test_")
         || ["_test.", ".test.", ".spec.", "_spec."]
@@ -3138,6 +3203,14 @@ mod tests {
         assert_eq!(super::this_alias_of("const that = this"), Some("that"));
         assert_eq!(super::this_alias_of("var self = this.app;"), None);
         assert_eq!(super::this_alias_of("self = this;"), None);
+    }
+
+    #[test]
+    fn python_test_packages_are_production_code() {
+        assert!(!super::is_test_path("django/test/selenium.py"));
+        assert!(super::is_test_path("tests/test_basic.py"));
+        assert!(super::is_test_path("Lib/test/test_os.py"));
+        assert!(super::is_test_path("test/app.router.js"));
     }
 
     #[test]

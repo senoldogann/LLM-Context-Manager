@@ -130,7 +130,7 @@ fn fixture_files() -> Vec<(String, String)> {
     // `var self = this` takma adıyla yapılan alıcı çağrısı (express res.render deseni).
     files.push((
         "web/res.js".into(),
-        "var res = {};\n\nres.send = function send(body) {\n  return body;\n};\n\nres.render = function render(view) {\n  var self = this;\n  var done = function (err, str) {\n    self.send(str);\n  };\n  return done;\n};\n".into(),
+        "var res = {};\n\nres.send = function send(body) {\n  return body;\n};\n\nres.render = function render(view) {\n  var self = this;\n  var done = function (err, str) {\n    self.send(str);\n  };\n  return done;\n};\n\nres.relay = function relay(self) {\n  return self.send(1);\n};\n".into(),
     ));
     // `exports.f = function`: çağıranlar başka adla çağırır; graf yolunda kalmalı.
     files.push((
@@ -855,5 +855,8 @@ fn context_follows_self_aliases_of_this_in_the_definition_file() {
         text.contains("render · web/res.js"),
         "a call through `var self = this` is a caller: {text}"
     );
-    assert!(text.contains("Check: call list complete."), "{text}");
+    assert!(
+        !text.contains("relay · web/res.js"),
+        "`self` in a function that does not bind it to `this` is another object: {text}"
+    );
 }
