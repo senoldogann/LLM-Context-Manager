@@ -1172,6 +1172,72 @@ pub(crate) fn read_sources<'a>(
     Ok(scanned)
 }
 
+/// İndekste olmayan bir adın metin taraması: kaynaktaki tanım satırları, test dışı
+/// dosyalardaki çağrılar ve sayılmayan geçişler.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct UnindexedReport {
+    pub definitions: Vec<(String, usize)>,
+    pub calls: Vec<Hit>,
+    pub test_hits: usize,
+    pub external: usize,
+}
+
+/// Satır adın bir tanımı mı (`fn ad`, `def ad`, `function ad`, `class ad`, `struct ad`).
+fn defines_name(line: &str, name: &str) -> bool {
+    needle_positions(line, name)
+        .into_iter()
+        .any(|position| is_definition(line, position) && !in_comment(line, position, Lang::Other))
+}
+
+/// Adı indekste olmayan bir sembol için taranan dosyalardan rapor üretir. Çağrı
+/// sınıflandırması denetimle aynıdır (dizgi, yorum, dış modül ayrılır).
+pub(crate) fn unindexed_name_report(
+    scanned: &[ScannedFile<'_>],
+    name: &str,
+    roots: &HashSet<String>,
+    is_test: &dyn Fn(&str) -> bool,
+) -> UnindexedReport {
+    let spec = CheckSpec {
+        needles: vec![Needle {
+            text: name.to_string(),
+            only_file: None,
+        }],
+        kind: CheckKind::NameUses,
+        scope: None,
+    };
+    let mut report = UnindexedReport {
+        definitions: Vec::new(),
+        calls: Vec::new(),
+        test_hits: 0,
+        external: 0,
+    };
+    for scanned_file in scanned {
+        let path = &scanned_file.file.path;
+        for (index, line) in scanned_file.source.lines().enumerate() {
+            if defines_name(line, name) {
+                report.definitions.push((path.clone(), index + 1));
+            }
+        }
+        let externals = match lang_of(path) {
+            Lang::Python => python_externals(&scanned_file.source, roots),
+            Lang::Rust => PythonExternals {
+                modules: rust_std_aliases(&scanned_file.source),
+                ..PythonExternals::default()
+            },
+            Lang::JavaScript | Lang::Other => PythonExternals::default(),
+        };
+        for hit in file_hits(path, &scanned_file.source, &spec, name, &externals) {
+            match hit.kind {
+                HitKind::Call if is_test(path) => report.test_hits += 1,
+                HitKind::Call => report.calls.push(hit),
+                HitKind::External => report.external += 1,
+                _ => {}
+            }
+        }
+    }
+    report
+}
+
 /// Bir caller içeriğindeki çağrı yeri satırları: `  satır: kaynak`, en çok
 /// `SITES_PER_CALLER` satır, fazlası `+n more` ile sayılır.
 pub(crate) fn caller_site_lines(

@@ -127,6 +127,11 @@ fn fixture_files() -> Vec<(String, String)> {
         "app/late.py".into(),
         "def late(handler):\n    return handler.escape(1)\n".into(),
     ));
+    // Makro gövdesindeki tanım indekse girmez (tokio `cfg_trace! { … }` deseni).
+    files.push((
+        "rt/src/trace.rs".into(),
+        "macro_rules! cfg_trace { ($($item:item)*) => { $($item)* } }\n\ncfg_trace! {\n    pub(crate) fn hidden_helper(x: u8) -> u8 {\n        x\n    }\n}\n\npub fn uses_hidden(y: u8) -> u8 {\n    hidden_helper(y)\n}\n".into(),
+    ));
     // `var self = this` takma adıyla yapılan alıcı çağrısı (express res.render deseni).
     files.push((
         "web/res.js".into(),
@@ -870,5 +875,41 @@ fn context_resolves_a_symbol_named_in_a_file() {
     assert!(
         text.contains("Function `escape` · app/html_utils.py:1-2"),
         "`path:name` must resolve the symbol in that file: {text}"
+    );
+}
+
+#[test]
+fn context_says_when_a_name_is_not_indexed_instead_of_answering_another_symbol() {
+    let mut server = Server::start();
+    for query in ["hidden_helper", "rt/src/trace.rs:hidden_helper"] {
+        let (text, is_error) = server.call("context", json!({"query": query}));
+        assert!(!is_error, "{text}");
+        for expected in [
+            "`hidden_helper` is not in the index",
+            "The source defines it at rt/src/trace.rs:4",
+            "uses_hidden · rt/src/trace.rs",
+            "  10: hidden_helper(y)",
+        ] {
+            assert!(
+                text.contains(expected),
+                "missing {expected:?} for {query}: {text}"
+            );
+        }
+        assert!(
+            !text.contains("Check: call list complete"),
+            "no other symbol's check may be presented: {text}"
+        );
+    }
+}
+
+#[test]
+fn context_marks_a_semantic_fallback_for_a_name_that_appears_nowhere() {
+    let mut server = Server::start();
+    let (text, is_error) = server.call("context", json!({"query": "render_html_page_xyz"}));
+    assert!(!is_error, "{text}");
+    assert!(
+        text.contains("No symbol and no code text named `render_html_page_xyz` was found")
+            || text.contains("No context found for query"),
+        "a fallback must not look like an exact answer: {text}"
     );
 }

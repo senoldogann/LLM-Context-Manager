@@ -1472,6 +1472,176 @@ fn several_targets_text(candidates: &[String]) -> String {
     text
 }
 
+/// İndekste aranıp bulunamayan tam ad: aranan ad ve (`yol:ad` biçiminde) dosya.
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct UnknownName {
+    name: String,
+    file: Option<String>,
+}
+
+/// Sorgu kod gibi tek bir ad mı (`async_op`, `trace::async_op`, `mod.fn`,
+/// `yol.rs:ad`)? Boşluklu ya da sıradan bir sözcük (`routing`) değildir.
+fn exact_unknown_name(query: &str) -> Option<UnknownName> {
+    let query = query.trim().trim_matches('`');
+    if query.is_empty() || query.contains(char::is_whitespace) {
+        return None;
+    }
+    let (file, path) = match query.split_once(':') {
+        Some((file, rest)) if is_source_file_path(file) => {
+            (Some(file.to_string()), rest.trim_start_matches(':'))
+        }
+        _ => (None, query),
+    };
+    let segments: Vec<&str> = path
+        .split([':', '.'])
+        .filter(|part| !part.is_empty())
+        .collect();
+    let leaf = segments.last()?;
+    if !segments.iter().all(|segment| identifier_part(segment)) {
+        return None;
+    }
+    let code_like = file.is_some() || segments.len() > 1 || code_like_name(leaf);
+    code_like.then(|| UnknownName {
+        name: (*leaf).to_string(),
+        file,
+    })
+}
+
+/// İndekste olmayan ad için paket (ad kaynakta hiç geçmiyorsa `None`): bunu açıkça söyler, kaynakta tanımı nerede
+/// görünüyorsa gösterir ve adın test dışı çağrı yerlerini onları içeren
+/// indekslenmiş fonksiyona göre gruplar. Tamlık iddiası yoktur: metin taramasıdır.
+async fn unindexed_name_packet(
+    engine: &Arc<RetrievalEngine>,
+    root: Option<&Path>,
+    unknown: &UnknownName,
+    max_tokens: usize,
+) -> Option<String> {
+    let name = &unknown.name;
+    let mut output = match &unknown.file {
+        Some(file) => format!("`{name}` is not in the index for {file}.\n"),
+        None => format!("`{name}` is not in the index.\n"),
+    };
+    let Some(root) = root else {
+        output.push_str("No text search: the server has no project root for this index.\n");
+        return Some(output);
+    };
+    let (files, scopes) = {
+        let graph = engine.graph.read().await;
+        (indexed_files(&graph), function_scopes(&graph))
+    };
+    let spec = crate::call_sites::CheckSpec {
+        needles: vec![crate::call_sites::Needle {
+            text: name.clone(),
+            only_file: None,
+        }],
+        kind: crate::call_sites::CheckKind::NameUses,
+        scope: None,
+    };
+    let scanned = match crate::call_sites::read_sources(root, &files, &spec) {
+        Ok(scanned) => scanned,
+        Err(error) => {
+            output.push_str(&format!("Text search failed: {error:#}\n"));
+            return Some(output);
+        }
+    };
+    let paths: Vec<&str> = files.iter().map(|file| file.path.as_str()).collect();
+    let roots = crate::call_sites::python_roots(&paths);
+    let report = crate::call_sites::unindexed_name_report(&scanned, name, &roots, &is_test_path);
+    if report.definitions.is_empty() && report.calls.is_empty() && report.test_hits == 0 {
+        return None;
+    }
+    let definitions: Vec<String> = report
+        .definitions
+        .iter()
+        .filter(|(path, _)| !is_test_path(path))
+        .map(|(path, line)| format!("{path}:{line}"))
+        .collect();
+    if definitions.is_empty() {
+        output.push_str("No definition of it was found in the indexed files' source.\n");
+    } else {
+        output.push_str(&format!(
+            "The source defines it at {} but the index has no symbol there (for example a definition inside a macro body).\n",
+            definitions.join(", ")
+        ));
+    }
+    let files_in_scope = files
+        .iter()
+        .filter(|file| !is_test_path(&file.path))
+        .count();
+    output.push_str(&format!(
+        "A grep for `{name}` in the {files_in_scope} indexed non-test files finds {} call site(s); they are grouped by the indexed function that contains them. This is a text search: calls through other names are not visible.\n",
+        report.calls.len()
+    ));
+    let mut groups: std::collections::BTreeMap<String, Vec<String>> =
+        std::collections::BTreeMap::new();
+    for hit in &report.calls {
+        let label = scopes
+            .get(&hit.file)
+            .and_then(|spans| {
+                spans
+                    .iter()
+                    .filter(|span| span.start <= hit.line && hit.line <= span.end)
+                    .min_by_key(|span| span.end - span.start)
+            })
+            .map_or_else(
+                || format!("{} (not inside an indexed function)", hit.file),
+                |span| format!("{} · {}:{}-{}", span.label, hit.file, span.start, span.end),
+            );
+        groups
+            .entry(label)
+            .or_default()
+            .push(format!("  {}: {}", hit.line, hit.text));
+    }
+    let budget = max_tokens.saturating_mul(CHARS_PER_TOKEN);
+    for (shown, (label, lines)) in groups.iter().enumerate() {
+        let block = format!("- {label}\n{}\n", lines.join("\n"));
+        if output.len() + block.len() > budget {
+            output.push_str(&format!(
+                "… {} more group(s) not shown (raise max_tokens)\n",
+                groups.len() - shown
+            ));
+            break;
+        }
+        output.push_str(&block);
+    }
+    if report.test_hits > 0 || report.external > 0 {
+        output.push_str(&format!(
+            "{} match(es) in test files and {} in external modules are not listed.\n",
+            report.test_hits, report.external
+        ));
+    }
+    Some(output)
+}
+
+/// Fonksiyon ve metot kapsamları dosya başına: grup etiketi ve satır aralığı.
+struct FunctionScope {
+    label: String,
+    start: usize,
+    end: usize,
+}
+
+fn function_scopes(
+    graph: &ccm_core::graph::CodeGraph,
+) -> std::collections::HashMap<String, Vec<FunctionScope>> {
+    use ccm_core::graph::NodeType;
+    let mut scopes: std::collections::HashMap<String, Vec<FunctionScope>> =
+        std::collections::HashMap::new();
+    for node in graph.graph.node_weights() {
+        if !matches!(node.node_type, NodeType::Function | NodeType::Method) {
+            continue;
+        }
+        let file = ccm_core::engine::extract_file_path(&node.id)
+            .trim_start_matches("./")
+            .to_string();
+        scopes.entry(file).or_default().push(FunctionScope {
+            label: format!("{:?}: {}", node.node_type, node.name),
+            start: node.start_line,
+            end: node.end_line,
+        });
+    }
+    scopes
+}
+
 /// Bilinen bir kaynak dosya uzantısıyla biten yol (`a/b.rs`, `x.py`, `lib/y.js`).
 fn is_source_file_path(path: &str) -> bool {
     !path.contains(':')
@@ -2119,6 +2289,37 @@ pub async fn context(
         Ok(target) => target,
         Err(error) => return Ok(tool_error(error.to_string())),
     };
+    let scoped_target_early = matches!(
+        scoped_symbol_targets(engine, query).await,
+        ScopedTargets::One(_) | ScopedTargets::Many(_)
+    );
+    // Kod gibi tam bir ad ya da `yol:ad` indekste yoksa anlamsal aramanın en yakın
+    // sembolü cevap gibi sunulmaz (iterasyon 8: `async_op` sorusuna başka bir
+    // fonksiyonun "complete" paketi döndü); adın metin taraması döner.
+    let mut semantic_note: Option<String> = None;
+    if member_target.is_none() && !scoped_target_early {
+        if let Some(unknown) = exact_unknown_name(query) {
+            match unindexed_name_packet(engine, root, &unknown, max_tokens).await {
+                Some(text) => {
+                    return Ok(ToolResult {
+                        content: vec![ToolResultContent {
+                            content_type: "text".to_string(),
+                            text,
+                        }],
+                        is_error: None,
+                    });
+                }
+                // Ad kaynakta hiç geçmiyor: anlamsal arama sürer, ama sonucu cevap
+                // gibi değil yakın eşleşme olarak işaretlenir.
+                None => {
+                    semantic_note = Some(format!(
+                        "No symbol and no code text named `{}` was found; the nearest semantic match follows and is not an exact answer.\n",
+                        unknown.name
+                    ))
+                }
+            }
+        }
+    }
     let scoped_target = match scoped_symbol_targets(engine, query).await {
         ScopedTargets::Many(candidates) if member_target.is_none() => {
             return Ok(ToolResult {
@@ -2224,6 +2425,9 @@ pub async fn context(
 
     if char_count(&output) > budget_chars {
         output = clip(&output, budget_chars);
+    }
+    if let Some(note) = semantic_note {
+        output = format!("{note}{output}");
     }
 
     Ok(ToolResult {
