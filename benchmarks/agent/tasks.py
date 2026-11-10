@@ -989,6 +989,44 @@ DJANGO_TASKS: tuple[Task, ...] = (
     ),
 )
 
+DJANGO_HELD_OUT_TASKS: tuple[Task, ...] = (
+    Task(
+        id="django-callers-make-aware",
+        repo="django",
+        category="callers",
+        answer_kind="symbols",
+        question=(
+            "Which functions or methods in `django/` call `django.utils.timezone.make_aware` "
+            "directly (either as `make_aware(...)` or as `timezone.make_aware(...)`)?"
+        ),
+        expected=(
+            sym("django/contrib/admin/views/main.py", "get_filters"),
+            sym("django/contrib/sitemaps/views.py", "_get_latest_lastmod"),
+            sym("django/contrib/syndication/views.py", "get_feed"),
+            sym("django/db/backends/base/operations.py", "year_lookup_bounds_for_datetime_field"),
+            sym("django/db/backends/mysql/operations.py", "convert_datetimefield_value"),
+            sym("django/db/backends/oracle/operations.py", "convert_datetimefield_value"),
+            sym("django/db/backends/sqlite3/operations.py", "convert_datetimefield_value"),
+            *symbols("django/db/models/fields/__init__.py", ("to_python", "get_prep_value")),
+            sym("django/db/models/functions/datetime.py", "convert_value"),
+            sym("django/forms/utils.py", "from_current_timezone"),
+            sym("django/http/response.py", "set_cookie"),
+            sym("django/templatetags/tz.py", "do_timezone"),
+            sym("django/utils/dateformat.py", "r"),
+            sym_with("django/views/decorators/http.py", "condition", ("_pre_process_request",)),
+            sym("django/views/generic/dates.py", "_make_date_lookup_arg"),
+        ),
+        edit=None,
+        notes=(
+            "Python ast over django/**/*.py: names bound by `from django.utils.timezone import "
+            "make_aware` and `timezone.make_aware` through `from django.utils import timezone`; "
+            "19 call sites in 16 functions (a call inside a nested function maps to the outermost "
+            "named function). Held out for the 2026-11-10 iteration-2 pilot: chosen before any "
+            "CCM packet for it was looked at."
+        ),
+    ),
+)
+
 TASKS: tuple[Task, ...] = FLASK_TASKS + EXPRESS_TASKS + SERDE_TASKS
 # Ürün pilotlarının seçebildiği tüm görevler; `--tasks all` yalnız ön kayıtlı 24 görevdir.
-KNOWN_TASKS: tuple[Task, ...] = TASKS + DJANGO_TASKS
+KNOWN_TASKS: tuple[Task, ...] = TASKS + DJANGO_TASKS + DJANGO_HELD_OUT_TASKS
