@@ -1027,6 +1027,41 @@ DJANGO_HELD_OUT_TASKS: tuple[Task, ...] = (
     ),
 )
 
+DJANGO_ITERATION3_TASKS: tuple[Task, ...] = (
+    Task(
+        id="django-callers-get-random-string",
+        repo="django",
+        category="callers",
+        answer_kind="symbols",
+        question=(
+            "Which functions or methods in `django/` call `django.utils.crypto.get_random_string` "
+            "directly?"
+        ),
+        expected=(
+            *symbols(
+                "django/contrib/auth/hashers.py", ("verify_password", "make_password", "salt")
+            ),
+            *symbols(
+                "django/contrib/sessions/backends/base.py",
+                ("_get_new_session_key", "_aget_new_session_key"),
+            ),
+            sym("django/core/files/storage/base.py", "get_alternative_name"),
+            sym("django/core/management/utils.py", "get_random_secret_key"),
+            sym("django/db/backends/oracle/creation.py", "_test_database_passwd"),
+            sym("django/middleware/csrf.py", "_get_new_csrf_string"),
+        ),
+        edit=None,
+        notes=(
+            "Python ast over django/**/*.py: names bound by `from django.utils.crypto import "
+            "get_random_string` (and module-attribute calls); 9 call sites in 9 functions. Held "
+            "out for the 2026-11-10 iteration-3 pilot: chosen before any CCM packet for it was "
+            "looked at."
+        ),
+    ),
+)
+
 TASKS: tuple[Task, ...] = FLASK_TASKS + EXPRESS_TASKS + SERDE_TASKS
 # Ürün pilotlarının seçebildiği tüm görevler; `--tasks all` yalnız ön kayıtlı 24 görevdir.
-KNOWN_TASKS: tuple[Task, ...] = TASKS + DJANGO_TASKS + DJANGO_HELD_OUT_TASKS
+KNOWN_TASKS: tuple[Task, ...] = (
+    TASKS + DJANGO_TASKS + DJANGO_HELD_OUT_TASKS + DJANGO_ITERATION3_TASKS
+)
