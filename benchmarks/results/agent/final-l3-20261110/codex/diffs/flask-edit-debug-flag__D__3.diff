@@ -1,0 +1,23 @@
+diff --git a/src/flask/cli.py b/src/flask/cli.py
+index ecb292a..e8dfb19 100644
+--- a/src/flask/cli.py
++++ b/src/flask/cli.py
+@@ -952,7 +952,7 @@ def run_command(
+             # command fails.
+             raise e from None
+ 
+-    debug = get_debug_flag()
++    debug = _debug_from_env()
+ 
+     if reload is None:
+         reload = debug
+@@ -1105,5 +1105,9 @@ def main() -> None:
+     cli.main()
+ 
+ 
++def _debug_from_env() -> bool:
++    return get_debug_flag()
++
++
+ if __name__ == "__main__":
+     main()

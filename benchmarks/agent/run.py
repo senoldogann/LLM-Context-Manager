@@ -35,7 +35,9 @@ from freshness.repos import WorkspaceError, export_corpus, init_git, run_git
 # Doğal kullanım kollarından (A/B/C) ayrı etiketlenir; onların karşılaştırmasını değiştirmez.
 # H yalnız context-first-pilot profilinde ve Claude Code'da: B'nin araçları ve notu + kurulumla
 # gelen isteğe bağlı Grep hook'u (`ccm-mcp hook claude-pre-tool-use`). Doğal kullanım değildir.
-Arm = Literal["A", "B", "C", "F", "H"]
+# D yalnız preregistered profilde (ek 14): B'nin güncel ürün sürümü, `context` + `index_project`
+# ve `context` notu. A, B ve C ön kayıttaki tanımlarıyla kalır.
+Arm = Literal["A", "B", "C", "D", "F", "H"]
 Embedding = Literal["local", "openai"]
 # subscription: `claude setup-token` ile üretilen abonelik jetonu; api-key: ücretli API anahtarı.
 Auth = Literal["subscription", "api-key"]
@@ -396,8 +398,12 @@ def granted_tools(profile: ProductProfile, arm: Arm) -> tuple[str, ...]:
         return ()
     if arm in ("F", "H") and profile != "context-first-pilot":
         raise SetupError(f"arm {arm} exists only in the context-first-pilot profile")
+    if arm == "D" and profile != "preregistered":
+        raise SetupError("arm D exists only in the preregistered profile")
     if profile == "context-first-pilot":
         return CONTEXT_DEFAULT_TOOLS if arm in ("B", "F", "H") else LEGACY_CCM_TOOLS
+    if arm == "D":
+        return CONTEXT_DEFAULT_TOOLS
     return LEGACY_CCM_TOOLS if arm == "B" else ("search_code",)
 
 
@@ -405,7 +411,7 @@ def uses_legacy_discovery(profile: ProductProfile, arm: Arm) -> bool:
     """Bu kol eski yapısal araçların tools/list içinde görünmesini gerektiriyor mu."""
     if arm == "A":
         return False
-    if arm in ("F", "H"):
+    if arm in ("D", "F", "H"):
         return False
     return profile == "preregistered" or arm == "C"
 
@@ -416,6 +422,10 @@ def arm_note(profile: ProductProfile, arm: Arm) -> str:
         return ""
     if arm in ("F", "H") and profile != "context-first-pilot":
         raise SetupError(f"arm {arm} exists only in the context-first-pilot profile")
+    if arm == "D" and profile != "preregistered":
+        raise SetupError("arm D exists only in the preregistered profile")
+    if arm == "D":
+        return CONTEXT_NOTE
     if profile == "context-first-pilot":
         if arm == "F":
             return CONTEXT_NOTE + FORCED_NOTE

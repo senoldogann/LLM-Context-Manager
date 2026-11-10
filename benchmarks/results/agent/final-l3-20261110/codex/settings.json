@@ -1,0 +1,57 @@
+{
+  "schema_version": 1,
+  "harness_revision": "6d502c8730ad138f0af152296bc40da3cfaa4923",
+  "preregistration": "benchmarks/agent/PREREGISTRATION.md",
+  "settings": {
+    "model": "gpt-6-luna",
+    "effort": "high",
+    "embedding": "local",
+    "auth": "subscription",
+    "profile": "preregistered",
+    "agent": "codex",
+    "max_budget_usd": 2.0,
+    "timeout_s": 1800,
+    "repetitions": 3,
+    "arms": [
+      "A",
+      "B",
+      "C",
+      "D"
+    ],
+    "tasks": [
+      "flask-callers-ensure-sync",
+      "flask-trap-load-dotenv",
+      "flask-files-globals",
+      "flask-types-scaffold",
+      "flask-locate-app-string",
+      "flask-edit-method-route",
+      "flask-edit-debug-flag",
+      "flask-edit-error-handler",
+      "express-trap-res-send",
+      "express-trap-req-get",
+      "express-trap-sendfile-helper",
+      "express-callers-res-set",
+      "express-locate-trust",
+      "express-edit-stringify",
+      "express-edit-handle-request",
+      "express-edit-normalize-type",
+      "serde-callers-expr-is-missing",
+      "serde-trap-deserialize-struct",
+      "serde-trap-effective-style",
+      "serde-types-deserializer",
+      "serde-locate-tag-conflict",
+      "serde-edit-wrap-field",
+      "serde-edit-with-bound",
+      "serde-edit-deserialize-seq"
+    ]
+  },
+  "environment": {
+    "agent_version": "codex-cli 0.167.0",
+    "agent_login": "Logged in using ChatGPT",
+    "ccm_version": "ccm-cli 0.5.0",
+    "ccm_commit": "6d502c8730ad138f0af152296bc40da3cfaa4923",
+    "ccm_dirty": false,
+    "ccm_cli_sha256": "5ea5c4bd122b12e3ba3265777c326526ae8de39f954c50dc15d91a81bce715a1",
+    "ccm_mcp_sha256": "601fc2c0bae700eeaa9f7360081e83c44ccf3fec4c07a697848ebdb974acd577"
+  }
+}

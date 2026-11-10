@@ -4,18 +4,16 @@ The current state of CCM and the next steps, for the owner and for any agent tha
 work. Keep it current: replace lines that stop being true instead of appending history (git log and
 `benchmarks/results/` are the history).
 
-Last updated: 2026-11-10. Where work stopped: **nine measured iterations; the two product gaps
-found in iteration 8 are fixed (#21 unknown names, #22 Rust items inside `cfg_*! { … }` macro
-bodies) and measured in iteration 9.** On the tuned Tokio `async_op` task they turned a loss into
-a saving for both agents (Codex B/A 2.28 → 0.85, Claude 1.02 → 0.50, every B run below the A mean).
-On the two new held-out Tokio tasks with macro-defined targets the means were below A for
-`with_scheduler` (Codex 0.83, Claude 0.93) but B runs exceeded the A mean (one for Codex, two for
-Claude), and
-`poll_proceed` cost more (Codex 1.10, Claude 1.18), so the preregistered saving rule held on
-neither. Over all pilots the saving rule held on large-repository caller questions (Django for
-Codex on three tasks and Claude on two; Tokio `sleep_until` for Codex), not across held-out sets as
-a whole. Claude Code chose CCM on its own in 17 of 86 B runs, 7 of 9 in iteration 9. The commits
-behind each figure are in "Agent pilots" below.
+Last updated: 2026-11-10. Where work stopped: **the preregistered final L3 run is complete
+(`benchmarks/results/agent/final-l3-20261110/`, commit `6d502c8`, 288 runs per agent).** On the
+preregistered tasks (Flask, Express, Serde) CCM lowers neither token use nor raises success for
+either agent. Claude Code practically never calls it (0 of 72 runs in B and C, 2 of 72 in the
+current product D) and pays only the tool-definition cost: input tokens B/A 1.24 (1.15–1.28),
+D/A 1.05 (0.91–1.06), success 100 % in every arm. Codex calls it in nearly every run and pays
+more: B/A 1.78 (1.68–2.09), C/A 2.09 (1.85–2.65), D/A 1.12 (1.06–1.30), with success A 92 %,
+B 90 %, C 82 %, D 85 % (overlapping intervals). The product pilots found the saving on caller
+questions in large repositories (Django, Tokio), which the preregistered set does not contain;
+that result rests on one to three repetitions per task and is not tested by the final run.
 
 ## Goal
 
@@ -43,7 +41,7 @@ are parked. The owner's strategy notes are `docs/productization-plan.md`,
 | Freshness after an edit (L1) | first-read validation since `fb0ecd4`; a failed refresh now retries with backoff, `context` waits up to 10 s for a pending refresh | `mcp/tests/auto_refresh_test.rs` |
 | Claude Code Grep hook | opt-in `ccm-mcp hook claude-pre-tool-use` (PreToolUse); answers a single-symbol Grep with a compact answer (target, completeness check, one line per caller) only when the index is fresh, the check says the list is complete and the whole answer is shorter than a lower bound of the grep output in the requested mode; otherwise the grep runs. Offline replay of 119 recorded Claude greps: 16 answered, 35 % less text on those. Not installed by the npm launcher | `mcp/src/hook.rs`, `benchmarks/results/agent/hook-replay-20261110/` |
 | Agent interface | default discovery `context + index_project` (1,134-byte `tools/list`, 266 o200k tokens, plus 65-token server instructions); legacy tools callable, discoverable with `CCM_MCP_LEGACY_TOOLS=1` | `mcp/src/server.rs` |
-| Agent experiment (L3) | product pilots on 2026-11-10 with tuned and held-out tasks, both agents; final preregistered L3 not run | "Agent pilots" below |
+| Agent experiment (L3) | preregistered final run complete (24 tasks × A/B/C + current product D × 3 repetitions × 2 agents, commit `6d502c8`); product pilots on 2026-11-09 and 2026-11-10 | "Agent pilots" below |
 
 ## What `context` returns
 
@@ -265,12 +263,10 @@ What the transcripts show:
 
 ## Next steps, in order
 
-1. **Repetitions across all held-out sets.** Nine iterations of one-to-three repetitions show
-   where CCM pays (large-repository caller questions) and where it does not (small repositories,
-   name-collision traps, callers that one grep already shows). Before further tuning, the open
-   question is whether the large-repository result holds with more repetitions on all held-out
-   large-repository tasks at one fixed commit; that is the preregistered final experiment's job,
-   which needs the owner's quota approval.
+1. **The final result is in** (`final-l3-20261110/README.md`). What remains open is the
+   large-repository result of the pilots. Testing it needs a preregistered set of large-repository
+   caller tasks (the Django and Tokio pilot tasks are tuned) with several repetitions; it is not
+   started without the owner's decision and quota approval.
 2. **Unknown names and macro bodies: done in #21 and #22.** Tokio `async_op` went from B/A 2.28 to
    0.85 (Codex) and 1.02 to 0.50 (Claude); all 441 functions in Tokio's item-level macro bodies
    are now indexed.
@@ -289,8 +285,7 @@ What the transcripts show:
    tuned task's `_find_error_handler|def handle_exception`; the rest are varied regexes (alias and
    import checks, receivers, look-arounds). Supporting them would fit one task, not a pattern.
 7. Release the fixes (npm launcher roots bug, refresh retry) as 0.5.1 after owner approval.
-8. After the product configuration is stable, the preregistered L3 final experiment (24 tasks × 3
-   arms × 3 repetitions per agent) with separate quota approval.
+8. The preregistered L3 final run: done (`final-l3-20261110/`).
 
 ## Running the L3 experiment
 

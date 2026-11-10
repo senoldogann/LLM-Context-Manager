@@ -1,0 +1,22 @@
+diff --git a/lib/response.js b/lib/response.js
+index dd7b3c8..bfdd803 100644
+--- a/lib/response.js
++++ b/lib/response.js
+@@ -312,7 +312,7 @@ res.jsonp = function jsonp(obj) {
+   var escape = app.get('json escape')
+   var replacer = app.get('json replacer');
+   var spaces = app.get('json spaces');
+-  var body = stringify(val, replacer, spaces, escape)
++  var body = JSON.stringify(val)
+   var callback = this.req.query[app.get('jsonp callback name')];
+ 
+   // content-type
+@@ -1176,3 +1176,8 @@ function stringify (value, replacer, spaces, escape) {
+ 
+   return json
+ }
++
++res.jsonBody = function jsonBody(obj) {
++  var app = this.app;
++  return stringify(obj, app.get('json replacer'), app.get('json spaces'), app.get('json escape'));
++};

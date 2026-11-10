@@ -1,0 +1,26 @@
+diff --git a/serde_derive/src/ser.rs b/serde_derive/src/ser.rs
+index c92800d..222a7cb 100644
+--- a/serde_derive/src/ser.rs
++++ b/serde_derive/src/ser.rs
+@@ -241,7 +241,7 @@ fn serialize_newtype_struct(
+         }),
+     );
+     if let Some(path) = field.attrs.serialize_with() {
+-        field_expr = wrap_serialize_field_with(params, field.ty, path, &field_expr);
++        field_expr = wrap_newtype_field(params, field.ty, path, &field_expr);
+     }
+ 
+     let span = field.original.span();
+@@ -1364,3 +1364,12 @@ impl TupleTrait {
+         }
+     }
+ }
++
++fn wrap_newtype_field(
++    params: &Parameters,
++    field_ty: &syn::Type,
++    serialize_with: &syn::ExprPath,
++    field_expr: &TokenStream,
++) -> TokenStream {
++    wrap_serialize_field_with(params, field_ty, serialize_with, field_expr)
++}

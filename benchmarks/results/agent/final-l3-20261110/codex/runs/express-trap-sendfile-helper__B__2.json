@@ -1,0 +1,49 @@
+{
+  "record_version": 3,
+  "run_id": "express-trap-sendfile-helper__B__2",
+  "task_id": "express-trap-sendfile-helper",
+  "repo": "express",
+  "category": "trap",
+  "arm": "B",
+  "rep": 2,
+  "model": "gpt-6-luna",
+  "effort": "high",
+  "embedding": "local",
+  "index_copy_s": 0.00671241688542068,
+  "index_build_s": 11.781855958048254,
+  "wall_s": 31.461590834194794,
+  "transcript": {
+    "result_text": "```json\n{\"answer\":[\"lib/response.js:sendFile\",\"lib/response.js:sendfile\"]}\n```",
+    "subtype": "completed",
+    "is_error": false,
+    "num_turns": null,
+    "duration_ms": 31462,
+    "cost_usd": null,
+    "usage": {
+      "input_tokens": 10854,
+      "output_tokens": 1329,
+      "cache_creation_input_tokens": 0,
+      "cache_read_input_tokens": 55040
+    },
+    "tool_calls": {
+      "mcp__context-manager__find_nodes": 1,
+      "mcp__context-manager__find_usages": 1,
+      "mcp__context-manager__map": 1
+    },
+    "mcp_status": "unreported",
+    "api_key_source": "chatgpt",
+    "tools": []
+  },
+  "score": {
+    "answered": true,
+    "recall": 1.0,
+    "precision": 1.0,
+    "missing": [],
+    "extra": [],
+    "edit_applied": null,
+    "stale": [],
+    "success": true
+  },
+  "failure": null,
+  "hook": null
+}

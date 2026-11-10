@@ -1,0 +1,65 @@
+{
+  "record_version": 3,
+  "run_id": "flask-locate-app-string__B__2",
+  "task_id": "flask-locate-app-string",
+  "repo": "flask",
+  "category": "locate",
+  "arm": "B",
+  "rep": 2,
+  "model": "claude-opus-5-5",
+  "effort": "high",
+  "embedding": "local",
+  "index_copy_s": 0.03362791589461267,
+  "index_build_s": 68.18985991599038,
+  "wall_s": 9.270144541049376,
+  "transcript": {
+    "result_text": "The function is `find_app_by_string` in `src/flask/cli.py:120`, with the signature `(module: ModuleType, app_name: str) -> Flask`.\n\nWhat it does:\n1. It parses the string with `ast.parse(..., mode=\"eval\")`.\n2. If the result is a plain name (`ast.Name`), it treats the string as a variable. If it is a call (`ast.Call`) on a simple name, it treats it as a factory and reads the arguments with `ast.literal_eval`, so they must be literal values.\n3. It looks up that name on the module with `getattr`. If the attribute is a function, it calls it with the parsed arguments; otherwise it uses the attribute as it is.\n4. It returns the result if it is a `Flask` instance. If any step fails, it raises `NoAppException`.\n\n`locate_app` (line 230) imports the module and calls this function when an app name is given.\n\n```json\n{\"answer\": [\"src/flask/cli.py:find_app_by_string\"]}\n```",
+    "subtype": "success",
+    "is_error": false,
+    "num_turns": 3,
+    "duration_ms": 7960,
+    "cost_usd": 0.0506256,
+    "usage": {
+      "input_tokens": 6,
+      "output_tokens": 575,
+      "cache_creation_input_tokens": 4219,
+      "cache_read_input_tokens": 26748
+    },
+    "tool_calls": {
+      "Grep": 1,
+      "Read": 1
+    },
+    "mcp_status": "connected",
+    "api_key_source": "none",
+    "tools": [
+      "Bash",
+      "Edit",
+      "Glob",
+      "Grep",
+      "Read",
+      "Write",
+      "mcp__context-manager__diff_context",
+      "mcp__context-manager__explain",
+      "mcp__context-manager__find_nodes",
+      "mcp__context-manager__find_usages",
+      "mcp__context-manager__impact_of_change",
+      "mcp__context-manager__index_now",
+      "mcp__context-manager__index_project",
+      "mcp__context-manager__map",
+      "mcp__context-manager__search_code",
+      "mcp__context-manager__trace_call_chain"
+    ]
+  },
+  "score": {
+    "answered": true,
+    "recall": 1.0,
+    "precision": 1.0,
+    "missing": [],
+    "extra": [],
+    "edit_applied": null,
+    "stale": [],
+    "success": true
+  },
+  "failure": null,
+  "hook": null
+}

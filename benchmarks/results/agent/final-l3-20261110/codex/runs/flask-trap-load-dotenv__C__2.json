@@ -1,0 +1,48 @@
+{
+  "record_version": 3,
+  "run_id": "flask-trap-load-dotenv__C__2",
+  "task_id": "flask-trap-load-dotenv",
+  "repo": "flask",
+  "category": "trap",
+  "arm": "C",
+  "rep": 2,
+  "model": "gpt-6-luna",
+  "effort": "high",
+  "embedding": "local",
+  "index_copy_s": 0.018720207968726754,
+  "index_build_s": 68.18985991599038,
+  "wall_s": 40.89423808408901,
+  "transcript": {
+    "result_text": "```json\n{\"answer\":[\"src/flask/app.py:Flask.run\",\"src/flask/cli.py:_env_file_callback\",\"src/flask/cli.py:FlaskGroup.make_context\"]}\n```",
+    "subtype": "completed",
+    "is_error": false,
+    "num_turns": null,
+    "duration_ms": 40894,
+    "cost_usd": null,
+    "usage": {
+      "input_tokens": 27440,
+      "output_tokens": 1248,
+      "cache_creation_input_tokens": 0,
+      "cache_read_input_tokens": 113408
+    },
+    "tool_calls": {
+      "command_execution": 2,
+      "mcp__context-manager__search_code": 3
+    },
+    "mcp_status": "unreported",
+    "api_key_source": "chatgpt",
+    "tools": []
+  },
+  "score": {
+    "answered": true,
+    "recall": 1.0,
+    "precision": 1.0,
+    "missing": [],
+    "extra": [],
+    "edit_applied": null,
+    "stale": [],
+    "success": true
+  },
+  "failure": null,
+  "hook": null
+}

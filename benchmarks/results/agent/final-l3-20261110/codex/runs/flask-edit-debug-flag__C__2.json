@@ -1,0 +1,49 @@
+{
+  "record_version": 3,
+  "run_id": "flask-edit-debug-flag__C__2",
+  "task_id": "flask-edit-debug-flag",
+  "repo": "flask",
+  "category": "edit",
+  "arm": "C",
+  "rep": 2,
+  "model": "gpt-6-luna",
+  "effort": "high",
+  "embedding": "local",
+  "index_copy_s": 0.016364250099286437,
+  "index_build_s": 68.18985991599038,
+  "wall_s": 47.51246133306995,
+  "transcript": {
+    "result_text": "After the change, these functions or methods call `get_debug_flag` directly:\n\n```json\n{\"answer\":[\"src/flask/cli.py:ScriptInfo.load_app\",\"src/flask/cli.py:_debug_from_env\",\"src/flask/app.py:Flask.run\",\"src/flask/sansio/app.py:App.make_config\"]}\n```",
+    "subtype": "completed",
+    "is_error": false,
+    "num_turns": null,
+    "duration_ms": 47512,
+    "cost_usd": null,
+    "usage": {
+      "input_tokens": 24897,
+      "output_tokens": 1899,
+      "cache_creation_input_tokens": 0,
+      "cache_read_input_tokens": 115712
+    },
+    "tool_calls": {
+      "command_execution": 4,
+      "file_change": 1,
+      "mcp__context-manager__search_code": 1
+    },
+    "mcp_status": "unreported",
+    "api_key_source": "chatgpt",
+    "tools": []
+  },
+  "score": {
+    "answered": true,
+    "recall": 1.0,
+    "precision": 1.0,
+    "missing": [],
+    "extra": [],
+    "edit_applied": true,
+    "stale": [],
+    "success": true
+  },
+  "failure": null,
+  "hook": null
+}

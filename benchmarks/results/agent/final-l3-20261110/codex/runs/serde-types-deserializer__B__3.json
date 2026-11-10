@@ -1,0 +1,49 @@
+{
+  "record_version": 3,
+  "run_id": "serde-types-deserializer__B__3",
+  "task_id": "serde-types-deserializer",
+  "repo": "serde",
+  "category": "types",
+  "arm": "B",
+  "rep": 3,
+  "model": "gpt-6-luna",
+  "effort": "high",
+  "embedding": "local",
+  "index_copy_s": 0.024930333020165563,
+  "index_build_s": 120.714250250021,
+  "wall_s": 57.554133834084496,
+  "transcript": {
+    "result_text": "The types are `MissingFieldDeserializer`, `ContentDeserializer`, `ContentRefDeserializer`, `StrDeserializer`, `BorrowedStrDeserializer`, and `FlatMapDeserializer`.\n\n```json\n{\"answer\":[\"serde/src/private/de.rs:MissingFieldDeserializer\",\"serde/src/private/de.rs:ContentDeserializer\",\"serde/src/private/de.rs:ContentRefDeserializer\",\"serde/src/private/de.rs:StrDeserializer\",\"serde/src/private/de.rs:BorrowedStrDeserializer\",\"serde/src/private/de.rs:FlatMapDeserializer\"]}\n```",
+    "subtype": "completed",
+    "is_error": false,
+    "num_turns": null,
+    "duration_ms": 57554,
+    "cost_usd": null,
+    "usage": {
+      "input_tokens": 19650,
+      "output_tokens": 2383,
+      "cache_creation_input_tokens": 0,
+      "cache_read_input_tokens": 149888
+    },
+    "tool_calls": {
+      "mcp__context-manager__explain": 27,
+      "mcp__context-manager__find_nodes": 2,
+      "mcp__context-manager__map": 1
+    },
+    "mcp_status": "unreported",
+    "api_key_source": "chatgpt",
+    "tools": []
+  },
+  "score": {
+    "answered": true,
+    "recall": 1.0,
+    "precision": 1.0,
+    "missing": [],
+    "extra": [],
+    "edit_applied": null,
+    "stale": [],
+    "success": true
+  },
+  "failure": null,
+  "hook": null
+}

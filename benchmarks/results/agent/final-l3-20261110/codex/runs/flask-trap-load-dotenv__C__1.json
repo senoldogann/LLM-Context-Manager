@@ -1,0 +1,48 @@
+{
+  "record_version": 3,
+  "run_id": "flask-trap-load-dotenv__C__1",
+  "task_id": "flask-trap-load-dotenv",
+  "repo": "flask",
+  "category": "trap",
+  "arm": "C",
+  "rep": 1,
+  "model": "gpt-6-luna",
+  "effort": "high",
+  "embedding": "local",
+  "index_copy_s": 0.1341324581298977,
+  "index_build_s": 68.18985991599038,
+  "wall_s": 46.544904791982844,
+  "transcript": {
+    "result_text": "The callers are `_env_file_callback`, `FlaskGroup.make_context`, and `Flask.run`.\n\n```json\n{\"answer\":[\"src/flask/cli.py:_env_file_callback\",\"src/flask/cli.py:FlaskGroup.make_context\",\"src/flask/app.py:Flask.run\"]}\n```",
+    "subtype": "completed",
+    "is_error": false,
+    "num_turns": null,
+    "duration_ms": 46545,
+    "cost_usd": null,
+    "usage": {
+      "input_tokens": 25892,
+      "output_tokens": 1486,
+      "cache_creation_input_tokens": 0,
+      "cache_read_input_tokens": 139520
+    },
+    "tool_calls": {
+      "command_execution": 5,
+      "mcp__context-manager__search_code": 2
+    },
+    "mcp_status": "unreported",
+    "api_key_source": "chatgpt",
+    "tools": []
+  },
+  "score": {
+    "answered": true,
+    "recall": 1.0,
+    "precision": 1.0,
+    "missing": [],
+    "extra": [],
+    "edit_applied": null,
+    "stale": [],
+    "success": true
+  },
+  "failure": null,
+  "hook": null
+}

@@ -1,0 +1,48 @@
+{
+  "record_version": 3,
+  "run_id": "serde-trap-deserialize-struct__C__3",
+  "task_id": "serde-trap-deserialize-struct",
+  "repo": "serde",
+  "category": "trap",
+  "arm": "C",
+  "rep": 3,
+  "model": "gpt-6-luna",
+  "effort": "high",
+  "embedding": "local",
+  "index_copy_s": 0.022312750108540058,
+  "index_build_s": 120.714250250021,
+  "wall_s": 30.836785458028316,
+  "transcript": {
+    "result_text": "The real calls are in `deserialize_body` and the three variant deserialization functions. The calls inside `quote!` output are excluded.\n\n```json\n{\"answer\":[\"serde_derive/src/de.rs:deserialize_body\",\"serde_derive/src/de.rs:deserialize_externally_tagged_variant\",\"serde_derive/src/de.rs:deserialize_internally_tagged_variant\",\"serde_derive/src/de.rs:deserialize_untagged_variant\"]}\n```",
+    "subtype": "completed",
+    "is_error": false,
+    "num_turns": null,
+    "duration_ms": 30837,
+    "cost_usd": null,
+    "usage": {
+      "input_tokens": 22877,
+      "output_tokens": 984,
+      "cache_creation_input_tokens": 0,
+      "cache_read_input_tokens": 96256
+    },
+    "tool_calls": {
+      "command_execution": 3,
+      "mcp__context-manager__search_code": 2
+    },
+    "mcp_status": "unreported",
+    "api_key_source": "chatgpt",
+    "tools": []
+  },
+  "score": {
+    "answered": true,
+    "recall": 1.0,
+    "precision": 1.0,
+    "missing": [],
+    "extra": [],
+    "edit_applied": null,
+    "stale": [],
+    "success": true
+  },
+  "failure": null,
+  "hook": null
+}

@@ -1,0 +1,56 @@
+{
+  "record_version": 3,
+  "run_id": "serde-trap-effective-style__C__2",
+  "task_id": "serde-trap-effective-style",
+  "repo": "serde",
+  "category": "trap",
+  "arm": "C",
+  "rep": 2,
+  "model": "claude-opus-5-5",
+  "effort": "high",
+  "embedding": "local",
+  "index_copy_s": 0.02963495790027082,
+  "index_build_s": 120.714250250021,
+  "wall_s": 9.443978208117187,
+  "transcript": {
+    "result_text": "Four functions call it, all in `serde_derive/src/ser.rs`:\n\n- `serialize_externally_tagged_variant` (call at line 522)\n- `serialize_internally_tagged_variant` (call at line 599)\n- `serialize_adjacently_tagged_variant` (call at line 664)\n- `serialize_untagged_variant` (call at line 775)\n\nI left out the two calls in `serde_derive/src/de.rs` (lines 1866 and 1911). That file defines its own `effective_style` at line 3090, so those calls go to the de.rs version, not the one in ser.rs.\n\n```json\n{\"answer\": [\"serde_derive/src/ser.rs:serialize_externally_tagged_variant\", \"serde_derive/src/ser.rs:serialize_internally_tagged_variant\", \"serde_derive/src/ser.rs:serialize_adjacently_tagged_variant\", \"serde_derive/src/ser.rs:serialize_untagged_variant\"]}\n```",
+    "subtype": "success",
+    "is_error": false,
+    "num_turns": 3,
+    "duration_ms": 8592,
+    "cost_usd": 0.047252800000000005,
+    "usage": {
+      "input_tokens": 6,
+      "output_tokens": 699,
+      "cache_creation_input_tokens": 3625,
+      "cache_read_input_tokens": 21244
+    },
+    "tool_calls": {
+      "Bash": 1,
+      "Grep": 1
+    },
+    "mcp_status": "connected",
+    "api_key_source": "none",
+    "tools": [
+      "Bash",
+      "Edit",
+      "Glob",
+      "Grep",
+      "Read",
+      "Write",
+      "mcp__context-manager__search_code"
+    ]
+  },
+  "score": {
+    "answered": true,
+    "recall": 1.0,
+    "precision": 1.0,
+    "missing": [],
+    "extra": [],
+    "edit_applied": null,
+    "stale": [],
+    "success": true
+  },
+  "failure": null,
+  "hook": null
+}

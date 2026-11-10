@@ -1,0 +1,47 @@
+{
+  "record_version": 3,
+  "run_id": "serde-trap-effective-style__D__1",
+  "task_id": "serde-trap-effective-style",
+  "repo": "serde",
+  "category": "trap",
+  "arm": "D",
+  "rep": 1,
+  "model": "gpt-6-luna",
+  "effort": "high",
+  "embedding": "local",
+  "index_copy_s": 0.10353187518194318,
+  "index_build_s": 120.714250250021,
+  "wall_s": 13.703875875100493,
+  "transcript": {
+    "result_text": "`effective_style` in `ser.rs` is called by four functions:\n\n```json\n{\"answer\":[\"serde_derive/src/ser.rs:serialize_externally_tagged_variant\",\"serde_derive/src/ser.rs:serialize_internally_tagged_variant\",\"serde_derive/src/ser.rs:serialize_adjacently_tagged_variant\",\"serde_derive/src/ser.rs:serialize_untagged_variant\"]}\n```",
+    "subtype": "completed",
+    "is_error": false,
+    "num_turns": null,
+    "duration_ms": 13704,
+    "cost_usd": null,
+    "usage": {
+      "input_tokens": 4021,
+      "output_tokens": 383,
+      "cache_creation_input_tokens": 0,
+      "cache_read_input_tokens": 28160
+    },
+    "tool_calls": {
+      "mcp__context-manager__context": 1
+    },
+    "mcp_status": "unreported",
+    "api_key_source": "chatgpt",
+    "tools": []
+  },
+  "score": {
+    "answered": true,
+    "recall": 1.0,
+    "precision": 1.0,
+    "missing": [],
+    "extra": [],
+    "edit_applied": null,
+    "stale": [],
+    "success": true
+  },
+  "failure": null,
+  "hook": null
+}

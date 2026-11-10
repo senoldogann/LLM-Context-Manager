@@ -1,0 +1,56 @@
+{
+  "record_version": 3,
+  "run_id": "express-trap-sendfile-helper__C__2",
+  "task_id": "express-trap-sendfile-helper",
+  "repo": "express",
+  "category": "trap",
+  "arm": "C",
+  "rep": 2,
+  "model": "claude-opus-5-5",
+  "effort": "high",
+  "embedding": "local",
+  "index_copy_s": 0.024386208038777113,
+  "index_build_s": 11.781855958048254,
+  "wall_s": 16.673162583028898,
+  "transcript": {
+    "result_text": "Two functions in `lib/` call the private `sendfile(res, file, options, callback)` helper. It is declared at `lib/response.js:1052`.\n\n1. **`res.sendFile`** (`function sendFile`, starting at `lib/response.js:420`) calls it at `lib/response.js:450`.\n2. **`res.sendfile`** (an anonymous function assigned at `lib/response.js:502`, the deprecated lowercase version) calls it at `lib/response.js:519`.\n\nNo other file in `lib/` refers to the helper, and nothing else in `lib/response.js` calls it. `res.download` calls the `this.sendFile` method instead (`lib/response.js:599`), so it only reaches the helper through `res.sendFile` and isn't a direct caller.\n\n```json\n{\"answer\": [\"lib/response.js:res.sendFile\", \"lib/response.js:res.sendfile\"]}\n```",
+    "subtype": "success",
+    "is_error": false,
+    "num_turns": 4,
+    "duration_ms": 10909,
+    "cost_usd": 0.0564572,
+    "usage": {
+      "input_tokens": 6,
+      "output_tokens": 935,
+      "cache_creation_input_tokens": 4180,
+      "cache_read_input_tokens": 21466
+    },
+    "tool_calls": {
+      "Grep": 2,
+      "Read": 1
+    },
+    "mcp_status": "connected",
+    "api_key_source": "none",
+    "tools": [
+      "Bash",
+      "Edit",
+      "Glob",
+      "Grep",
+      "Read",
+      "Write",
+      "mcp__context-manager__search_code"
+    ]
+  },
+  "score": {
+    "answered": true,
+    "recall": 1.0,
+    "precision": 1.0,
+    "missing": [],
+    "extra": [],
+    "edit_applied": null,
+    "stale": [],
+    "success": true
+  },
+  "failure": null,
+  "hook": null
+}

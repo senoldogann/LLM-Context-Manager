@@ -1,0 +1,48 @@
+{
+  "record_version": 3,
+  "run_id": "express-locate-trust__B__3",
+  "task_id": "express-locate-trust",
+  "repo": "express",
+  "category": "locate",
+  "arm": "B",
+  "rep": 3,
+  "model": "gpt-6-luna",
+  "effort": "high",
+  "embedding": "local",
+  "index_copy_s": 0.005361583083868027,
+  "index_build_s": 11.781855958048254,
+  "wall_s": 14.290001957910135,
+  "transcript": {
+    "result_text": "`lib/utils.js` — `compileTrust`\n\n```json\n{\"answer\":[\"lib/utils.js:compileTrust\"]}\n```",
+    "subtype": "completed",
+    "is_error": false,
+    "num_turns": null,
+    "duration_ms": 14290,
+    "cost_usd": null,
+    "usage": {
+      "input_tokens": 6954,
+      "output_tokens": 361,
+      "cache_creation_input_tokens": 0,
+      "cache_read_input_tokens": 53248
+    },
+    "tool_calls": {
+      "mcp__context-manager__map": 1,
+      "mcp__context-manager__search_code": 1
+    },
+    "mcp_status": "unreported",
+    "api_key_source": "chatgpt",
+    "tools": []
+  },
+  "score": {
+    "answered": true,
+    "recall": 1.0,
+    "precision": 1.0,
+    "missing": [],
+    "extra": [],
+    "edit_applied": null,
+    "stale": [],
+    "success": true
+  },
+  "failure": null,
+  "hook": null
+}

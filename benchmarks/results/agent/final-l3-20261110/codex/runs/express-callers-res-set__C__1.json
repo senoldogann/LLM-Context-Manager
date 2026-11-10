@@ -1,0 +1,49 @@
+{
+  "record_version": 3,
+  "run_id": "express-callers-res-set__C__1",
+  "task_id": "express-callers-res-set",
+  "repo": "express",
+  "category": "callers",
+  "arm": "C",
+  "rep": 1,
+  "model": "gpt-6-luna",
+  "effort": "high",
+  "embedding": "local",
+  "index_copy_s": 0.013924125116318464,
+  "index_build_s": 11.781855958048254,
+  "wall_s": 38.71789904101752,
+  "transcript": {
+    "result_text": "The callers are:\n\n- `lib/response.js:send`\n- `lib/response.js:json`\n- `lib/response.js:jsonp`\n- `lib/response.js:format`\n- `lib/response.js:type`\n- `lib/response.js:location`\n- `lib/response.js:links`\n- `lib/response.js:append`\n- `lib/response.js:redirect`\n- `lib/router/index.js:sendOptionsResponse`\n\n```json\n{\"answer\":[\"lib/response.js:send\",\"lib/response.js:json\",\"lib/response.js:jsonp\",\"lib/response.js:format\",\"lib/response.js:type\",\"lib/response.js:location\",\"lib/response.js:links\",\"lib/response.js:append\",\"lib/response.js:redirect\",\"lib/router/index.js:sendOptionsResponse\"]}\n```",
+    "subtype": "completed",
+    "is_error": false,
+    "num_turns": null,
+    "duration_ms": 38718,
+    "cost_usd": null,
+    "usage": {
+      "input_tokens": 33844,
+      "output_tokens": 1262,
+      "cache_creation_input_tokens": 0,
+      "cache_read_input_tokens": 85760
+    },
+    "tool_calls": {
+      "mcp__context-manager__search_code": 3
+    },
+    "mcp_status": "unreported",
+    "api_key_source": "chatgpt",
+    "tools": []
+  },
+  "score": {
+    "answered": true,
+    "recall": 0.9090909090909091,
+    "precision": 1.0,
+    "missing": [
+      "lib/response.js:attachment"
+    ],
+    "extra": [],
+    "edit_applied": null,
+    "stale": [],
+    "success": false
+  },
+  "failure": null,
+  "hook": null
+}
