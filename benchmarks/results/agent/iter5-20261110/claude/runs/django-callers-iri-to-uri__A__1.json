@@ -1,0 +1,56 @@
+{
+  "record_version": 3,
+  "run_id": "django-callers-iri-to-uri__A__1",
+  "task_id": "django-callers-iri-to-uri",
+  "repo": "django",
+  "category": "callers",
+  "arm": "A",
+  "rep": 1,
+  "model": "claude-opus-5-5",
+  "effort": "high",
+  "embedding": "local",
+  "index_copy_s": null,
+  "index_build_s": null,
+  "wall_s": 24.64704529196024,
+  "transcript": {
+    "result_text": "I found 10 functions and methods in `django/` that call `iri_to_uri` directly. I searched for every use of the name, then found the function or method around each call.\n\n- `django/http/response.py:618`: `HttpResponseRedirectBase.__init__`\n- `django/http/request.py:174`: `HttpRequest._get_full_path`\n- `django/http/request.py:241`: `HttpRequest.build_absolute_uri`\n- `django/template/defaultfilters.py:226`: `iriencode`\n- `django/templatetags/static.py:48`: `PrefixNode.handle_simple`\n- `django/contrib/syndication/views.py:21`: `add_domain`\n- `django/contrib/flatpages/models.py:49`: `FlatPage.get_absolute_url`\n- `django/utils/feedgenerator.py:86, 91, 94`: `SyndicationFeed.__init__`. The calls are in the method body itself, not in the nested `to_str` helper.\n- `django/utils/feedgenerator.py:134, 138`: `SyndicationFeed.add_item`\n- `django/utils/feedgenerator.py:222`: `Enclosure.__init__`\n\n`django/utils/http.py:252` names `iri_to_uri` only in a docstring, so it isn't a call and isn't listed.\n\n```json\n{\"answer\": [\"django/http/response.py:HttpResponseRedirectBase.__init__\", \"django/http/request.py:HttpRequest._get_full_path\", \"django/http/request.py:HttpRequest.build_absolute_uri\", \"django/template/defaultfilters.py:iriencode\", \"django/templatetags/static.py:PrefixNode.handle_simple\", \"django/contrib/syndication/views.py:add_domain\", \"django/contrib/flatpages/models.py:FlatPage.get_absolute_url\", \"django/utils/feedgenerator.py:SyndicationFeed.__init__\", \"django/utils/feedgenerator.py:SyndicationFeed.add_item\", \"django/utils/feedgenerator.py:Enclosure.__init__\"]}\n```",
+    "subtype": "success",
+    "is_error": false,
+    "num_turns": 6,
+    "duration_ms": 23930,
+    "cost_usd": 0.0953248,
+    "usage": {
+      "input_tokens": 12,
+      "output_tokens": 1730,
+      "cache_creation_input_tokens": 6326,
+      "cache_read_input_tokens": 50344
+    },
+    "tool_calls": {
+      "Bash": 3,
+      "Grep": 1,
+      "Read": 1
+    },
+    "mcp_status": "none",
+    "api_key_source": "none",
+    "tools": [
+      "Bash",
+      "Edit",
+      "Glob",
+      "Grep",
+      "Read",
+      "Write"
+    ]
+  },
+  "score": {
+    "answered": true,
+    "recall": 1.0,
+    "precision": 1.0,
+    "missing": [],
+    "extra": [],
+    "edit_applied": null,
+    "stale": [],
+    "success": true
+  },
+  "failure": null,
+  "hook": null
+}

@@ -1,0 +1,47 @@
+{
+  "record_version": 3,
+  "run_id": "flask-locate-app-string__A__1",
+  "task_id": "flask-locate-app-string",
+  "repo": "flask",
+  "category": "locate",
+  "arm": "A",
+  "rep": 1,
+  "model": "gpt-6-luna",
+  "effort": "high",
+  "embedding": "local",
+  "index_copy_s": null,
+  "index_build_s": null,
+  "wall_s": 12.75862287497148,
+  "transcript": {
+    "result_text": "```json\n{\"answer\":[\"src/flask/cli.py:find_app_by_string\"]}\n```",
+    "subtype": "completed",
+    "is_error": false,
+    "num_turns": null,
+    "duration_ms": 12759,
+    "cost_usd": null,
+    "usage": {
+      "input_tokens": 26183,
+      "output_tokens": 196,
+      "cache_creation_input_tokens": 0,
+      "cache_read_input_tokens": 9728
+    },
+    "tool_calls": {
+      "command_execution": 2
+    },
+    "mcp_status": "unreported",
+    "api_key_source": "chatgpt",
+    "tools": []
+  },
+  "score": {
+    "answered": true,
+    "recall": 1.0,
+    "precision": 1.0,
+    "missing": [],
+    "extra": [],
+    "edit_applied": null,
+    "stale": [],
+    "success": true
+  },
+  "failure": null,
+  "hook": null
+}

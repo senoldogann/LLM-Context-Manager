@@ -1,0 +1,21 @@
+diff --git a/lib/response.js b/lib/response.js
+index dd7b3c8..94eeae8 100644
+--- a/lib/response.js
++++ b/lib/response.js
+@@ -696,7 +696,7 @@ res.format = function(obj){
+   this.vary("Accept");
+ 
+   if (key) {
+-    this.set('Content-Type', normalizeType(key).value);
++    this.set('Content-Type', contentTypeOf(key));
+     obj[key](req, this, next);
+   } else if (obj.default) {
+     obj.default(req, this, next)
+@@ -1176,3 +1176,7 @@ function stringify (value, replacer, spaces, escape) {
+ 
+   return json
+ }
++
++function contentTypeOf(key) {
++  return normalizeType(key).value;
++}
