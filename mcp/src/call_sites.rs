@@ -760,8 +760,10 @@ pub(crate) fn file_hits(
                     continue;
                 }
                 if in_text(line, position, lang, doc_states[index]) {
-                    // Dizgideki noktalı yol (`"pkg.mod.ad"`) dinamik referans olabilir.
-                    let dotted = line[..position].ends_with('.');
+                    // Python dizgisindeki noktalı yol (`"pkg.mod.ad"`) dinamik referans olabilir
+                    // (`import_string`); diğer dillerde dizgi içi eşleşme metindir
+                    // (`trace_span!("runtime.resource.async_op")`).
+                    let dotted = lang == Lang::Python && line[..position].ends_with('.');
                     if spec.kind != CheckKind::MemberCalls {
                         hits.push(Hit {
                             file: path.to_string(),

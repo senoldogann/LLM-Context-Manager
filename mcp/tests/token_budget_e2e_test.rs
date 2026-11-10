@@ -127,7 +127,12 @@ fn fixture_files() -> Vec<(String, String)> {
         "app/late.py".into(),
         "def late(handler):\n    return handler.escape(1)\n".into(),
     ));
-    // Makro gövdesindeki tanım indekse girmez (tokio `cfg_trace! { … }` deseni).
+    // Fonksiyon gövdesindeki makronun öğeleri indekse girmez; adın metin taraması döner.
+    files.push((
+        "rt/src/local.rs".into(),
+        "fn outer() -> u8 {\n    local_items! {\n        fn local_only(x: u8) -> u8 { x }\n    }\n    0\n}\n\npub fn calls_local() -> u8 {\n    local_only(1)\n}\n".into(),
+    ));
+    // Öğe düzeyindeki `cfg_trace! { … }` gövdesindeki tanım indekslenir (tokio deseni).
     files.push((
         "rt/src/trace.rs".into(),
         "macro_rules! cfg_trace { ($($item:item)*) => { $($item)* } }\n\ncfg_trace! {\n    pub(crate) fn hidden_helper(x: u8) -> u8 {\n        x\n    }\n}\n\npub fn uses_hidden(y: u8) -> u8 {\n    hidden_helper(y)\n}\n".into(),
@@ -881,14 +886,14 @@ fn context_resolves_a_symbol_named_in_a_file() {
 #[test]
 fn context_says_when_a_name_is_not_indexed_instead_of_answering_another_symbol() {
     let mut server = Server::start();
-    for query in ["hidden_helper", "rt/src/trace.rs:hidden_helper"] {
+    for query in ["local_only", "rt/src/local.rs:local_only"] {
         let (text, is_error) = server.call("context", json!({"query": query}));
         assert!(!is_error, "{text}");
         for expected in [
-            "`hidden_helper` is not in the index",
-            "The source defines it at rt/src/trace.rs:4",
-            "uses_hidden · rt/src/trace.rs",
-            "  10: hidden_helper(y)",
+            "`local_only` is not in the index",
+            "The source defines it at rt/src/local.rs:3",
+            "calls_local · rt/src/local.rs",
+            "  9: local_only(1)",
         ] {
             assert!(
                 text.contains(expected),
@@ -912,4 +917,19 @@ fn context_marks_a_semantic_fallback_for_a_name_that_appears_nowhere() {
             || text.contains("No context found for query"),
         "a fallback must not look like an exact answer: {text}"
     );
+}
+
+#[test]
+fn context_finds_functions_defined_inside_item_level_brace_macros() {
+    let mut server = Server::start();
+    let (text, is_error) =
+        server.call("context", json!({"query": "rt/src/trace.rs:hidden_helper"}));
+    assert!(!is_error, "{text}");
+    for expected in [
+        "Function `hidden_helper` · rt/src/trace.rs:4-6",
+        "uses_hidden · rt/src/trace.rs",
+        "Check: call list complete.",
+    ] {
+        assert!(text.contains(expected), "missing {expected:?}: {text}");
+    }
 }

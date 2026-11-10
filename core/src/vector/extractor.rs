@@ -4,7 +4,7 @@
 //! extracting semantic code elements (functions, classes, imports, etc.)
 //! and creating appropriate graph nodes with their relationships.
 
-use anyhow::Result;
+use anyhow::{Context, Result};
 use petgraph::graph::NodeIndex;
 use std::collections::HashMap;
 use tree_sitter::{Node, Tree};
@@ -14,6 +14,24 @@ use crate::graph::{
 };
 use crate::parser::SupportedLanguage;
 use crate::vector::{python_facts, rust_facts};
+
+/// `[start, end)` dışındaki baytları ASCII boşlukla örter, satır sonlarını korur. Bayt
+/// uzunluğu ve tüm konumlar değişmez; aralığın sınırları ASCII (`{`, `}`) olduğundan içerisi
+/// geçerli UTF-8 kalır ve dışarısı yalnız boşluk ve satır sonudur.
+fn mask_outside(source: &str, start: usize, end: usize) -> Result<String> {
+    let bytes: Vec<u8> = source
+        .bytes()
+        .enumerate()
+        .map(|(index, byte)| {
+            if (start..end).contains(&index) || byte == b'\n' {
+                byte
+            } else {
+                b' '
+            }
+        })
+        .collect();
+    String::from_utf8(bytes).context("masked macro body is not UTF-8")
+}
 
 /// Extractor extracts semantic code elements from an AST and populates a CodeGraph.
 pub struct Extractor {
@@ -86,6 +104,10 @@ impl Extractor {
         file_id: &str,
         semantic_parent: &str,
     ) -> Result<()> {
+        // Öğe düzeyindeki `cfg_x! { … }` gövdesindeki öğeler Rust kaynağı olarak ayrıştırılır.
+        if let Some((start, end)) = self.item_macro_body(&node) {
+            return self.walk_macro_body(start, end, graph, parent_idx, file_id, semantic_parent);
+        }
         // Determine if this node is semantically significant
         if let Some((node_type, name)) = self.classify_node(&node) {
             // PHASE 3: Capture Docstring (Preceding comments)
@@ -155,6 +177,61 @@ impl Extractor {
         }
 
         Ok(())
+    }
+
+    /// Öğe düzeyindeki (dosya, `impl`/`trait`/`mod` gövdesi) ve `{ … }` ile açılan Rust
+    /// makro çağrısının gövde bayt aralığı (`{` ve `}` hariç). Tokio gibi depolar kodun bir
+    /// kısmını `cfg_rt! { … }` bloklarında tanımlar; tree-sitter bu gövdeyi belirteç ağacı
+    /// olarak bırakır ve içindeki fonksiyonlar indekse girmezdi. İfade makroları
+    /// (`vec![…]`, fonksiyon gövdesindeki `select! { … }`) bu kapsamda değildir.
+    fn item_macro_body(&self, node: &Node) -> Option<(usize, usize)> {
+        if self.language != SupportedLanguage::Rust || node.kind() != "macro_invocation" {
+            return None;
+        }
+        let item_level = node
+            .parent()
+            .is_some_and(|parent| matches!(parent.kind(), "source_file" | "declaration_list"));
+        if !item_level {
+            return None;
+        }
+        let mut cursor = node.walk();
+        let body = node
+            .children(&mut cursor)
+            .find(|child| child.kind() == "token_tree")?;
+        let bytes = self.source_code.as_bytes();
+        let (open, close) = (body.start_byte(), body.end_byte());
+        (close > open + 1 && bytes.get(open) == Some(&b'{') && bytes.get(close - 1) == Some(&b'}'))
+            .then_some((open + 1, close - 1))
+    }
+
+    /// Makro gövdesini, dışındaki her bayt (satır sonları hariç) boşlukla örtülmüş aynı
+    /// uzunlukta bir kaynak olarak yeniden ayrıştırır: satır, sütun ve bayt konumları asıl
+    /// dosyayla aynı kalır; gövdedeki öğeler ve olguları normal yoldan çıkarılır.
+    fn walk_macro_body(
+        &mut self,
+        start: usize,
+        end: usize,
+        graph: &mut CodeGraph,
+        parent_idx: NodeIndex,
+        file_id: &str,
+        semantic_parent: &str,
+    ) -> Result<()> {
+        let masked = mask_outside(&self.source_code, start, end)?;
+        let tree = crate::parser::CodeParser::new()
+            .parse_tree(&masked, SupportedLanguage::Rust)
+            .with_context(|| {
+                format!("macro body at byte {start} in {file_id} could not be parsed")
+            })?;
+        let original = std::mem::replace(&mut self.source_code, masked);
+        let walked = self.walk_node(
+            tree.root_node(),
+            graph,
+            parent_idx,
+            file_id,
+            semantic_parent,
+        );
+        self.source_code = original;
+        walked
     }
 
     /// Düğümün referans olguları: Python'da sözdiziminden, diğer dillerde sözcüksel.
@@ -848,6 +925,38 @@ fn helper(x: i32) -> i32 {
         // Verify file node exists
         let file_node = &graph.graph[file_idx];
         assert_eq!(file_node.node_type, NodeType::File);
+    }
+
+    #[test]
+    fn items_inside_item_level_brace_macros_are_extracted_with_their_lines() {
+        let code = "// é\ncfg_trace! {\n    pub(crate) fn async_op(x: u8) -> u8 {\n        helper(x)\n    }\n\n    impl Span {\n        fn enter(&self) {}\n    }\n}\n\nfn outer() {\n    inner_macro! {\n        fn statement_level() {}\n    }\n}\n";
+        let mut parser = CodeParser::new();
+        let tree = parser.parse_tree(code, SupportedLanguage::Rust).unwrap();
+        let mut graph = CodeGraph::new();
+        let mut extractor = Extractor::new(code.to_string(), SupportedLanguage::Rust);
+        extractor.extract(&tree, &mut graph, "t.rs").unwrap();
+        let found = |name: &str| {
+            graph
+                .graph
+                .node_weights()
+                .find(|node| node.name == name)
+                .map(|node| (node.start_line, node.end_line, node.content.to_string()))
+        };
+        let (start, end, content) = found("async_op").expect("macro body function is indexed");
+        assert_eq!((start, end), (3, 5));
+        assert!(content.contains("helper(x)"), "{content}");
+        assert_eq!(
+            found("enter").map(|(start, end, _)| (start, end)),
+            Some((8, 8))
+        );
+        assert_eq!(
+            found("outer").map(|(start, end, _)| (start, end)),
+            Some((12, 16))
+        );
+        assert!(
+            found("statement_level").is_none(),
+            "macros inside function bodies are not parsed as items"
+        );
     }
 
     #[test]
