@@ -2342,9 +2342,37 @@ fn listed_key(node_id: &str) -> String {
 /// Paketteki hedef için grep eşdeğeri denetimin tanımı. Receiver ipucu varsa onun
 /// ifadeleri (ve tanım dosyasında `this.üye`) aranır; yoksa yalnız Function/Method
 /// hedefinin çıplak adı. Sınıf ve dosya hedeflerinde denetim yapılmaz.
+/// Tanımın bir sınıfın içinde olup olmadığı (Python'da metotlar da `Function`'dır).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum DefinitionPlace {
+    InsideClass,
+    OutsideClass,
+}
+
+/// Aynı dosyada düğümün satır aralığını kapsayan bir sınıf varsa `InsideClass`.
+async fn definition_place(
+    engine: &Arc<RetrievalEngine>,
+    node: &ccm_core::graph::CodeNode,
+) -> DefinitionPlace {
+    let graph = engine.graph.read().await;
+    let file = ccm_core::engine::extract_file_path(&node.id);
+    let inside = graph.graph.node_weights().any(|other| {
+        other.node_type == ccm_core::graph::NodeType::Class
+            && ccm_core::engine::extract_file_path(&other.id) == file
+            && other.start_line <= node.start_line
+            && node.end_line <= other.end_line
+    });
+    if inside {
+        DefinitionPlace::InsideClass
+    } else {
+        DefinitionPlace::OutsideClass
+    }
+}
+
 fn check_spec(
     node: &ccm_core::graph::CodeNode,
     member: Option<&MemberTarget>,
+    place: DefinitionPlace,
 ) -> Option<crate::call_sites::CheckSpec> {
     use crate::call_sites::{CheckKind, CheckSpec, Needle};
     if let Some(target) = member {
@@ -2391,11 +2419,17 @@ fn check_spec(
         return None;
     }
     let path = ccm_core::engine::extract_file_path(&node.id);
-    let kind = match crate::call_sites::lang_of(path.trim_start_matches("./")) {
-        crate::call_sites::Lang::Rust
+    let kind = match (
+        crate::call_sites::lang_of(path.trim_start_matches("./")),
+        place,
+    ) {
+        (crate::call_sites::Lang::Rust, _)
             if !crate::call_sites::rust_takes_self(&node.content, &node.name) =>
         {
             CheckKind::RustNoSelfUses
+        }
+        (crate::call_sites::Lang::Python, DefinitionPlace::OutsideClass) => {
+            CheckKind::PythonModuleFunctionUses
         }
         _ => CheckKind::NameUses,
     };
@@ -2570,7 +2604,8 @@ async fn context_packet(
     use ccm_core::engine::{extract_file_path, node_suggestion, usage_suggestion};
     let node = &explanation.node;
     let callers = dedupe_semantic_callers(callers.iter().cloned());
-    let spec = check_spec(node, member);
+    let place = definition_place(engine, node).await;
+    let spec = check_spec(node, member, place);
     let tests: Vec<&ccm_core::graph::Usage> = explanation
         .usages
         .iter()
