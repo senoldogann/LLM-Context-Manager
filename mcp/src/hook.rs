@@ -100,8 +100,10 @@ pub(crate) fn grep_symbol(call: &GrepCall) -> std::result::Result<String, String
     Ok(pattern)
 }
 
-/// Grep'in döndüreceği çıktının karakter tahmini (Claude'un Grep biçimleri:
+/// Grep'in döndüreceği çıktının karakter alt sınırı (Claude'un Grep biçimleri:
 /// `content` satırlar, `count` dosya başına sayı, `files_with_matches` yollar).
+/// Satır başına yalnız yol, kırpılmış metin ve iki ayraç sayılır: kayıtlı dökümlerde
+/// gerçek çıktı bu sınırın üstünde kaldı; tahmin aşarsa hook grep'ten uzun cevap verirdi.
 pub(crate) fn estimated_grep_chars(output_mode: &str, matches: &[(String, Vec<String>)]) -> usize {
     match output_mode {
         "content" => matches
@@ -109,11 +111,11 @@ pub(crate) fn estimated_grep_chars(output_mode: &str, matches: &[(String, Vec<St
             .map(|(path, lines)| {
                 lines
                     .iter()
-                    .map(|line| path.len() + line.len() + 8)
+                    .map(|line| path.len() + line.trim().len() + 2)
                     .sum::<usize>()
             })
             .sum(),
-        "count" => matches.iter().map(|(path, _)| path.len() + 8).sum(),
+        "count" => matches.iter().map(|(path, _)| path.len() + 2).sum(),
         _ => matches.iter().map(|(path, _)| path.len() + 1).sum(),
     }
 }
@@ -123,6 +125,100 @@ pub(crate) fn packet_is_complete(packet: &str) -> bool {
     packet
         .lines()
         .any(|line| line.starts_with("Check: call list complete."))
+}
+
+/// Hook'un verdiği kısa paket: hedef satırı, tamlık başlığı ve çağıran başına tek
+/// satır (`yol:Kapsam (çağrı satırları)`). Gövde, callee, üye ve test listeleri
+/// atılır; "kim çağırıyor" cevabı ve tamlık kanıtı kalır. Tam pakette bu bölümler
+/// bulunamazsa nedeni döner (hook grep'i geçirir).
+pub(crate) fn compact_packet(packet: &str) -> std::result::Result<String, String> {
+    let lines: Vec<&str> = packet.lines().collect();
+    let target = lines
+        .iter()
+        .find(|line| line.contains("` · ") && !line.starts_with('-'))
+        .ok_or_else(|| "packet has no target line".to_string())?;
+    let check = lines
+        .iter()
+        .find(|line| line.starts_with("Check: call list complete."))
+        .ok_or_else(|| "packet does not claim a complete call list".to_string())?;
+    let start = lines
+        .iter()
+        .position(|line| *line == "callers:")
+        .ok_or_else(|| "packet has no callers section".to_string())?;
+    let mut output = vec![
+        (*target).to_string(),
+        (*check).to_string(),
+        "callers:".to_string(),
+    ];
+    let mut current: Option<(String, Vec<String>)> = None;
+    let flush = |current: &mut Option<(String, Vec<String>)>, output: &mut Vec<String>| {
+        if let Some((caller, sites)) = current.take() {
+            output.push(if sites.is_empty() {
+                format!("- {caller}")
+            } else {
+                format!("- {caller} ({})", sites.join(", "))
+            });
+        }
+    };
+    for line in &lines[start + 1..] {
+        if let Some(rest) = line.strip_prefix("- ") {
+            flush(&mut current, &mut output);
+            current = Some((caller_label(rest)?, Vec::new()));
+        } else if let Some(rest) = line.strip_prefix("  + ") {
+            match current.as_mut() {
+                Some((_, sites)) if rest.ends_with(" more") => {
+                    sites.push(format!("+{}", rest.trim_end_matches(" more")))
+                }
+                _ => {
+                    flush(&mut current, &mut output);
+                    output.push(format!("+ {rest}"));
+                }
+            }
+        } else if let Some(more) = line
+            .strip_prefix("  +")
+            .and_then(|rest| rest.strip_suffix(" more"))
+            .filter(|count| count.chars().all(|c| c.is_ascii_digit()))
+        {
+            // `  +2 more`: gösterilmeyen çağrı satırları (bkz. `  + N files` satırı).
+            match current.as_mut() {
+                Some((_, sites)) => sites.push(format!("+{more}")),
+                None => return Err(format!("unexpected caller line {line:?}")),
+            }
+        } else if let Some(rest) = line.strip_prefix("  ") {
+            let Some((number, _)) = rest.split_once(':') else {
+                return Err(format!("unexpected caller line {line:?}"));
+            };
+            match current.as_mut() {
+                Some((_, sites)) if number.chars().all(|c| c.is_ascii_digit()) => {
+                    sites.push(number.to_string())
+                }
+                _ => return Err(format!("unexpected caller line {line:?}")),
+            }
+        } else {
+            break;
+        }
+    }
+    flush(&mut current, &mut output);
+    Ok(output.join("\n"))
+}
+
+/// `Function: ad · yol:a-b · ilişki; scope: K; …` satırından `yol:K` (kapsam yoksa ad).
+fn caller_label(line: &str) -> std::result::Result<String, String> {
+    let parts: Vec<&str> = line.split(" · ").collect();
+    let [kind_name, location, details, ..] = parts.as_slice() else {
+        return Err(format!("unexpected caller line {line:?}"));
+    };
+    let name = kind_name
+        .split_once(": ")
+        .map_or(*kind_name, |(_, name)| name);
+    let path = location
+        .rsplit_once(':')
+        .map_or(*location, |(path, _)| path);
+    let scope = details
+        .split("; ")
+        .find_map(|part| part.strip_prefix("scope: "))
+        .unwrap_or(name);
+    Ok(format!("{path}:{scope}"))
 }
 
 /// Reddin modele gösterilen metni: hata değil, cevaptır; ham çıktıya yol açıktır.
@@ -179,7 +275,6 @@ async fn grep_matches(
             .filter(|path| scope.is_empty() || path.starts_with(scope))
             .collect()
     };
-    let leaf = symbol.rsplit('.').next().unwrap_or(symbol);
     let mut matches = Vec::new();
     for file in files {
         let full = root.join(&file);
@@ -189,7 +284,10 @@ async fn grep_matches(
             .with_context(|| format!("hook: {} is not UTF-8", full.display()))?;
         let lines: Vec<String> = text
             .lines()
-            .filter(|line| !crate::call_sites::needle_positions(line, leaf).is_empty())
+            // Tam sembol, sözcük sınırlarıyla: tahmin Grep'in gerçek çıktısını hiçbir
+            // zaman aşmaz (`res\.send` için ilgisiz `send` satırları sayılmaz), böylece
+            // hook grep'i olduğundan pahalı sanıp engellemez.
+            .filter(|line| !crate::call_sites::needle_positions(line, symbol).is_empty())
             .map(str::to_string)
             .collect();
         if !lines.is_empty() {
@@ -264,16 +362,25 @@ async fn decide(call: &GrepCall) -> Result<Decision> {
             "packet does not claim a complete call list".to_string(),
         ));
     }
+    let compact = match compact_packet(&packet) {
+        Ok(compact) => compact,
+        Err(reason) => return Ok(Decision::Pass(reason)),
+    };
     let matches = grep_matches(&loaded.engine, &call.cwd, &scope, &symbol).await?;
+    // Karşılaştırma modele gidecek metnin tamamıyla ve Grep çıktısının alt sınırıyla:
+    // hook yalnız gerçekten daha az metin verdiğinde cevaplar.
     let grep_chars = estimated_grep_chars(&call.output_mode, &matches);
-    if packet.len() >= grep_chars {
+    let reason_chars = deny_reason(&symbol, &compact).chars().count();
+    if reason_chars >= grep_chars {
         return Ok(Decision::Pass(format!(
-            "packet ({} chars) is not shorter than the grep output ({grep_chars} chars)",
-            packet.len()
+            "answer ({reason_chars} chars) is not shorter than the grep output (at least {grep_chars} chars)"
         )));
     }
     remember_denied(&call.session_id, &symbol)?;
-    Ok(Decision::Deny { symbol, packet })
+    Ok(Decision::Deny {
+        symbol,
+        packet: compact,
+    })
 }
 
 /// Karar satırını `CCM_HOOK_LOG` dosyasına ekler (ayarlıysa).
@@ -295,12 +402,13 @@ fn log_decision(
         "elapsed_ms": elapsed.as_millis() as u64,
     });
     use std::io::Write as _;
+    // Tek yazım: paralel hook'ların O_APPEND kayıtları satır ortasında karışmaz.
     let mut file = std::fs::OpenOptions::new()
         .create(true)
         .append(true)
         .open(&path)
         .with_context(|| format!("hook log {path} could not be opened"))?;
-    writeln!(file, "{line}")?;
+    file.write_all(format!("{line}\n").as_bytes())?;
     Ok(())
 }
 
@@ -388,10 +496,21 @@ mod tests {
         )];
         assert_eq!(
             estimated_grep_chars("content", &matches),
-            (4 + 8 + 8) + (4 + 4 + 8)
+            (4 + 8 + 2) + (4 + 4 + 2)
         );
-        assert_eq!(estimated_grep_chars("count", &matches), 12);
+        assert_eq!(estimated_grep_chars("count", &matches), 6);
         assert_eq!(estimated_grep_chars("files_with_matches", &matches), 5);
+    }
+
+    #[test]
+    fn compact_packet_keeps_the_check_and_one_line_per_caller() {
+        let packet = "_Index: fresh_\n\nFunction `capfirst` · django/utils/text.py:25-31 · 2 callers\nCheck: call list complete. A grep finds 3 call sites.\n1 non-call use(s) outside:\n  a.py:1: import\ncallers:\n- Function: history_view · django/contrib/admin/options.py:2248-2306 · calls; scope: ModelAdmin.history_view\n  2288: x = capfirst(y)\n- Function: date_hierarchy · django/contrib/admin/templatetags/admin_list.py:361-462 · calls\n  405: a\n  408: b\n  +2 more\n  + 3 files that import it (module-level uses there count as inside)\n```\ndef capfirst(x):\n```\ncallees:\n- Function: f · a.py:1-2 · calls";
+        let compact = compact_packet(packet).unwrap();
+        assert_eq!(
+            compact,
+            "Function `capfirst` · django/utils/text.py:25-31 · 2 callers\nCheck: call list complete. A grep finds 3 call sites.\ncallers:\n- django/contrib/admin/options.py:ModelAdmin.history_view (2288)\n- django/contrib/admin/templatetags/admin_list.py:date_hierarchy (405, 408, +2)\n+ 3 files that import it (module-level uses there count as inside)"
+        );
+        assert!(compact_packet("Function `f` · a.py:1-2\nCheck: NOT complete.\ncallers:").is_err());
     }
 
     #[test]

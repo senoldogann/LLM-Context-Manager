@@ -1069,6 +1069,11 @@ def hook_settings(settings: Settings, server_env: dict[str, str], hook_log: Path
     return json.dumps({"hooks": hooks}, indent=2)
 
 
+def join_failures(first: str | None, second: str) -> str:
+    """İki hata nedenini birleştirir; ilki yoksa ikincisi."""
+    return second if first is None else f"{first}; {second}"
+
+
 def hook_counts(hook_log: Path) -> HookCounts:
     """Hook günlüğündeki kararların sayısı; hook hiç çağrılmadıysa sıfırdır."""
     if not hook_log.is_file():
@@ -1280,6 +1285,14 @@ def run_one(settings: Settings, task: Task, arm: Arm, rep: int, secrets: Secrets
         failure = str(error)
     finally:
         shutil.rmtree(work)
+    # Hook günlüğü okunamazsa koşu yine kaydedilir; hata `failure` alanına eklenir.
+    hook: HookCounts | None = None
+    hook_failure: str | None = None
+    if arm == "H":
+        try:
+            hook = hook_counts(paths.hook_log)
+        except (TranscriptError, json.JSONDecodeError, UnicodeError, OSError) as error:
+            hook_failure = f"hook log {paths.hook_log}: {error}"
     record = RunRecord(
         record_version=RECORD_VERSION,
         run_id=name,
@@ -1296,8 +1309,8 @@ def run_one(settings: Settings, task: Task, arm: Arm, rep: int, secrets: Secrets
         wall_s=wall_s,
         transcript=transcript,
         score=result,
-        failure=failure,
-        hook=hook_counts(paths.hook_log) if arm == "H" else None,
+        failure=failure if hook_failure is None else join_failures(failure, hook_failure),
+        hook=hook,
     )
     write_record(paths.record, record)
     return record

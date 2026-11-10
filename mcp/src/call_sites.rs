@@ -135,6 +135,8 @@ pub(crate) struct CheckCounts {
     /// Kapsamı başka tanıma bağlı geçişler: kapsam bazında (satır bazında değil)
     /// atandıkları için tamlık başlığı onları açıkça gösterir.
     pub elsewhere_hits: Vec<Hit>,
+    /// Başka tanıma bağlı olduğu dosyanın import'uyla kanıtlanan geçişler.
+    pub elsewhere_proven: usize,
     pub text: usize,
     /// Hedefin kendi gövdesindeki (özyinelemeli) çağrılar.
     pub recursive: usize,
@@ -531,6 +533,71 @@ pub(crate) fn python_externals(source: &str, roots: &HashSet<String>) -> PythonE
     externals
 }
 
+/// Python dosyasında `from M import ad` (parantezli ya da `as ad` dahil) ile adın
+/// bağlandığı modül; yoksa `None`. Göreli modül (`.x`) olduğu gibi döner.
+fn python_import_module(source: &str, name: &str) -> Option<String> {
+    let lines: Vec<&str> = source.lines().collect();
+    let mut index = 0;
+    while index < lines.len() {
+        let trimmed = lines[index].trim();
+        if let Some((module, names)) = trimmed
+            .strip_prefix("from ")
+            .and_then(|rest| rest.split_once(" import "))
+        {
+            let mut names = names.to_string();
+            if names.trim_start().starts_with('(') {
+                while !names.contains(')') && index + 1 < lines.len() {
+                    index += 1;
+                    names.push(' ');
+                    names.push_str(lines[index]);
+                }
+            }
+            let cleaned = names.replace(['(', ')'], " ");
+            let binds = cleaned.split(',').any(|part| {
+                let words: Vec<&str> = part.split_whitespace().collect();
+                match words.as_slice() {
+                    [imported] => *imported == name,
+                    [_, "as", alias] => *alias == name,
+                    _ => false,
+                }
+            });
+            if binds {
+                return Some(module.trim().to_string());
+            }
+        }
+        index += 1;
+    }
+    None
+}
+
+/// Python dosya yolunun modül adı: `src/` öneki ve `__init__` atılır
+/// (`django/template/defaultfilters.py` → `django.template.defaultfilters`).
+fn python_module_of_path(path: &str) -> String {
+    let path = path.trim_start_matches("./");
+    let path = path.strip_prefix("src/").unwrap_or(path);
+    let path = path.strip_suffix(".py").unwrap_or(path);
+    let path = path.strip_suffix("/__init__").unwrap_or(path);
+    path.replace('/', ".")
+}
+
+/// Dosya adı, `yol:satır` konumundaki başka tanımın modülünden mi içe aktarıyor.
+/// Göreli import yalnız aynı paketteki modül adıyla eşleşir (son bileşen).
+fn import_binds_to_definition(source: &str, name: &str, location: &str) -> bool {
+    let Some(module) = python_import_module(source, name) else {
+        return false;
+    };
+    let path = location.rsplit_once(':').map_or(location, |(path, _)| path);
+    let definition = python_module_of_path(path);
+    match module.strip_prefix('.') {
+        Some(relative) => {
+            !relative.is_empty()
+                && !relative.starts_with('.')
+                && definition.ends_with(&format!(".{relative}"))
+        }
+        None => module == definition,
+    }
+}
+
 /// `x.ad` biçiminde, noktadan önceki tanımlayıcı (`re.escape` → `re`); zincirde
 /// yalnız son halka alınır (`a.b.escape` → `b`).
 fn receiver_before(line: &str, position: usize) -> Option<&str> {
@@ -773,6 +840,7 @@ pub(crate) fn reconcile(
         elsewhere: 0,
         elsewhere_targets: BTreeSet::new(),
         elsewhere_hits: Vec::new(),
+        elsewhere_proven: 0,
         text: 0,
         recursive: 0,
         other_type_methods: 0,
@@ -881,6 +949,20 @@ pub(crate) fn reconcile(
                 continue;
             }
             match elsewhere.get(key) {
+                Some(location)
+                    if lang_of(&file.path) == Lang::Python
+                        && import_binds_to_definition(
+                            &scanned_file.source,
+                            target_name,
+                            location,
+                        ) =>
+                {
+                    // Dosya adı o tanımın modülünden içe aktarıyor: satırın hedefe
+                    // ait olmadığı kanıtlı, tamlık başlığını koşullu yapmaz.
+                    counts.elsewhere += 1;
+                    counts.elsewhere_targets.insert(location.clone());
+                    counts.elsewhere_proven += 1;
+                }
                 Some(location) => {
                     counts.elsewhere += 1;
                     counts.elsewhere_targets.insert(location.clone());
@@ -1073,6 +1155,18 @@ fn counts_suffix(spec: &CheckSpec, counts: &CheckCounts) -> String {
         .iter()
         .filter(|hit| hit.kind != HitKind::Call)
         .count();
+    if counts.elsewhere_proven > 0 {
+        text.push_str(&format!(
+            " {} match(es) are in files that import this name from another definition ({}) and are not listed.",
+            counts.elsewhere_proven,
+            counts
+                .elsewhere_targets
+                .iter()
+                .map(String::as_str)
+                .collect::<Vec<_>>()
+                .join(", ")
+        ));
+    }
     if elsewhere_uses > 0 {
         text.push_str(&format!(
             " {elsewhere_uses} other use(s) sit in functions the graph links to another definition with this name."
@@ -1364,6 +1458,31 @@ mod tests {
             !roots.contains("html") && !roots.contains("lib"),
             "{roots:?}"
         );
+    }
+
+    #[test]
+    fn imports_prove_lines_of_another_definition() {
+        let source = "from django.template.defaultfilters import capfirst, linebreaksbr\n";
+        assert!(import_binds_to_definition(
+            source,
+            "capfirst",
+            "django/template/defaultfilters.py:73"
+        ));
+        assert!(!import_binds_to_definition(
+            source,
+            "capfirst",
+            "django/utils/text.py:25"
+        ));
+        assert!(import_binds_to_definition(
+            "from .defaultfilters import (\n    capfirst,\n)\n",
+            "capfirst",
+            "django/template/defaultfilters.py:73"
+        ));
+        assert!(!import_binds_to_definition(
+            "import x\n",
+            "capfirst",
+            "a/b.py:1"
+        ));
     }
 
     #[test]
