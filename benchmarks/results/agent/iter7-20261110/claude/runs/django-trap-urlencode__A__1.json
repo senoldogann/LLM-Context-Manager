@@ -1,0 +1,55 @@
+{
+  "record_version": 3,
+  "run_id": "django-trap-urlencode__A__1",
+  "task_id": "django-trap-urlencode",
+  "repo": "django",
+  "category": "trap",
+  "arm": "A",
+  "rep": 1,
+  "model": "claude-opus-5-5",
+  "effort": "high",
+  "embedding": "local",
+  "index_copy_s": null,
+  "index_build_s": null,
+  "wall_s": 18.513336792122573,
+  "transcript": {
+    "result_text": "Seven functions and methods in `django/` call `django.utils.http.urlencode` directly. For each one I checked the import and the enclosing definition:\n\n- `django/test/client.py` imports it at line 28 and calls it in three places:\n  - `RequestFactory.__init__` (line 399)\n  - `RequestFactory.generic` (line 669)\n  - `AsyncRequestFactory.generic` (line 769)\n- `django/contrib/admin/views/main.py` calls it in `ChangeList.get_query_string` (line 306).\n- `django/contrib/admin/widgets.py` calls it in `ForeignKeyRawIdWidget.get_context` (line 162).\n- `django/contrib/admin/options.py` calls it in `ModelAdmin.get_preserved_filters` (line 1246). The `request.GET.urlencode()` call on line 1241 is the `QueryDict` method, so it doesn't count.\n- `django/contrib/admin/templatetags/admin_urls.py` calls it in `add_preserved_filters` (line 69).\n\nI left these out:\n- **Standard-library `urlencode`:** used in `django/http/request.py`, `django/test/testcases.py` and `django/utils/html.py`. Inside `django/utils/http.py`, `urlencode` itself calls the stdlib version under the alias `original_urlencode`.\n- **`QueryDict.urlencode` method:** called in `django/template/defaulttags.py` and `django/contrib/auth/views.py`.\n- **`urlencode` template filter:** defined in `django/template/defaultfilters.py` and used in templates.\n\n```json\n{\"answer\": [\"django/test/client.py:RequestFactory.__init__\", \"django/test/client.py:RequestFactory.generic\", \"django/test/client.py:AsyncRequestFactory.generic\", \"django/contrib/admin/views/main.py:ChangeList.get_query_string\", \"django/contrib/admin/widgets.py:ForeignKeyRawIdWidget.get_context\", \"django/contrib/admin/options.py:ModelAdmin.get_preserved_filters\", \"django/contrib/admin/templatetags/admin_urls.py:add_preserved_filters\"]}\n```",
+    "subtype": "success",
+    "is_error": false,
+    "num_turns": 4,
+    "duration_ms": 17302,
+    "cost_usd": 0.0879946,
+    "usage": {
+      "input_tokens": 8,
+      "output_tokens": 1429,
+      "cache_creation_input_tokens": 6620,
+      "cache_read_input_tokens": 32113
+    },
+    "tool_calls": {
+      "Bash": 2,
+      "Grep": 1
+    },
+    "mcp_status": "none",
+    "api_key_source": "none",
+    "tools": [
+      "Bash",
+      "Edit",
+      "Glob",
+      "Grep",
+      "Read",
+      "Write"
+    ]
+  },
+  "score": {
+    "answered": true,
+    "recall": 1.0,
+    "precision": 1.0,
+    "missing": [],
+    "extra": [],
+    "edit_applied": null,
+    "stale": [],
+    "success": true
+  },
+  "failure": null,
+  "hook": null
+}

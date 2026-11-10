@@ -1,0 +1,55 @@
+{
+  "record_version": 3,
+  "run_id": "tokio-callers-sleep-until__A__3",
+  "task_id": "tokio-callers-sleep-until",
+  "repo": "tokio",
+  "category": "callers",
+  "arm": "A",
+  "rep": 3,
+  "model": "claude-opus-5-5",
+  "effort": "high",
+  "embedding": "local",
+  "index_copy_s": null,
+  "index_build_s": null,
+  "wall_s": 16.848159458022565,
+  "transcript": {
+    "result_text": "Ten functions and methods in the library sources call `sleep_until` directly. I found them by searching outside the tests, benches and examples directories, then checking which function contains each call.\n\n**tokio**\n- `tokio/src/time/timeout.rs`: `timeout_at`\n- `tokio/src/time/interval.rs`: `internal_interval_at`. It calls `sleep_until` in two places, one with tracing turned on and one without.\n\n**tokio-util**\n- `tokio-util/src/time/delay_queue.rs`: `DelayQueue.insert_at`, `DelayQueue.remove` and `DelayQueue.poll_idx`. In `poll_idx` the call is inside a closure.\n\n**tokio-stream**\n- `tokio-stream/src/stream_ext/timeout.rs`: `Timeout.new`\n- `tokio-stream/src/stream_ext/throttle.rs`: `throttle`\n\n**tokio-test**\n- `tokio-test/src/stream_mock.rs`: `StreamMock.poll_next`\n- `tokio-test/src/io.rs`: `Mock.poll_read` and `Mock.poll_write`\n\nI left out the other matches: comments and doc examples in `tokio/src/sync/mod.rs` and `tokio/src/time/sleep.rs`, imports and re-exports, and the definition of `sleep_until` itself. `sleep` builds its timer with `Sleep::new_timeout` and does not call `sleep_until`.\n\n```json\n{\"answer\": [\"tokio/src/time/timeout.rs:timeout_at\", \"tokio/src/time/interval.rs:internal_interval_at\", \"tokio-util/src/time/delay_queue.rs:DelayQueue.insert_at\", \"tokio-util/src/time/delay_queue.rs:DelayQueue.remove\", \"tokio-util/src/time/delay_queue.rs:DelayQueue.poll_idx\", \"tokio-stream/src/stream_ext/timeout.rs:Timeout.new\", \"tokio-stream/src/stream_ext/throttle.rs:throttle\", \"tokio-test/src/stream_mock.rs:StreamMock.poll_next\", \"tokio-test/src/io.rs:Mock.poll_read\", \"tokio-test/src/io.rs:Mock.poll_write\"]}\n```",
+    "subtype": "success",
+    "is_error": false,
+    "num_turns": 4,
+    "duration_ms": 15997,
+    "cost_usd": 0.0892516,
+    "usage": {
+      "input_tokens": 8,
+      "output_tokens": 1611,
+      "cache_creation_input_tokens": 6325,
+      "cache_read_input_tokens": 31998
+    },
+    "tool_calls": {
+      "Bash": 2,
+      "Grep": 1
+    },
+    "mcp_status": "none",
+    "api_key_source": "none",
+    "tools": [
+      "Bash",
+      "Edit",
+      "Glob",
+      "Grep",
+      "Read",
+      "Write"
+    ]
+  },
+  "score": {
+    "answered": true,
+    "recall": 1.0,
+    "precision": 1.0,
+    "missing": [],
+    "extra": [],
+    "edit_applied": null,
+    "stale": [],
+    "success": true
+  },
+  "failure": null,
+  "hook": null
+}

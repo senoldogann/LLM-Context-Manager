@@ -4,15 +4,16 @@ The current state of CCM and the next steps, for the owner and for any agent tha
 work. Keep it current: replace lines that stop being true instead of appending history (git log and
 `benchmarks/results/` are the history).
 
-Last updated: 2026-11-10. Where work stopped: **five Django held-out tasks measured; the
-large-repository saving holds for Codex on all of them and for Claude on caller questions, not on a
-name-collision trap; across small repositories CCM still costs more.** With three repetitions:
-on Django `iri_to_uri`, `constant_time_compare` and the `urlencode` trap every Codex B run was below
-the A mean (B/A 0.61, 0.67, 0.51); Claude B was below A on the two caller tasks (0.53, 0.51), where
-it chose CCM on its own in all six runs, and not on the trap (1.08), where it never called CCM. On
-the three small-repository held-out tasks B costs about the same as A for Claude (1.06–1.08) and
-more for Codex (1.16–1.77): there a CCM call adds a turn instead of replacing one. The commits behind
-each figure are in "Agent pilots" below.
+Last updated: 2026-11-10. Where work stopped: **seven measured iterations; a second large
+repository (Tokio, Rust, 112 k non-test lines) added and measured.** The large-repository saving
+on caller questions is not specific to Django: on Tokio `sleep_until` every Codex B run was below
+the A mean (B/A 0.65), and on Django all three caller tasks held for Codex (0.61, 0.67 and the
+`urlencode` trap 0.51, now 0.30 after #17). Claude Code saves on these tasks only in the runs where
+it chooses CCM (6 of 6 Django caller runs, 1 of 3 Tokio runs). Name-collision traps remain a loss
+when the check cannot rule out the other definition (Tokio `catch_unwind`: Codex 1.36, Claude
+1.30), and small-repository tasks cost more for Codex (1.16–1.77) because a CCM call adds a turn.
+Across held-out sets as a whole B/A stays above 1. The commits behind each figure are in "Agent
+pilots" below.
 
 ## Goal
 
@@ -68,7 +69,7 @@ unchanged), but they came after the iteration-3 runs and have no agent measureme
 |---|---|---|---|
 | L1 freshness | After an edit, does a tool answer from the new code? | each tool's answers after scripted edits | agent behaviour |
 | M2 answer cost | How many tokens does a CCM answer cost? | response bytes and calls per question, before and after M2 | whether an agent reads less overall |
-| L3 agents | Does the same agent finish real tasks better or with less quota with CCM? | success, recall and precision, tokens, turns, time, cost (Claude), stale answers after edits; arms A/B/C (and the forced-use arm F in product pilots) for Claude Code and Codex | open-ended feature work and debugging, long sessions, languages other than Python, JavaScript and Rust |
+| L3 agents | Does the same agent finish real tasks better or with less quota with CCM? | success, recall and precision, tokens, turns, time, cost (Claude), stale answers after edits; arms A/B/C (and the forced-use arm F in product pilots) for Claude Code and Codex; corpus Flask, Express, Serde, Django and (product pilots) Tokio | open-ended feature work and debugging, long sessions, languages other than Python, JavaScript and Rust |
 | L2 edge accuracy | Are the graph's edges right against a language server? | not run | — |
 
 L3 has 24 tasks × 3 repetitions per arm and agent: the report gives intervals, and differences
@@ -114,6 +115,17 @@ wide and one repetition cannot separate small effects from run-to-run noise.
 | large-repository ×3 (`516ed4c` harness, `9bb6564` product) | Codex | 2 held-out, 3 reps | 12/12 | | django constant_time_compare 0.67, django urlencode trap 0.51 | |
 | large-repository ×3 (`516ed4c` harness, `9bb6564` product) | Claude | 2 held-out, 3 reps | 24/24 | B called CCM in 3 of 6 runs (all on constant_time_compare) | django constant_time_compare 0.51, urlencode trap 1.08 | F 0.58, 1.10; H 0.43, 1.34 |
 
+| iteration 7 (`e805025`) | Codex | Tokio 2 held-out + Django urlencode tuned, 3 reps | 18/18 | | tokio sleep_until 0.65, tokio catch_unwind trap 1.36; tuned django urlencode 0.30 (was 0.51) | |
+| iteration 7 (`e805025`) | Claude | Tokio 2 held-out + Django urlencode tuned, 3 reps | 36/36 | B called CCM in 1 of 9 runs (tokio sleep_until) | tokio sleep_until 0.84, catch_unwind trap 1.30; tuned urlencode 0.91 | F 0.87, 1.33, 0.66 (urlencode was 1.10); H 0.77, 1.22, 0.91 |
+
+Per-run input tokens for iteration 7 (`iter7-20261110/`, reading rule in its `PLAN.md`): Tokio
+`sleep_until` Codex A 51 k, 80 k, 53 k and B 44 k, 43 k, 33 k; Claude A 26–38 k and B 19 k (with
+CCM), 28 k, 39 k (without). Tokio `catch_unwind` trap Codex A 47–60 k and B 70–71 k: its first query
+(`tokio/src/sync/task/atomic_waker.rs:catch_unwind`) routed to an unrelated test function, and the
+check called ten `panic::catch_unwind(` / `std::panic::catch_unwind(` calls outside call sites, so
+Codex grepped and read anyway. The hook answered none of 11 greps (4 packets not complete, 4 greps
+with `glob`/`type`/`-i`, 2 on a single file, 1 not a single symbol).
+
 Per-run input tokens for the large-repository set (`iter6-20261110/`, reading rule in its `PLAN.md`):
 `constant_time_compare` Codex A 48 k, 46 k, 48 k and B 32 k ×3; Claude A 34–44 k and B 17 k, 17 k,
 28 k. `urlencode` trap Codex A 90 k, 113 k, 142 k and B 47 k, 60 k, 69 k; Claude A 27 k, 49 k, 54 k
@@ -157,7 +169,7 @@ with 35 % less text (`hook-replay-20261110/`).
 
 Results, reports, run records and task selections are in `benchmarks/results/agent/`
 (`heldout-20261110/`, `pilot-*-20261110/`, `iter2-20261110/`, `iter3-20261110/`,
-`iter4-20261110/`, `iter5-20261110/`, `iter5-reps-20261110/`, `iter6-20261110/`, `hook-replay-20261110/`); transcripts stay
+`iter4-20261110/`, `iter5-20261110/`, `iter5-reps-20261110/`, `iter6-20261110/`, `iter7-20261110/`, `hook-replay-20261110/`); transcripts stay
 local. Failures kept in the records:
 
 - Iteration-1 tuned sets stopped at the Django task: the frozen harness rebuilt the index with local
@@ -220,14 +232,13 @@ What the transcripts show:
 
 ## Next steps, in order
 
-1. **A second large repository.** Five Django tasks now back "CCM saves tokens on caller questions
-   in a 155 k-line Python repository" for Codex, and for Claude when it chooses CCM. Whether this
-   holds for large repositories in general needs one in another language (Rust or TypeScript),
-   added to the corpus and preregistered before its tasks are looked at.
-2. **Python method calls on other objects** (generic, from the `urlencode` trap): for a Python
-   module-level function, `x.name(` where `x` is not a name bound by an import in that file is a
-   method of another object and should not count as an outside call site, as for Rust functions
-   without `self`. Unmeasured candidate.
+1. **Rust path targets and standard-library calls** (generic, from the Tokio trap): resolve
+   `path.rs:name` queries as a symbol in that file, and treat calls qualified by `std::`, `core::`
+   or `alloc::` (directly or through a `use std::…` binding in the file) as external, as Python
+   standard-library calls already are. Measure on new held-out tasks, not on the trap it came from.
+2. **Python method calls on other objects: done in #17.** Calls `x.name(` on objects that no import
+   binds are listed under their own headline instead of making the check "NOT complete"; on the
+   tuned `urlencode` trap Codex B/A went from 0.51 to 0.30 and Claude F from 1.10 to 0.66.
 3. **Small repositories: documented limit.** In the repeated Codex runs B costs more than A on
    Flask edits (1.69) and Serde trait implementors (1.77) in all three repetitions. The transcripts
    show why: A answers with one or two `rg` calls; B makes the same calls plus a CCM call (a

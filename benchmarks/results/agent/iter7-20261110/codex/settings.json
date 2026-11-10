@@ -1,0 +1,34 @@
+{
+  "schema_version": 1,
+  "harness_revision": "e8050250f7a20bf6428b8ca30efb514f8724ebfa",
+  "preregistration": "benchmarks/agent/PREREGISTRATION.md",
+  "settings": {
+    "model": "gpt-6-luna",
+    "effort": "high",
+    "embedding": "local",
+    "auth": "subscription",
+    "profile": "context-first-pilot",
+    "agent": "codex",
+    "max_budget_usd": 2.0,
+    "timeout_s": 1800,
+    "repetitions": 3,
+    "arms": [
+      "A",
+      "B"
+    ],
+    "tasks": [
+      "django-trap-urlencode",
+      "tokio-callers-sleep-until",
+      "tokio-trap-catch-unwind"
+    ]
+  },
+  "environment": {
+    "agent_version": "codex-cli 0.167.0",
+    "agent_login": "Logged in using ChatGPT",
+    "ccm_version": "ccm-cli 0.5.0",
+    "ccm_commit": "e8050250f7a20bf6428b8ca30efb514f8724ebfa",
+    "ccm_dirty": false,
+    "ccm_cli_sha256": "a86cb4695fa881aff10e6baa27d22eca2905b3ba773a28e0c680fa2341fa4c46",
+    "ccm_mcp_sha256": "cd1cfefdd9124fe39481c997b970286aefdf809535a118e5a6545834460d5f14"
+  }
+}

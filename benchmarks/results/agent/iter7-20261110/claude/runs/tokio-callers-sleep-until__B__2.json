@@ -1,0 +1,57 @@
+{
+  "record_version": 3,
+  "run_id": "tokio-callers-sleep-until__B__2",
+  "task_id": "tokio-callers-sleep-until",
+  "repo": "tokio",
+  "category": "callers",
+  "arm": "B",
+  "rep": 2,
+  "model": "claude-opus-5-5",
+  "effort": "high",
+  "embedding": "local",
+  "index_copy_s": 0.054482500068843365,
+  "index_build_s": 202.65235587512143,
+  "wall_s": 18.288512957980856,
+  "transcript": {
+    "result_text": "I found 10 functions and methods that call `sleep_until` directly. I searched the four crates' sources with tests, benches and examples left out, and matched each call to the function that contains it. I left out calls that only appear in doc comments (in `tokio/src/time/sleep.rs` and `tokio/src/sync/mod.rs`). `tokio::time::sleep` doesn't count either: it calls `Sleep::new_timeout`, not `sleep_until`.\n\n- **`tokio`:**\n  - `internal_interval_at` in `tokio/src/time/interval.rs` (one call each in the tracing and non-tracing cfg branches).\n  - `timeout_at` in `tokio/src/time/timeout.rs`.\n- **`tokio-util`:** three `DelayQueue` methods in `tokio-util/src/time/delay_queue.rs`: `insert_at`, `remove` and `poll_idx`.\n- **`tokio-stream`:**\n  - `throttle` in `stream_ext/throttle.rs`.\n  - `Timeout::new` in `stream_ext/timeout.rs`.\n- **`tokio-test`:**\n  - `StreamMock::poll_next` in `stream_mock.rs`.\n  - `Mock::poll_read` and `Mock::poll_write` in `io.rs`.\n\n```json\n{\"answer\": [\"tokio/src/time/interval.rs:internal_interval_at\", \"tokio/src/time/timeout.rs:timeout_at\", \"tokio-util/src/time/delay_queue.rs:DelayQueue.insert_at\", \"tokio-util/src/time/delay_queue.rs:DelayQueue.remove\", \"tokio-util/src/time/delay_queue.rs:DelayQueue.poll_idx\", \"tokio-stream/src/stream_ext/throttle.rs:throttle\", \"tokio-stream/src/stream_ext/timeout.rs:Timeout.new\", \"tokio-test/src/stream_mock.rs:StreamMock.poll_next\", \"tokio-test/src/io.rs:Mock.poll_read\", \"tokio-test/src/io.rs:Mock.poll_write\"]}\n```",
+    "subtype": "success",
+    "is_error": false,
+    "num_turns": 3,
+    "duration_ms": 17520,
+    "cost_usd": 0.0814962,
+    "usage": {
+      "input_tokens": 6,
+      "output_tokens": 1556,
+      "cache_creation_input_tokens": 5729,
+      "cache_read_input_tokens": 22601
+    },
+    "tool_calls": {
+      "Bash": 1,
+      "Grep": 1
+    },
+    "mcp_status": "connected",
+    "api_key_source": "none",
+    "tools": [
+      "Bash",
+      "Edit",
+      "Glob",
+      "Grep",
+      "Read",
+      "Write",
+      "mcp__context-manager__context",
+      "mcp__context-manager__index_project"
+    ]
+  },
+  "score": {
+    "answered": true,
+    "recall": 1.0,
+    "precision": 1.0,
+    "missing": [],
+    "extra": [],
+    "edit_applied": null,
+    "stale": [],
+    "success": true
+  },
+  "failure": null,
+  "hook": null
+}
