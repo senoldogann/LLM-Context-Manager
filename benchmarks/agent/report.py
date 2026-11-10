@@ -15,7 +15,7 @@ from agent.prices import PRICES, estimated_cost
 from freshness.jsonio import as_bool, as_float, as_int, as_list, as_object, as_str
 from freshness.model import JsonValue
 
-ARMS = ("A", "B", "C", "F", "H")
+ARMS = ("A", "B", "C", "D", "F", "H")
 CCM_TOOL_PREFIX = "mcp__context-manager__"
 BOOTSTRAP_ROUNDS = 10_000
 BOOTSTRAP_SEED = 7
@@ -582,7 +582,8 @@ def header(setup: JsonValue, outcomes: list[Outcome]) -> list[str]:
         "H=B plus the opt-in Claude Code Grep hook (installed product configuration, not "
         "natural use)"
         if profile == "context-first-pilot"
-        else "A=built-ins; B=preregistered full CCM surface; C=preregistered search_code only"
+        else "A=built-ins; B=preregistered full CCM surface; C=preregistered search_code only; "
+        "D=current product (`context` + `index_project` with the context note; amendment 14)"
     )
     return [
         "# L3 agent benchmark",

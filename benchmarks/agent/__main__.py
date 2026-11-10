@@ -41,7 +41,10 @@ from freshness.repos import run_git
 
 PACKAGE_DIR = Path(__file__).resolve().parent
 DEFAULT_ARMS = "A,B,C"
-KNOWN_ARMS: tuple[Arm, ...] = ("A", "B", "C", "F", "H")
+KNOWN_ARMS: tuple[Arm, ...] = ("A", "B", "C", "D", "F", "H")
+# Ön kayıttaki dengeli sıranın kolları; D gibi sonradan eklenen kollar her zaman bunlardan sonra
+# koşar, böylece A/B/C'nin kayıtlı sırası değişmez (ek 14).
+PREREGISTERED_ROTATION: tuple[Arm, ...] = ("A", "B", "C")
 HARNESS_PATHS = ("benchmarks/agent", "benchmarks/pyproject.toml", "benchmarks/corpus.json")
 CCM_SOURCE_PATHS = ("core", "mcp", "cli", "npm", "Cargo.toml", "Cargo.lock", "SKILL.md")
 SETUP_SCHEMA_VERSION = 1
@@ -318,6 +321,21 @@ def arm_order(arms: tuple[Arm, ...], task_index: int, repetition: int) -> tuple[
     return (*arms[shift:], *arms[:shift])
 
 
+def run_order(
+    profile: ProductProfile, arms: tuple[Arm, ...], task_index: int, repetition: int
+) -> tuple[Arm, ...]:
+    """Koşu sırası: preregistered profilde yalnız A/B/C döner ve diğer kollar onlardan sonra
+    gelir; pilot profillerinde tüm kollar döner (önceki davranış)."""
+    if profile != "preregistered":
+        return arm_order(arms, task_index, repetition)
+    rotated = tuple(arm for arm in arms if arm in PREREGISTERED_ROTATION)
+    extra = tuple(arm for arm in arms if arm not in PREREGISTRATION_ROTATION_SET)
+    return (*arm_order(rotated, task_index, repetition), *extra)
+
+
+PREREGISTRATION_ROTATION_SET = frozenset(PREREGISTERED_ROTATION)
+
+
 def selected_arms(raw: str) -> tuple[Arm, ...]:
     """Virgülle ayrılmış kolları bilinen sırayla seçer; A her zaman karşılaştırma tabanıdır."""
     requested = [item.strip() for item in raw.split(",") if item.strip()]
@@ -368,6 +386,8 @@ def command_run(
         raise HarnessError("--max-total-usd must be at least --max-budget-usd")
     if ("F" in arms or "H" in arms) and settings.profile != "context-first-pilot":
         raise HarnessError("arms F and H exist only in the context-first-pilot profile")
+    if "D" in arms and settings.profile != "preregistered":
+        raise HarnessError("arm D exists only in the preregistered profile")
     if "H" in arms and settings.agent != "claude":
         raise HarnessError("arm H (Claude Code Grep hook) is only defined for --agent claude")
     with exclusive_out_dir(settings.out_dir), sigterm_raises():
@@ -401,7 +421,7 @@ def run_missing(
     spent = spent_usd(settings.out_dir)
     for repetition in range(1, repetitions + 1):
         for task_index, task in enumerate(tasks):
-            for arm in arm_order(arms, task_index, repetition):
+            for arm in run_order(settings.profile, arms, task_index, repetition):
                 name = f"{task.id}__{arm}__{repetition}"
                 if record_path(settings.out_dir, name).is_file():
                     completed += 1

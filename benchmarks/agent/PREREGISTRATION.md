@@ -217,3 +217,20 @@ the final run is complete.
     defined twice as `cfg_coop!`/`cfg_not_coop!` alternatives, in 11 methods). They run with three
     repetitions, arms Codex A and B and Claude A, B, F and H, together with a re-run of the now tuned
     `tokio-callers-async-op`.
+14. 2026-11-10, written before the final run, with the owner's approval of its quota: the final run
+    keeps the preregistered design above unchanged (24 tasks; arms A, B and C with their
+    preregistered tools and notes; 3 repetitions; both agents) and adds one arm, **D**, the
+    current product: B's built-in tools plus only `context` and `index_project`, with the context
+    note used in the product pilots. D is reported next to B and C as its own arm (D/A); it does
+    not replace B. The preregistered rotation of A, B and C is kept exactly; D runs after them in
+    every task and repetition. Product and harness are the commit that adds this amendment, built
+    once for the whole run; agent models are those of the product pilots (Claude Code
+    `claude-opus-5-5`, Codex `gpt-6-luna`, the newest Codex model listed), effort high, local
+    embeddings, a per-run budget of 2 USD.
+    Eighteen of the 24 tasks were used in the product pilots of 2026-11-09 and 2026-11-10 and are
+    therefore not held out; six were never run (`flask-files-globals`, `flask-types-scaffold`,
+    `express-edit-stringify`, `express-edit-handle-request`, `serde-locate-tag-conflict`,
+    `serde-edit-deserialize-seq`). The primary result covers all 24 tasks as preregistered; the
+    report also gives the same outcomes separately for the six never-run tasks and the eighteen
+    pilot tasks. Answers keep the preregistered scorer; the owner audit
+    (`scripts/owner_audit.py`) is reported alongside without changing scores.
