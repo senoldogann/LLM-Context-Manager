@@ -861,3 +861,14 @@ fn context_follows_self_aliases_of_this_in_the_definition_file() {
         "`self` in a function that does not bind it to `this` is another object: {text}"
     );
 }
+
+#[test]
+fn context_resolves_a_symbol_named_in_a_file() {
+    let mut server = Server::start();
+    let (text, is_error) = server.call("context", json!({"query": "app/html_utils.py:escape"}));
+    assert!(!is_error, "{text}");
+    assert!(
+        text.contains("Function `escape` · app/html_utils.py:1-2"),
+        "`path:name` must resolve the symbol in that file: {text}"
+    );
+}

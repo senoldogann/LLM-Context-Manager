@@ -614,6 +614,114 @@ fn import_binds_to_definition(source: &str, name: &str, location: &str) -> bool 
     }
 }
 
+/// Rust standart kütüphane kökleri: bu kökle başlayan yol çalışma alanındaki bir
+/// fonksiyona ulaşamaz.
+const RUST_STD_ROOTS: [&str; 3] = ["std", "core", "alloc"];
+
+/// Rust dosyasında `use std::…` bildirimlerinin bağladığı adlar → tam yol
+/// (`use std::panic;` → `panic` → `std::panic`; `use std::{self as s, panic::{self, X}}`).
+/// Yalnız standart kütüphane kökleri izlenir; çalışma alanı yolları dokunulmaz kalır.
+pub(crate) fn rust_std_aliases(source: &str) -> HashMap<String, String> {
+    let mut aliases = HashMap::new();
+    let mut rest = source;
+    while let Some(start) = rest.find("use ") {
+        let before_ok = rest[..start]
+            .chars()
+            .next_back()
+            .is_none_or(|c| !is_ident_char(c));
+        let after = &rest[start + 4..];
+        let Some(end) = after.find(';') else { break };
+        if before_ok {
+            let statement: String = after[..end]
+                .split_whitespace()
+                .collect::<Vec<_>>()
+                .join(" ");
+            let statement = statement.trim_start_matches(':');
+            if RUST_STD_ROOTS
+                .iter()
+                .any(|root| statement.starts_with(&format!("{root}::")))
+            {
+                expand_use_tree("", statement, &mut aliases);
+            }
+        }
+        rest = &after[end + 1..];
+    }
+    aliases
+}
+
+/// Bir `use` ağacını (`a::{b, c::{self, D as E}}`) bağlanan ad → tam yol olarak açar.
+fn expand_use_tree(prefix: &str, tree: &str, aliases: &mut HashMap<String, String>) {
+    let tree = tree.trim();
+    if let Some(open) = tree.find('{') {
+        let head = tree[..open].trim().trim_end_matches("::");
+        let body = tree[open + 1..].trim_end().trim_end_matches('}');
+        let base = join_path(prefix, head);
+        let mut depth = 0usize;
+        let mut part_start = 0;
+        for (index, character) in body.char_indices() {
+            match character {
+                '{' => depth += 1,
+                '}' => depth = depth.saturating_sub(1),
+                ',' if depth == 0 => {
+                    expand_use_tree(&base, &body[part_start..index], aliases);
+                    part_start = index + 1;
+                }
+                _ => {}
+            }
+        }
+        expand_use_tree(&base, &body[part_start..], aliases);
+        return;
+    }
+    let (path, alias) = match tree.split_once(" as ") {
+        Some((path, alias)) => (path.trim(), Some(alias.trim())),
+        None => (tree, None),
+    };
+    if path.is_empty() || path == "*" || path.ends_with("::*") {
+        return;
+    }
+    let full = if path == "self" {
+        prefix.to_string()
+    } else {
+        join_path(prefix, path)
+    };
+    let bound = alias.unwrap_or_else(|| full.rsplit("::").next().unwrap_or(&full));
+    if !bound.is_empty() && bound != "_" {
+        aliases.insert(bound.to_string(), full);
+    }
+}
+
+fn join_path(prefix: &str, path: &str) -> String {
+    match (prefix.is_empty(), path.is_empty()) {
+        (true, _) => path.to_string(),
+        (_, true) => prefix.to_string(),
+        _ => format!("{prefix}::{path}"),
+    }
+}
+
+/// Geçişten önceki Rust yol niteleyicisi (`std::panic::catch_unwind` → `std::panic`);
+/// `<T as Trait>::` gibi nitelikli tip yolları için `None`.
+fn rust_qualifier(line: &str, position: usize) -> Option<&str> {
+    let prefix = line[..position].strip_suffix("::")?;
+    let start = prefix
+        .char_indices()
+        .rev()
+        .find(|(_, c)| !(is_ident_char(*c) || *c == ':'))
+        .map_or(0, |(index, c)| index + c.len_utf8());
+    let qualifier = prefix[start..].trim_start_matches("::");
+    (!qualifier.is_empty() && !prefix[..start].ends_with('>')).then_some(qualifier)
+}
+
+/// Niteleyici standart kütüphaneye çıkıyorsa onun tam yolu (`panic` → `std::panic`).
+fn rust_external_module(qualifier: &str, aliases: &HashMap<String, String>) -> Option<String> {
+    let (root, rest) = qualifier
+        .split_once("::")
+        .map_or((qualifier, ""), |(root, rest)| (root, rest));
+    if RUST_STD_ROOTS.contains(&root) {
+        return Some(qualifier.to_string());
+    }
+    aliases.get(root).map(|full| join_path(full, rest))
+}
+
 /// `x.ad` biçiminde, noktadan önceki tanımlayıcı (`re.escape` → `re`); zincirde
 /// yalnız son halka alınır (`a.b.escape` → `b`).
 fn receiver_before(line: &str, position: usize) -> Option<&str> {
@@ -686,6 +794,14 @@ pub(crate) fn file_hits(
                         }
                     }
                 {
+                    HitKind::External
+                } else if lang == Lang::Rust
+                    && rust_qualifier(line, position)
+                        .and_then(|qualifier| rust_external_module(qualifier, &externals.modules))
+                        .is_some()
+                {
+                    // `std::panic::catch_unwind(` ya da `use std::panic;` sonrası
+                    // `panic::catch_unwind(`: standart kütüphanenin fonksiyonudur.
                     HitKind::External
                 } else if spec.kind == CheckKind::RustNoSelfUses
                     && lang == Lang::Rust
@@ -886,10 +1002,13 @@ pub(crate) fn reconcile(
             .count();
             continue;
         }
-        let externals = if lang_of(&file.path) == Lang::Python {
-            python_externals(&scanned_file.source, roots)
-        } else {
-            PythonExternals::default()
+        let externals = match lang_of(&file.path) {
+            Lang::Python => python_externals(&scanned_file.source, roots),
+            Lang::Rust => PythonExternals {
+                modules: rust_std_aliases(&scanned_file.source),
+                ..PythonExternals::default()
+            },
+            Lang::JavaScript | Lang::Other => PythonExternals::default(),
         };
         let lines: Vec<&str> = scanned_file.source.lines().collect();
         for hit in file_hits(
@@ -905,12 +1024,18 @@ pub(crate) fn reconcile(
                     // Aynı satırdaki her geçişin modülü (`escape(x) + re.escape(x)`).
                     if let Some(line) = lines.get(hit.line - 1) {
                         for position in needle_positions(line, target_name) {
-                            let module = match receiver_before(line, position) {
-                                Some(receiver) => externals.modules.get(receiver),
-                                None => externals.names.get(target_name),
+                            let module = if lang_of(&file.path) == Lang::Rust {
+                                rust_qualifier(line, position).and_then(|qualifier| {
+                                    rust_external_module(qualifier, &externals.modules)
+                                })
+                            } else {
+                                match receiver_before(line, position) {
+                                    Some(receiver) => externals.modules.get(receiver).cloned(),
+                                    None => externals.names.get(target_name).cloned(),
+                                }
                             };
                             if let Some(module) = module {
-                                counts.external_modules.insert(module.clone());
+                                counts.external_modules.insert(module);
                             }
                         }
                     }
@@ -1580,6 +1705,42 @@ mod tests {
                 HitKind::Call,
                 HitKind::OtherTypeMethod,
                 HitKind::OtherTypeMethod,
+                HitKind::Call
+            ]
+        );
+    }
+
+    #[test]
+    fn rust_std_qualified_calls_are_external() {
+        let source = "use std::panic;\nuse std::{sync::Arc, panic::{self as p, AssertUnwindSafe}};\n\nfn f() {\n    panic::catch_unwind(x);\n    std::panic::catch_unwind(x);\n    p::catch_unwind(x);\n    catch_unwind(x);\n    crate::util::catch_unwind(x);\n}\n";
+        let aliases = rust_std_aliases(source);
+        assert_eq!(aliases.get("panic").map(String::as_str), Some("std::panic"));
+        assert_eq!(aliases.get("p").map(String::as_str), Some("std::panic"));
+        assert_eq!(
+            aliases.get("Arc").map(String::as_str),
+            Some("std::sync::Arc")
+        );
+        let externals = PythonExternals {
+            modules: aliases,
+            ..PythonExternals::default()
+        };
+        let kinds: Vec<HitKind> = file_hits(
+            "src/a.rs",
+            source,
+            &name_spec("catch_unwind"),
+            "catch_unwind",
+            &externals,
+        )
+        .iter()
+        .map(|hit| hit.kind)
+        .collect();
+        assert_eq!(
+            kinds,
+            vec![
+                HitKind::External,
+                HitKind::External,
+                HitKind::External,
+                HitKind::Call,
                 HitKind::Call
             ]
         );
