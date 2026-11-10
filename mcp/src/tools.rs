@@ -1433,6 +1433,42 @@ struct MemberTarget {
     node_id: String,
     hint: MemberCallHint,
     expressions: Vec<String>,
+    /// Tanım dosyasında `this`'in takma adları (`var self = this`): `self.üye(`
+    /// çağrısı `this.üye(` gibi aynı nesnenin metodudur.
+    this_aliases: Vec<String>,
+}
+
+/// Satır `var|let|const AD = this` bildirimiyse takma ad.
+fn this_alias_of(line: &str) -> Option<&str> {
+    let trimmed = line.trim();
+    let rest = ["var ", "let ", "const "]
+        .iter()
+        .find_map(|keyword| trimmed.strip_prefix(keyword))?;
+    let (name, value) = rest.split_once('=')?;
+    let name = name.trim();
+    let value = value.trim().trim_end_matches(';').trim();
+    (identifier_part(name) && value == "this").then_some(name)
+}
+
+/// Tanım dosyasındaki fonksiyonlarda geçen `this` takma adları (sıralı, tekil).
+fn this_aliases_in_file(graph: &ccm_core::graph::CodeGraph, file: &str) -> Vec<String> {
+    let mut aliases: Vec<String> = graph
+        .graph
+        .node_weights()
+        .filter(|node| {
+            ccm_core::engine::extract_file_path(&node.id).trim_start_matches("./") == file
+        })
+        .flat_map(|node| {
+            node.content
+                .lines()
+                .filter_map(this_alias_of)
+                .map(str::to_string)
+                .collect::<Vec<_>>()
+        })
+        .collect();
+    aliases.sort();
+    aliases.dedup();
+    aliases
 }
 
 fn js_language(path: &str) -> ccm_core::parser::SupportedLanguage {
@@ -1555,6 +1591,7 @@ async fn assigned_member_target(
             definition_file: Some(path.to_string()),
         },
         expressions,
+        this_aliases: this_aliases_in_file(&graph, path),
     }))
 }
 
@@ -1634,10 +1671,15 @@ async fn member_call_target(
         .collect();
     expressions.sort();
     expressions.dedup();
+    let this_aliases = first_hint
+        .definition_file
+        .as_deref()
+        .map_or_else(Vec::new, |file| this_aliases_in_file(&graph, file));
     Ok(Some(MemberTarget {
         node_id: graph.graph[*first].id.clone(),
         hint: first_hint.clone(),
         expressions,
+        this_aliases,
     }))
 }
 
@@ -1733,7 +1775,16 @@ async fn receiver_call_evidence(
             contains_member_call(&tree, &node.content, expression, true)
                 || (hint.definition_file.as_deref() == Some(path)
                     && expression.rsplit_once('.').is_some_and(|(_, member)| {
-                        contains_member_call(&tree, &node.content, &format!("this.{member}"), false)
+                        std::iter::once("this")
+                            .chain(target.this_aliases.iter().map(String::as_str))
+                            .any(|receiver| {
+                                contains_member_call(
+                                    &tree,
+                                    &node.content,
+                                    &format!("{receiver}.{member}"),
+                                    false,
+                                )
+                            })
                     }))
         });
         let Some(expression) = matching_expression else {
@@ -1860,6 +1911,7 @@ async fn sole_assigned_member_target(
             definition_file: Some(path.clone()),
         },
         expressions: expressions.clone(),
+        this_aliases: this_aliases_in_file(&graph, path),
     }))
 }
 
@@ -2255,10 +2307,16 @@ fn check_spec(
             .collect();
         members.sort_unstable();
         members.dedup();
-        needles.extend(members.into_iter().map(|member| Needle {
-            text: format!("this.{member}"),
-            only_file: target.hint.definition_file.clone(),
-        }));
+        for member in members {
+            for receiver in
+                std::iter::once("this").chain(target.this_aliases.iter().map(String::as_str))
+            {
+                needles.push(Needle {
+                    text: format!("{receiver}.{member}"),
+                    only_file: target.hint.definition_file.clone(),
+                });
+            }
+        }
         return Some(CheckSpec {
             needles,
             kind: CheckKind::MemberCalls,
@@ -3072,6 +3130,14 @@ mod tests {
     fn body_head_keeps_short_bodies_and_counts_hidden_lines() {
         assert_eq!(super::body_head("a\nb", 3), ("a\nb".to_string(), 0));
         assert_eq!(super::body_head("a\nb\nc\nd", 2), ("a\nb".to_string(), 2));
+    }
+
+    #[test]
+    fn this_aliases_are_simple_this_bindings() {
+        assert_eq!(super::this_alias_of("  var self = this;"), Some("self"));
+        assert_eq!(super::this_alias_of("const that = this"), Some("that"));
+        assert_eq!(super::this_alias_of("var self = this.app;"), None);
+        assert_eq!(super::this_alias_of("self = this;"), None);
     }
 
     #[test]

@@ -6,6 +6,7 @@ use tokio::io::{AsyncBufRead, AsyncBufReadExt, BufReader};
 mod call_sites;
 mod dispatch;
 mod freshness;
+mod hook;
 mod protocol;
 mod server;
 mod tools;
@@ -25,6 +26,20 @@ async fn main() -> Result<()> {
 
     if run_internal_index_worker().await? {
         return Ok(());
+    }
+
+    // `ccm-mcp hook claude-pre-tool-use`: isteğe bağlı Claude Code hook'u (bkz. `hook`).
+    let args: Vec<String> = std::env::args().skip(1).take(2).collect();
+    if args.first().map(String::as_str) == Some("hook") {
+        return match args.get(1).map(String::as_str) {
+            Some("claude-pre-tool-use") => {
+                ccm_core::vector::remote::load_user_env_file()?;
+                hook::run_claude_pre_tool_use().await
+            }
+            other => anyhow::bail!(
+                "unknown hook {other:?}; supported: `ccm-mcp hook claude-pre-tool-use`"
+            ),
+        };
     }
 
     // Allowlist/kök gibi başlangıç ayarları `~/.ccm/.env`'de de tanımlanabilir;
