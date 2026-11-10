@@ -1,0 +1,24 @@
+diff --git a/src/flask/app.py b/src/flask/app.py
+index 7622b5e..dc2a8dc 100644
+--- a/src/flask/app.py
++++ b/src/flask/app.py
+@@ -817,13 +817,18 @@ class Flask(App):
+         self.log_exception(exc_info)
+         server_error: InternalServerError | ft.ResponseReturnValue
+         server_error = InternalServerError(original_exception=e)
+-        handler = self._find_error_handler(server_error, request.blueprints)
++        handler = self._server_error_handler(server_error)
+ 
+         if handler is not None:
+             server_error = self.ensure_sync(handler)(server_error)
+ 
+         return self.finalize_request(server_error, from_error_handler=True)
+ 
++    def _server_error_handler(
++        self, error: InternalServerError
++    ) -> ft.ErrorHandlerCallable | None:
++        return self._find_error_handler(error, request.blueprints)
++
+     def log_exception(
+         self,
+         exc_info: (tuple[type, BaseException, TracebackType] | tuple[None, None, None]),

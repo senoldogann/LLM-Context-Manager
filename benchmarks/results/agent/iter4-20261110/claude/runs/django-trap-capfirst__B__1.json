@@ -1,0 +1,57 @@
+{
+  "record_version": 3,
+  "run_id": "django-trap-capfirst__B__1",
+  "task_id": "django-trap-capfirst",
+  "repo": "django",
+  "category": "trap",
+  "arm": "B",
+  "rep": 1,
+  "model": "claude-opus-5-5",
+  "effort": "high",
+  "embedding": "local",
+  "index_copy_s": 0.6895844999235123,
+  "index_build_s": 4468.590688791126,
+  "wall_s": 41.159520792076364,
+  "transcript": {
+    "result_text": "I found 14 functions and methods in `django/` that call `django.utils.text.capfirst` directly, across 22 call sites.\n\n**What I counted:**\n- Every module whose code calls `capfirst(` imports it with `from django.utils.text import capfirst`. I found no aliases (`capfirst as …`) and no `text.capfirst` style calls.\n- `django/contrib/admin/helpers.py` is left out. It imports `capfirst` from `django.template.defaultfilters`, which is the template filter you said not to count.\n- The `|capfirst` uses in the admin `.html` templates are also left out, because they are template filters.\n\n**Calls inside nested functions** are credited to the outermost named function, as you asked:\n- `django/contrib/admin/templatetags/admin_list.py`: the four calls sit in `link()` or in the body of `date_hierarchy`. Either way they count under `date_hierarchy`.\n- `django/contrib/admin/utils.py`: both calls are inside the nested `format_callback`, so they count under `get_deleted_objects`.\n\n**Calls per function, where there is more than one:**\n- `Model.date_error_message` and `Model.unique_error_message` in `django/db/models/base.py`: three calls each.\n- `date_hierarchy`: four calls.\n- `get_deleted_objects`: two calls.\n- Every other function makes one call.\n\n```json\n{\"answer\": [\n\"django/test/selenium.py:SeleniumTestCaseBase.__new__\",\n\"django/db/models/base.py:Model.date_error_message\",\n\"django/db/models/base.py:Model.unique_error_message\",\n\"django/db/models/fields/__init__.py:Field.formfield\",\n\"django/forms/models.py:BaseInlineFormSet.add_fields\",\n\"django/contrib/admin/options.py:ModelAdmin._get_action_description\",\n\"django/contrib/admin/options.py:ModelAdmin.history_view\",\n\"django/contrib/auth/forms.py:AuthenticationForm.__init__\",\n\"django/contrib/admin/templatetags/admin_list.py:date_hierarchy\",\n\"django/contrib/admin/sites.py:AdminSite._build_app_dict\",\n\"django/contrib/admin/utils.py:get_deleted_objects\",\n\"django/contrib/auth/management/commands/createsuperuser.py:Command.handle\",\n\"django/contrib/auth/management/commands/createsuperuser.py:Command._get_input_message\",\n\"django/contrib/auth/management/commands/createsuperuser.py:Command._validate_username\"\n]}\n```",
+    "subtype": "success",
+    "is_error": false,
+    "num_turns": 9,
+    "duration_ms": 40261,
+    "cost_usd": 0.1848678,
+    "usage": {
+      "input_tokens": 18,
+      "output_tokens": 3911,
+      "cache_creation_input_tokens": 10794,
+      "cache_read_input_tokens": 101119
+    },
+    "tool_calls": {
+      "Bash": 6,
+      "Grep": 2
+    },
+    "mcp_status": "connected",
+    "api_key_source": "none",
+    "tools": [
+      "Bash",
+      "Edit",
+      "Glob",
+      "Grep",
+      "Read",
+      "Write",
+      "mcp__context-manager__context",
+      "mcp__context-manager__index_project"
+    ]
+  },
+  "score": {
+    "answered": true,
+    "recall": 1.0,
+    "precision": 1.0,
+    "missing": [],
+    "extra": [],
+    "edit_applied": null,
+    "stale": [],
+    "success": true
+  },
+  "failure": null,
+  "hook": null
+}

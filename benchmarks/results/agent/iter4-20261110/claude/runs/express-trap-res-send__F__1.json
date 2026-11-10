@@ -1,0 +1,57 @@
+{
+  "record_version": 3,
+  "run_id": "express-trap-res-send__F__1",
+  "task_id": "express-trap-res-send",
+  "repo": "express",
+  "category": "trap",
+  "arm": "F",
+  "rep": 1,
+  "model": "claude-opus-5-5",
+  "effort": "high",
+  "embedding": "local",
+  "index_copy_s": 0.014669708209112287,
+  "index_build_s": 82.88992095901631,
+  "wall_s": 20.277663624845445,
+  "transcript": {
+    "result_text": "Five functions in `lib/` call the response method `res.send`. I found them with the code index and then confirmed with a full text search for \"send\" across `lib/`, which turned up no aliases or other receivers.\n\n- **`lib/response.js`**\n  - `json` (line 279): `return this.send(body);`\n  - `jsonp` (line 352): `return this.send(body);`\n  - `sendStatus` (line 376): `return this.send(body);`\n  - `render` (line 1044): `self.send(str);`, inside the callback passed to `app.render`.\n- **`lib/router/index.js`**\n  - `sendOptionsResponse` (line 655): `res.send(body);`\n\nI left out:\n- `send(req, path, opts)` in `sendFile` (`lib/response.js:447`) and `sendfile` (`lib/response.js:516`), which are calls to the `send` package.\n- `download`, which calls `this.sendFile`, not `res.send`.\n- Mentions of `res.send` in comments and deprecation messages.\n\n```json\n{\"answer\": [\"lib/response.js:json\", \"lib/response.js:jsonp\", \"lib/response.js:sendStatus\", \"lib/response.js:render\", \"lib/router/index.js:sendOptionsResponse\"]}\n```",
+    "subtype": "success",
+    "is_error": false,
+    "num_turns": 5,
+    "duration_ms": 16154,
+    "cost_usd": 0.09022619999999999,
+    "usage": {
+      "input_tokens": 10,
+      "output_tokens": 1002,
+      "cache_creation_input_tokens": 7638,
+      "cache_read_input_tokens": 45211
+    },
+    "tool_calls": {
+      "Grep": 3,
+      "mcp__context-manager__context": 1
+    },
+    "mcp_status": "connected",
+    "api_key_source": "none",
+    "tools": [
+      "Bash",
+      "Edit",
+      "Glob",
+      "Grep",
+      "Read",
+      "Write",
+      "mcp__context-manager__context",
+      "mcp__context-manager__index_project"
+    ]
+  },
+  "score": {
+    "answered": true,
+    "recall": 1.0,
+    "precision": 1.0,
+    "missing": [],
+    "extra": [],
+    "edit_applied": null,
+    "stale": [],
+    "success": true
+  },
+  "failure": null,
+  "hook": null
+}
