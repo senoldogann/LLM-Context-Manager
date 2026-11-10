@@ -28,12 +28,13 @@ from agent.run import (
     record_path,
     run_one,
 )
-from agent.tasks import TASKS, Task
+from agent.tasks import KNOWN_TASKS, TASKS, Task
 from freshness.model import JsonValue
 from freshness.repos import run_git
 
 PACKAGE_DIR = Path(__file__).resolve().parent
-ARMS: tuple[Arm, ...] = ("A", "B", "C")
+DEFAULT_ARMS = "A,B,C"
+KNOWN_ARMS: tuple[Arm, ...] = ("A", "B", "C", "F")
 HARNESS_PATHS = ("benchmarks/agent", "benchmarks/pyproject.toml", "benchmarks/corpus.json")
 CCM_SOURCE_PATHS = ("core", "mcp", "cli", "npm", "Cargo.toml", "Cargo.lock", "SKILL.md")
 SETUP_SCHEMA_VERSION = 1
@@ -100,6 +101,7 @@ def settings_json(
     settings: Settings,
     repetitions: int,
     tasks: tuple[Task, ...],
+    arms: tuple[Arm, ...],
 ) -> dict[str, JsonValue]:
     """Sonuç dizinine yazılan, tekrar koşuda bire bir eşleşmesi gereken ayarlar."""
     return {
@@ -112,7 +114,7 @@ def settings_json(
         "max_budget_usd": settings.max_budget_usd,
         "timeout_s": settings.timeout_s,
         "repetitions": repetitions,
-        "arms": list(ARMS),
+        "arms": list(arms),
         "tasks": [task.id for task in tasks],
     }
 
@@ -137,6 +139,7 @@ def setup_json(
     settings: Settings,
     repetitions: int,
     tasks: tuple[Task, ...],
+    arms: tuple[Arm, ...],
     revision: str,
 ) -> dict[str, JsonValue]:
     """Rapor ve resume için sabit deney tanımı."""
@@ -144,7 +147,7 @@ def setup_json(
         "schema_version": SETUP_SCHEMA_VERSION,
         "harness_revision": revision,
         "preregistration": "benchmarks/agent/PREREGISTRATION.md",
-        "settings": settings_json(settings, repetitions, tasks),
+        "settings": settings_json(settings, repetitions, tasks, arms),
         "environment": environment_json(settings, revision),
     }
 
@@ -172,11 +175,11 @@ def selected_tasks(raw: str) -> tuple[Task, ...]:
     if raw == "all":
         return TASKS
     requested = {item.strip() for item in raw.split(",") if item.strip()}
-    known = {task.id for task in TASKS}
+    known = {task.id for task in KNOWN_TASKS}
     unknown = sorted(requested - known)
     if unknown:
         raise HarnessError("unknown task ids: " + ", ".join(unknown))
-    tasks = tuple(task for task in TASKS if task.id in requested)
+    tasks = tuple(task for task in KNOWN_TASKS if task.id in requested)
     if not tasks:
         raise HarnessError("no tasks selected")
     return tasks
@@ -253,20 +256,32 @@ def secrets_from_env(agent: AgentName, embedding: Embedding, auth: Auth) -> Secr
     )
 
 
-def arm_order(task_index: int, repetition: int) -> tuple[Arm, ...]:
-    """Üç tekrarda her görev için ilk kolu dengeli döndürür."""
-    shift = (task_index + repetition - 1) % len(ARMS)
-    return (*ARMS[shift:], *ARMS[:shift])
+def arm_order(arms: tuple[Arm, ...], task_index: int, repetition: int) -> tuple[Arm, ...]:
+    """Tekrarlar boyunca her görev için ilk kolu dengeli döndürür."""
+    shift = (task_index + repetition - 1) % len(arms)
+    return (*arms[shift:], *arms[:shift])
+
+
+def selected_arms(raw: str) -> tuple[Arm, ...]:
+    """Virgülle ayrılmış kolları bilinen sırayla seçer; A her zaman karşılaştırma tabanıdır."""
+    requested = [item.strip() for item in raw.split(",") if item.strip()]
+    unknown = sorted(set(requested) - set(KNOWN_ARMS))
+    if unknown:
+        raise HarnessError("unknown arms: " + ", ".join(unknown))
+    arms = tuple(arm for arm in KNOWN_ARMS if arm in requested)
+    if "A" not in arms:
+        raise HarnessError("arm A (built-ins) is required as the comparison baseline")
+    return arms
 
 
 def command_check(corpus_dir: Path) -> int:
     """24 görevi ve puanlayıcı işaretlerini sabit korpusa karşı doğrular."""
-    problems = check_tasks(TASKS, corpus_dir.resolve())
+    problems = check_tasks(KNOWN_TASKS, corpus_dir.resolve())
     if problems:
         for problem in problems:
             print(problem, file=sys.stderr)
         return 1
-    print(f"{len(TASKS)} tasks checked: ok")
+    print(f"{len(KNOWN_TASKS)} tasks checked: ok")
     return 0
 
 
@@ -281,6 +296,7 @@ def command_run(
     settings: Settings,
     repetitions: int,
     raw_tasks: str,
+    arms: tuple[Arm, ...],
     max_total_usd: float,
 ) -> int:
     """Eksik koşuları yürütür; tamamlanmış kayıtları atlar, toplam bütçeyi aşmadan durur.
@@ -293,22 +309,24 @@ def command_run(
         raise HarnessError("--repetitions must be at least 1")
     if max_total_usd < settings.max_budget_usd:
         raise HarnessError("--max-total-usd must be at least --max-budget-usd")
+    if "F" in arms and settings.profile != "context-first-pilot":
+        raise HarnessError("arm F exists only in the context-first-pilot profile")
     tasks = selected_tasks(raw_tasks)
     validate_paths(settings)
     problems = check_tasks(tasks, settings.corpus_dir)
     if problems:
         raise HarnessError("task validation failed:\n" + "\n".join(problems))
     revision = harness_revision()
-    setup = setup_json(settings, repetitions, tasks, revision)
+    setup = setup_json(settings, repetitions, tasks, arms, revision)
     write_or_verify_setup(settings.out_dir / "settings.json", setup)
     secrets = secrets_from_env(settings.agent, settings.embedding, settings.auth)
 
-    total = len(tasks) * len(ARMS) * repetitions
+    total = len(tasks) * len(arms) * repetitions
     completed = 0
     spent = spent_usd(settings.out_dir)
     for repetition in range(1, repetitions + 1):
         for task_index, task in enumerate(tasks):
-            for arm in arm_order(task_index, repetition):
+            for arm in arm_order(arms, task_index, repetition):
                 name = f"{task.id}__{arm}__{repetition}"
                 if record_path(settings.out_dir, name).is_file():
                     completed += 1
@@ -422,6 +440,11 @@ def build_parser() -> argparse.ArgumentParser:
     run.add_argument("--timeout-s", type=int, required=True)
     run.add_argument("--repetitions", type=int, required=True)
     run.add_argument("--tasks", required=True, help="'all' or comma-separated task ids")
+    run.add_argument(
+        "--arms",
+        default=DEFAULT_ARMS,
+        help="comma-separated arms; F (forced context-first) exists only in context-first-pilot",
+    )
     run.add_argument("--agent", choices=("claude", "codex"), required=True)
     run.add_argument(
         "--agent-bin",
@@ -475,7 +498,13 @@ def main() -> int:
         corpus_dir=namespace.corpus_dir.resolve(),
         out_dir=namespace.out_dir.resolve(),
     )
-    return command_run(settings, namespace.repetitions, namespace.tasks, namespace.max_total_usd)
+    return command_run(
+        settings,
+        namespace.repetitions,
+        namespace.tasks,
+        selected_arms(namespace.arms),
+        namespace.max_total_usd,
+    )
 
 
 if __name__ == "__main__":

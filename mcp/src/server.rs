@@ -1338,11 +1338,11 @@ fn handle_list_tools(id: Option<Value>) -> JsonRpcResponse {
         ToolDefinition {
             name: "context".to_string(),
             title: "Get Task Context".to_string(),
-            description: Some("One-call code context. Give a symbol, path:line, or natural-language task; CCM chooses structural explain or hybrid search and returns a compact task packet.".to_string()),
+            description: Some("Who calls X, where X is used, what X does: give a symbol, path:line or question. Returns X's source, each caller with its call-site lines, and a grep-equivalent check of whether that list is complete.".to_string()),
             input_schema: json!({
                 "type": "object",
                 "properties": {
-                    "query": { "type": "string", "description": "Symbol, path:line, or natural-language code question/task." },
+                    "query": { "type": "string", "description": "Symbol, path:line or question." },
                     "max_tokens": max_tokens_property(tools::DEFAULT_MAX_TOKENS),
                     "project_path": project_path_property()
                 },
@@ -1486,7 +1486,7 @@ fn handle_list_tools(id: Option<Value>) -> JsonRpcResponse {
         ToolDefinition {
             name: "index_project".to_string(),
             title: "Index Project".to_string(),
-            description: Some("Refresh the index in the background (incremental). Modes: full (default), quick (graph now, semantics later), upgrade (fill missing semantics).".to_string()),
+            description: Some("Build or refresh the index (incremental, background). Needed once per project; later edits are picked up automatically.".to_string()),
             input_schema: json!({
                 "type": "object",
                 "properties": {
@@ -1641,7 +1641,9 @@ async fn run_tool(
     let engine = loaded.engine.clone();
 
     let result = match tool_name {
-        "context" => tools::context(&engine, arguments).await?,
+        "context" => {
+            tools::context(&engine, arguments, project_path.map(std::path::Path::new)).await?
+        }
         "search_code" => tools::search_code(&engine, arguments).await?,
         "find_nodes" => tools::find_nodes(&engine, arguments).await?,
         "find_usages" => tools::find_usages(&engine, arguments).await?,

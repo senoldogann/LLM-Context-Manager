@@ -951,4 +951,44 @@ SERDE_TASKS: tuple[Task, ...] = (
     ),
 )
 
+# --- Django 5.1 (product pilots only; not part of the preregistered 24) ------------------------
+
+HTML = "django/utils/html.py"
+DEFAULTFILTERS = "django/template/defaultfilters.py"
+
+DJANGO_TASKS: tuple[Task, ...] = (
+    Task(
+        id="django-trap-html-escape",
+        repo="django",
+        category="trap",
+        answer_kind="symbols",
+        question=(
+            "Which functions or methods in `django/` call Django's HTML `escape` function "
+            "(`django.utils.html.escape`) directly? Calls to other functions named `escape` "
+            "(for example `re.escape`, `glob.escape` or the standard library's `html.escape`) "
+            "do not count."
+        ),
+        expected=(
+            sym("django/contrib/auth/admin.py", "user_change_password"),
+            sym("django/contrib/syndication/views.py", "item_title"),
+            sym("django/forms/utils.py", "get_json_data"),
+            sym("django/template/base.py", "get_exception_info"),
+            *symbols(DEFAULTFILTERS, ("linenumbers", "force_escape", "linebreaksbr")),
+            sym("django/template/defaulttags.py", "render"),
+            *symbols(HTML, ("conditional_escape", "linebreaks", "handle_word")),
+        ),
+        edit=None,
+        notes=(
+            "Python ast over django/**/*.py: names bound by `from django.utils.html import "
+            "escape` (or the local definition in django/utils/html.py) called directly; 21 call "
+            "sites in 11 functions. `rg '\\bescape\\(' django` gives 43 lines: the rest are "
+            "re.escape, glob.escape, stdlib html.escape (django/utils/text.py imports `escape` "
+            "from the standard library `html`, django/test/html.py calls html.escape), a "
+            "docstring, the definition and MySQL's connection.escape."
+        ),
+    ),
+)
+
 TASKS: tuple[Task, ...] = FLASK_TASKS + EXPRESS_TASKS + SERDE_TASKS
+# Ürün pilotlarının seçebildiği tüm görevler; `--tasks all` yalnız ön kayıtlı 24 görevdir.
+KNOWN_TASKS: tuple[Task, ...] = TASKS + DJANGO_TASKS

@@ -114,6 +114,19 @@ fn fixture_files() -> Vec<(String, String)> {
         "src/lib.rs".into(),
         "pub struct Foo;\n\nimpl Foo {\n    pub fn new() -> Self {\n        Foo\n    }\n}\n".into(),
     ));
+    // Grep eşdeğeri denetim: aynı adlı stdlib fonksiyonu ve grafın bağlayamadığı çağrı.
+    files.push((
+        "app/html_utils.py".into(),
+        "def escape(text):\n    return text\n\n\ndef render(value):\n    \"\"\"Calls escape() once.\"\"\"\n    return escape(value)\n".into(),
+    ));
+    files.push((
+        "app/textutil.py".into(),
+        "import re\nfrom html import escape\n\n\ndef shout(text):\n    return escape(text) + re.escape(text)\n".into(),
+    ));
+    files.push((
+        "app/late.py".into(),
+        "def late(handler):\n    return handler.escape(1)\n".into(),
+    ));
     let mut hub = String::from("def hub():\n    return 0\n");
     for index in 0..30 {
         hub.push_str(&format!("\n\ndef caller_{index:02}():\n    return hub()\n"));
@@ -762,5 +775,44 @@ fn rust_traits_and_enums_are_symbols() {
     assert!(
         text.contains("src/store.rs — Store, Store.save, Kind"),
         "{text}"
+    );
+}
+
+#[test]
+fn context_states_a_complete_call_list_with_call_site_lines() {
+    let mut server = Server::start();
+    let (text, is_error) = server.call("context", json!({"query": "Who calls `cjk`?"}));
+    assert!(!is_error, "{text}");
+    for expected in [
+        "Check: call list complete.",
+        "finds 3 call sites, all inside the 3 callers below",
+        "  5: return cjk()",
+    ] {
+        assert!(text.contains(expected), "missing {expected:?}: {text}");
+    }
+}
+
+#[test]
+fn context_check_separates_external_modules_and_unlinked_calls() {
+    let mut server = Server::start();
+    let (text, is_error) = server.call(
+        "context",
+        json!({"query": "Which functions call `app.html_utils.escape`?"}),
+    );
+    assert!(!is_error, "{text}");
+    for expected in [
+        "Function `escape` · app/html_utils.py:1-2",
+        "- Function: render · app/html_utils.py",
+        "  7: return escape(value)",
+        "Check: NOT complete.",
+        "app/late.py:2: return handler.escape(1)",
+        "belong to external modules (html, re)",
+        "inside strings or docstrings",
+    ] {
+        assert!(text.contains(expected), "missing {expected:?}: {text}");
+    }
+    assert!(
+        !text.contains("- Function: shout"),
+        "stdlib html.escape must not be reported as a caller: {text}"
     );
 }

@@ -14,7 +14,7 @@ from agent.prices import PRICES, estimated_cost
 from freshness.jsonio import as_bool, as_float, as_int, as_list, as_object, as_str
 from freshness.model import JsonValue
 
-ARMS = ("A", "B", "C")
+ARMS = ("A", "B", "C", "F")
 CCM_TOOL_PREFIX = "mcp__context-manager__"
 BOOTSTRAP_ROUNDS = 10_000
 BOOTSTRAP_SEED = 7
@@ -223,6 +223,12 @@ def paired_ratios(outcomes: list[Outcome], arm: str, metric: Metric) -> list[flo
     return [other[task] / base[task] for task in sorted(base) if task in other and base[task] > 0]
 
 
+def present_arms(outcomes: list[Outcome]) -> tuple[str, ...]:
+    """Kayıtlarda bulunan kollar, bilinen sırayla."""
+    found = {outcome.arm for outcome in outcomes}
+    return tuple(arm for arm in ARMS if arm in found)
+
+
 def as_metric(value: int | float | None) -> float | None:
     """İsteğe bağlı sayıyı oran metriğine çevirir."""
     return None if value is None else float(value)
@@ -306,12 +312,13 @@ def ratio_rows(outcomes: list[Outcome]) -> list[str]:
         "means less than A. A task is omitted from a metric ratio if any recorded repetition "
         "in either compared arm has that metric unknown.",
         "",
-        "| Metric | B / A | C / A |",
-        "|---|---|---|",
     ]
+    compared = tuple(arm for arm in present_arms(outcomes) if arm != "A")
+    rows.append("| Metric | " + " | ".join(f"{arm} / A" for arm in compared) + " |")
+    rows.append("|---|" + "---|" * len(compared))
     for name, metric in RATIO_METRICS:
         cells: list[str] = []
-        for arm in ("B", "C"):
+        for arm in compared:
             ratios = paired_ratios(outcomes, arm, metric)
             if not ratios:
                 cells.append("—")
@@ -320,7 +327,35 @@ def ratio_rows(outcomes: list[Outcome]) -> list[str]:
             cells.append(
                 f"{statistics.median(ratios):.2f} ({low:.2f}–{high:.2f}, {len(ratios)} tasks)"
             )
-        rows.append(f"| {name} | {cells[0]} | {cells[1]} |")
+        rows.append(f"| {name} | " + " | ".join(cells) + " |")
+    return rows
+
+
+def token_rows(outcomes: list[Outcome]) -> list[str]:
+    """Görev başına giriş token'ları (tekrar ortalaması) ve A'ya oranlar."""
+    arms = present_arms(outcomes)
+    compared = tuple(arm for arm in arms if arm != "A")
+    metric: Metric = lambda outcome: as_metric(outcome.input_tokens)  # noqa: E731
+    means = {arm: task_means(outcomes, arm, metric) for arm in arms}
+    rows = [
+        "## Input tokens by task",
+        "",
+        "Mean input tokens (cache included) over repetitions, and the ratio to A.",
+        "",
+        "| Task | "
+        + " | ".join(arms)
+        + (" | " + " | ".join(f"{arm}/A" for arm in compared) if compared else "")
+        + " |",
+        "|---|" + "---|" * (len(arms) + len(compared)),
+    ]
+    for task in sorted({outcome.task_id for outcome in outcomes}):
+        values = [means[arm].get(task) for arm in arms]
+        cells = ["—" if value is None else f"{value:,.0f}" for value in values]
+        base = means["A"].get(task) if "A" in means else None
+        for arm in compared:
+            value = means[arm].get(task)
+            cells.append("—" if value is None or not base else f"{value / base:.2f}")
+        rows.append(f"| `{task}` | " + " | ".join(cells) + " |")
     return rows
 
 
@@ -329,12 +364,12 @@ def category_rows(outcomes: list[Outcome]) -> list[str]:
     rows = [
         "## Success by task category",
         "",
-        "| Category | " + " | ".join(ARMS) + " |",
-        "|---|" + "---|" * len(ARMS),
+        "| Category | " + " | ".join(present_arms(outcomes)) + " |",
+        "|---|" + "---|" * len(present_arms(outcomes)),
     ]
     for category in sorted({outcome.category for outcome in outcomes}):
         cells: list[str] = []
-        for arm in ARMS:
+        for arm in present_arms(outcomes):
             runs = [o for o in outcomes if o.category == category and o.arm == arm]
             cells.append(f"{sum(o.success for o in runs)}/{len(runs)}" if runs else "—")
         rows.append(f"| {category} | " + " | ".join(cells) + " |")
@@ -343,16 +378,17 @@ def category_rows(outcomes: list[Outcome]) -> list[str]:
 
 def task_rows(outcomes: list[Outcome]) -> list[str]:
     """Görev başına başarılar ve ortalama maliyet."""
+    arms = present_arms(outcomes)
     rows = [
         "## By task",
         "",
-        "| Task | " + " | ".join(ARMS) + " | " + " | ".join(f"Cost {arm}" for arm in ARMS) + " |",
-        "|---|" + "---|" * (2 * len(ARMS)),
+        "| Task | " + " | ".join(arms) + " | " + " | ".join(f"Cost {arm}" for arm in arms) + " |",
+        "|---|" + "---|" * (2 * len(arms)),
     ]
     for task in sorted({outcome.task_id for outcome in outcomes}):
         wins: list[str] = []
         costs: list[str] = []
-        for arm in ARMS:
+        for arm in arms:
             runs = [o for o in outcomes if o.task_id == task and o.arm == arm]
             wins.append(f"{sum(o.success for o in runs)}/{len(runs)}" if runs else "—")
             known_costs = known_numbers([outcome.cost_usd for outcome in runs])
@@ -404,7 +440,8 @@ def header(setup: JsonValue, outcomes: list[Outcome]) -> list[str]:
     repetitions = as_int(settings.get("repetitions"), "settings.json: repetitions", ReportError)
     profile_value = settings.get("profile")
     profile = profile_value if isinstance(profile_value, str) else "preregistered"
-    planned = len(tasks) * len(ARMS) * repetitions
+    arm_list = as_list(settings.get("arms"), "settings.json: arms", ReportError)
+    planned = len(tasks) * len(arm_list) * repetitions
     design = (
         "preregistered final design"
         if profile == "preregistered" and len(tasks) == 24 and repetitions == 3
@@ -417,7 +454,8 @@ def header(setup: JsonValue, outcomes: list[Outcome]) -> list[str]:
     )
     arms = (
         "A=built-ins; B=default context+index_project with context note; "
-        "C=legacy full surface with legacy navigation note"
+        "C=legacy full surface with legacy navigation note; "
+        "F=B plus an instruction to call `context` first (forced use, not natural use)"
         if profile == "context-first-pilot"
         else "A=built-ins; B=preregistered full CCM surface; C=preregistered search_code only"
     )
@@ -458,6 +496,7 @@ def render(outcomes: list[Outcome], setup: JsonValue) -> str:
         header(setup, outcomes),
         arm_rows(outcomes),
         ratio_rows(outcomes),
+        token_rows(outcomes),
         category_rows(outcomes),
         task_rows(outcomes),
         failure_rows(outcomes),

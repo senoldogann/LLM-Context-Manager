@@ -28,7 +28,9 @@ from freshness.jsonio import as_bool, as_float, as_int, as_list, as_object, as_s
 from freshness.model import JsonValue
 from freshness.repos import export_corpus, init_git, run_git
 
-Arm = Literal["A", "B", "C"]
+# F yalnız context-first-pilot profilinde: B'nin araçları + `context`'i önce çağırma talimatı.
+# Doğal kullanım kollarından (A/B/C) ayrı etiketlenir; onların karşılaştırmasını değiştirmez.
+Arm = Literal["A", "B", "C", "F"]
 Embedding = Literal["local", "openai"]
 # subscription: `claude setup-token` ile üretilen abonelik jetonu; api-key: ücretli API anahtarı.
 Auth = Literal["subscription", "api-key"]
@@ -84,8 +86,15 @@ SEARCH_NOTE = (
 )
 CONTEXT_NOTE = (
     "## Code navigation\n"
-    "Use the context-manager `context` MCP tool before broad grep/read exploration. Give it "
-    "the coding task, symbol, or path:line directly; then read only source lines you still need."
+    "For who-calls / where-used questions, call `context` first: it lists every call site and "
+    "checks completeness, replacing grep + read."
+)
+
+
+# F kolunun ek talimatı: ajan önce `context`'i çağırmalı (zorunlu kullanım ölçümü).
+FORCED_NOTE = (
+    "\nCall the context-manager `context` tool before any other tool, with the task's "
+    "question as the query."
 )
 
 
@@ -223,14 +232,18 @@ def granted_tools(profile: ProductProfile, arm: Arm) -> tuple[str, ...]:
     """Ürün profili ve kola göre ajana açılan CCM araçları."""
     if arm == "A":
         return ()
+    if arm == "F" and profile != "context-first-pilot":
+        raise RunError("arm F exists only in the context-first-pilot profile")
     if profile == "context-first-pilot":
-        return CONTEXT_DEFAULT_TOOLS if arm == "B" else LEGACY_CCM_TOOLS
+        return CONTEXT_DEFAULT_TOOLS if arm in ("B", "F") else LEGACY_CCM_TOOLS
     return LEGACY_CCM_TOOLS if arm == "B" else ("search_code",)
 
 
 def uses_legacy_discovery(profile: ProductProfile, arm: Arm) -> bool:
     """Bu kol eski yapısal araçların tools/list içinde görünmesini gerektiriyor mu."""
     if arm == "A":
+        return False
+    if arm == "F":
         return False
     return profile == "preregistered" or arm == "C"
 
@@ -239,7 +252,11 @@ def arm_note(profile: ProductProfile, arm: Arm) -> str:
     """Kolun ürün yönlendirme notu; baseline not eklemez."""
     if arm == "A":
         return ""
+    if arm == "F" and profile != "context-first-pilot":
+        raise RunError("arm F exists only in the context-first-pilot profile")
     if profile == "context-first-pilot":
+        if arm == "F":
+            return CONTEXT_NOTE + FORCED_NOTE
         return CONTEXT_NOTE if arm == "B" else GRAPH_NOTE
     return GRAPH_NOTE if arm == "B" else SEARCH_NOTE
 

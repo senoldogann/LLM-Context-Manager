@@ -36,6 +36,8 @@ pub(crate) const DEFAULT_MAP_TOKENS: usize = 1_000;
 const MAX_MAX_TOKENS: usize = 20_000;
 const CHARS_PER_TOKEN: usize = 4;
 const MAX_GRAPH_DEPTH: usize = 32;
+/// Receiver evidence en çok bu kadar caller döndürür; sınıra ulaşan liste tam sayılmaz.
+const RECEIVER_EVIDENCE_LIMIT: usize = 20;
 const MAX_DIFF_DAYS: u32 = 3_650;
 
 /// Tek satırlık sonuç: `- Tür: ad · yol:başlangıç-bitiş · neden`.
@@ -1174,7 +1176,37 @@ fn member_call_hints(query: &str) -> Vec<MemberCallHint> {
 struct ScopedSymbolHint {
     symbol: String,
     scope: Option<String>,
-    definition_file: Option<String>,
+    /// Tanımın bulunabileceği dosyalar; Python modül yolu birden çok aday verir.
+    definition_files: Vec<String>,
+    /// Kod gibi yazılmış ad (`_`, `::`, iç büyük harf ya da backtick): yol kanıtı
+    /// olmadan da projede tek tanıma çözülürse hedef olabilir. Düz İngilizce
+    /// sözcükler (`get`, `run`) hiçbir zaman kapsamsız hedef olmaz.
+    code_like: bool,
+}
+
+/// Ad kod gibi mi yazılmış: alt çizgi ya da iç büyük harf.
+fn code_like_name(name: &str) -> bool {
+    name.contains('_')
+        || (name.chars().any(|c| c.is_ascii_lowercase())
+            && name.chars().skip(1).any(|c| c.is_ascii_uppercase()))
+}
+
+/// `django.utils.html.escape` → (`escape`, olası tanım dosyaları).
+fn python_module_hint(part: &str) -> Option<(String, Vec<String>)> {
+    let segments: Vec<&str> = part.split('.').collect();
+    if segments.len() < 2 || !segments.iter().all(|segment| identifier_part(segment)) {
+        return None;
+    }
+    let (symbol, module) = segments.split_last()?;
+    let module = module.join("/");
+    let files = [
+        format!("{module}.py"),
+        format!("{module}/__init__.py"),
+        format!("src/{module}.py"),
+        format!("src/{module}/__init__.py"),
+    ]
+    .to_vec();
+    Some((symbol.to_string(), files))
 }
 
 /// Açık sembolü path kanıtıyla birlikte çıkarır. Çıplak
@@ -1182,10 +1214,32 @@ struct ScopedSymbolHint {
 /// prose dili routing kararını etkilemez.
 fn scoped_symbol_hints(query: &str) -> Vec<ScopedSymbolHint> {
     let spans = code_spans(query);
+    let backticked: HashSet<&str> = backtick_spans(query).into_iter().collect();
     let (scope, definition_file) = hint_paths(&spans);
+    // Uzantısız göreli yol (`src/flask`) da kapsam sayılır.
+    let scope = scope.or_else(|| {
+        spans
+            .iter()
+            .find(|part| {
+                part.contains('/')
+                    && Path::new(part).extension().is_none()
+                    && !Path::new(part).is_absolute()
+                    && !part.split('/').any(|segment| segment == "..")
+            })
+            .map(|part| format!("{}/", part.trim_start_matches("./").trim_end_matches('/')))
+    });
     let mut hints = Vec::new();
     for part in spans {
         if part.contains('/') {
+            continue;
+        }
+        if let Some((symbol, files)) = python_module_hint(part) {
+            hints.push(ScopedSymbolHint {
+                symbol,
+                scope: None,
+                definition_files: files,
+                code_like: false,
+            });
             continue;
         }
         let symbol = if let Some((qualifier, symbol)) = part.rsplit_once("::") {
@@ -1204,42 +1258,67 @@ fn scoped_symbol_hints(query: &str) -> Vec<ScopedSymbolHint> {
         hints.push(ScopedSymbolHint {
             symbol: symbol.to_string(),
             scope: scope.clone(),
-            definition_file: definition_file.clone(),
+            definition_files: definition_file.iter().cloned().collect(),
+            code_like: part.contains("::") || backticked.contains(part) || code_like_name(symbol),
         });
     }
     hints
 }
 
+/// İpuçlarından tek hedef seçer: her ipucu yol kanıtıyla (tanım dosyası ya da
+/// kapsam) veya kapsamsız kod-benzeri adın projedeki tek tanımıyla çözülür. Ancak
+/// tek bir ipucu tek bir düğüme çözülürse hedef döner; birden çok farklı hedef ya
+/// da belirsiz ad sessizce seçilmez.
 async fn scoped_symbol_target_id(engine: &Arc<RetrievalEngine>, query: &str) -> Option<String> {
     let hints = scoped_symbol_hints(query);
     if hints.is_empty() {
         return None;
     }
-
     let graph = engine.graph.read().await;
-    let mut candidates = graph.graph.node_indices().filter(|idx| {
-        let node = &graph.graph[*idx];
-        if !matches!(
-            node.node_type,
-            ccm_core::graph::NodeType::Function | ccm_core::graph::NodeType::Method
-        ) {
-            return false;
-        }
-        let path = ccm_core::engine::extract_file_path(&node.id);
-        let path = path.trim_start_matches("./");
-        hints.iter().any(|hint| {
-            node.name == hint.symbol
-                && if let Some(definition_file) = hint.definition_file.as_deref() {
-                    path == definition_file
-                } else {
-                    hint.scope
-                        .as_deref()
-                        .is_some_and(|scope| path.starts_with(scope))
-                }
+    let callables: Vec<petgraph::graph::NodeIndex> = graph
+        .graph
+        .node_indices()
+        .filter(|idx| {
+            matches!(
+                graph.graph[*idx].node_type,
+                ccm_core::graph::NodeType::Function | ccm_core::graph::NodeType::Method
+            )
         })
-    });
-    match (candidates.next(), candidates.next()) {
-        (Some(only), None) => Some(graph.graph[only].id.clone()),
+        .collect();
+    let mut resolved: Vec<petgraph::graph::NodeIndex> = Vec::new();
+    for hint in &hints {
+        // Düz sözcükler (`call`, `HTML`) kapsam olsa bile hedef olmaz; yalnız modül
+        // yoluyla ya da kod gibi yazılmış ad aday olur.
+        if hint.definition_files.is_empty() && !hint.code_like {
+            continue;
+        }
+        let matches: Vec<petgraph::graph::NodeIndex> = callables
+            .iter()
+            .copied()
+            .filter(|idx| {
+                let node = &graph.graph[*idx];
+                if node.name != hint.symbol {
+                    return false;
+                }
+                let path = ccm_core::engine::extract_file_path(&node.id);
+                let path = path.trim_start_matches("./");
+                if !hint.definition_files.is_empty() {
+                    hint.definition_files.iter().any(|file| file == path)
+                } else if let Some(scope) = hint.scope.as_deref() {
+                    path.starts_with(scope)
+                } else {
+                    !is_test_path(path)
+                }
+            })
+            .collect();
+        if let [only] = matches.as_slice() {
+            if !resolved.contains(only) {
+                resolved.push(*only);
+            }
+        }
+    }
+    match resolved.as_slice() {
+        [only] => Some(graph.graph[*only].id.clone()),
         _ => None,
     }
 }
@@ -1497,7 +1576,7 @@ async fn receiver_call_evidence(
                 &right.title,
             ))
     });
-    suggestions.truncate(20);
+    suggestions.truncate(RECEIVER_EVIDENCE_LIMIT);
     Ok(suggestions)
 }
 
@@ -1505,7 +1584,11 @@ async fn receiver_call_evidence(
 /// Ajanın araç seçmesini istemeden tek sorgudan yeterli görev bağlamı üretir.
 /// Kesin hedefler doğrudan graf açıklamasına gider; doğal dil sorguları hibrit
 /// aramayla en iyi düğümü bulur ve aynı çağrıda yapısal açıklamayla zenginleşir.
-pub async fn context(engine: &Arc<RetrievalEngine>, args: &Value) -> Result<ToolResult> {
+pub async fn context(
+    engine: &Arc<RetrievalEngine>,
+    args: &Value,
+    root: Option<&Path>,
+) -> Result<ToolResult> {
     let query = args
         .get("query")
         .and_then(Value::as_str)
@@ -1531,15 +1614,12 @@ pub async fn context(engine: &Arc<RetrievalEngine>, args: &Value) -> Result<Tool
                 Ok(explanation) => explanation,
                 Err(error) => return Ok(tool_error(error.to_string())),
             };
+            let callers = context_callers(engine, &explanation, None).await?;
+            let text = context_packet(engine, root, &explanation, &callers, None, max_tokens).await;
             return Ok(ToolResult {
                 content: vec![ToolResultContent {
                     content_type: "text".to_string(),
-                    text: format_explanation_with_callers(
-                        &explanation,
-                        true,
-                        max_tokens,
-                        Some(&context_callers(engine, &explanation, None).await?),
-                    ),
+                    text,
                 }],
                 is_error: None,
             });
@@ -1586,23 +1666,46 @@ pub async fn context(engine: &Arc<RetrievalEngine>, args: &Value) -> Result<Tool
     } else {
         None
     };
+    // Pakette zaten görünen düğümler "related matches" içinde tekrar edilmez.
+    let mut shown: HashSet<String> = HashSet::new();
     let mut output = if let Some(node_id) = selected_node_id {
         match engine.explain(node_id).await {
             Ok(explanation) => {
-                let primary_tokens = max_tokens.saturating_mul(3).saturating_div(4).max(1);
                 let callers =
                     context_callers(engine, &explanation, hinted_callers.as_deref()).await?;
-                format_explanation_with_callers(&explanation, true, primary_tokens, Some(&callers))
+                shown.insert(explanation.node.id.clone());
+                shown.extend(callers.iter().filter_map(|caller| caller.node_id.clone()));
+                shown.extend(
+                    explanation
+                        .callees
+                        .iter()
+                        .map(|usage| usage.node.id.clone()),
+                );
+                context_packet(
+                    engine,
+                    root,
+                    &explanation,
+                    &callers,
+                    member_target.as_ref(),
+                    max_tokens,
+                )
+                .await
             }
             Err(_) => format_suggestions_output(&hits, false, max_tokens, max_tokens),
         }
     } else {
         format_suggestions_output(&hits, false, max_tokens, max_tokens)
     };
+    let related: Vec<ccm_core::engine::ContextSuggestion> = hits
+        .iter()
+        .skip(1)
+        .filter(|hit| hit.node_id.as_ref().is_none_or(|id| !shown.contains(id)))
+        .cloned()
+        .collect();
 
     // Kalan bütçe varsa alternatifleri de kısa handle'lar olarak ver. Ajanın
     // ikinci bir search çağrısı yapmadan belirsizliği görmesini sağlar.
-    if hits.len() > 1 && char_count(&output) < budget_chars {
+    if !related.is_empty() && char_count(&output) < budget_chars {
         let header = "related matches:\n";
         let remaining_chars = budget_chars
             .saturating_sub(char_count(&output))
@@ -1611,7 +1714,7 @@ pub async fn context(engine: &Arc<RetrievalEngine>, args: &Value) -> Result<Tool
         if remaining_tokens > 0 {
             output.push_str(header);
             output.push_str(&format_suggestions_output(
-                &hits[1..],
+                &related,
                 false,
                 remaining_tokens,
                 remaining_tokens,
@@ -1650,6 +1753,21 @@ async fn context_callers(
         },
         |callers| callers.to_vec(),
     );
+    // Ada göre çıkarılan kenar dil sınırını aşamaz: Python fonksiyonunu JS kodu
+    // çağırmaz (`CSS.escape` ≠ `django.utils.html.escape`).
+    let target_lang = crate::call_sites::lang_of(
+        ccm_core::engine::extract_file_path(&explanation.node.id).trim_start_matches("./"),
+    );
+    callers.retain(|caller| {
+        let lang = crate::call_sites::lang_of(
+            caller
+                .file_path
+                .as_deref()
+                .unwrap_or_default()
+                .trim_start_matches("./"),
+        );
+        lang == target_lang || target_lang == crate::call_sites::Lang::Other
+    });
     let graph = engine.graph.read().await;
     for caller in &mut callers {
         let Some(id) = caller.node_id.as_deref() else {
@@ -1719,6 +1837,383 @@ async fn context_callers(
         }
     }
     Ok(callers)
+}
+
+/// Dal alternatiflerini (`…:symbol:view:1`, `…:2`) tek anahtarda birleştirir; caller
+/// listesi de aynı biçimde tekilleştirilir.
+fn listed_key(node_id: &str) -> String {
+    semantic_symbol_occurrence_key(node_id)
+        .unwrap_or(node_id)
+        .to_string()
+}
+
+/// Paketteki hedef için grep eşdeğeri denetimin tanımı. Receiver ipucu varsa onun
+/// ifadeleri (ve tanım dosyasında `this.üye`) aranır; yoksa yalnız Function/Method
+/// hedefinin çıplak adı. Sınıf ve dosya hedeflerinde denetim yapılmaz.
+fn check_spec(
+    node: &ccm_core::graph::CodeNode,
+    member: Option<&MemberTarget>,
+) -> Option<crate::call_sites::CheckSpec> {
+    use crate::call_sites::{CheckKind, CheckSpec, Needle};
+    if let Some(target) = member {
+        let mut needles: Vec<Needle> = target
+            .expressions
+            .iter()
+            .map(|expression| Needle {
+                text: expression.clone(),
+                only_file: None,
+            })
+            .collect();
+        let mut members: Vec<&str> = target
+            .expressions
+            .iter()
+            .filter_map(|expression| expression.rsplit_once('.').map(|(_, member)| member))
+            .collect();
+        members.sort_unstable();
+        members.dedup();
+        needles.extend(members.into_iter().map(|member| Needle {
+            text: format!("this.{member}"),
+            only_file: target.hint.definition_file.clone(),
+        }));
+        return Some(CheckSpec {
+            needles,
+            kind: CheckKind::MemberCalls,
+            scope: target.hint.scope.clone(),
+        });
+    }
+    if !matches!(
+        node.node_type,
+        ccm_core::graph::NodeType::Function | ccm_core::graph::NodeType::Method
+    ) {
+        return None;
+    }
+    Some(CheckSpec {
+        needles: vec![Needle {
+            text: node.name.clone(),
+            only_file: None,
+        }],
+        kind: CheckKind::NameUses,
+        scope: None,
+    })
+}
+
+/// Kesin çağrı kenarıyla aynı adlı *başka* bir tanıma bağlanan kapsamlar: kapsam
+/// anahtarı → o tanımın `yol:satır` yeri. Bu kapsamlardaki geçişler hedefin eksik
+/// caller'ı değil, başka fonksiyonun çağrısıdır.
+fn resolved_elsewhere(
+    graph: &ccm_core::graph::CodeGraph,
+    target_id: &str,
+    target_name: &str,
+) -> std::collections::HashMap<String, String> {
+    use ccm_core::graph::EdgeType;
+    let mut map = std::collections::HashMap::new();
+    for edge in graph.graph.edge_references() {
+        if !matches!(edge.weight(), EdgeType::Calls) {
+            continue;
+        }
+        let callee = &graph.graph[edge.target()];
+        if callee.name != target_name || callee.id == target_id {
+            continue;
+        }
+        let caller = &graph.graph[edge.source()];
+        map.insert(
+            listed_key(&caller.id),
+            format!(
+                "{}:{}",
+                ccm_core::engine::extract_file_path(&callee.id).trim_start_matches("./"),
+                callee.start_line
+            ),
+        );
+    }
+    map
+}
+
+/// İndeksteki kaynak dosyaları ve sembol aralıkları (denetimin en içteki kapsamı için).
+fn indexed_files(graph: &ccm_core::graph::CodeGraph) -> Vec<crate::call_sites::IndexedFile> {
+    use ccm_core::graph::NodeType;
+    let mut files: std::collections::BTreeMap<String, crate::call_sites::IndexedFile> =
+        std::collections::BTreeMap::new();
+    for idx in graph.graph.node_indices() {
+        let node = &graph.graph[idx];
+        if node.node_type == NodeType::File {
+            let path = node.id.trim_start_matches("./").to_string();
+            files
+                .entry(node.id.clone())
+                .or_insert_with(|| crate::call_sites::IndexedFile {
+                    path,
+                    file_key: listed_key(&node.id),
+                    symbols: Vec::new(),
+                });
+        }
+    }
+    for idx in graph.graph.node_indices() {
+        let node = &graph.graph[idx];
+        // Değişken ve import düğümleri kapsam değildir: çağrı satırını kendi
+        // fonksiyonundan koparırlar.
+        if !matches!(
+            node.node_type,
+            NodeType::Function
+                | NodeType::Method
+                | NodeType::Class
+                | NodeType::Struct
+                | NodeType::Enum
+                | NodeType::Trait
+                | NodeType::Module
+        ) {
+            continue;
+        }
+        let file_id = ccm_core::engine::extract_file_path(&node.id);
+        if let Some(file) = files.get_mut(&file_id) {
+            file.symbols.push(crate::call_sites::SymbolSpan {
+                key: listed_key(&node.id),
+                start: node.start_line,
+                end: node.end_line,
+                content: node.content.clone(),
+            });
+        }
+    }
+    files.into_values().collect()
+}
+
+/// Denetimi çalıştırır ve pakete yazılacak satırı döndürür. Okuma hatası sessizce
+/// yutulmaz: denetimin neden yapılamadığı satırda yazılır.
+async fn call_site_check(
+    engine: &Arc<RetrievalEngine>,
+    root: Option<&Path>,
+    spec: &crate::call_sites::CheckSpec,
+    target_id: &str,
+    target_name: &str,
+    callers: &[ccm_core::engine::ContextSuggestion],
+    code_callers: usize,
+) -> String {
+    let Some(root) = root else {
+        return "Check skipped: the server has no project root for this index.\n".to_string();
+    };
+    if callers.len() >= RECEIVER_EVIDENCE_LIMIT
+        && spec.kind == crate::call_sites::CheckKind::MemberCalls
+    {
+        return format!(
+            "Check skipped: receiver evidence stops at {RECEIVER_EVIDENCE_LIMIT} callers.\n"
+        );
+    }
+    let (files, elsewhere) = {
+        let graph = engine.graph.read().await;
+        (
+            indexed_files(&graph),
+            resolved_elsewhere(&graph, target_id, target_name),
+        )
+    };
+    let paths: Vec<&str> = files.iter().map(|file| file.path.as_str()).collect();
+    let roots = crate::call_sites::python_roots(&paths);
+    let listed: HashSet<String> = callers
+        .iter()
+        .filter_map(|caller| caller.node_id.as_deref().map(listed_key))
+        .collect();
+    let target_lang = crate::call_sites::lang_of(
+        ccm_core::engine::extract_file_path(target_id).trim_start_matches("./"),
+    );
+    let files: Vec<crate::call_sites::IndexedFile> = files
+        .into_iter()
+        .filter(|file| crate::call_sites::lang_of(&file.path) == target_lang)
+        .collect();
+    let files_in_scope = files
+        .iter()
+        .filter(|file| {
+            !is_test_path(&file.path)
+                && spec
+                    .scope
+                    .as_deref()
+                    .is_none_or(|scope| file.path.starts_with(scope))
+        })
+        .count();
+    match crate::call_sites::read_sources(root, &files, spec) {
+        Ok(scanned) => {
+            let facts = crate::call_sites::IndexFacts {
+                listed,
+                roots,
+                files_in_scope,
+                elsewhere,
+            };
+            let outcome =
+                crate::call_sites::reconcile(&scanned, spec, target_name, &facts, &is_test_path);
+            crate::call_sites::outcome_text(spec, &outcome, code_callers)
+        }
+        Err(error) => format!("Check skipped: {error:#}\n"),
+    }
+}
+
+/// `context` paketi: başlık, grep eşdeğeri denetim, çağrı yeri satırlarıyla
+/// caller'lar, gövde ve kalan bölümler. Caller'lar gövdeden önce gelir: "kim
+/// çağırıyor" sorusunun cevabı bütçe kesilse de kalır. Liste kesilirse tamlık
+/// iddiası yazılmaz.
+async fn context_packet(
+    engine: &Arc<RetrievalEngine>,
+    root: Option<&Path>,
+    explanation: &ccm_core::graph::Explanation,
+    callers: &[ccm_core::engine::ContextSuggestion],
+    member: Option<&MemberTarget>,
+    max_tokens: usize,
+) -> String {
+    use ccm_core::engine::{extract_file_path, node_suggestion, usage_suggestion};
+    let node = &explanation.node;
+    let callers = dedupe_semantic_callers(callers.iter().cloned());
+    let spec = check_spec(node, member);
+    let tests: Vec<&ccm_core::graph::Usage> = explanation
+        .usages
+        .iter()
+        .filter(|usage| is_test_path(&extract_file_path(&usage.node.id)))
+        .collect();
+    let title = match node.node_type {
+        ccm_core::graph::NodeType::File => "File".to_string(),
+        _ => format!("{:?} `{}`", node.node_type, node.name),
+    };
+    let code_callers = callers
+        .iter()
+        .filter(|caller| caller.node_type.as_deref() != Some("File"))
+        .count();
+    let mut output = format!(
+        "{title} · {}:{}-{} · {} callers, {} callees, {} tests",
+        extract_file_path(&node.id).trim_start_matches("./"),
+        node.start_line,
+        node.end_line,
+        code_callers,
+        explanation.callees.len(),
+        tests.len()
+    );
+    if !explanation.members.is_empty() {
+        output.push_str(&format!(", {} members", explanation.members.len()));
+    }
+    output.push('\n');
+
+    let check = match &spec {
+        Some(spec) => Some(
+            call_site_check(
+                engine,
+                root,
+                spec,
+                &node.id,
+                &node.name,
+                &callers,
+                code_callers,
+            )
+            .await,
+        ),
+        None => None,
+    };
+    // İmport eden dosyalar denetimde sayılır ama listede tek satırdır: "kim
+    // çağırıyor" sorusunda her biri bir satır token'ı harcıyordu.
+    let importers = callers
+        .iter()
+        .filter(|caller| caller.node_type.as_deref() == Some("File"))
+        .count();
+    let mut caller_lines: Vec<String> = callers
+        .iter()
+        .filter(|caller| caller.node_type.as_deref() != Some("File"))
+        .map(|caller| {
+            let mut line = suggestion_line(caller).replace(
+                "may call (receiver type unknown or several candidates)",
+                "may call (receiver not resolved)",
+            );
+            if let (Some(spec), Some(path), Some(start), Some(end)) = (
+                &spec,
+                caller.file_path.as_deref(),
+                caller.start_line,
+                caller.end_line,
+            ) {
+                for site in crate::call_sites::caller_site_lines(
+                    path.trim_start_matches("./"),
+                    &caller.content,
+                    start,
+                    end,
+                    spec,
+                    &node.name,
+                ) {
+                    line.push('\n');
+                    line.push_str(&site);
+                }
+            }
+            line
+        })
+        .collect();
+    if importers > 0 {
+        caller_lines.push(format!("  + {importers} files that only import it"));
+    }
+
+    let budget = max_tokens.saturating_mul(CHARS_PER_TOKEN);
+    let check_chars = check.as_deref().map_or(0, char_count);
+    let mut used = char_count(&output) + check_chars;
+    // Caller'lar önceliklidir: gövde ve diğer bölümler için yalnız küçük bir pay kalır.
+    let caller_budget = budget.saturating_sub(used).saturating_sub(budget / 8);
+    let (caller_section, shown) = if caller_lines.is_empty() {
+        (String::new(), 0)
+    } else {
+        section_text_counted("callers", &caller_lines, caller_budget)
+    };
+    match check {
+        Some(_) if shown < caller_lines.len() => output.push_str(
+            "Check skipped: the caller list below was cut; raise max_tokens for the full list and the check.\n",
+        ),
+        Some(check) => output.push_str(&check),
+        None => {}
+    }
+    used = char_count(&output) + char_count(&caller_section);
+    output.push_str(&caller_section);
+
+    if !node.content.is_empty() {
+        let limit = budget
+            .saturating_sub(used)
+            .saturating_div(2)
+            .saturating_sub(8);
+        let body = clip(&node.content, limit);
+        if !body.is_empty() {
+            output.push_str("```\n");
+            output.push_str(&body);
+            output.push_str("\n```\n");
+            used += char_count(&body) + 8;
+        }
+        if char_count(&node.content) > limit {
+            let notice = "… body clipped (raise max_tokens)\n";
+            output.push_str(notice);
+            used += char_count(notice);
+        }
+    }
+
+    let sections: Vec<(&str, Vec<String>)> = vec![
+        (
+            "callees",
+            explanation
+                .callees
+                .iter()
+                .map(|usage| suggestion_line(&usage_suggestion(usage)))
+                .collect(),
+        ),
+        (
+            "members",
+            explanation
+                .members
+                .iter()
+                .map(|member| suggestion_line(&node_suggestion(member, String::new())))
+                .collect(),
+        ),
+        (
+            "tests",
+            tests
+                .iter()
+                .map(|usage| suggestion_line(&usage_suggestion(usage)))
+                .collect(),
+        ),
+    ];
+    let filled: Vec<&(&str, Vec<String>)> = sections
+        .iter()
+        .filter(|(_, lines)| !lines.is_empty())
+        .collect();
+    for (index, (title, lines)) in filled.iter().enumerate() {
+        let share = budget.saturating_sub(used) / (filled.len() - index);
+        let (section, _) = section_text_counted(title, lines, share);
+        used += char_count(&section);
+        output.push_str(&section);
+    }
+    output
 }
 
 /// Tool: map
@@ -1915,6 +2410,23 @@ fn format_explanation_with_callers(
         output.push_str(&section);
     }
     output
+}
+
+/// `section_text` ile aynı; ayrıca gösterilen satır sayısını döndürür.
+fn section_text_counted(title: &str, lines: &[String], budget: usize) -> (String, usize) {
+    let text = section_text(title, lines, budget);
+    let hidden = text
+        .lines()
+        .last()
+        .and_then(|line| line.strip_prefix("… "))
+        .and_then(|rest| rest.split_once(' '))
+        .and_then(|(count, rest)| {
+            rest.starts_with("more (raise max_tokens)")
+                .then(|| count.parse::<usize>().ok())
+                .flatten()
+        })
+        .unwrap_or(0);
+    (text, lines.len() - hidden)
 }
 
 /// `başlık:` ve `budget` karaktere sığan satırlar; sığmayanlar `… n more` ile sayılır.
