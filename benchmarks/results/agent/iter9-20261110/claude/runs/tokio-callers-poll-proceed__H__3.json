@@ -1,0 +1,59 @@
+{
+  "record_version": 3,
+  "run_id": "tokio-callers-poll-proceed__H__3",
+  "task_id": "tokio-callers-poll-proceed",
+  "repo": "tokio",
+  "category": "callers",
+  "arm": "H",
+  "rep": 3,
+  "model": "claude-opus-5-5",
+  "effort": "high",
+  "embedding": "local",
+  "index_copy_s": 0.08627887489274144,
+  "index_build_s": 265.3463085840922,
+  "wall_s": 12.660324750002474,
+  "transcript": {
+    "result_text": "I found 12 methods that call `poll_proceed_and_make_progress` directly. They are all I/O trait impls in three files: `Repeat` in `repeat.rs`, `Sink` in `sink.rs` and `Empty` in `empty.rs`. The search covered the whole repository, and there are no other callers. The only other matches are the function's two definitions in `mod.rs`, one with and one without the cooperative-scheduling (`coop`) feature.\n\n- **`Repeat`** (`AsyncRead`): `poll_read`\n- **`Sink`** (`AsyncWrite`): `poll_write`, `poll_flush`, `poll_shutdown`\n- **`Empty`**:\n  - `AsyncRead`: `poll_read`\n  - `AsyncBufRead`: `poll_fill_buf`\n  - `AsyncWrite`: `poll_write`, `poll_flush`, `poll_shutdown`, `poll_write_vectored`\n  - `AsyncSeek`: `poll_complete`\n\n```json\n{\"answer\": [\"tokio/src/io/util/repeat.rs:Repeat.poll_read\", \"tokio/src/io/util/sink.rs:Sink.poll_write\", \"tokio/src/io/util/sink.rs:Sink.poll_flush\", \"tokio/src/io/util/sink.rs:Sink.poll_shutdown\", \"tokio/src/io/util/empty.rs:Empty.poll_read\", \"tokio/src/io/util/empty.rs:Empty.poll_fill_buf\", \"tokio/src/io/util/empty.rs:Empty.poll_write\", \"tokio/src/io/util/empty.rs:Empty.poll_flush\", \"tokio/src/io/util/empty.rs:Empty.poll_shutdown\", \"tokio/src/io/util/empty.rs:Empty.poll_write_vectored\", \"tokio/src/io/util/empty.rs:Empty.poll_complete\"]}\n```",
+    "subtype": "success",
+    "is_error": false,
+    "num_turns": 3,
+    "duration_ms": 11793,
+    "cost_usd": 0.0681196,
+    "usage": {
+      "input_tokens": 6,
+      "output_tokens": 926,
+      "cache_creation_input_tokens": 5644,
+      "cache_read_input_tokens": 22118
+    },
+    "tool_calls": {
+      "Grep": 2
+    },
+    "mcp_status": "connected",
+    "api_key_source": "none",
+    "tools": [
+      "Bash",
+      "Edit",
+      "Glob",
+      "Grep",
+      "Read",
+      "Write",
+      "mcp__context-manager__context",
+      "mcp__context-manager__index_project"
+    ]
+  },
+  "score": {
+    "answered": true,
+    "recall": 1.0,
+    "precision": 1.0,
+    "missing": [],
+    "extra": [],
+    "edit_applied": null,
+    "stale": [],
+    "success": true
+  },
+  "failure": null,
+  "hook": {
+    "deny": 0,
+    "pass_": 2
+  }
+}

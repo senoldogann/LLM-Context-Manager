@@ -1,0 +1,47 @@
+{
+  "record_version": 3,
+  "run_id": "tokio-callers-poll-proceed__A__3",
+  "task_id": "tokio-callers-poll-proceed",
+  "repo": "tokio",
+  "category": "callers",
+  "arm": "A",
+  "rep": 3,
+  "model": "gpt-6-luna",
+  "effort": "high",
+  "embedding": "local",
+  "index_copy_s": null,
+  "index_build_s": null,
+  "wall_s": 15.292510125087574,
+  "transcript": {
+    "result_text": "```json\n{\"answer\":[\"tokio/src/io/util/repeat.rs:Repeat.poll_read\",\"tokio/src/io/util/empty.rs:Empty.poll_read\",\"tokio/src/io/util/empty.rs:Empty.poll_fill_buf\",\"tokio/src/io/util/empty.rs:Empty.poll_write\",\"tokio/src/io/util/empty.rs:Empty.poll_flush\",\"tokio/src/io/util/empty.rs:Empty.poll_shutdown\",\"tokio/src/io/util/empty.rs:Empty.poll_write_vectored\",\"tokio/src/io/util/empty.rs:Empty.poll_complete\",\"tokio/src/io/util/sink.rs:Sink.poll_write\",\"tokio/src/io/util/sink.rs:Sink.poll_flush\",\"tokio/src/io/util/sink.rs:Sink.poll_shutdown\"]}\n```",
+    "subtype": "completed",
+    "is_error": false,
+    "num_turns": null,
+    "duration_ms": 15293,
+    "cost_usd": null,
+    "usage": {
+      "input_tokens": 8315,
+      "output_tokens": 558,
+      "cache_creation_input_tokens": 0,
+      "cache_read_input_tokens": 25088
+    },
+    "tool_calls": {
+      "command_execution": 2
+    },
+    "mcp_status": "unreported",
+    "api_key_source": "chatgpt",
+    "tools": []
+  },
+  "score": {
+    "answered": true,
+    "recall": 1.0,
+    "precision": 1.0,
+    "missing": [],
+    "extra": [],
+    "edit_applied": null,
+    "stale": [],
+    "success": true
+  },
+  "failure": null,
+  "hook": null
+}

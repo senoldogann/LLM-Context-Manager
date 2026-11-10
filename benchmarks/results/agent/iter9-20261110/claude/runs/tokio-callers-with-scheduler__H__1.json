@@ -1,0 +1,60 @@
+{
+  "record_version": 3,
+  "run_id": "tokio-callers-with-scheduler__H__1",
+  "task_id": "tokio-callers-with-scheduler",
+  "repo": "tokio",
+  "category": "callers",
+  "arm": "H",
+  "rep": 1,
+  "model": "claude-opus-5-5",
+  "effort": "high",
+  "embedding": "local",
+  "index_copy_s": 0.06342045799829066,
+  "index_build_s": 265.3463085840922,
+  "wall_s": 19.15686137508601,
+  "transcript": {
+    "result_text": "I searched the repo for `with_scheduler` and read the code around each match. It has nine direct callers in five files. All of them are in the `tokio` crate, since no other crate in the workspace calls it.\n\n- **`tokio/src/runtime/context.rs`**: `defer`.\n- **`tokio/src/runtime/time/entry.rs`**: `generate_shard_id`, a free function inside `cfg_rt!`.\n- **`tokio/src/runtime/scheduler/current_thread/mod.rs`**: three callers.\n  - `Handle::dump`.\n  - `schedule` in `impl Schedule for Arc<Handle>`.\n  - `unhandled_panic` in the same impl, inside `cfg_unstable!`.\n- **`tokio/src/runtime/scheduler/multi_thread/worker.rs`**: `with_current`.\n- **`tokio/src/runtime/scheduler/multi_thread_alt/worker.rs`**: `with_current`.\n- **`tokio/src/runtime/task/trace/mod.rs`**: `trace_leaf`.\n\nEach call sits directly in the function listed, not inside a nested function or closure. Some of these functions are only compiled with certain features or cfg flags (taskdump, `tokio_unstable`, `rt`). They still count as direct callers in the source.\n\n```json\n{\"answer\": [\"tokio/src/runtime/context.rs:defer\", \"tokio/src/runtime/time/entry.rs:generate_shard_id\", \"tokio/src/runtime/scheduler/current_thread/mod.rs:Handle.dump\", \"tokio/src/runtime/scheduler/current_thread/mod.rs:schedule\", \"tokio/src/runtime/scheduler/current_thread/mod.rs:unhandled_panic\", \"tokio/src/runtime/scheduler/multi_thread_alt/worker.rs:with_current\", \"tokio/src/runtime/scheduler/multi_thread/worker.rs:with_current\", \"tokio/src/runtime/task/trace/mod.rs:trace_leaf\"]}\n```",
+    "subtype": "success",
+    "is_error": false,
+    "num_turns": 4,
+    "duration_ms": 18243,
+    "cost_usd": 0.094951,
+    "usage": {
+      "input_tokens": 8,
+      "output_tokens": 1514,
+      "cache_creation_input_tokens": 7242,
+      "cache_read_input_tokens": 33515
+    },
+    "tool_calls": {
+      "Bash": 2,
+      "Grep": 1
+    },
+    "mcp_status": "connected",
+    "api_key_source": "none",
+    "tools": [
+      "Bash",
+      "Edit",
+      "Glob",
+      "Grep",
+      "Read",
+      "Write",
+      "mcp__context-manager__context",
+      "mcp__context-manager__index_project"
+    ]
+  },
+  "score": {
+    "answered": true,
+    "recall": 1.0,
+    "precision": 1.0,
+    "missing": [],
+    "extra": [],
+    "edit_applied": null,
+    "stale": [],
+    "success": true
+  },
+  "failure": null,
+  "hook": {
+    "deny": 0,
+    "pass_": 1
+  }
+}

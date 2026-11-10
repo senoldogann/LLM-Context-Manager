@@ -1,0 +1,57 @@
+{
+  "record_version": 3,
+  "run_id": "tokio-callers-with-scheduler__F__3",
+  "task_id": "tokio-callers-with-scheduler",
+  "repo": "tokio",
+  "category": "callers",
+  "arm": "F",
+  "rep": 3,
+  "model": "claude-opus-5-5",
+  "effort": "high",
+  "embedding": "local",
+  "index_copy_s": 0.0716576250270009,
+  "index_build_s": 265.3463085840922,
+  "wall_s": 12.597422000020742,
+  "transcript": {
+    "result_text": "Eight functions call `with_scheduler` directly. The code index searched every non-test file for the name and found 8 call sites, all inside the 8 functions below, so the list is complete. Each call sits inside a closure passed to `with_scheduler`, and is listed under the named function that contains it.\n\n- `tokio/src/runtime/context.rs`: `defer` (line 168)\n- `tokio/src/runtime/scheduler/current_thread/mod.rs`:\n  - `Handle.dump` (line 510)\n  - `Handle.schedule` (line 632). This method is in `impl Schedule for Arc<Handle>`, so I've named it after `Handle`.\n  - `Handle.unhandled_panic` (line 674). Same `impl` block as `schedule`.\n- `tokio/src/runtime/scheduler/multi_thread/worker.rs`: `with_current` (line 1255)\n- `tokio/src/runtime/scheduler/multi_thread_alt/worker.rs`: `with_current` (line 1600)\n- `tokio/src/runtime/task/trace/mod.rs`: `trace_leaf` (line 194)\n- `tokio/src/runtime/time/entry.rs`: `generate_shard_id` (line 662)\n\n```json\n{\"answer\": [\"tokio/src/runtime/context.rs:defer\", \"tokio/src/runtime/scheduler/current_thread/mod.rs:Handle.dump\", \"tokio/src/runtime/scheduler/current_thread/mod.rs:Handle.schedule\", \"tokio/src/runtime/scheduler/current_thread/mod.rs:Handle.unhandled_panic\", \"tokio/src/runtime/scheduler/multi_thread/worker.rs:with_current\", \"tokio/src/runtime/scheduler/multi_thread_alt/worker.rs:with_current\", \"tokio/src/runtime/task/trace/mod.rs:trace_leaf\", \"tokio/src/runtime/time/entry.rs:generate_shard_id\"]}\n```",
+    "subtype": "success",
+    "is_error": false,
+    "num_turns": 3,
+    "duration_ms": 11698,
+    "cost_usd": 0.0613256,
+    "usage": {
+      "input_tokens": 6,
+      "output_tokens": 1084,
+      "cache_creation_input_tokens": 4390,
+      "cache_read_input_tokens": 22508
+    },
+    "tool_calls": {
+      "Grep": 1,
+      "mcp__context-manager__context": 1
+    },
+    "mcp_status": "connected",
+    "api_key_source": "none",
+    "tools": [
+      "Bash",
+      "Edit",
+      "Glob",
+      "Grep",
+      "Read",
+      "Write",
+      "mcp__context-manager__context",
+      "mcp__context-manager__index_project"
+    ]
+  },
+  "score": {
+    "answered": true,
+    "recall": 1.0,
+    "precision": 1.0,
+    "missing": [],
+    "extra": [],
+    "edit_applied": null,
+    "stale": [],
+    "success": true
+  },
+  "failure": null,
+  "hook": null
+}

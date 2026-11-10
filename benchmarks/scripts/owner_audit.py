@@ -109,6 +109,7 @@ def rust_owners(source: str, name: str) -> set[str]:
     """`fn name` tanımlarının kapsayan impl tipi, fonksiyon ve mod adları."""
     owners: set[str] = set()
     stack: list[tuple[int, str]] = []
+    owners_in_args: set[str] = set()
     # `{` sonraki satırda açılabilir (`where` bloğu): öğe adı o satıra kadar bekler.
     pending: str | None = None
     depth = 0
@@ -118,7 +119,15 @@ def rust_owners(source: str, name: str) -> set[str]:
             label = match.group("fname") or match.group("mname") or match.group("iname")
             if match.group("fn") and match.group("fname") == name:
                 owners.update(owner for _, owner in stack)
+                owners.update(owners_in_args)
             pending = label.rsplit("::", 1)[-1] if label else None
+            if match.group("iname"):
+                # `impl Trait for Arc<Handle>`: sarmalanan tip (`Handle`) de sahiptir.
+                wrapped = re.search(r"\bfor\s+[\w:]+<([^{]*)>", line) or re.search(
+                    r"^\s*impl(?:<[^{]*?>)?\s+[\w:]+<([^{]*)>", line
+                )
+                if wrapped:
+                    owners_in_args.update(re.findall(r"\b[A-Z]\w*", wrapped.group(1)))
         if pending is not None and "{" in line:
             stack.append((depth, pending))
             pending = None
@@ -126,6 +135,8 @@ def rust_owners(source: str, name: str) -> set[str]:
             pending = None
         depth += line.count("{") - line.count("}")
         stack = [(level, owner) for level, owner in stack if level < depth]
+        if not stack:
+            owners_in_args = set()
     return owners
 
 

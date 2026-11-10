@@ -1,0 +1,55 @@
+{
+  "record_version": 3,
+  "run_id": "tokio-callers-async-op__A__1",
+  "task_id": "tokio-callers-async-op",
+  "repo": "tokio",
+  "category": "callers",
+  "arm": "A",
+  "rep": 1,
+  "model": "claude-opus-5-5",
+  "effort": "high",
+  "embedding": "local",
+  "index_copy_s": null,
+  "index_build_s": null,
+  "wall_s": 15.063811000203714,
+  "transcript": {
+    "result_text": "I found 13 functions that call `async_op` directly. I searched the whole workspace for `async_op(`. Every call outside `trace.rs` itself is written as `trace::async_op(...)`, and all of them are in the `tokio` crate. I matched each call to the function that contains it by looking for the nearest `fn` above it. None of the calls are inside a closure or nested function. No other library crate calls it, and the test files only use the span name `\"runtime.resource.async_op\"` as a string, not the function.\n\n- `Interval::tick` (`tokio/src/time/interval.rs`)\n- `Sender::closed` (`tokio/src/sync/oneshot.rs`)\n- `Barrier::wait` (`tokio/src/sync/barrier.rs`)\n- `Semaphore::acquire`, `acquire_many`, `acquire_owned`, `acquire_many_owned` (`tokio/src/sync/semaphore.rs`)\n- `RwLock::read`, `read_owned`, `write`, `write_owned` (`tokio/src/sync/rwlock.rs`)\n- `Mutex::lock`, `lock_owned` (`tokio/src/sync/mutex.rs`)\n\n```json\n{\"answer\": [\"tokio/src/time/interval.rs:Interval.tick\", \"tokio/src/sync/oneshot.rs:Sender.closed\", \"tokio/src/sync/barrier.rs:Barrier.wait\", \"tokio/src/sync/semaphore.rs:Semaphore.acquire\", \"tokio/src/sync/semaphore.rs:Semaphore.acquire_many\", \"tokio/src/sync/semaphore.rs:Semaphore.acquire_owned\", \"tokio/src/sync/semaphore.rs:Semaphore.acquire_many_owned\", \"tokio/src/sync/rwlock.rs:RwLock.read\", \"tokio/src/sync/rwlock.rs:RwLock.read_owned\", \"tokio/src/sync/rwlock.rs:RwLock.write\", \"tokio/src/sync/rwlock.rs:RwLock.write_owned\", \"tokio/src/sync/mutex.rs:Mutex.lock\", \"tokio/src/sync/mutex.rs:Mutex.lock_owned\"]}\n```",
+    "subtype": "success",
+    "is_error": false,
+    "num_turns": 3,
+    "duration_ms": 14075,
+    "cost_usd": 0.09288380000000002,
+    "usage": {
+      "input_tokens": 6,
+      "output_tokens": 1281,
+      "cache_creation_input_tokens": 7818,
+      "cache_read_input_tokens": 23479
+    },
+    "tool_calls": {
+      "Bash": 1,
+      "Grep": 1
+    },
+    "mcp_status": "none",
+    "api_key_source": "none",
+    "tools": [
+      "Bash",
+      "Edit",
+      "Glob",
+      "Grep",
+      "Read",
+      "Write"
+    ]
+  },
+  "score": {
+    "answered": true,
+    "recall": 1.0,
+    "precision": 1.0,
+    "missing": [],
+    "extra": [],
+    "edit_applied": null,
+    "stale": [],
+    "success": true
+  },
+  "failure": null,
+  "hook": null
+}

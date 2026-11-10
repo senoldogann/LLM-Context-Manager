@@ -1,0 +1,57 @@
+{
+  "record_version": 3,
+  "run_id": "tokio-callers-with-scheduler__B__2",
+  "task_id": "tokio-callers-with-scheduler",
+  "repo": "tokio",
+  "category": "callers",
+  "arm": "B",
+  "rep": 2,
+  "model": "claude-opus-5-5",
+  "effort": "high",
+  "embedding": "local",
+  "index_copy_s": 0.07086212490685284,
+  "index_build_s": 265.3463085840922,
+  "wall_s": 15.83595854206942,
+  "transcript": {
+    "result_text": "Eight functions and methods call `with_scheduler` directly. I found them by searching the whole workspace for the name and then reading the code around each call to see which function contains it. All of them are in the `tokio` crate.\n\n- `tokio/src/runtime/context.rs:168`: `defer`, a free function.\n- `tokio/src/runtime/task/trace/mod.rs:194`: `trace_leaf`.\n- `tokio/src/runtime/time/entry.rs:662`: `generate_shard_id`.\n- `tokio/src/runtime/scheduler/current_thread/mod.rs:510`: `Handle::dump`.\n- `tokio/src/runtime/scheduler/current_thread/mod.rs`, two methods in `impl Schedule for Arc<Handle>`:\n  - `schedule`, at line 632.\n  - `unhandled_panic`, at line 674 (it is only compiled under the `unstable` feature).\n- `tokio/src/runtime/scheduler/multi_thread/worker.rs:1255`: `with_current`, a free function.\n- `tokio/src/runtime/scheduler/multi_thread_alt/worker.rs:1600`: `with_current`, a free function.\n\nThe two `schedule` and `unhandled_panic` methods belong to a trait impl on `Arc<Handle>`, so I've written them as `Handle.schedule` and `Handle.unhandled_panic`.\n\n```json\n{\"answer\": [\"tokio/src/runtime/context.rs:defer\", \"tokio/src/runtime/task/trace/mod.rs:trace_leaf\", \"tokio/src/runtime/time/entry.rs:generate_shard_id\", \"tokio/src/runtime/scheduler/current_thread/mod.rs:Handle.dump\", \"tokio/src/runtime/scheduler/current_thread/mod.rs:Handle.schedule\", \"tokio/src/runtime/scheduler/current_thread/mod.rs:Handle.unhandled_panic\", \"tokio/src/runtime/scheduler/multi_thread/worker.rs:with_current\", \"tokio/src/runtime/scheduler/multi_thread_alt/worker.rs:with_current\"]}\n```",
+    "subtype": "success",
+    "is_error": false,
+    "num_turns": 4,
+    "duration_ms": 15081,
+    "cost_usd": 0.0804926,
+    "usage": {
+      "input_tokens": 8,
+      "output_tokens": 1342,
+      "cache_creation_input_tokens": 5885,
+      "cache_read_input_tokens": 32703
+    },
+    "tool_calls": {
+      "Bash": 2,
+      "Grep": 1
+    },
+    "mcp_status": "connected",
+    "api_key_source": "none",
+    "tools": [
+      "Bash",
+      "Edit",
+      "Glob",
+      "Grep",
+      "Read",
+      "Write",
+      "mcp__context-manager__context",
+      "mcp__context-manager__index_project"
+    ]
+  },
+  "score": {
+    "answered": true,
+    "recall": 1.0,
+    "precision": 1.0,
+    "missing": [],
+    "extra": [],
+    "edit_applied": null,
+    "stale": [],
+    "success": true
+  },
+  "failure": null,
+  "hook": null
+}

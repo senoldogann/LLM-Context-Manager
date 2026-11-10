@@ -9,9 +9,10 @@ result sets below for two things:
 
 It changes no record and no score. Edit tasks are skipped because their answers name code the
 agent added. Owners are accepted broadly (any enclosing class, impl type, function or module,
-or the file or directory name), so the audit errs towards not flagging.
+or the file or directory name), so the audit errs towards not flagging. For `impl Trait for Wrapper<Inner>` the wrapped type also
+counts as an owner (`Handle.schedule` for `impl Schedule for Arc<Handle>`).
 
-Result: 6 of the audited runs would fail under owner-aware scoring; all 6 were scored as
+Result (all sets through iteration 9): 6 of the audited runs would fail under owner-aware scoring; all 6 were scored as
 successes. Token ratios are unaffected.
 
 | Results | Agent | Task | Runs | Wrong owner | Missing same-name copy | Unqualified copy |
