@@ -1,0 +1,48 @@
+{
+  "record_version": 3,
+  "run_id": "serde-types-deserializer__B__1",
+  "task_id": "serde-types-deserializer",
+  "repo": "serde",
+  "category": "types",
+  "arm": "B",
+  "rep": 1,
+  "model": "gpt-6-luna",
+  "effort": "high",
+  "embedding": "local",
+  "index_copy_s": 0.03432895801961422,
+  "index_build_s": 55.95570275001228,
+  "wall_s": 21.88395058293827,
+  "transcript": {
+    "result_text": "```json\n{\"answer\":[\"serde/src/private/de.rs:MissingFieldDeserializer\",\"serde/src/private/de.rs:ContentDeserializer\",\"serde/src/private/de.rs:ContentRefDeserializer\",\"serde/src/private/de.rs:StrDeserializer\",\"serde/src/private/de.rs:BorrowedStrDeserializer\",\"serde/src/private/de.rs:FlatMapDeserializer\"]}\n```",
+    "subtype": "completed",
+    "is_error": false,
+    "num_turns": null,
+    "duration_ms": 21884,
+    "cost_usd": null,
+    "usage": {
+      "input_tokens": 12239,
+      "output_tokens": 578,
+      "cache_creation_input_tokens": 0,
+      "cache_read_input_tokens": 42112
+    },
+    "tool_calls": {
+      "command_execution": 2,
+      "mcp__context-manager__context": 1
+    },
+    "mcp_status": "unreported",
+    "api_key_source": "chatgpt",
+    "tools": []
+  },
+  "score": {
+    "answered": true,
+    "recall": 1.0,
+    "precision": 1.0,
+    "missing": [],
+    "extra": [],
+    "edit_applied": null,
+    "stale": [],
+    "success": true
+  },
+  "failure": null,
+  "hook": null
+}

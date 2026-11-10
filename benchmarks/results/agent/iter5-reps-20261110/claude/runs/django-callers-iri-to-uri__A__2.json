@@ -1,0 +1,55 @@
+{
+  "record_version": 3,
+  "run_id": "django-callers-iri-to-uri__A__2",
+  "task_id": "django-callers-iri-to-uri",
+  "repo": "django",
+  "category": "callers",
+  "arm": "A",
+  "rep": 2,
+  "model": "claude-opus-5-5",
+  "effort": "high",
+  "embedding": "local",
+  "index_copy_s": null,
+  "index_build_s": null,
+  "wall_s": 16.186143499799073,
+  "transcript": {
+    "result_text": "I found 11 functions and methods in `django/` that call `iri_to_uri` directly. I searched for every occurrence of `iri_to_uri` and matched each call to the function or method that contains it. The search turned up no other way of reaching the function, such as through `encoding.iri_to_uri`. The definition in `django/utils/encoding.py` and a mention in a docstring in `django/utils/http.py` are not calls, so they're left out.\n\n- `django/templatetags/static.py:48` — `PrefixNode.handle_simple`\n- `django/utils/feedgenerator.py:86, 91, 94` — `SyndicationFeed.__init__`\n- `django/utils/feedgenerator.py:134, 138` — `SyndicationFeed.add_item`\n- `django/utils/feedgenerator.py:222` — `Enclosure.__init__`\n- `django/template/defaultfilters.py:226` — `iriencode`\n- `django/http/response.py:618` — `HttpResponseRedirectBase.__init__`\n- `django/http/request.py:174` — `HttpRequest._get_full_path`\n- `django/http/request.py:241` — `HttpRequest.build_absolute_uri`\n- `django/contrib/flatpages/models.py:49` — `FlatPage.get_absolute_url`\n- `django/contrib/syndication/views.py:21` — `add_domain`\n\n```json\n{\"answer\": [\"django/templatetags/static.py:PrefixNode.handle_simple\", \"django/utils/feedgenerator.py:SyndicationFeed.__init__\", \"django/utils/feedgenerator.py:SyndicationFeed.add_item\", \"django/utils/feedgenerator.py:Enclosure.__init__\", \"django/template/defaultfilters.py:iriencode\", \"django/http/response.py:HttpResponseRedirectBase.__init__\", \"django/http/request.py:HttpRequest._get_full_path\", \"django/http/request.py:HttpRequest.build_absolute_uri\", \"django/contrib/flatpages/models.py:FlatPage.get_absolute_url\", \"django/contrib/syndication/views.py:add_domain\"]}\n```",
+    "subtype": "success",
+    "is_error": false,
+    "num_turns": 4,
+    "duration_ms": 15382,
+    "cost_usd": 0.0756564,
+    "usage": {
+      "input_tokens": 8,
+      "output_tokens": 1398,
+      "cache_creation_input_tokens": 5203,
+      "cache_read_input_tokens": 30202
+    },
+    "tool_calls": {
+      "Bash": 2,
+      "Grep": 1
+    },
+    "mcp_status": "none",
+    "api_key_source": "none",
+    "tools": [
+      "Bash",
+      "Edit",
+      "Glob",
+      "Grep",
+      "Read",
+      "Write"
+    ]
+  },
+  "score": {
+    "answered": true,
+    "recall": 1.0,
+    "precision": 1.0,
+    "missing": [],
+    "extra": [],
+    "edit_applied": null,
+    "stale": [],
+    "success": true
+  },
+  "failure": null,
+  "hook": null
+}

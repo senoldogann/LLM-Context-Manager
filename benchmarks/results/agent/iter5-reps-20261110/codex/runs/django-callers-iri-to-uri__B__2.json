@@ -1,0 +1,47 @@
+{
+  "record_version": 3,
+  "run_id": "django-callers-iri-to-uri__B__2",
+  "task_id": "django-callers-iri-to-uri",
+  "repo": "django",
+  "category": "callers",
+  "arm": "B",
+  "rep": 2,
+  "model": "gpt-6-luna",
+  "effort": "high",
+  "embedding": "local",
+  "index_copy_s": 0.5614200001582503,
+  "index_build_s": 1230.484017916955,
+  "wall_s": 22.132771625183523,
+  "transcript": {
+    "result_text": "The index reports 10 callers in `django/`, and its call list is complete.\n\n```json\n{\"answer\":[\"django/contrib/flatpages/models.py:FlatPage.get_absolute_url\",\"django/contrib/syndication/views.py:add_domain\",\"django/http/request.py:HttpRequest._get_full_path\",\"django/http/request.py:HttpRequest.build_absolute_uri\",\"django/http/response.py:HttpResponseRedirectBase.__init__\",\"django/template/defaultfilters.py:iriencode\",\"django/templatetags/static.py:PrefixNode.handle_simple\",\"django/utils/feedgenerator.py:SyndicationFeed.__init__\",\"django/utils/feedgenerator.py:SyndicationFeed.add_item\",\"django/utils/feedgenerator.py:Enclosure.__init__\"]}\n```",
+    "subtype": "completed",
+    "is_error": false,
+    "num_turns": null,
+    "duration_ms": 22133,
+    "cost_usd": null,
+    "usage": {
+      "input_tokens": 22392,
+      "output_tokens": 723,
+      "cache_creation_input_tokens": 0,
+      "cache_read_input_tokens": 10624
+    },
+    "tool_calls": {
+      "mcp__context-manager__context": 1
+    },
+    "mcp_status": "unreported",
+    "api_key_source": "chatgpt",
+    "tools": []
+  },
+  "score": {
+    "answered": true,
+    "recall": 1.0,
+    "precision": 1.0,
+    "missing": [],
+    "extra": [],
+    "edit_applied": null,
+    "stale": [],
+    "success": true
+  },
+  "failure": null,
+  "hook": null
+}

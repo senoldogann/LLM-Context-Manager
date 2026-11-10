@@ -1,0 +1,59 @@
+{
+  "record_version": 3,
+  "run_id": "serde-types-deserializer__H__2",
+  "task_id": "serde-types-deserializer",
+  "repo": "serde",
+  "category": "types",
+  "arm": "H",
+  "rep": 2,
+  "model": "claude-opus-5-5",
+  "effort": "high",
+  "embedding": "local",
+  "index_copy_s": 0.03683220804668963,
+  "index_build_s": 55.95570275001228,
+  "wall_s": 13.416304250014946,
+  "transcript": {
+    "result_text": "Six types in `serde/src/private/de.rs` implement `Deserializer<'de>`. I searched the file for every `Deserializer<'de>` mention. The only other matches are trait bounds like `D: Deserializer<'de>` and one helper macro, `forward_to_deserialize_other`, which writes methods rather than impl blocks.\n\n| Type | Line |\n|---|---|\n| `MissingFieldDeserializer<E>` | 30 |\n| `ContentDeserializer<'de, E>` | 1136 |\n| `ContentRefDeserializer<'a, 'de, E>` | 1735 |\n| `StrDeserializer<'a, E>` | 2396 |\n| `BorrowedStrDeserializer<'de, E>` | 2421 |\n| `FlatMapDeserializer<'a, 'de, E>` | 2522 (only when the `std` or `alloc` feature is on) |\n\n```json\n{\"answer\": [\"serde/src/private/de.rs:MissingFieldDeserializer\", \"serde/src/private/de.rs:ContentDeserializer\", \"serde/src/private/de.rs:ContentRefDeserializer\", \"serde/src/private/de.rs:StrDeserializer\", \"serde/src/private/de.rs:BorrowedStrDeserializer\", \"serde/src/private/de.rs:FlatMapDeserializer\"]}\n```",
+    "subtype": "success",
+    "is_error": false,
+    "num_turns": 4,
+    "duration_ms": 12673,
+    "cost_usd": 0.06311699999999999,
+    "usage": {
+      "input_tokens": 8,
+      "output_tokens": 1010,
+      "cache_creation_input_tokens": 4590,
+      "cache_read_input_tokens": 30825
+    },
+    "tool_calls": {
+      "Grep": 3
+    },
+    "mcp_status": "connected",
+    "api_key_source": "none",
+    "tools": [
+      "Bash",
+      "Edit",
+      "Glob",
+      "Grep",
+      "Read",
+      "Write",
+      "mcp__context-manager__context",
+      "mcp__context-manager__index_project"
+    ]
+  },
+  "score": {
+    "answered": true,
+    "recall": 1.0,
+    "precision": 1.0,
+    "missing": [],
+    "extra": [],
+    "edit_applied": null,
+    "stale": [],
+    "success": true
+  },
+  "failure": null,
+  "hook": {
+    "deny": 0,
+    "pass_": 3
+  }
+}

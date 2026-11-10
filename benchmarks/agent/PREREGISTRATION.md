@@ -174,3 +174,12 @@ the final run is complete.
    (`ccm-mcp hook claude-pre-tool-use`, passed with `--settings`). H is an installed product
    configuration, neither natural use nor forced use, and is reported apart; each record (version 3)
    carries how many greps the hook answered and let through. A, B, C and F are unchanged.
+9. 2026-11-10: before any further product change, the iteration-5 held-out set was re-run with
+   three repetitions at the iteration-5 commit (`results/agent/iter5-reps-20261110/`, rule in its
+   `PLAN.md`). The large-repository saving held for both agents on the Django task, so two more
+   Django held-out tasks are added before they are run or any CCM packet for them is looked at:
+   `django-callers-constant-time-compare` (10 call sites in 9 functions) and
+   `django-trap-urlencode` (7 calls of `django.utils.http.urlencode` in 7 functions, next to the
+   standard-library `urlencode`, `QueryDict.urlencode` and the template filter). Both gold answers
+   come from Python `ast` over `django/`. They are run with three repetitions, arms Codex A and B and
+   Claude A, B, F and H, at a commit without product changes since iteration 5.

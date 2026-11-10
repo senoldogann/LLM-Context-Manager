@@ -1,0 +1,55 @@
+{
+  "record_version": 3,
+  "run_id": "django-callers-iri-to-uri__A__3",
+  "task_id": "django-callers-iri-to-uri",
+  "repo": "django",
+  "category": "callers",
+  "arm": "A",
+  "rep": 3,
+  "model": "claude-opus-5-5",
+  "effort": "high",
+  "embedding": "local",
+  "index_copy_s": null,
+  "index_build_s": null,
+  "wall_s": 17.39345487509854,
+  "transcript": {
+    "result_text": "Ten functions and methods under `django/` call `iri_to_uri` directly. I found them by searching for every use of the name and then checking which function or method each call sits in. `django/utils/encoding.py` only defines the function and never calls it. `django/utils/http.py` mentions it only in a docstring.\n\n- `django/template/defaultfilters.py`: the `iriencode` filter\n- `django/http/response.py`: `HttpResponseRedirectBase.__init__`, which sets the `Location` header\n- `django/http/request.py`: `HttpRequest._get_full_path` (for the query string) and `HttpRequest.build_absolute_uri`\n- `django/templatetags/static.py`: `PrefixNode.handle_simple`\n- `django/contrib/flatpages/models.py`: `FlatPage.get_absolute_url`\n- `django/contrib/syndication/views.py`: `add_domain`\n- `django/utils/feedgenerator.py`: `SyndicationFeed.__init__`, `SyndicationFeed.add_item` and `Enclosure.__init__`. The first two each define a nested `to_str` helper. I listed the outer method in both cases, which is the name you asked for whether or not the call sits inside the helper.\n\n```json\n{\"answer\": [\"django/template/defaultfilters.py:iriencode\", \"django/http/response.py:HttpResponseRedirectBase.__init__\", \"django/http/request.py:HttpRequest._get_full_path\", \"django/http/request.py:HttpRequest.build_absolute_uri\", \"django/templatetags/static.py:PrefixNode.handle_simple\", \"django/contrib/flatpages/models.py:FlatPage.get_absolute_url\", \"django/contrib/syndication/views.py:add_domain\", \"django/utils/feedgenerator.py:SyndicationFeed.__init__\", \"django/utils/feedgenerator.py:SyndicationFeed.add_item\", \"django/utils/feedgenerator.py:Enclosure.__init__\"]}\n```",
+    "subtype": "success",
+    "is_error": false,
+    "num_turns": 4,
+    "duration_ms": 16609,
+    "cost_usd": 0.0744378,
+    "usage": {
+      "input_tokens": 8,
+      "output_tokens": 1394,
+      "cache_creation_input_tokens": 5059,
+      "cache_read_input_tokens": 30269
+    },
+    "tool_calls": {
+      "Bash": 2,
+      "Grep": 1
+    },
+    "mcp_status": "none",
+    "api_key_source": "none",
+    "tools": [
+      "Bash",
+      "Edit",
+      "Glob",
+      "Grep",
+      "Read",
+      "Write"
+    ]
+  },
+  "score": {
+    "answered": true,
+    "recall": 1.0,
+    "precision": 1.0,
+    "missing": [],
+    "extra": [],
+    "edit_applied": null,
+    "stale": [],
+    "success": true
+  },
+  "failure": null,
+  "hook": null
+}
