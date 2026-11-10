@@ -1233,6 +1233,70 @@ TOKIO_TASKS: tuple[Task, ...] = (
     ),
 )
 
+TOKIO_HELD_OUT_TASKS: tuple[Task, ...] = (
+    Task(
+        id="tokio-callers-async-op",
+        repo="tokio",
+        category="callers",
+        answer_kind="symbols",
+        question=(
+            "Which functions or methods in the library crates of this workspace call the "
+            "`async_op` function defined in `tokio/src/util/trace.rs` directly?"
+        ),
+        expected=(
+            sym("tokio/src/sync/barrier.rs", "wait"),
+            *symbols("tokio/src/sync/mutex.rs", ("lock", "lock_owned")),
+            *symbols(
+                "tokio/src/sync/semaphore.rs",
+                ("acquire", "acquire_many", "acquire_owned", "acquire_many_owned"),
+            ),
+            *symbols("tokio/src/sync/rwlock.rs", ("read", "read_owned", "write", "write_owned")),
+            sym("tokio/src/sync/oneshot.rs", "closed"),
+            sym("tokio/src/time/interval.rs", "tick"),
+        ),
+        edit=None,
+        notes=(
+            "rg '(^|[^\\w.])async_op\\s*\\(' over the library crates (all calls are "
+            "`trace::async_op(`), each read in its enclosing method: 13 calls in 13 methods. "
+            "Held out (preregistration amendment 11)."
+        ),
+    ),
+    Task(
+        id="tokio-trap-yield-now",
+        repo="tokio",
+        category="trap",
+        answer_kind="symbols",
+        question=(
+            "Which functions or methods in the library crates of this workspace call "
+            "`tokio::task::yield_now` (defined in `tokio/src/task/yield_now.rs`) directly? Calls "
+            "to `std::thread::yield_now`, to the `loom` wrapper `crate::loom::thread::yield_now` "
+            "and to scheduler `yield_now` methods do not count."
+        ),
+        expected=(
+            sym("tokio/src/signal/registry.rs", "smoke"),
+            sym("tokio/src/time/clock.rs", "advance"),
+            sym("tokio-util/src/task/spawn_pinned.rs", "run"),
+            *symbols(
+                "tokio/src/runtime/scheduler/multi_thread/trace.rs",
+                ("start_trace_request", "end_trace_request"),
+            ),
+            *symbols(
+                "tokio/src/runtime/scheduler/multi_thread_alt/trace.rs",
+                ("start_trace_request", "end_trace_request"),
+            ),
+        ),
+        edit=None,
+        notes=(
+            "Seven calls in five files: `crate::task::yield_now()` in signal/registry.rs, "
+            "time/clock.rs and both scheduler trace.rs files, `tokio::task::yield_now()` in "
+            "tokio-util spawn_pinned.rs. Not counted: std::thread::yield_now in "
+            "loom/std/barrier.rs, `thread::yield_now()` in sync/mpsc/list.rs and "
+            "`crate::loom::thread::yield_now()` in sync/mpsc/block.rs (both the loom wrapper, "
+            "which calls std::hint::spin_loop). Held out (preregistration amendment 11)."
+        ),
+    ),
+)
+
 TASKS: tuple[Task, ...] = FLASK_TASKS + EXPRESS_TASKS + SERDE_TASKS
 # Ürün pilotlarının seçebildiği tüm görevler; `--tasks all` yalnız ön kayıtlı 24 görevdir.
 KNOWN_TASKS: tuple[Task, ...] = (
@@ -1244,4 +1308,5 @@ KNOWN_TASKS: tuple[Task, ...] = (
     + DJANGO_ITERATION5_TASKS
     + DJANGO_ITERATION6_TASKS
     + TOKIO_TASKS
+    + TOKIO_HELD_OUT_TASKS
 )
