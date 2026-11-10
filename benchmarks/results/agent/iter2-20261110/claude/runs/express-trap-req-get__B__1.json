@@ -1,0 +1,56 @@
+{
+  "record_version": 2,
+  "run_id": "express-trap-req-get__B__1",
+  "task_id": "express-trap-req-get",
+  "repo": "express",
+  "category": "trap",
+  "arm": "B",
+  "rep": 1,
+  "model": "claude-opus-5-5",
+  "effort": "high",
+  "embedding": "local",
+  "index_copy_s": 0.016032583080232143,
+  "index_build_s": 23.08429770800285,
+  "wall_s": 14.070007750065997,
+  "transcript": {
+    "result_text": "Five functions in `lib/` call `req.get`. I found them by searching `lib/` for every `.get(` and `.header(` call and checking what each one is called on.\n\n- **`lib/request.js`**: `range` calls `this.get('Range')`. `protocol` calls `this.get('X-Forwarded-Proto')`. `hostname` calls `this.get('X-Forwarded-Host')` and `this.get('Host')`. `xhr` calls `this.get('X-Requested-With')`. The last three are getters defined with `defineGetter`.\n- **`lib/response.js`**: `location` calls `this.req.get('Referrer')` when the URL is `'back'`.\n\nExcluded:\n- All the `this.get(...)` calls in `response.js` are `res.get`.\n- The `app.get(...)` / `this.app.get(...)` calls in `application.js` and `request.js` are `app.get`.\n- The `res.get` calls in `request.js`'s `fresh` don't count.\n- `req.header()` is never called inside `lib/`; it's only the alias itself, defined at `lib/request.js:65`.\n\n```json\n{\"answer\": [\"lib/request.js:range\", \"lib/request.js:protocol\", \"lib/request.js:hostname\", \"lib/request.js:xhr\", \"lib/response.js:location\"]}\n```",
+    "subtype": "success",
+    "is_error": false,
+    "num_turns": 3,
+    "duration_ms": 12621,
+    "cost_usd": 0.06760440000000001,
+    "usage": {
+      "input_tokens": 6,
+      "output_tokens": 1083,
+      "cache_creation_input_tokens": 5173,
+      "cache_read_input_tokens": 22682
+    },
+    "tool_calls": {
+      "Bash": 1,
+      "Grep": 1
+    },
+    "mcp_status": "connected",
+    "api_key_source": "none",
+    "tools": [
+      "Bash",
+      "Edit",
+      "Glob",
+      "Grep",
+      "Read",
+      "Write",
+      "mcp__context-manager__context",
+      "mcp__context-manager__index_project"
+    ]
+  },
+  "score": {
+    "answered": true,
+    "recall": 1.0,
+    "precision": 1.0,
+    "missing": [],
+    "extra": [],
+    "edit_applied": null,
+    "stale": [],
+    "success": true
+  },
+  "failure": null
+}

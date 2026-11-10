@@ -1,0 +1,56 @@
+{
+  "record_version": 2,
+  "run_id": "django-callers-make-aware__F__1",
+  "task_id": "django-callers-make-aware",
+  "repo": "django",
+  "category": "callers",
+  "arm": "F",
+  "rep": 1,
+  "model": "claude-opus-5-5",
+  "effort": "high",
+  "embedding": "local",
+  "index_copy_s": 0.27775645814836025,
+  "index_build_s": 1348.7221117501613,
+  "wall_s": 14.527788666076958,
+  "transcript": {
+    "result_text": "I found 16 functions or methods in `django/` that call `make_aware` directly, across 19 call sites. I checked the index's caller list against a plain text search of `django/`, and they match.\n\n1. `ChangeList.get_filters` in `django/contrib/admin/views/main.py` (lines 261–262, as `make_aware(...)`)\n2. `_get_latest_lastmod` in `django/contrib/sitemaps/views.py` (line 38)\n3. `Feed.get_feed` in `django/contrib/syndication/views.py` (lines 209 and 213, as `make_aware(...)`)\n4. `BaseDatabaseOperations.year_lookup_bounds_for_datetime_field` in `django/db/backends/base/operations.py` (lines 640–641)\n5. `DatabaseOperations.convert_datetimefield_value` in `django/db/backends/mysql/operations.py` (line 325)\n6. `DatabaseOperations.convert_datetimefield_value` in `django/db/backends/oracle/operations.py` (line 265)\n7. `DatabaseOperations.convert_datetimefield_value` in `django/db/backends/sqlite3/operations.py` (line 310)\n8. `DateTimeField.to_python` in `django/db/models/fields/__init__.py` (line 1612)\n9. `DateTimeField.get_prep_value` in `django/db/models/fields/__init__.py` (line 1671)\n10. `TruncBase.convert_value` in `django/db/models/functions/datetime.py` (line 351)\n11. `from_current_timezone` in `django/forms/utils.py` (line 223)\n12. `HttpResponseBase.set_cookie` in `django/http/response.py` (line 242)\n13. `do_timezone` in `django/templatetags/tz.py` (line 55)\n14. `DateFormat.r` in `django/utils/dateformat.py` (line 271, as `make_aware(...)`)\n15. `condition` in `django/views/decorators/http.py` (line 113). The call is in the nested `_pre_process_request` inside `decorator`, so I've listed the outermost named function.\n16. `DateMixin._make_date_lookup_arg` in `django/views/generic/dates.py` (line 279)\n\nAll other calls use the `timezone.make_aware(...)` form. Test files and matches inside strings or docstrings are excluded.\n\n```json\n{\"answer\": [\"django/contrib/admin/views/main.py:ChangeList.get_filters\", \"django/contrib/sitemaps/views.py:_get_latest_lastmod\", \"django/contrib/syndication/views.py:Feed.get_feed\", \"django/db/backends/base/operations.py:BaseDatabaseOperations.year_lookup_bounds_for_datetime_field\", \"django/db/backends/mysql/operations.py:DatabaseOperations.convert_datetimefield_value\", \"django/db/backends/oracle/operations.py:DatabaseOperations.convert_datetimefield_value\", \"django/db/backends/sqlite3/operations.py:DatabaseOperations.convert_datetimefield_value\", \"django/db/models/fields/__init__.py:DateTimeField.to_python\", \"django/db/models/fields/__init__.py:DateTimeField.get_prep_value\", \"django/db/models/functions/datetime.py:TruncBase.convert_value\", \"django/forms/utils.py:from_current_timezone\", \"django/http/response.py:HttpResponseBase.set_cookie\", \"django/templatetags/tz.py:do_timezone\", \"django/utils/dateformat.py:DateFormat.r\", \"django/views/decorators/http.py:condition\", \"django/views/generic/dates.py:DateMixin._make_date_lookup_arg\"]}\n```",
+    "subtype": "success",
+    "is_error": false,
+    "num_turns": 3,
+    "duration_ms": 13684,
+    "cost_usd": 0.0874678,
+    "usage": {
+      "input_tokens": 4,
+      "output_tokens": 1664,
+      "cache_creation_input_tokens": 6439,
+      "cache_read_input_tokens": 13299
+    },
+    "tool_calls": {
+      "Grep": 1,
+      "mcp__context-manager__context": 1
+    },
+    "mcp_status": "connected",
+    "api_key_source": "none",
+    "tools": [
+      "Bash",
+      "Edit",
+      "Glob",
+      "Grep",
+      "Read",
+      "Write",
+      "mcp__context-manager__context",
+      "mcp__context-manager__index_project"
+    ]
+  },
+  "score": {
+    "answered": true,
+    "recall": 1.0,
+    "precision": 1.0,
+    "missing": [],
+    "extra": [],
+    "edit_applied": null,
+    "stale": [],
+    "success": true
+  },
+  "failure": null
+}

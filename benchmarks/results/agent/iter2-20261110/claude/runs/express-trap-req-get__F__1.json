@@ -1,0 +1,56 @@
+{
+  "record_version": 2,
+  "run_id": "express-trap-req-get__F__1",
+  "task_id": "express-trap-req-get",
+  "repo": "express",
+  "category": "trap",
+  "arm": "F",
+  "rep": 1,
+  "model": "claude-opus-5-5",
+  "effort": "high",
+  "embedding": "local",
+  "index_copy_s": 0.014373042155057192,
+  "index_build_s": 23.08429770800285,
+  "wall_s": 14.760258459020406,
+  "transcript": {
+    "result_text": "Five functions in `lib/` call `req.get`. I found them with the code index and checked with a grep across `lib/`. I also looked for calls through `.call`, `.apply`, `.bind` or a variable alias, and found none.\n\n- **`lib/request.js`**: four request methods call it as `this.get(...)`:\n  - `range` reads `Range` (line 213).\n  - `protocol` reads `X-Forwarded-Proto` (line 318).\n  - `hostname` reads `X-Forwarded-Host`, then `Host` (lines 429 and 432).\n  - `xhr` reads `X-Requested-With` (line 507).\n- **`lib/response.js`**: `location` calls `this.req.get('Referrer')` (line 912).\n\nI left out these look-alike calls:\n- `this.get(...)` inside `lib/response.js`, which is `res.get`. The one exception is `this.req.get` above.\n- `res.get(...)` in `lib/request.js` at lines 478–479.\n- `this.app.get(...)` and `app.get(...)`.\n\n```json\n{\"answer\": [\"lib/request.js:range\", \"lib/request.js:protocol\", \"lib/request.js:hostname\", \"lib/request.js:xhr\", \"lib/response.js:location\"]}\n```",
+    "subtype": "success",
+    "is_error": false,
+    "num_turns": 4,
+    "duration_ms": 13387,
+    "cost_usd": 0.069581,
+    "usage": {
+      "input_tokens": 8,
+      "output_tokens": 954,
+      "cache_creation_input_tokens": 5499,
+      "cache_read_input_tokens": 32385
+    },
+    "tool_calls": {
+      "Grep": 2,
+      "mcp__context-manager__context": 1
+    },
+    "mcp_status": "connected",
+    "api_key_source": "none",
+    "tools": [
+      "Bash",
+      "Edit",
+      "Glob",
+      "Grep",
+      "Read",
+      "Write",
+      "mcp__context-manager__context",
+      "mcp__context-manager__index_project"
+    ]
+  },
+  "score": {
+    "answered": true,
+    "recall": 1.0,
+    "precision": 1.0,
+    "missing": [],
+    "extra": [],
+    "edit_applied": null,
+    "stale": [],
+    "success": true
+  },
+  "failure": null
+}

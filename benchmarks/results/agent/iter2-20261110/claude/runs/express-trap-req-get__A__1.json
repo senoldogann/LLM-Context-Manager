@@ -1,0 +1,54 @@
+{
+  "record_version": 2,
+  "run_id": "express-trap-req-get__A__1",
+  "task_id": "express-trap-req-get",
+  "repo": "express",
+  "category": "trap",
+  "arm": "A",
+  "rep": 1,
+  "model": "claude-opus-5-5",
+  "effort": "high",
+  "embedding": "local",
+  "index_copy_s": null,
+  "index_build_s": null,
+  "wall_s": 13.185017375042662,
+  "transcript": {
+    "result_text": "Six functions in `lib/` call `req.get` / `req.header`. I found them by searching `lib/` for every `.get(` and `.header(` call.\n\n**`lib/request.js`** (each calls `this.get(...)`, where `this` is the request):\n- `req.range` gets `Range`.\n- The `protocol` getter gets `X-Forwarded-Proto`.\n- The `hostname` getter gets `X-Forwarded-Host`, and falls back to `Host`.\n- The `xhr` getter gets `X-Requested-With`.\n\n**`lib/response.js`**:\n- `res.location` calls `this.req.get('Referrer')` when the URL is `'back'`.\n\n**`lib/request.js` again**:\n- `req.fresh` is the one indirect case. It never calls `req.get` by name, but it hands `this.headers` (the request headers) to `fresh()`. That is not a call to the method, so I left it out.\n\nI didn't count these, because they are not request calls:\n- `this.get(...)` inside `lib/response.js`, which is `res.get`.\n- `this.app.get(...)` and `app.get(...)`, which read app settings.\n- `res.get(...)` inside `req.fresh`.\n- `this.location(...).get('Location')` in `res.redirect`, which is `res.get`.\n\n```json\n{\"answer\": [\"lib/request.js:req.range\", \"lib/request.js:protocol\", \"lib/request.js:hostname\", \"lib/request.js:xhr\", \"lib/response.js:res.location\"]}\n```",
+    "subtype": "success",
+    "is_error": false,
+    "num_turns": 3,
+    "duration_ms": 11971,
+    "cost_usd": 0.0603948,
+    "usage": {
+      "input_tokens": 6,
+      "output_tokens": 984,
+      "cache_creation_input_tokens": 4554,
+      "cache_read_input_tokens": 21294
+    },
+    "tool_calls": {
+      "Bash": 1,
+      "Grep": 1
+    },
+    "mcp_status": "none",
+    "api_key_source": "none",
+    "tools": [
+      "Bash",
+      "Edit",
+      "Glob",
+      "Grep",
+      "Read",
+      "Write"
+    ]
+  },
+  "score": {
+    "answered": true,
+    "recall": 1.0,
+    "precision": 1.0,
+    "missing": [],
+    "extra": [],
+    "edit_applied": null,
+    "stale": [],
+    "success": true
+  },
+  "failure": null
+}
