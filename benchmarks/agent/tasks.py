@@ -1362,6 +1362,377 @@ TOKIO_MACRO_TASKS: tuple[Task, ...] = (
     ),
 )
 
+LARGE_REPO_HELD_OUT_TASKS: tuple[Task, ...] = (
+    Task(
+        id="django-callers-is-aware",
+        repo="django",
+        category="callers",
+        answer_kind="symbols",
+        question=(
+            "Which functions or methods in `django/` (not test files) call "
+            "`django.utils.timezone.is_aware` directly?"
+        ),
+        expected=(
+            sym("django/contrib/admin/filters.py", "__init__"),
+            sym("django/contrib/admin/templatetags/admin_list.py", "date_hierarchy"),
+            sym("django/contrib/humanize/templatetags/humanize.py", "string_for"),
+            sym("django/core/serializers/json.py", "default"),
+            sym("django/db/backends/base/operations.py", "adapt_timefield_value"),
+            *symbols(
+                "django/db/backends/mysql/operations.py",
+                ("adapt_datetimefield_value", "adapt_timefield_value"),
+            ),
+            *symbols(
+                "django/db/backends/oracle/operations.py",
+                ("adapt_datetimefield_value", "adapt_timefield_value"),
+            ),
+            *symbols(
+                "django/db/backends/sqlite3/operations.py",
+                (
+                    "adapt_datetimefield_value",
+                    "adapt_timefield_value",
+                    "convert_datetimefield_value",
+                ),
+            ),
+            *symbols("django/db/models/fields/__init__.py", ("_to_naive", "to_python")),
+            sym("django/forms/utils.py", "to_current_timezone"),
+            sym("django/utils/timesince.py", "timesince"),
+            sym("django/utils/timezone.py", "make_aware"),
+            sym("django/views/decorators/http.py", "condition"),
+        ),
+        edit=None,
+        notes=(
+            "Python ast (scripts/python_callers_gold.py): 20 call sites in 18 functions. Held "
+            "out (preregistration amendment 15)."
+        ),
+    ),
+    Task(
+        id="django-callers-make-hashable",
+        repo="django",
+        category="callers",
+        answer_kind="symbols",
+        question=(
+            "Which functions or methods in `django/` (not test files) call "
+            "`django.utils.hashable.make_hashable` directly?"
+        ),
+        expected=(
+            sym("django/contrib/admin/utils.py", "display_for_field"),
+            sym("django/core/exceptions.py", "__hash__"),
+            sym("django/db/models/base.py", "_get_FIELD_display"),
+            sym("django/db/models/expressions.py", "identity"),
+            sym("django/db/models/fields/reverse_related.py", "identity"),
+            sym("django/db/models/lookups.py", "__hash__"),
+            sym("django/db/models/query_utils.py", "identity"),
+            *symbols("django/db/models/sql/compiler.py", ("get_group_by", "get_order_by")),
+            sym("django/forms/models.py", "validate_unique"),
+            sym("django/utils/hashable.py", "make_hashable"),
+            sym("django/utils/tree.py", "__hash__"),
+        ),
+        edit=None,
+        notes=(
+            "Python ast (scripts/python_callers_gold.py): 16 call sites in 13 functions; two "
+            "same-named methods in one file are one item. Held out (preregistration amendment "
+            "15)."
+        ),
+    ),
+    Task(
+        id="django-trap-get-connection",
+        repo="django",
+        category="trap",
+        answer_kind="symbols",
+        question=(
+            "Which functions or methods in `django/` (not test files) call "
+            "`django.db.transaction.get_connection` directly? Calls to "
+            "`django.core.mail.get_connection` do not count."
+        ),
+        expected=(
+            *symbols(
+                "django/db/transaction.py",
+                (
+                    "get_autocommit",
+                    "set_autocommit",
+                    "commit",
+                    "rollback",
+                    "savepoint",
+                    "savepoint_rollback",
+                    "savepoint_commit",
+                    "clean_savepoints",
+                    "get_rollback",
+                    "set_rollback",
+                    "mark_for_rollback_on_error",
+                    "on_commit",
+                    "__enter__",
+                    "__exit__",
+                ),
+            ),
+        ),
+        edit=None,
+        notes=(
+            "Python ast: 14 calls in 14 functions, all in django/db/transaction.py; "
+            "django.core.mail.get_connection is another function with the same name (4 calls "
+            "elsewhere). Held out (preregistration amendment 15)."
+        ),
+    ),
+    Task(
+        id="django-impact-get-resolver",
+        repo="django",
+        category="files",
+        answer_kind="files",
+        question=(
+            "Which files in `django/` (not test files) call `django.urls.resolvers.get_resolver` "
+            "directly?"
+        ),
+        expected=(
+            path_item("django/conf/urls/i18n.py"),
+            path_item("django/contrib/admindocs/views.py"),
+            path_item("django/core/checks/urls.py"),
+            path_item("django/core/handlers/base.py"),
+            path_item("django/core/handlers/exception.py"),
+            path_item("django/urls/base.py"),
+            path_item("django/utils/autoreload.py"),
+        ),
+        edit=None,
+        notes=("Python ast: 17 call sites in 7 files. Held out (preregistration amendment 15)."),
+    ),
+    Task(
+        id="sklearn-callers-check-cv",
+        repo="scikit-learn",
+        category="callers",
+        answer_kind="symbols",
+        question=(
+            "Which functions or methods in `sklearn/` (not test files: `tests/` directories, "
+            "`test_*.py`) call `sklearn.model_selection.check_cv` directly?"
+        ),
+        expected=(
+            sym("sklearn/calibration.py", "fit"),
+            *symbols("sklearn/covariance/_graph_lasso.py", ("fit", "get_metadata_routing")),
+            sym("sklearn/ensemble/_stacking.py", "fit"),
+            sym("sklearn/feature_selection/_rfe.py", "fit"),
+            sym("sklearn/feature_selection/_sequential.py", "fit"),
+            *symbols(
+                "sklearn/linear_model/_coordinate_descent.py", ("fit", "get_metadata_routing")
+            ),
+            *symbols("sklearn/linear_model/_least_angle.py", ("fit", "get_metadata_routing")),
+            sym("sklearn/linear_model/_logistic.py", "fit"),
+            sym("sklearn/linear_model/_omp.py", "fit"),
+            sym("sklearn/model_selection/_classification_threshold.py", "_fit"),
+            sym("sklearn/model_selection/_search.py", "fit"),
+            sym("sklearn/model_selection/_search_successive_halving.py", "fit"),
+            *symbols(
+                "sklearn/model_selection/_validation.py",
+                (
+                    "cross_validate",
+                    "cross_val_predict",
+                    "permutation_test_score",
+                    "learning_curve",
+                    "validation_curve",
+                ),
+            ),
+        ),
+        edit=None,
+        notes=(
+            "Python ast with re-exports and relative imports (scripts/python_callers_gold.py): "
+            "20 call sites in 20 functions. Held out (preregistration amendment 15)."
+        ),
+    ),
+    Task(
+        id="sklearn-callers-gen-batches",
+        repo="scikit-learn",
+        category="callers",
+        answer_kind="symbols",
+        question=(
+            "Which functions or methods in `sklearn/` (not test files: `tests/` directories, "
+            "`test_*.py`) call `sklearn.utils.gen_batches` directly?"
+        ),
+        expected=(
+            sym("sklearn/cluster/_mean_shift.py", "estimate_bandwidth"),
+            sym("sklearn/cluster/_optics.py", "_compute_core_distances_"),
+            sym("sklearn/decomposition/_dict_learning.py", "fit"),
+            *symbols("sklearn/decomposition/_incremental_pca.py", ("fit", "transform")),
+            *symbols("sklearn/decomposition/_lda.py", ("partial_fit", "fit")),
+            sym("sklearn/decomposition/_nmf.py", "_fit_transform"),
+            sym("sklearn/ensemble/_iforest.py", "_compute_chunked_score_samples"),
+            *symbols(
+                "sklearn/metrics/pairwise.py",
+                ("_euclidean_distances_upcast", "pairwise_distances_chunked"),
+            ),
+            sym("sklearn/neural_network/_multilayer_perceptron.py", "_fit_stochastic"),
+        ),
+        edit=None,
+        notes=(
+            "Python ast with re-exports: 13 call sites in 12 functions. Held out "
+            "(preregistration amendment 15)."
+        ),
+    ),
+    Task(
+        id="sklearn-trap-shuffle",
+        repo="scikit-learn",
+        category="trap",
+        answer_kind="symbols",
+        question=(
+            "Which functions or methods in `sklearn/` (not test files: `tests/` directories, "
+            "`test_*.py`) call `sklearn.utils.shuffle` directly? Calls to "
+            "`numpy.random.shuffle`, `random.shuffle` or a random generator's `shuffle` method "
+            "do not count."
+        ),
+        expected=(
+            sym("sklearn/datasets/_kddcup99.py", "fetch_kddcup99"),
+            sym("sklearn/datasets/_rcv1.py", "fetch_rcv1"),
+            *symbols(
+                "sklearn/datasets/_samples_generator.py",
+                (
+                    "make_classification",
+                    "make_regression",
+                    "make_circles",
+                    "make_moons",
+                    "make_blobs",
+                    "make_gaussian_quantiles",
+                ),
+            ),
+            sym("sklearn/neural_network/_multilayer_perceptron.py", "_fit_stochastic"),
+            *symbols(
+                "sklearn/utils/estimator_checks.py",
+                (
+                    "check_sample_weights_invariance",
+                    "check_clustering",
+                    "check_classifiers_train",
+                    "check_outliers_train",
+                    "check_classifiers_classes",
+                    "check_outliers_fit_predict",
+                ),
+            ),
+        ),
+        edit=None,
+        notes=(
+            "Python ast with re-exports and aliases (util_shuffle, shuffle_): 15 call sites in "
+            "15 functions. Held out (preregistration amendment 15)."
+        ),
+    ),
+    Task(
+        id="sklearn-impact-get-config",
+        repo="scikit-learn",
+        category="files",
+        answer_kind="files",
+        question=(
+            "Which files in `sklearn/` (not test files: `tests/` directories, `test_*.py`) call "
+            "`sklearn.get_config` directly?"
+        ),
+        expected=(
+            path_item("sklearn/_config.py"),
+            path_item("sklearn/base.py"),
+            path_item("sklearn/metrics/_pairwise_distances_reduction/_dispatcher.py"),
+            path_item("sklearn/utils/_array_api.py"),
+            path_item("sklearn/utils/_chunking.py"),
+            path_item("sklearn/utils/_metadata_requests.py"),
+            path_item("sklearn/utils/_param_validation.py"),
+            path_item("sklearn/utils/_pprint.py"),
+            path_item("sklearn/utils/_set_output.py"),
+            path_item("sklearn/utils/parallel.py"),
+            path_item("sklearn/utils/validation.py"),
+        ),
+        edit=None,
+        notes=(
+            "Python ast with re-exports: 13 call sites in 11 files. Held out (preregistration "
+            "amendment 15)."
+        ),
+    ),
+    Task(
+        id="tokio-callers-new-unnamed",
+        repo="tokio",
+        category="callers",
+        answer_kind="symbols",
+        question=(
+            "Which functions or methods in the library crates of this workspace (`tokio`, "
+            "`tokio-util`, `tokio-stream`, `tokio-test`, `tokio-macros`; not tests, benches or "
+            "examples) call `SpawnMeta::new_unnamed` (defined in `tokio/src/util/trace.rs`) "
+            "directly?"
+        ),
+        expected=(
+            *symbols(
+                "tokio/src/runtime/blocking/pool.rs", ("spawn_blocking", "spawn_mandatory_blocking")
+            ),
+            *symbols("tokio/src/runtime/handle.rs", ("spawn", "block_on")),
+            sym("tokio/src/task/local.rs", "spawn_local"),
+            sym("tokio/src/task/spawn.rs", "spawn"),
+            *symbols("tokio/src/runtime/runtime.rs", ("spawn", "block_on")),
+            *symbols("tokio/src/runtime/local_runtime/runtime.rs", ("spawn_local", "block_on")),
+        ),
+        edit=None,
+        notes=(
+            "rg over the library crates, each call read in its enclosing function: 20 calls in "
+            "13 functions in 7 files (the free spawn_local and LocalSet::spawn_local in "
+            "task/local.rs are one item). Held out (preregistration amendment 15)."
+        ),
+    ),
+    Task(
+        id="tokio-callers-unbounded-channel",
+        repo="tokio",
+        category="callers",
+        answer_kind="symbols",
+        question=(
+            "Which functions or methods in the library crates of this workspace (`tokio`, "
+            "`tokio-util`, `tokio-stream`, `tokio-test`, `tokio-macros`; not tests, benches or "
+            "examples) call `tokio::sync::mpsc::unbounded_channel` directly?"
+        ),
+        expected=(
+            sym("tokio-test/src/io.rs", "new"),
+            sym("tokio-util/src/task/spawn_pinned.rs", "new_worker"),
+        ),
+        edit=None,
+        notes=(
+            "rg over the library crates: two library callers (tokio-test Inner::new, tokio-util "
+            "LocalWorkerHandle::new_worker); the other calls are in tests or doc comments. Held "
+            "out (preregistration amendment 15)."
+        ),
+    ),
+    Task(
+        id="tokio-trap-try-with",
+        repo="tokio",
+        category="trap",
+        answer_kind="symbols",
+        question=(
+            "Which functions or methods in the library crates of this workspace (`tokio`, "
+            "`tokio-util`, `tokio-stream`, `tokio-test`, `tokio-macros`; not tests, benches or "
+            "examples) call the `try_with` method of tokio's task-local `LocalKey` (defined in "
+            "`tokio/src/task/task_local.rs`) directly? Calls to `try_with` on standard-library "
+            "thread locals (`thread_local!` keys) do not count."
+        ),
+        expected=(sym("tokio/src/task/task_local.rs", "with"),),
+        edit=None,
+        notes=(
+            "Fourteen `try_with(` calls in the library crates; only `self.try_with(f)` in "
+            "LocalKey::with calls tokio's task-local method. The other thirteen are "
+            "std::thread::LocalKey::try_with on thread_local! keys (CONTEXT, CURRENT, "
+            "CURRENT_PARKER, and self.inner in task_local.rs). Held out (preregistration "
+            "amendment 15)."
+        ),
+    ),
+    Task(
+        id="tokio-impact-enter-runtime",
+        repo="tokio",
+        category="files",
+        answer_kind="files",
+        question=(
+            "Which files in the library crates of this workspace (`tokio`, `tokio-util`, "
+            "`tokio-stream`, `tokio-test`, `tokio-macros`; not tests, benches or examples) call "
+            "`enter_runtime` (defined in `tokio/src/runtime/context/runtime.rs`) directly?"
+        ),
+        expected=(
+            path_item("tokio/src/runtime/handle.rs"),
+            path_item("tokio/src/runtime/scheduler/current_thread/mod.rs"),
+            path_item("tokio/src/runtime/scheduler/multi_thread/mod.rs"),
+            path_item("tokio/src/runtime/scheduler/multi_thread/worker.rs"),
+            path_item("tokio/src/runtime/scheduler/multi_thread_alt/mod.rs"),
+            path_item("tokio/src/runtime/scheduler/multi_thread_alt/worker.rs"),
+        ),
+        edit=None,
+        notes=(
+            "rg over the library crates: 6 calls in 6 files. Held out (preregistration amendment "
+            "15)."
+        ),
+    ),
+)
+
 TASKS: tuple[Task, ...] = FLASK_TASKS + EXPRESS_TASKS + SERDE_TASKS
 # Ürün pilotlarının seçebildiği tüm görevler; `--tasks all` yalnız ön kayıtlı 24 görevdir.
 KNOWN_TASKS: tuple[Task, ...] = (
@@ -1375,4 +1746,5 @@ KNOWN_TASKS: tuple[Task, ...] = (
     + TOKIO_TASKS
     + TOKIO_HELD_OUT_TASKS
     + TOKIO_MACRO_TASKS
+    + LARGE_REPO_HELD_OUT_TASKS
 )

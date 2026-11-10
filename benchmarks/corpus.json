@@ -56,6 +56,17 @@
       ],
       "size_hint": "large",
       "notes": "Tokio async runtime workspace (tokio, tokio-util, tokio-stream, tokio-test, tokio-macros); about 112 k non-test lines of Rust, the second large repository for the agent pilots."
+    },
+    {
+      "name": "scikit-learn",
+      "url": "https://github.com/scikit-learn/scikit-learn.git",
+      "ref": "1.5.2",
+      "commit": "156ef141f3b270edb06c8ae9af37c55253c0aabe",
+      "languages": [
+        "python"
+      ],
+      "size_hint": "large",
+      "notes": "scikit-learn machine-learning library; about 186 k non-test lines of Python with heavy relative imports and re-exports; third large repository for the large-repository experiment."
     }
   ]
 }

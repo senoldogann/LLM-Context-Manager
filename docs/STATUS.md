@@ -263,10 +263,11 @@ What the transcripts show:
 
 ## Next steps, in order
 
-1. **The final result is in** (`final-l3-20261110/README.md`). What remains open is the
-   large-repository result of the pilots. Testing it needs a preregistered set of large-repository
-   caller tasks (the Django and Tokio pilot tasks are tuned) with several repetitions; it is not
-   started without the owner's decision and quota approval.
+1. **Large-repository experiment** (preregistration amendment 15, written before its run): twelve
+   held-out caller, trap and impact tasks on Django, Tokio and scikit-learn, plus six tuned
+   tasks reported apart; arms A and D, three repetitions, both agents. Its primary outcome is the
+   held-out D/A input-token ratio with a decision rule fixed in the amendment: a measured saving,
+   a measured cost, or no detectable difference, with the boundary by category and repository.
 2. **Unknown names and macro bodies: done in #21 and #22.** Tokio `async_op` went from B/A 2.28 to
    0.85 (Codex) and 1.02 to 0.50 (Claude); all 441 functions in Tokio's item-level macro bodies
    are now indexed.
