@@ -1,0 +1,53 @@
+{
+  "record_version": 2,
+  "run_id": "express-trap-sendfile-helper__A__1",
+  "task_id": "express-trap-sendfile-helper",
+  "repo": "express",
+  "category": "trap",
+  "arm": "A",
+  "rep": 1,
+  "model": "claude-opus-5-5",
+  "effort": "high",
+  "embedding": "local",
+  "index_copy_s": null,
+  "index_build_s": null,
+  "wall_s": 11.753708499949425,
+  "transcript": {
+    "result_text": "Two functions in `lib/` call the private `sendfile` helper (declared at `lib/response.js:1052`). Both are response methods, and both call the helper rather than being its target:\n\n1. **`res.sendFile`** (`lib/response.js:420`) calls `sendfile(res, file, opts, ...)` at line 450.\n2. **`res.sendfile`** (`lib/response.js:502`), the deprecated lowercase version, calls it at line 519. It's an anonymous function assigned to `res.sendfile` and later wrapped with `deprecate.function`, so I've named it by its property, `sendfile`.\n\nNo other file in `lib/` uses the helper, and the other mentions of `sendfile` in `response.js` are only in comments.\n\n```json\n{\"answer\": [\"lib/response.js:sendFile\", \"lib/response.js:sendfile\"]}\n```",
+    "subtype": "success",
+    "is_error": false,
+    "num_turns": 3,
+    "duration_ms": 11072,
+    "cost_usd": 0.0526264,
+    "usage": {
+      "input_tokens": 6,
+      "output_tokens": 684,
+      "cache_creation_input_tokens": 4360,
+      "cache_read_input_tokens": 20212
+    },
+    "tool_calls": {
+      "Grep": 2
+    },
+    "mcp_status": "none",
+    "api_key_source": "none",
+    "tools": [
+      "Bash",
+      "Edit",
+      "Glob",
+      "Grep",
+      "Read",
+      "Write"
+    ]
+  },
+  "score": {
+    "answered": true,
+    "recall": 1.0,
+    "precision": 1.0,
+    "missing": [],
+    "extra": [],
+    "edit_applied": null,
+    "stale": [],
+    "success": true
+  },
+  "failure": null
+}

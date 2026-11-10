@@ -1,0 +1,56 @@
+{
+  "record_version": 2,
+  "run_id": "serde-trap-effective-style__B__1",
+  "task_id": "serde-trap-effective-style",
+  "repo": "serde",
+  "category": "trap",
+  "arm": "B",
+  "rep": 1,
+  "model": "claude-opus-5-5",
+  "effort": "high",
+  "embedding": "local",
+  "index_copy_s": 0.02976970886811614,
+  "index_build_s": 93.0913077078294,
+  "wall_s": 10.003704959060997,
+  "transcript": {
+    "result_text": "Four functions call it, all in `serde_derive/src/ser.rs`:\n\n- `serialize_externally_tagged_variant` (call at line 522)\n- `serialize_internally_tagged_variant` (call at line 599)\n- `serialize_adjacently_tagged_variant` (call at line 664)\n- `serialize_untagged_variant` (call at line 775)\n\n`serde_derive/src/de.rs` also has `effective_style` calls (lines 1866 and 1911). They go to a separate function with the same name, defined in `de.rs` at line 3090, not the one in `ser.rs`, so I left them out.\n\n```json\n{\"answer\": [\"serde_derive/src/ser.rs:serialize_externally_tagged_variant\", \"serde_derive/src/ser.rs:serialize_internally_tagged_variant\", \"serde_derive/src/ser.rs:serialize_adjacently_tagged_variant\", \"serde_derive/src/ser.rs:serialize_untagged_variant\"]}\n```",
+    "subtype": "success",
+    "is_error": false,
+    "num_turns": 3,
+    "duration_ms": 9055,
+    "cost_usd": 0.050344799999999995,
+    "usage": {
+      "input_tokens": 6,
+      "output_tokens": 697,
+      "cache_creation_input_tokens": 4007,
+      "cache_read_input_tokens": 21624
+    },
+    "tool_calls": {
+      "Bash": 1,
+      "Grep": 1
+    },
+    "mcp_status": "connected",
+    "api_key_source": "none",
+    "tools": [
+      "Bash",
+      "Edit",
+      "Glob",
+      "Grep",
+      "Read",
+      "Write",
+      "mcp__context-manager__context",
+      "mcp__context-manager__index_project"
+    ]
+  },
+  "score": {
+    "answered": true,
+    "recall": 1.0,
+    "precision": 1.0,
+    "missing": [],
+    "extra": [],
+    "edit_applied": null,
+    "stale": [],
+    "success": true
+  },
+  "failure": null
+}

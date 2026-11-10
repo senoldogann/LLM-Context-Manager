@@ -1,0 +1,56 @@
+{
+  "record_version": 2,
+  "run_id": "django-callers-get-random-string__A__1",
+  "task_id": "django-callers-get-random-string",
+  "repo": "django",
+  "category": "callers",
+  "arm": "A",
+  "rep": 1,
+  "model": "claude-opus-5-5",
+  "effort": "high",
+  "embedding": "local",
+  "index_copy_s": null,
+  "index_build_s": null,
+  "wall_s": 14.710948624880984,
+  "transcript": {
+    "result_text": "Eight functions and methods in `django/` call `get_random_string` directly. I found them by searching for every use of the name and then checking which function or method each call sits in.\n\n- `django/core/files/storage/base.py`: `Storage.get_alternative_name`, which adds a random 7-character suffix to a file name.\n- `django/core/management/utils.py`: `get_random_secret_key`.\n- `django/db/backends/oracle/creation.py`: `DatabaseCreation._test_database_passwd`, which generates a 30-character password for the test database.\n- `django/middleware/csrf.py`: `_get_new_csrf_string`.\n- `django/contrib/auth/hashers.py`: three callers.\n  - `verify_password`\n  - `make_password`, for the unusable-password suffix.\n  - `BasePasswordHasher.salt`\n- `django/contrib/sessions/backends/base.py`: `SessionBase._get_new_session_key`, which calls it twice.\n\n`django/utils/crypto.py` only defines the function, so it isn't counted.\n\n```json\n{\"answer\": [\"django/core/files/storage/base.py:Storage.get_alternative_name\", \"django/core/management/utils.py:get_random_secret_key\", \"django/db/backends/oracle/creation.py:DatabaseCreation._test_database_passwd\", \"django/middleware/csrf.py:_get_new_csrf_string\", \"django/contrib/auth/hashers.py:verify_password\", \"django/contrib/auth/hashers.py:make_password\", \"django/contrib/auth/hashers.py:BasePasswordHasher.salt\", \"django/contrib/sessions/backends/base.py:SessionBase._get_new_session_key\"]}\n```",
+    "subtype": "success",
+    "is_error": false,
+    "num_turns": 4,
+    "duration_ms": 13840,
+    "cost_usd": 0.071252,
+    "usage": {
+      "input_tokens": 8,
+      "output_tokens": 1219,
+      "cache_creation_input_tokens": 5098,
+      "cache_read_input_tokens": 30280
+    },
+    "tool_calls": {
+      "Bash": 2,
+      "Grep": 1
+    },
+    "mcp_status": "none",
+    "api_key_source": "none",
+    "tools": [
+      "Bash",
+      "Edit",
+      "Glob",
+      "Grep",
+      "Read",
+      "Write"
+    ]
+  },
+  "score": {
+    "answered": true,
+    "recall": 0.8888888888888888,
+    "precision": 1.0,
+    "missing": [
+      "django/contrib/sessions/backends/base.py:_aget_new_session_key"
+    ],
+    "extra": [],
+    "edit_applied": null,
+    "stale": [],
+    "success": false
+  },
+  "failure": null
+}

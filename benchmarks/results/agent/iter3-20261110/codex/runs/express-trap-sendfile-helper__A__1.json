@@ -1,0 +1,49 @@
+{
+  "record_version": 2,
+  "run_id": "express-trap-sendfile-helper__A__1",
+  "task_id": "express-trap-sendfile-helper",
+  "repo": "express",
+  "category": "trap",
+  "arm": "A",
+  "rep": 1,
+  "model": "gpt-6-luna",
+  "effort": "high",
+  "embedding": "local",
+  "index_copy_s": null,
+  "index_build_s": null,
+  "wall_s": 14.966792207909748,
+  "transcript": {
+    "result_text": "The private helper is called only by `res.sendFile` and `res.sendfile`, which you excluded.\n\n```json\n{\"answer\": []}\n```",
+    "subtype": "completed",
+    "is_error": false,
+    "num_turns": null,
+    "duration_ms": 14967,
+    "cost_usd": null,
+    "usage": {
+      "input_tokens": 4312,
+      "output_tokens": 546,
+      "cache_creation_input_tokens": 0,
+      "cache_read_input_tokens": 27520
+    },
+    "tool_calls": {
+      "command_execution": 2
+    },
+    "mcp_status": "unreported",
+    "api_key_source": "chatgpt",
+    "tools": []
+  },
+  "score": {
+    "answered": true,
+    "recall": 0.0,
+    "precision": 0.0,
+    "missing": [
+      "lib/response.js:sendFile",
+      "lib/response.js:sendfile"
+    ],
+    "extra": [],
+    "edit_applied": null,
+    "stale": [],
+    "success": false
+  },
+  "failure": null
+}
