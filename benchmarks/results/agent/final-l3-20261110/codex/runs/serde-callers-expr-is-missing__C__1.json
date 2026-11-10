@@ -1,0 +1,48 @@
+{
+  "record_version": 3,
+  "run_id": "serde-callers-expr-is-missing__C__1",
+  "task_id": "serde-callers-expr-is-missing",
+  "repo": "serde",
+  "category": "callers",
+  "arm": "C",
+  "rep": 1,
+  "model": "gpt-6-luna",
+  "effort": "high",
+  "embedding": "local",
+  "index_copy_s": 0.04495691601186991,
+  "index_build_s": 120.714250250021,
+  "wall_s": 43.034618417033926,
+  "transcript": {
+    "result_text": "```json\n{\"answer\":[\"serde_derive/src/de.rs:deserialize_seq\",\"serde_derive/src/de.rs:deserialize_seq_in_place\",\"serde_derive/src/de.rs:deserialize_internally_tagged_variant\",\"serde_derive/src/de.rs:deserialize_untagged_variant\",\"serde_derive/src/de.rs:deserialize_externally_tagged_newtype_variant\",\"serde_derive/src/de.rs:deserialize_map\",\"serde_derive/src/de.rs:deserialize_map_in_place\"]}\n```",
+    "subtype": "completed",
+    "is_error": false,
+    "num_turns": null,
+    "duration_ms": 43035,
+    "cost_usd": null,
+    "usage": {
+      "input_tokens": 28122,
+      "output_tokens": 1557,
+      "cache_creation_input_tokens": 0,
+      "cache_read_input_tokens": 125696
+    },
+    "tool_calls": {
+      "command_execution": 2,
+      "mcp__context-manager__search_code": 2
+    },
+    "mcp_status": "unreported",
+    "api_key_source": "chatgpt",
+    "tools": []
+  },
+  "score": {
+    "answered": true,
+    "recall": 1.0,
+    "precision": 1.0,
+    "missing": [],
+    "extra": [],
+    "edit_applied": null,
+    "stale": [],
+    "success": true
+  },
+  "failure": null,
+  "hook": null
+}

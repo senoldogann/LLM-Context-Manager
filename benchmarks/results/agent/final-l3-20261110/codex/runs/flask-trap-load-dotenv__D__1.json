@@ -1,0 +1,48 @@
+{
+  "record_version": 3,
+  "run_id": "flask-trap-load-dotenv__D__1",
+  "task_id": "flask-trap-load-dotenv",
+  "repo": "flask",
+  "category": "trap",
+  "arm": "D",
+  "rep": 1,
+  "model": "gpt-6-luna",
+  "effort": "high",
+  "embedding": "local",
+  "index_copy_s": 0.05623312504030764,
+  "index_build_s": 68.18985991599038,
+  "wall_s": 20.633202916942537,
+  "transcript": {
+    "result_text": "The three functions that call Flask’s `load_dotenv` are:\n\n```json\n{\"answer\":[\"src/flask/cli.py:_env_file_callback\",\"src/flask/cli.py:FlaskGroup.make_context\",\"src/flask/app.py:Flask.run\"]}\n```",
+    "subtype": "completed",
+    "is_error": false,
+    "num_turns": null,
+    "duration_ms": 20633,
+    "cost_usd": null,
+    "usage": {
+      "input_tokens": 7875,
+      "output_tokens": 781,
+      "cache_creation_input_tokens": 0,
+      "cache_read_input_tokens": 39680
+    },
+    "tool_calls": {
+      "command_execution": 1,
+      "mcp__context-manager__context": 1
+    },
+    "mcp_status": "unreported",
+    "api_key_source": "chatgpt",
+    "tools": []
+  },
+  "score": {
+    "answered": true,
+    "recall": 1.0,
+    "precision": 1.0,
+    "missing": [],
+    "extra": [],
+    "edit_applied": null,
+    "stale": [],
+    "success": true
+  },
+  "failure": null,
+  "hook": null
+}

@@ -1,0 +1,47 @@
+{
+  "record_version": 3,
+  "run_id": "serde-locate-tag-conflict__C__2",
+  "task_id": "serde-locate-tag-conflict",
+  "repo": "serde",
+  "category": "locate",
+  "arm": "C",
+  "rep": 2,
+  "model": "gpt-6-luna",
+  "effort": "high",
+  "embedding": "local",
+  "index_copy_s": 0.036621541948989034,
+  "index_build_s": 120.714250250021,
+  "wall_s": 17.63338258303702,
+  "transcript": {
+    "result_text": "`check_internal_tag_field_name_conflict` reports the error.\n\n```json\n{\"answer\":[\"serde_derive/src/internals/check.rs:check_internal_tag_field_name_conflict\"]}\n```",
+    "subtype": "completed",
+    "is_error": false,
+    "num_turns": null,
+    "duration_ms": 17633,
+    "cost_usd": null,
+    "usage": {
+      "input_tokens": 17850,
+      "output_tokens": 524,
+      "cache_creation_input_tokens": 0,
+      "cache_read_input_tokens": 52224
+    },
+    "tool_calls": {
+      "mcp__context-manager__search_code": 3
+    },
+    "mcp_status": "unreported",
+    "api_key_source": "chatgpt",
+    "tools": []
+  },
+  "score": {
+    "answered": true,
+    "recall": 1.0,
+    "precision": 1.0,
+    "missing": [],
+    "extra": [],
+    "edit_applied": null,
+    "stale": [],
+    "success": true
+  },
+  "failure": null,
+  "hook": null
+}

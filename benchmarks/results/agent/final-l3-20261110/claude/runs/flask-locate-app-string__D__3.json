@@ -1,0 +1,56 @@
+{
+  "record_version": 3,
+  "run_id": "flask-locate-app-string__D__3",
+  "task_id": "flask-locate-app-string",
+  "repo": "flask",
+  "category": "locate",
+  "arm": "D",
+  "rep": 3,
+  "model": "claude-opus-5-5",
+  "effort": "high",
+  "embedding": "local",
+  "index_copy_s": 0.017765874974429607,
+  "index_build_s": 68.18985991599038,
+  "wall_s": 6.552054249914363,
+  "transcript": {
+    "result_text": "The function is `find_app_by_string` in `src/flask/cli.py:120`. Its signature is `(module: ModuleType, app_name: str) -> Flask`. It runs `ast.parse(app_name.strip(), mode=\"eval\")` on the string, then checks the result:\n- If the string is a plain name like `app`, it looks up that attribute on the module.\n- If it's a call like `create_app(debug=True)`, it reads the positional and keyword arguments with `ast.literal_eval`, so only literal values are allowed. It then calls the factory and returns the application object.\n\n```json\n{\"answer\": [\"src/flask/cli.py:find_app_by_string\"]}\n```",
+    "subtype": "success",
+    "is_error": false,
+    "num_turns": 2,
+    "duration_ms": 5705,
+    "cost_usd": 0.034492400000000006,
+    "usage": {
+      "input_tokens": 4,
+      "output_tokens": 355,
+      "cache_creation_input_tokens": 3090,
+      "cache_read_input_tokens": 13282
+    },
+    "tool_calls": {
+      "Grep": 1
+    },
+    "mcp_status": "connected",
+    "api_key_source": "none",
+    "tools": [
+      "Bash",
+      "Edit",
+      "Glob",
+      "Grep",
+      "Read",
+      "Write",
+      "mcp__context-manager__context",
+      "mcp__context-manager__index_project"
+    ]
+  },
+  "score": {
+    "answered": true,
+    "recall": 1.0,
+    "precision": 1.0,
+    "missing": [],
+    "extra": [],
+    "edit_applied": null,
+    "stale": [],
+    "success": true
+  },
+  "failure": null,
+  "hook": null
+}

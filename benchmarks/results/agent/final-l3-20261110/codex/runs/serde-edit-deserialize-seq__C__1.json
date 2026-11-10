@@ -1,0 +1,49 @@
+{
+  "record_version": 3,
+  "run_id": "serde-edit-deserialize-seq__C__1",
+  "task_id": "serde-edit-deserialize-seq",
+  "repo": "serde",
+  "category": "edit",
+  "arm": "C",
+  "rep": 1,
+  "model": "gpt-6-luna",
+  "effort": "high",
+  "embedding": "local",
+  "index_copy_s": 0.039026500191539526,
+  "index_build_s": 120.714250250021,
+  "wall_s": 41.34171508299187,
+  "transcript": {
+    "result_text": "Made the requested change in [de.rs](/var/folders/zg/ck3g8b9x3m14ly_tk4w7kntr0000gn/T/ccm-l3-dxkig40z/ws-serde-edit-deserialize-seq__C__1/serde_derive/src/de.rs). The functions that call `deserialize_seq` directly are:\n\n```json\n{\"answer\":[\"serde_derive/src/de.rs:deserialize_struct\",\"serde_derive/src/de.rs:deserialize_tuple_seq\"]}\n```",
+    "subtype": "completed",
+    "is_error": false,
+    "num_turns": null,
+    "duration_ms": 41342,
+    "cost_usd": null,
+    "usage": {
+      "input_tokens": 19934,
+      "output_tokens": 1460,
+      "cache_creation_input_tokens": 0,
+      "cache_read_input_tokens": 95104
+    },
+    "tool_calls": {
+      "command_execution": 4,
+      "file_change": 1,
+      "mcp__context-manager__search_code": 1
+    },
+    "mcp_status": "unreported",
+    "api_key_source": "chatgpt",
+    "tools": []
+  },
+  "score": {
+    "answered": true,
+    "recall": 1.0,
+    "precision": 1.0,
+    "missing": [],
+    "extra": [],
+    "edit_applied": true,
+    "stale": [],
+    "success": true
+  },
+  "failure": null,
+  "hook": null
+}

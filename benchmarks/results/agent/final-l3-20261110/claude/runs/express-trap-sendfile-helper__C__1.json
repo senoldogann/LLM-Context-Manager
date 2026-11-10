@@ -1,0 +1,55 @@
+{
+  "record_version": 3,
+  "run_id": "express-trap-sendfile-helper__C__1",
+  "task_id": "express-trap-sendfile-helper",
+  "repo": "express",
+  "category": "trap",
+  "arm": "C",
+  "rep": 1,
+  "model": "claude-opus-5-5",
+  "effort": "high",
+  "embedding": "local",
+  "index_copy_s": 0.029961750144138932,
+  "index_build_s": 11.781855958048254,
+  "wall_s": 16.998285749927163,
+  "transcript": {
+    "result_text": "Two functions in `lib/` call the private `sendfile` helper, which is declared at `lib/response.js:1052`. Both are in the same file:\n\n- **`res.sendFile`**, defined at `lib/response.js:420`, calls `sendfile(res, file, opts, ...)` at `lib/response.js:450`.\n- **`res.sendfile`**, the deprecated lowercase method defined at `lib/response.js:502`, calls the helper at `lib/response.js:519`. Line 530 then wraps this method in `deprecate.function`.\n\nNothing else in `lib/` calls the helper directly. `res.download` only reaches it indirectly, through `this.sendFile(...)` at line 599.\n\n```json\n{\"answer\": [\"lib/response.js:res.sendFile\", \"lib/response.js:res.sendfile\"]}\n```",
+    "subtype": "success",
+    "is_error": false,
+    "num_turns": 3,
+    "duration_ms": 12935,
+    "cost_usd": 0.0601178,
+    "usage": {
+      "input_tokens": 6,
+      "output_tokens": 854,
+      "cache_creation_input_tokens": 4846,
+      "cache_read_input_tokens": 21229
+    },
+    "tool_calls": {
+      "Grep": 2
+    },
+    "mcp_status": "connected",
+    "api_key_source": "none",
+    "tools": [
+      "Bash",
+      "Edit",
+      "Glob",
+      "Grep",
+      "Read",
+      "Write",
+      "mcp__context-manager__search_code"
+    ]
+  },
+  "score": {
+    "answered": true,
+    "recall": 1.0,
+    "precision": 1.0,
+    "missing": [],
+    "extra": [],
+    "edit_applied": null,
+    "stale": [],
+    "success": true
+  },
+  "failure": null,
+  "hook": null
+}

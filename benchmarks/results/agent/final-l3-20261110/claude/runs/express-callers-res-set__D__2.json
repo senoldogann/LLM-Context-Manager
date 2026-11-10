@@ -1,0 +1,57 @@
+{
+  "record_version": 3,
+  "run_id": "express-callers-res-set__D__2",
+  "task_id": "express-callers-res-set",
+  "repo": "express",
+  "category": "callers",
+  "arm": "D",
+  "rep": 2,
+  "model": "claude-opus-5-5",
+  "effort": "high",
+  "embedding": "local",
+  "index_copy_s": 0.018693832913413644,
+  "index_build_s": 11.781855958048254,
+  "wall_s": 14.91889641713351,
+  "transcript": {
+    "result_text": "Nine functions in `lib/response.js` and one in `lib/router/index.js` call `res.set` directly. I found them by searching `lib/` for every `.set(` and `.header(` call, then matching each line to the function that contains it.\n\n**`lib/response.js`** (all call `this.set(...)`):\n- `res.links`: sets `Link` (line 94).\n- `res.send`: sets `Content-Type`, `Content-Length` and `ETag` (lines 175–223).\n- `res.json`: sets `Content-Type` (line 276).\n- `res.jsonp`: sets `X-Content-Type-Options` and `Content-Type` (lines 320–332).\n- `res.type` / `res.contentType`: sets `Content-Type` (line 625). It's one function under two names, listed below as `contentType`.\n- `res.format`: sets `Content-Type` inside its body (line 699).\n- `res.attachment`: sets `Content-Disposition` (line 725).\n- `res.append`: sets the field it was given (line 756).\n- `res.location`: sets `Location` (line 924).\n- `res.redirect`: sets `Content-Length` (line 982).\n\n**`lib/router/index.js`**:\n- `sendOptionsResponse`: calls `res.set('Allow', body)` (line 654).\n\nI left out three things:\n- The call at line 798 is inside `res.set` itself.\n- The `this.set(...)` calls in `lib/application.js` are `app.set`.\n- Matches on `res.set(...)` in doc comments (lines 641 and 765–767) aren't real calls.\n\nA search for bracket access (`res['set']`) and `set.call` / `set.apply` turned up nothing more.\n\n```json\n{\"answer\": [\"lib/response.js:links\", \"lib/response.js:send\", \"lib/response.js:json\", \"lib/response.js:jsonp\", \"lib/response.js:contentType\", \"lib/response.js:format\", \"lib/response.js:attachment\", \"lib/response.js:append\", \"lib/response.js:location\", \"lib/response.js:redirect\", \"lib/router/index.js:sendOptionsResponse\"]}\n```",
+    "subtype": "success",
+    "is_error": false,
+    "num_turns": 3,
+    "duration_ms": 13629,
+    "cost_usd": 0.0688036,
+    "usage": {
+      "input_tokens": 6,
+      "output_tokens": 1242,
+      "cache_creation_input_tokens": 4929,
+      "cache_read_input_tokens": 22538
+    },
+    "tool_calls": {
+      "Bash": 1,
+      "Grep": 1
+    },
+    "mcp_status": "connected",
+    "api_key_source": "none",
+    "tools": [
+      "Bash",
+      "Edit",
+      "Glob",
+      "Grep",
+      "Read",
+      "Write",
+      "mcp__context-manager__context",
+      "mcp__context-manager__index_project"
+    ]
+  },
+  "score": {
+    "answered": true,
+    "recall": 1.0,
+    "precision": 1.0,
+    "missing": [],
+    "extra": [],
+    "edit_applied": null,
+    "stale": [],
+    "success": true
+  },
+  "failure": null,
+  "hook": null
+}

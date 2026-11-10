@@ -1,0 +1,55 @@
+{
+  "record_version": 3,
+  "run_id": "serde-trap-deserialize-struct__A__3",
+  "task_id": "serde-trap-deserialize-struct",
+  "repo": "serde",
+  "category": "trap",
+  "arm": "A",
+  "rep": 3,
+  "model": "claude-opus-5-5",
+  "effort": "high",
+  "embedding": "local",
+  "index_copy_s": null,
+  "index_build_s": null,
+  "wall_s": 13.702019250020385,
+  "transcript": {
+    "result_text": "Four functions in `serde_derive/src/de.rs` call `deserialize_struct`, and nothing outside that file does:\n\n- `deserialize_body` calls it at line 287, for the `Data::Struct(Style::Struct, …)` case.\n- `deserialize_externally_tagged_variant` calls it at line 1843.\n- `deserialize_internally_tagged_variant` calls it at line 1886.\n- `deserialize_untagged_variant` calls it at line 1942.\n\nI left out three matches at lines 1066, 1202 and 1730. Those are `_serde::Deserializer::deserialize_struct(...)` inside `quote!` blocks, so they are generated code, not calls to this function.\n\n```json\n{\"answer\": [\"serde_derive/src/de.rs:deserialize_body\", \"serde_derive/src/de.rs:deserialize_externally_tagged_variant\", \"serde_derive/src/de.rs:deserialize_internally_tagged_variant\", \"serde_derive/src/de.rs:deserialize_untagged_variant\"]}\n```",
+    "subtype": "success",
+    "is_error": false,
+    "num_turns": 4,
+    "duration_ms": 12994,
+    "cost_usd": 0.06837760000000001,
+    "usage": {
+      "input_tokens": 8,
+      "output_tokens": 934,
+      "cache_creation_input_tokens": 5478,
+      "cache_read_input_tokens": 29208
+    },
+    "tool_calls": {
+      "Bash": 2,
+      "Grep": 1
+    },
+    "mcp_status": "none",
+    "api_key_source": "none",
+    "tools": [
+      "Bash",
+      "Edit",
+      "Glob",
+      "Grep",
+      "Read",
+      "Write"
+    ]
+  },
+  "score": {
+    "answered": true,
+    "recall": 1.0,
+    "precision": 1.0,
+    "missing": [],
+    "extra": [],
+    "edit_applied": null,
+    "stale": [],
+    "success": true
+  },
+  "failure": null,
+  "hook": null
+}

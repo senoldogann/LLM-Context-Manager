@@ -1,0 +1,20 @@
+diff --git a/src/flask/sansio/scaffold.py b/src/flask/sansio/scaffold.py
+index 69e33a0..09bb211 100644
+--- a/src/flask/sansio/scaffold.py
++++ b/src/flask/sansio/scaffold.py
+@@ -330,7 +330,14 @@ class Scaffold:
+ 
+         .. versionadded:: 2.0
+         """
+-        return self._method_route("PATCH", rule, options)
++        return self.route(rule, methods=["PATCH"], **options)
++
++    @setupmethod
++    def options_route(
++        self, rule: str, **options: t.Any
++    ) -> t.Callable[[T_route], T_route]:
++        """Shortcut for :meth:`route` with ``methods=["OPTIONS"]``."""
++        return self._method_route("OPTIONS", rule, options)
+ 
+     @setupmethod
+     def route(self, rule: str, **options: t.Any) -> t.Callable[[T_route], T_route]:

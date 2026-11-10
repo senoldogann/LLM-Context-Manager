@@ -1,0 +1,57 @@
+{
+  "record_version": 3,
+  "run_id": "flask-callers-ensure-sync__D__2",
+  "task_id": "flask-callers-ensure-sync",
+  "repo": "flask",
+  "category": "callers",
+  "arm": "D",
+  "rep": 2,
+  "model": "claude-opus-5-5",
+  "effort": "high",
+  "embedding": "local",
+  "index_copy_s": 0.045396583154797554,
+  "index_build_s": 68.18985991599038,
+  "wall_s": 22.878628958947957,
+  "transcript": {
+    "result_text": "I found 14 functions and methods in `src/flask/` that call `ensure_sync(...)` directly:\n\n**`src/flask/app.py`** (`Flask` methods)\n- `update_template_context` (line 493)\n- `handle_http_exception` (line 740)\n- `handle_user_exception` (line 772)\n- `handle_exception` (line 823)\n- `dispatch_request` (line 865)\n- `preprocess_request` (line 1253)\n- `process_response` (lines 1276, 1281)\n- `do_teardown_request` (line 1318)\n- `do_teardown_appcontext` (line 1344)\n\n**`src/flask/views.py`**\n- `View.as_view`: the call is inside the nested `view` closures (lines 110, 116).\n- `MethodView.dispatch_request` (line 191)\n\n**`src/flask/ctx.py`**\n- `copy_current_request_context`: the call is inside the nested `wrapper` (line 191).\n\nI left out code that only passes the method along, as in `signal.send(..., _async_wrapper=app.ensure_sync)`. Signals may use it later, but these functions never call it themselves. That covers:\n- `helpers.flash`\n- `templating._render` and `templating._stream`\n- `Flask.full_dispatch_request` and `Flask.finalize_request`\n- `AppContext.push` and `AppContext.pop`\n\n`Flask.handle_exception`, `do_teardown_request` and `do_teardown_appcontext` do this too, but they're already in the list because they also make direct calls.\n\n```json\n{\"answer\": [\"src/flask/app.py:Flask.update_template_context\", \"src/flask/app.py:Flask.handle_http_exception\", \"src/flask/app.py:Flask.handle_user_exception\", \"src/flask/app.py:Flask.handle_exception\", \"src/flask/app.py:Flask.dispatch_request\", \"src/flask/app.py:Flask.preprocess_request\", \"src/flask/app.py:Flask.process_response\", \"src/flask/app.py:Flask.do_teardown_request\", \"src/flask/app.py:Flask.do_teardown_appcontext\", \"src/flask/views.py:View.as_view\", \"src/flask/views.py:MethodView.dispatch_request\", \"src/flask/ctx.py:copy_current_request_context\"]}\n```",
+    "subtype": "success",
+    "is_error": false,
+    "num_turns": 5,
+    "duration_ms": 21737,
+    "cost_usd": 0.0991174,
+    "usage": {
+      "input_tokens": 10,
+      "output_tokens": 1723,
+      "cache_creation_input_tokens": 6922,
+      "cache_read_input_tokens": 46207
+    },
+    "tool_calls": {
+      "Bash": 3,
+      "Grep": 1
+    },
+    "mcp_status": "connected",
+    "api_key_source": "none",
+    "tools": [
+      "Bash",
+      "Edit",
+      "Glob",
+      "Grep",
+      "Read",
+      "Write",
+      "mcp__context-manager__context",
+      "mcp__context-manager__index_project"
+    ]
+  },
+  "score": {
+    "answered": true,
+    "recall": 1.0,
+    "precision": 1.0,
+    "missing": [],
+    "extra": [],
+    "edit_applied": null,
+    "stale": [],
+    "success": true
+  },
+  "failure": null,
+  "hook": null
+}

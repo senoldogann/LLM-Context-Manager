@@ -1,0 +1,48 @@
+{
+  "record_version": 3,
+  "run_id": "express-locate-trust__D__3",
+  "task_id": "express-locate-trust",
+  "repo": "express",
+  "category": "locate",
+  "arm": "D",
+  "rep": 3,
+  "model": "gpt-6-luna",
+  "effort": "high",
+  "embedding": "local",
+  "index_copy_s": 0.006094458047300577,
+  "index_build_s": 11.781855958048254,
+  "wall_s": 11.890898042125627,
+  "transcript": {
+    "result_text": "`compileTrust` in [lib/utils.js](/var/folders/zg/ck3g8b9x3m14ly_tk4w7kntr0000gn/T/ccm-l3-oyuvre62/ws-express-locate-trust__D__3/lib/utils.js) converts the setting into a trust function.\n\n```json\n{\"answer\":[\"lib/utils.js:compileTrust\"]}\n```",
+    "subtype": "completed",
+    "is_error": false,
+    "num_turns": null,
+    "duration_ms": 11891,
+    "cost_usd": null,
+    "usage": {
+      "input_tokens": 4139,
+      "output_tokens": 303,
+      "cache_creation_input_tokens": 0,
+      "cache_read_input_tokens": 28928
+    },
+    "tool_calls": {
+      "command_execution": 1,
+      "mcp__context-manager__context": 1
+    },
+    "mcp_status": "unreported",
+    "api_key_source": "chatgpt",
+    "tools": []
+  },
+  "score": {
+    "answered": true,
+    "recall": 1.0,
+    "precision": 1.0,
+    "missing": [],
+    "extra": [],
+    "edit_applied": null,
+    "stale": [],
+    "success": true
+  },
+  "failure": null,
+  "hook": null
+}

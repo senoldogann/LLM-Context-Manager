@@ -1,0 +1,56 @@
+{
+  "record_version": 3,
+  "run_id": "express-trap-res-send__C__1",
+  "task_id": "express-trap-res-send",
+  "repo": "express",
+  "category": "trap",
+  "arm": "C",
+  "rep": 1,
+  "model": "claude-opus-5-5",
+  "effort": "high",
+  "embedding": "local",
+  "index_copy_s": 0.02539662504568696,
+  "index_build_s": 11.781855958048254,
+  "wall_s": 19.283583583077416,
+  "transcript": {
+    "result_text": "Five functions in `lib/` call the response method `res.send`. I found them by searching `lib/` for `.send(` and for indirect forms like `send.call` and `send.apply`, then checking which function contains each match.\n\n- **`lib/response.js` – `res.json`**: ends with `return this.send(body)` (line 279).\n- **`lib/response.js` – `res.jsonp`**: ends with `return this.send(body)` (line 352).\n- **`lib/response.js` – `res.sendStatus`**: ends with `return this.send(body)` (line 376).\n- **`lib/response.js` – `res.render`**: its default `done` callback calls `self.send(str)` (line 1044), so it is credited to `res.render`, the named function that contains it.\n- **`lib/router/index.js` – `sendOptionsResponse`**: calls `res.send(body)` (line 655).\n\nI left out these matches:\n- Calls to the `send` package in `res.sendFile` and `res.sendfile` (lines 447 and 516).\n- `res.send` itself, which is the definition rather than a call.\n- Usage examples inside doc comments.\n\n```json\n{\"answer\": [\"lib/response.js:res.json\", \"lib/response.js:res.jsonp\", \"lib/response.js:res.sendStatus\", \"lib/response.js:res.render\", \"lib/router/index.js:sendOptionsResponse\"]}\n```",
+    "subtype": "success",
+    "is_error": false,
+    "num_turns": 5,
+    "duration_ms": 17110,
+    "cost_usd": 0.0776958,
+    "usage": {
+      "input_tokens": 10,
+      "output_tokens": 1203,
+      "cache_creation_input_tokens": 5628,
+      "cache_read_input_tokens": 42859
+    },
+    "tool_calls": {
+      "Bash": 3,
+      "Grep": 1
+    },
+    "mcp_status": "connected",
+    "api_key_source": "none",
+    "tools": [
+      "Bash",
+      "Edit",
+      "Glob",
+      "Grep",
+      "Read",
+      "Write",
+      "mcp__context-manager__search_code"
+    ]
+  },
+  "score": {
+    "answered": true,
+    "recall": 1.0,
+    "precision": 1.0,
+    "missing": [],
+    "extra": [],
+    "edit_applied": null,
+    "stale": [],
+    "success": true
+  },
+  "failure": null,
+  "hook": null
+}

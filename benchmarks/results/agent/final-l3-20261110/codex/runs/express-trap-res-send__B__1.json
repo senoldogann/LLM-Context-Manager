@@ -1,0 +1,49 @@
+{
+  "record_version": 3,
+  "run_id": "express-trap-res-send__B__1",
+  "task_id": "express-trap-res-send",
+  "repo": "express",
+  "category": "trap",
+  "arm": "B",
+  "rep": 1,
+  "model": "gpt-6-luna",
+  "effort": "high",
+  "embedding": "local",
+  "index_copy_s": 0.03767279093153775,
+  "index_build_s": 11.781855958048254,
+  "wall_s": 20.25457516615279,
+  "transcript": {
+    "result_text": "```json\n{\"answer\":[\"lib/response.js:json\",\"lib/response.js:jsonp\",\"lib/response.js:sendStatus\",\"lib/response.js:render\",\"lib/router/index.js:sendOptionsResponse\"]}\n```",
+    "subtype": "completed",
+    "is_error": false,
+    "num_turns": null,
+    "duration_ms": 20255,
+    "cost_usd": null,
+    "usage": {
+      "input_tokens": 13465,
+      "output_tokens": 687,
+      "cache_creation_input_tokens": 0,
+      "cache_read_input_tokens": 53376
+    },
+    "tool_calls": {
+      "mcp__context-manager__explain": 1,
+      "mcp__context-manager__find_usages": 1,
+      "mcp__context-manager__map": 1
+    },
+    "mcp_status": "unreported",
+    "api_key_source": "chatgpt",
+    "tools": []
+  },
+  "score": {
+    "answered": true,
+    "recall": 1.0,
+    "precision": 1.0,
+    "missing": [],
+    "extra": [],
+    "edit_applied": null,
+    "stale": [],
+    "success": true
+  },
+  "failure": null,
+  "hook": null
+}

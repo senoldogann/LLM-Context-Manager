@@ -1,0 +1,65 @@
+{
+  "record_version": 3,
+  "run_id": "express-trap-res-send__B__1",
+  "task_id": "express-trap-res-send",
+  "repo": "express",
+  "category": "trap",
+  "arm": "B",
+  "rep": 1,
+  "model": "claude-opus-5-5",
+  "effort": "high",
+  "embedding": "local",
+  "index_copy_s": 0.01125904219225049,
+  "index_build_s": 11.781855958048254,
+  "wall_s": 19.024289540946484,
+  "transcript": {
+    "result_text": "Five functions in `lib/` call `res.send`. I found them by searching `lib/` for every occurrence of `send` and checking which function holds each call:\n\n- **`lib/response.js`**\n  - `res.json` calls `this.send(body)` (line 279).\n  - `res.jsonp` calls `this.send(body)` (line 352).\n  - `res.sendStatus` calls `this.send(body)` (line 376).\n  - `res.render` calls `self.send(str)` (line 1044). The call sits inside its default `done` callback, so the containing function is `render`.\n- **`lib/router/index.js`**\n  - `sendOptionsResponse` calls `res.send(body)` (line 655).\n\nI left out the `send(req, …)` calls in `sendFile` (line 447) and `sendfile` (line 516), because those call the `send` package. I also left out matches that only appear in comments, such as the examples in `lib/router/route.js` and in the `format` documentation.\n\n```json\n{\"answer\": [\"lib/response.js:res.json\", \"lib/response.js:res.jsonp\", \"lib/response.js:res.sendStatus\", \"lib/response.js:res.render\", \"lib/router/index.js:sendOptionsResponse\"]}\n```",
+    "subtype": "success",
+    "is_error": false,
+    "num_turns": 5,
+    "duration_ms": 17463,
+    "cost_usd": 0.07486340000000001,
+    "usage": {
+      "input_tokens": 10,
+      "output_tokens": 1120,
+      "cache_creation_input_tokens": 5278,
+      "cache_read_input_tokens": 50997
+    },
+    "tool_calls": {
+      "Bash": 3,
+      "Grep": 1
+    },
+    "mcp_status": "connected",
+    "api_key_source": "none",
+    "tools": [
+      "Bash",
+      "Edit",
+      "Glob",
+      "Grep",
+      "Read",
+      "Write",
+      "mcp__context-manager__diff_context",
+      "mcp__context-manager__explain",
+      "mcp__context-manager__find_nodes",
+      "mcp__context-manager__find_usages",
+      "mcp__context-manager__impact_of_change",
+      "mcp__context-manager__index_now",
+      "mcp__context-manager__index_project",
+      "mcp__context-manager__map",
+      "mcp__context-manager__search_code",
+      "mcp__context-manager__trace_call_chain"
+    ]
+  },
+  "score": {
+    "answered": true,
+    "recall": 1.0,
+    "precision": 1.0,
+    "missing": [],
+    "extra": [],
+    "edit_applied": null,
+    "stale": [],
+    "success": true
+  },
+  "failure": null,
+  "hook": null
+}

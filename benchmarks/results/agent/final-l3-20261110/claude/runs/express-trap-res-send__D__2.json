@@ -1,0 +1,57 @@
+{
+  "record_version": 3,
+  "run_id": "express-trap-res-send__D__2",
+  "task_id": "express-trap-res-send",
+  "repo": "express",
+  "category": "trap",
+  "arm": "D",
+  "rep": 2,
+  "model": "claude-opus-5-5",
+  "effort": "high",
+  "embedding": "local",
+  "index_copy_s": 0.029216541908681393,
+  "index_build_s": 11.781855958048254,
+  "wall_s": 20.16890862514265,
+  "transcript": {
+    "result_text": "Five functions in `lib/` call `res.send`:\n\n- **`lib/response.js`**:\n  - `res.json` calls `this.send(body)` (line 279).\n  - `res.jsonp` calls `this.send(body)` (line 352).\n  - `res.sendStatus` calls `this.send(body)` (line 376).\n  - `res.render` calls `self.send(str)` (line 1044). The call sits inside its default `done` callback, so it counts under `render`.\n- **`lib/router/index.js`**:\n  - `sendOptionsResponse` calls `res.send(body)` (line 655).\n\nI left out the calls to the `send` package in `res.sendFile` (line 447) and `res.sendfile` (line 516). Every other `res.send` match in `lib/` is in a comment or deprecation message.\n\n```json\n{\"answer\": [\"lib/response.js:res.json\", \"lib/response.js:res.jsonp\", \"lib/response.js:res.sendStatus\", \"lib/response.js:res.render\", \"lib/router/index.js:sendOptionsResponse\"]}\n```",
+    "subtype": "success",
+    "is_error": false,
+    "num_turns": 4,
+    "duration_ms": 13928,
+    "cost_usd": 0.0665096,
+    "usage": {
+      "input_tokens": 8,
+      "output_tokens": 931,
+      "cache_creation_input_tokens": 5177,
+      "cache_read_input_tokens": 32208
+    },
+    "tool_calls": {
+      "Bash": 2,
+      "Grep": 1
+    },
+    "mcp_status": "connected",
+    "api_key_source": "none",
+    "tools": [
+      "Bash",
+      "Edit",
+      "Glob",
+      "Grep",
+      "Read",
+      "Write",
+      "mcp__context-manager__context",
+      "mcp__context-manager__index_project"
+    ]
+  },
+  "score": {
+    "answered": true,
+    "recall": 1.0,
+    "precision": 1.0,
+    "missing": [],
+    "extra": [],
+    "edit_applied": null,
+    "stale": [],
+    "success": true
+  },
+  "failure": null,
+  "hook": null
+}

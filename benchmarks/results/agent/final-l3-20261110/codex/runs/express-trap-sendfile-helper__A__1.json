@@ -1,0 +1,50 @@
+{
+  "record_version": 3,
+  "run_id": "express-trap-sendfile-helper__A__1",
+  "task_id": "express-trap-sendfile-helper",
+  "repo": "express",
+  "category": "trap",
+  "arm": "A",
+  "rep": 1,
+  "model": "gpt-6-luna",
+  "effort": "high",
+  "embedding": "local",
+  "index_copy_s": null,
+  "index_build_s": null,
+  "wall_s": 15.881461791926995,
+  "transcript": {
+    "result_text": "The only direct calls are inside the excluded methods `res.sendFile` and `res.sendfile`, so there are no other functions to list.\n\n```json\n{\"answer\": []}\n```",
+    "subtype": "completed",
+    "is_error": false,
+    "num_turns": null,
+    "duration_ms": 15881,
+    "cost_usd": null,
+    "usage": {
+      "input_tokens": 4089,
+      "output_tokens": 502,
+      "cache_creation_input_tokens": 0,
+      "cache_read_input_tokens": 27392
+    },
+    "tool_calls": {
+      "command_execution": 2
+    },
+    "mcp_status": "unreported",
+    "api_key_source": "chatgpt",
+    "tools": []
+  },
+  "score": {
+    "answered": true,
+    "recall": 0.0,
+    "precision": 0.0,
+    "missing": [
+      "lib/response.js:sendFile",
+      "lib/response.js:sendfile"
+    ],
+    "extra": [],
+    "edit_applied": null,
+    "stale": [],
+    "success": false
+  },
+  "failure": null,
+  "hook": null
+}

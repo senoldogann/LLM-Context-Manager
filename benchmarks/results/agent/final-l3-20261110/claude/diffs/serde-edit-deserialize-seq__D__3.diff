@@ -1,0 +1,28 @@
+diff --git a/serde_derive/src/de.rs b/serde_derive/src/de.rs
+index 4967e35..e6d8447 100644
+--- a/serde_derive/src/de.rs
++++ b/serde_derive/src/de.rs
+@@ -517,7 +517,7 @@ fn deserialize_tuple(
+         _ => None,
+     };
+ 
+-    let visit_seq = Stmts(deserialize_seq(
++    let visit_seq = Stmts(deserialize_tuple_seq(
+         &type_path, params, fields, false, cattrs, expecting,
+     ));
+ 
+@@ -3237,3 +3237,14 @@ fn split_with_de_lifetime(
+     let (_, ty_generics, where_clause) = params.generics.split_for_impl();
+     (de_impl_generics, de_ty_generics, ty_generics, where_clause)
+ }
++
++fn deserialize_tuple_seq(
++    type_path: &TokenStream,
++    params: &Parameters,
++    fields: &[Field],
++    is_struct: bool,
++    cattrs: &attr::Container,
++    expecting: &str,
++) -> Fragment {
++    deserialize_seq(type_path, params, fields, is_struct, cattrs, expecting)
++}
