@@ -1,0 +1,55 @@
+{
+  "record_version": 3,
+  "run_id": "django-trap-urlencode__A__3",
+  "task_id": "django-trap-urlencode",
+  "repo": "django",
+  "category": "trap",
+  "arm": "A",
+  "rep": 3,
+  "model": "claude-opus-5-5",
+  "effort": "high",
+  "embedding": "local",
+  "index_copy_s": null,
+  "index_build_s": null,
+  "wall_s": 21.035854417132214,
+  "transcript": {
+    "result_text": "I found eight places in `django/` that call `django.utils.http.urlencode` directly. I started from every `urlencode` hit in `django/`, then checked each file's imports to see which `urlencode` it actually uses:\n\n- **Imported from `django.utils.http`:**\n  - `django/test/client.py`\n  - `django/contrib/admin/views/main.py`\n  - `django/contrib/admin/options.py`\n  - `django/contrib/admin/templatetags/admin_urls.py`\n  - `django/contrib/admin/widgets.py`\n\n  No file imports the module and calls it as `http.urlencode`.\n- **Excluded, because they use the standard-library function:**\n  - `django/test/testcases.py` imports it from `urllib.parse`.\n  - `django/utils/html.py` imports it from `urllib.parse`.\n  - `django/http/request.py` imports it from `urllib.parse`. Its `QueryDict.urlencode` uses that version too.\n  - `django/utils/http.py` imports it from `urllib.parse` as `original_urlencode`. That module defines the function but never calls it.\n- **Excluded, because they aren't the function:**\n  - The `request.GET.urlencode()`, `querystring.urlencode()` and `query_dict.urlencode()` calls are the `QueryDict` method.\n  - The `urlencode` in `defaultfilters.py` and the `|urlencode` uses in templates are the template filter.\n\n```json\n{\"answer\": [\"django/test/client.py:RequestFactory.__init__\", \"django/test/client.py:RequestFactory.generic\", \"django/test/client.py:AsyncRequestFactory.generic\", \"django/contrib/admin/views/main.py:ChangeList.get_query_string\", \"django/contrib/admin/options.py:ModelAdmin.get_preserved_filters\", \"django/contrib/admin/templatetags/admin_urls.py:add_preserved_filters\", \"django/contrib/admin/widgets.py:ForeignKeyRawIdWidget.get_context\"]}\n```",
+    "subtype": "success",
+    "is_error": false,
+    "num_turns": 5,
+    "duration_ms": 20198,
+    "cost_usd": 0.108927,
+    "usage": {
+      "input_tokens": 10,
+      "output_tokens": 1576,
+      "cache_creation_input_tokens": 8519,
+      "cache_read_input_tokens": 46075
+    },
+    "tool_calls": {
+      "Bash": 2,
+      "Grep": 2
+    },
+    "mcp_status": "none",
+    "api_key_source": "none",
+    "tools": [
+      "Bash",
+      "Edit",
+      "Glob",
+      "Grep",
+      "Read",
+      "Write"
+    ]
+  },
+  "score": {
+    "answered": true,
+    "recall": 1.0,
+    "precision": 1.0,
+    "missing": [],
+    "extra": [],
+    "edit_applied": null,
+    "stale": [],
+    "success": true
+  },
+  "failure": null,
+  "hook": null
+}

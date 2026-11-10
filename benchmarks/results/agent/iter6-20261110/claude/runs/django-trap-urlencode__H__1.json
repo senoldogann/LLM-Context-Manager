@@ -1,0 +1,61 @@
+{
+  "record_version": 3,
+  "run_id": "django-trap-urlencode__H__1",
+  "task_id": "django-trap-urlencode",
+  "repo": "django",
+  "category": "trap",
+  "arm": "H",
+  "rep": 1,
+  "model": "claude-opus-5-5",
+  "effort": "high",
+  "embedding": "local",
+  "index_copy_s": 0.5513706251513213,
+  "index_build_s": 1230.484017916955,
+  "wall_s": 20.087001000065356,
+  "transcript": {
+    "result_text": "Seven functions or methods in `django/` call `django.utils.http.urlencode` directly. Each comes from a module that imports it with `from django.utils.http import urlencode`, so the call is the Django version:\n\n- `django/test/client.py`: `RequestFactory.__init__` (line 399), `RequestFactory.generic` (line 669) and `AsyncRequestFactory.generic` (line 769)\n- `django/contrib/admin/widgets.py`: `ForeignKeyRawIdWidget.get_context` (line 162)\n- `django/contrib/admin/views/main.py`: `ChangeList.get_query_string` (line 306)\n- `django/contrib/admin/options.py`: `BaseModelAdmin.get_preserved_filters` (line 1246)\n- `django/contrib/admin/templatetags/admin_urls.py`: `add_preserved_filters` (line 69)\n\nThese matches were left out:\n- **Standard-library calls:** `django/test/testcases.py`, `django/utils/html.py` and `django/http/request.py` (inside `QueryDict.urlencode`) import `urlencode` from `urllib.parse`.\n- **`QueryDict.urlencode` calls:** `request.GET.urlencode()` in `options.py`, `query_dict.urlencode()` in `defaulttags.py`, and `querystring.urlencode(...)` in `auth/views.py`.\n- **The template filter:** its definition in `defaultfilters.py` and the `|urlencode` uses in templates.\n\nI also searched for the other ways it could be called, such as `http.urlencode` or importing it under another name, and found none.\n\n```json\n{\"answer\": [\"django/test/client.py:RequestFactory.__init__\", \"django/test/client.py:RequestFactory.generic\", \"django/test/client.py:AsyncRequestFactory.generic\", \"django/contrib/admin/widgets.py:ForeignKeyRawIdWidget.get_context\", \"django/contrib/admin/views/main.py:ChangeList.get_query_string\", \"django/contrib/admin/options.py:BaseModelAdmin.get_preserved_filters\", \"django/contrib/admin/templatetags/admin_urls.py:add_preserved_filters\"]}\n```",
+    "subtype": "success",
+    "is_error": false,
+    "num_turns": 6,
+    "duration_ms": 19030,
+    "cost_usd": 0.09586080000000001,
+    "usage": {
+      "input_tokens": 10,
+      "output_tokens": 1707,
+      "cache_creation_input_tokens": 6590,
+      "cache_read_input_tokens": 44804
+    },
+    "tool_calls": {
+      "Bash": 2,
+      "Grep": 2,
+      "Read": 1
+    },
+    "mcp_status": "connected",
+    "api_key_source": "none",
+    "tools": [
+      "Bash",
+      "Edit",
+      "Glob",
+      "Grep",
+      "Read",
+      "Write",
+      "mcp__context-manager__context",
+      "mcp__context-manager__index_project"
+    ]
+  },
+  "score": {
+    "answered": true,
+    "recall": 1.0,
+    "precision": 1.0,
+    "missing": [],
+    "extra": [],
+    "edit_applied": null,
+    "stale": [],
+    "success": true
+  },
+  "failure": null,
+  "hook": {
+    "deny": 0,
+    "pass_": 2
+  }
+}

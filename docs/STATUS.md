@@ -4,15 +4,15 @@ The current state of CCM and the next steps, for the owner and for any agent tha
 work. Keep it current: replace lines that stop being true instead of appending history (git log and
 `benchmarks/results/` are the history).
 
-Last updated: 2026-11-10. Where work stopped: **iteration 5's held-out set repeated three times
-at the same commit (`9bb6564`); two more Django held-out tasks preregistered (amendment 9) and
-about to run.** With three repetitions the held-out B/A medians are Codex 1.43 (0.61–1.77) and
-Claude 1.06 (0.53–1.08): CCM does not lower token use across the held-out set. It does on the
-large repository: on Django `iri_to_uri` every B run of both agents used fewer tokens than A
-(Codex 32–33 k vs A mean 54 k, Claude 18 k vs 35 k), and Claude chose CCM on its own in all three
-Django B runs and in none of the nine others. On the three small-repository tasks B costs about the
-same as A for Claude (1.06–1.08) and more for Codex (1.16–1.77). The commits behind each figure are
-in "Agent pilots" below.
+Last updated: 2026-11-10. Where work stopped: **five Django held-out tasks measured; the
+large-repository saving holds for Codex on all of them and for Claude on caller questions, not on a
+name-collision trap; across small repositories CCM still costs more.** With three repetitions:
+on Django `iri_to_uri`, `constant_time_compare` and the `urlencode` trap every Codex B run was below
+the A mean (B/A 0.61, 0.67, 0.51); Claude B was below A on the two caller tasks (0.53, 0.51), where
+it chose CCM on its own in all six runs, and not on the trap (1.08), where it never called CCM. On
+the three small-repository held-out tasks B costs about the same as A for Claude (1.06–1.08) and
+more for Codex (1.16–1.77): there a CCM call adds a turn instead of replacing one. The commits behind
+each figure are in "Agent pilots" below.
 
 ## Goal
 
@@ -111,6 +111,16 @@ wide and one repetition cannot separate small effects from run-to-run noise.
 | iteration 5 held-out ×3 (`9bb6564`) | Codex | 4 held-out, 3 reps | 24/24 | 1.43 (0.61–1.77) | django iri_to_uri 0.61, express locate-trust 1.16, flask edit-method-route 1.69, serde types-deserializer 1.77 | |
 | iteration 5 held-out ×3 (`9bb6564`) | Claude | 4 held-out, 3 reps | 48/48 | 1.06 (0.53–1.08), B called CCM in 3 of 12 runs (all Django) | django iri_to_uri 0.53, express 1.06, flask 1.06, serde 1.08 | F 0.99 (0.51–1.27); H 0.95 (0.53–0.97) |
 
+| large-repository ×3 (`516ed4c` harness, `9bb6564` product) | Codex | 2 held-out, 3 reps | 12/12 | | django constant_time_compare 0.67, django urlencode trap 0.51 | |
+| large-repository ×3 (`516ed4c` harness, `9bb6564` product) | Claude | 2 held-out, 3 reps | 24/24 | B called CCM in 3 of 6 runs (all on constant_time_compare) | django constant_time_compare 0.51, urlencode trap 1.08 | F 0.58, 1.10; H 0.43, 1.34 |
+
+Per-run input tokens for the large-repository set (`iter6-20261110/`, reading rule in its `PLAN.md`):
+`constant_time_compare` Codex A 48 k, 46 k, 48 k and B 32 k ×3; Claude A 34–44 k and B 17 k, 17 k,
+28 k. `urlencode` trap Codex A 90 k, 113 k, 142 k and B 47 k, 60 k, 69 k; Claude A 27 k, 49 k, 54 k
+and B 40 k, 40 k, 60 k without any CCM call. In the trap the packet says "NOT complete" because two
+`querystring.urlencode(...)` / `query_dict.urlencode()` method calls on local objects count as
+outside call sites; Claude F then greps and reads anyway.
+
 Per-run input tokens for the repeated set (`iter5-reps-20261110/`, decision rule written in its
 `PLAN.md` before the runs): Django `iri_to_uri` Codex A 47 k, 50 k, 64 k and B 32 k, 33 k, 32 k;
 Claude A 35 k ×3 and B 18 k ×3 (one `context` call each). Codex B on Flask `edit-method-route`
@@ -147,7 +157,7 @@ with 35 % less text (`hook-replay-20261110/`).
 
 Results, reports, run records and task selections are in `benchmarks/results/agent/`
 (`heldout-20261110/`, `pilot-*-20261110/`, `iter2-20261110/`, `iter3-20261110/`,
-`iter4-20261110/`, `iter5-20261110/`, `iter5-reps-20261110/`, `hook-replay-20261110/`); transcripts stay
+`iter4-20261110/`, `iter5-20261110/`, `iter5-reps-20261110/`, `iter6-20261110/`, `hook-replay-20261110/`); transcripts stay
 local. Failures kept in the records:
 
 - Iteration-1 tuned sets stopped at the Django task: the frozen harness rebuilt the index with local
@@ -201,27 +211,34 @@ What the transcripts show:
   `capfirst` packet now says "call list complete" and matches the gold; Codex B answered the
   tuned trap with `context` alone (B/A 0.45, was 1.60). Its remaining losses are edit tasks it
   solves with `rg` and `sed` (flask edit-method-route 2.11).
-- **Claude Code calls CCM on its own only on the Django caller question** (4 of 53 B runs on
-  2026-11-09 and 2026-11-10, all on held-out Django `iri_to_uri`: one `context` call and no grep,
-  about 18 k input tokens against 35–57 k for A), with the tool loaded, a usage note, short server instructions and
+- **Claude Code calls CCM on its own only on Django caller questions** (7 of 59 B runs on
+  2026-11-09 and 2026-11-10, all on held-out Django `iri_to_uri` and `constant_time_compare`: one
+  `context` call and no grep, 17–28 k input tokens against 34–57 k for A), with the tool loaded, a usage note, short server instructions and
   `anthropic/alwaysLoad`. Its
   Grep tool caps output, so its baseline is cheaper than Codex's. When forced (F), it always
   re-checks the answer with one or more Greps; F saved tokens on some tasks and cost more on others.
 
 ## Next steps, in order
 
-1. **More large-repository evidence** (preregistration amendment 9): run the two new Django
-   held-out tasks (`django-callers-constant-time-compare`, `django-trap-urlencode`) with three
-   repetitions, unchanged product. If the saving holds on them too, the claim "CCM saves tokens on
-   caller questions in a 155 k-line repository" has five Django tasks behind it; a second large
-   repository in another language would be the next test of "projects of any size".
-2. **Codex on small-repository tasks.** Codex B costs more than A on Flask edits and Serde types in
-   all three repetitions; read those transcripts (they are no longer held out) for generic causes.
-3. **Hook alternations: not pursued.** Of the 49 recorded greps the hook could not parse, 10 are one
+1. **A second large repository.** Five Django tasks now back "CCM saves tokens on caller questions
+   in a 155 k-line Python repository" for Codex, and for Claude when it chooses CCM. Whether this
+   holds for large repositories in general needs one in another language (Rust or TypeScript),
+   added to the corpus and preregistered before its tasks are looked at.
+2. **Python method calls on other objects** (generic, from the `urlencode` trap): for a Python
+   module-level function, `x.name(` where `x` is not a name bound by an import in that file is a
+   method of another object and should not count as an outside call site, as for Rust functions
+   without `self`. Unmeasured candidate.
+3. **Small repositories: documented limit.** In the repeated Codex runs B costs more than A on
+   Flask edits (1.69) and Serde trait implementors (1.77) in all three repetitions. The transcripts
+   show why: A answers with one or two `rg` calls; B makes the same calls plus a CCM call (a
+   natural-language query that missed on Serde, a confirmation after the edit on Flask), and each
+   extra turn re-sends the whole context (about 15–20 k input tokens with cache). CCM can only save
+   where its answer replaces at least one search turn, which on these repositories it rarely does.
+4. **Hook alternations: not pursued.** Of the 49 recorded greps the hook could not parse, 10 are one
    tuned task's `_find_error_handler|def handle_exception`; the rest are varied regexes (alias and
    import checks, receivers, look-arounds). Supporting them would fit one task, not a pattern.
-4. Release the fixes (npm launcher roots bug, refresh retry) as 0.5.1 after owner approval.
-5. After the product configuration is stable, the preregistered L3 final experiment (24 tasks × 3
+5. Release the fixes (npm launcher roots bug, refresh retry) as 0.5.1 after owner approval.
+6. After the product configuration is stable, the preregistered L3 final experiment (24 tasks × 3
    arms × 3 repetitions per agent) with separate quota approval.
 
 ## Running the L3 experiment

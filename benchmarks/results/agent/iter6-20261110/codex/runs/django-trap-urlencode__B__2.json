@@ -1,0 +1,48 @@
+{
+  "record_version": 3,
+  "run_id": "django-trap-urlencode__B__2",
+  "task_id": "django-trap-urlencode",
+  "repo": "django",
+  "category": "trap",
+  "arm": "B",
+  "rep": 2,
+  "model": "gpt-6-luna",
+  "effort": "high",
+  "embedding": "local",
+  "index_copy_s": 0.38828162499703467,
+  "index_build_s": 1230.484017916955,
+  "wall_s": 31.965203958097845,
+  "transcript": {
+    "result_text": "```json\n{\"answer\":[\"django/contrib/admin/options.py:ModelAdmin.get_preserved_filters\",\"django/contrib/admin/templatetags/admin_urls.py:add_preserved_filters\",\"django/contrib/admin/views/main.py:ChangeList.get_query_string\",\"django/contrib/admin/widgets.py:ForeignKeyRawIdWidget.get_context\",\"django/test/client.py:RequestFactory.__init__\",\"django/test/client.py:RequestFactory.generic\",\"django/test/client.py:AsyncRequestFactory.generic\"]}\n```",
+    "subtype": "completed",
+    "is_error": false,
+    "num_turns": null,
+    "duration_ms": 31965,
+    "cost_usd": null,
+    "usage": {
+      "input_tokens": 17868,
+      "output_tokens": 915,
+      "cache_creation_input_tokens": 0,
+      "cache_read_input_tokens": 42624
+    },
+    "tool_calls": {
+      "command_execution": 2,
+      "mcp__context-manager__context": 1
+    },
+    "mcp_status": "unreported",
+    "api_key_source": "chatgpt",
+    "tools": []
+  },
+  "score": {
+    "answered": true,
+    "recall": 1.0,
+    "precision": 1.0,
+    "missing": [],
+    "extra": [],
+    "edit_applied": null,
+    "stale": [],
+    "success": true
+  },
+  "failure": null,
+  "hook": null
+}
