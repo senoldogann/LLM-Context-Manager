@@ -1,0 +1,46 @@
+{
+  "record_version": 2,
+  "run_id": "serde-trap-deserialize-struct__A__1",
+  "task_id": "serde-trap-deserialize-struct",
+  "repo": "serde",
+  "category": "trap",
+  "arm": "A",
+  "rep": 1,
+  "model": "gpt-6-luna",
+  "effort": "high",
+  "embedding": "local",
+  "index_copy_s": null,
+  "index_build_s": null,
+  "wall_s": 22.074062666855752,
+  "transcript": {
+    "result_text": "The real calls are in `deserialize_body` and the three variant deserialization functions. The other matches are generated output or calls to the Serde deserializer method.\n\n```json\n{\"answer\":[\"serde_derive/src/de.rs:deserialize_body\",\"serde_derive/src/de.rs:deserialize_externally_tagged_variant\",\"serde_derive/src/de.rs:deserialize_internally_tagged_variant\",\"serde_derive/src/de.rs:deserialize_untagged_variant\"]}\n```",
+    "subtype": "completed",
+    "is_error": false,
+    "num_turns": null,
+    "duration_ms": 22074,
+    "cost_usd": null,
+    "usage": {
+      "input_tokens": 9488,
+      "output_tokens": 759,
+      "cache_creation_input_tokens": 0,
+      "cache_read_input_tokens": 41216
+    },
+    "tool_calls": {
+      "command_execution": 3
+    },
+    "mcp_status": "unreported",
+    "api_key_source": "chatgpt",
+    "tools": []
+  },
+  "score": {
+    "answered": true,
+    "recall": 1.0,
+    "precision": 1.0,
+    "missing": [],
+    "extra": [],
+    "edit_applied": null,
+    "stale": [],
+    "success": true
+  },
+  "failure": null
+}

@@ -1,0 +1,46 @@
+{
+  "record_version": 2,
+  "run_id": "serde-trap-effective-style__A__1",
+  "task_id": "serde-trap-effective-style",
+  "repo": "serde",
+  "category": "trap",
+  "arm": "A",
+  "rep": 1,
+  "model": "gpt-6-luna",
+  "effort": "high",
+  "embedding": "local",
+  "index_copy_s": null,
+  "index_build_s": null,
+  "wall_s": 12.983518625143915,
+  "transcript": {
+    "result_text": "```json\n{\"answer\":[\"serde_derive/src/ser.rs:serialize_externally_tagged_variant\",\"serde_derive/src/ser.rs:serialize_internally_tagged_variant\",\"serde_derive/src/ser.rs:serialize_adjacently_tagged_variant\",\"serde_derive/src/ser.rs:serialize_untagged_variant\"]}\n```",
+    "subtype": "completed",
+    "is_error": false,
+    "num_turns": null,
+    "duration_ms": 12984,
+    "cost_usd": null,
+    "usage": {
+      "input_tokens": 4418,
+      "output_tokens": 455,
+      "cache_creation_input_tokens": 0,
+      "cache_read_input_tokens": 27392
+    },
+    "tool_calls": {
+      "command_execution": 2
+    },
+    "mcp_status": "unreported",
+    "api_key_source": "chatgpt",
+    "tools": []
+  },
+  "score": {
+    "answered": true,
+    "recall": 1.0,
+    "precision": 1.0,
+    "missing": [],
+    "extra": [],
+    "edit_applied": null,
+    "stale": [],
+    "success": true
+  },
+  "failure": null
+}

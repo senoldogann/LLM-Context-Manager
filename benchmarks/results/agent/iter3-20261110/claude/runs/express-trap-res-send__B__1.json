@@ -1,0 +1,57 @@
+{
+  "record_version": 2,
+  "run_id": "express-trap-res-send__B__1",
+  "task_id": "express-trap-res-send",
+  "repo": "express",
+  "category": "trap",
+  "arm": "B",
+  "rep": 1,
+  "model": "claude-opus-5-5",
+  "effort": "high",
+  "embedding": "local",
+  "index_copy_s": 0.009590792004019022,
+  "index_build_s": 9.103650875156745,
+  "wall_s": 17.67844625003636,
+  "transcript": {
+    "result_text": "Five functions in `lib/` call `res.send`:\n\n- `lib/response.js:279`: `res.json` calls `this.send(body)`.\n- `lib/response.js:352`: `res.jsonp` calls `this.send(body)`.\n- `lib/response.js:376`: `res.sendStatus` calls `this.send(body)`.\n- `lib/response.js:1044`: `res.render` calls `self.send(str)` inside its default callback. That callback is a closure, so the call counts toward `render`.\n- `lib/router/index.js:655`: `sendOptionsResponse` calls `res.send(body)`.\n\nLeft out:\n- `send(req, …)` at `lib/response.js:447` (`sendFile`) and `lib/response.js:516` (`sendfile`). These call the `send` package, not the response method.\n- The remaining `res.send(...)` matches are only in comments.\n- `res.send` does not call itself. It hands objects off to `this.json` at line 163.\n\n```json\n{\"answer\": [\"lib/response.js:res.json\", \"lib/response.js:res.jsonp\", \"lib/response.js:res.sendStatus\", \"lib/response.js:res.render\", \"lib/router/index.js:sendOptionsResponse\"]}\n```",
+    "subtype": "success",
+    "is_error": false,
+    "num_turns": 6,
+    "duration_ms": 16921,
+    "cost_usd": 0.10321259999999999,
+    "usage": {
+      "input_tokens": 12,
+      "output_tokens": 1337,
+      "cache_creation_input_tokens": 8227,
+      "cache_read_input_tokens": 53043
+    },
+    "tool_calls": {
+      "Bash": 1,
+      "Grep": 3,
+      "Read": 1
+    },
+    "mcp_status": "connected",
+    "api_key_source": "none",
+    "tools": [
+      "Bash",
+      "Edit",
+      "Glob",
+      "Grep",
+      "Read",
+      "Write",
+      "mcp__context-manager__context",
+      "mcp__context-manager__index_project"
+    ]
+  },
+  "score": {
+    "answered": true,
+    "recall": 1.0,
+    "precision": 1.0,
+    "missing": [],
+    "extra": [],
+    "edit_applied": null,
+    "stale": [],
+    "success": true
+  },
+  "failure": null
+}

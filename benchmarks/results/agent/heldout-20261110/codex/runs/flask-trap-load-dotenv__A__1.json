@@ -1,0 +1,44 @@
+{
+  "run_id": "flask-trap-load-dotenv__A__1",
+  "task_id": "flask-trap-load-dotenv",
+  "repo": "flask",
+  "category": "trap",
+  "arm": "A",
+  "rep": 1,
+  "model": "gpt-6-luna",
+  "effort": "high",
+  "embedding": "local",
+  "index_s": null,
+  "wall_s": 24.151275458047166,
+  "transcript": {
+    "result_text": "```json\n{\"answer\":[\"src/flask/app.py:Flask.run\",\"src/flask/cli.py:_env_file_callback\",\"src/flask/cli.py:FlaskGroup.make_context\"]}\n```",
+    "subtype": "completed",
+    "is_error": false,
+    "num_turns": null,
+    "duration_ms": 24151,
+    "cost_usd": null,
+    "usage": {
+      "input_tokens": 10229,
+      "output_tokens": 562,
+      "cache_creation_input_tokens": 0,
+      "cache_read_input_tokens": 35072
+    },
+    "tool_calls": {
+      "command_execution": 3
+    },
+    "mcp_status": "unreported",
+    "api_key_source": "chatgpt",
+    "tools": []
+  },
+  "score": {
+    "answered": true,
+    "recall": 1.0,
+    "precision": 1.0,
+    "missing": [],
+    "extra": [],
+    "edit_applied": null,
+    "stale": [],
+    "success": true
+  },
+  "failure": null
+}

@@ -1,0 +1,57 @@
+{
+  "record_version": 2,
+  "run_id": "express-trap-res-send__F__1",
+  "task_id": "express-trap-res-send",
+  "repo": "express",
+  "category": "trap",
+  "arm": "F",
+  "rep": 1,
+  "model": "claude-opus-5-5",
+  "effort": "high",
+  "embedding": "local",
+  "index_copy_s": 0.007046290906146169,
+  "index_build_s": 9.103650875156745,
+  "wall_s": 13.371694291941822,
+  "transcript": {
+    "result_text": "Five functions in `lib/` call `res.send`. I found them with the index lookup plus a grep of `lib/` for every `send` reference, which also covers calls through other variable names.\n\n- `lib/response.js` — `json` (line 279), `jsonp` (line 352) and `sendStatus` (line 376) each end with `return this.send(body)`.\n- `lib/response.js` — `render`: its default callback, a closure inside `res.render`, calls `self.send(str)` (line 1044). `self` is just a saved copy of `this`, which is why the index missed it.\n- `lib/router/index.js` — `sendOptionsResponse` calls `res.send(body)` (line 655).\n\nThe `send(req, ...)` calls at `lib/response.js:447` and `:516` are calls to the `send` package, so they're left out. The other `res.send` matches are only in comments.\n\n```json\n{\"answer\": [\"lib/response.js:json\", \"lib/response.js:jsonp\", \"lib/response.js:sendStatus\", \"lib/response.js:render\", \"lib/router/index.js:sendOptionsResponse\"]}\n```",
+    "subtype": "success",
+    "is_error": false,
+    "num_turns": 5,
+    "duration_ms": 12299,
+    "cost_usd": 0.0820204,
+    "usage": {
+      "input_tokens": 8,
+      "output_tokens": 914,
+      "cache_creation_input_tokens": 7117,
+      "cache_read_input_tokens": 33862
+    },
+    "tool_calls": {
+      "Grep": 2,
+      "Read": 1,
+      "mcp__context-manager__context": 1
+    },
+    "mcp_status": "connected",
+    "api_key_source": "none",
+    "tools": [
+      "Bash",
+      "Edit",
+      "Glob",
+      "Grep",
+      "Read",
+      "Write",
+      "mcp__context-manager__context",
+      "mcp__context-manager__index_project"
+    ]
+  },
+  "score": {
+    "answered": true,
+    "recall": 1.0,
+    "precision": 1.0,
+    "missing": [],
+    "extra": [],
+    "edit_applied": null,
+    "stale": [],
+    "success": true
+  },
+  "failure": null
+}

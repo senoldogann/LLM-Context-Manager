@@ -1,0 +1,56 @@
+{
+  "record_version": 2,
+  "run_id": "express-trap-sendfile-helper__F__1",
+  "task_id": "express-trap-sendfile-helper",
+  "repo": "express",
+  "category": "trap",
+  "arm": "F",
+  "rep": 1,
+  "model": "claude-opus-5-5",
+  "effort": "high",
+  "embedding": "local",
+  "index_copy_s": 0.014744291082024574,
+  "index_build_s": 23.08429770800285,
+  "wall_s": 14.385099333012477,
+  "transcript": {
+    "result_text": "Two functions in `lib/` call the private `sendfile` helper (`lib/response.js:1052`). Both are methods on the response object:\n\n- **`res.sendFile`**: declared as `function sendFile` at `lib/response.js:420`. It calls the helper at `lib/response.js:450`.\n- **`res.sendfile`**: the anonymous function assigned at `lib/response.js:502`. It calls the helper at `lib/response.js:519`. It is wrapped as deprecated at lines 530–531, but those lines only refer to the method and do not call the helper.\n\nThe index check says this list is complete: these are the only two call sites in non-test `lib/` code. `res.download` doesn't call the helper itself; it goes through `this.sendFile` (line 599).\n\n```json\n{\"answer\": [\"lib/response.js:res.sendFile\", \"lib/response.js:res.sendfile\"]}\n```",
+    "subtype": "success",
+    "is_error": false,
+    "num_turns": 3,
+    "duration_ms": 12942,
+    "cost_usd": 0.0633738,
+    "usage": {
+      "input_tokens": 4,
+      "output_tokens": 936,
+      "cache_creation_input_tokens": 5247,
+      "cache_read_input_tokens": 13309
+    },
+    "tool_calls": {
+      "Grep": 1,
+      "mcp__context-manager__context": 1
+    },
+    "mcp_status": "connected",
+    "api_key_source": "none",
+    "tools": [
+      "Bash",
+      "Edit",
+      "Glob",
+      "Grep",
+      "Read",
+      "Write",
+      "mcp__context-manager__context",
+      "mcp__context-manager__index_project"
+    ]
+  },
+  "score": {
+    "answered": true,
+    "recall": 1.0,
+    "precision": 1.0,
+    "missing": [],
+    "extra": [],
+    "edit_applied": null,
+    "stale": [],
+    "success": true
+  },
+  "failure": null
+}

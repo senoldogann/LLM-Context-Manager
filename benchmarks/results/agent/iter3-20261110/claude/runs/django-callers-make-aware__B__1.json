@@ -1,0 +1,56 @@
+{
+  "record_version": 2,
+  "run_id": "django-callers-make-aware__B__1",
+  "task_id": "django-callers-make-aware",
+  "repo": "django",
+  "category": "callers",
+  "arm": "B",
+  "rep": 1,
+  "model": "claude-opus-5-5",
+  "effort": "high",
+  "embedding": "local",
+  "index_copy_s": 1.5993655000347644,
+  "index_build_s": 2304.7229919580277,
+  "wall_s": 23.836698665982112,
+  "transcript": {
+    "result_text": "I found 20 `make_aware(` call sites in `django/`, excluding the definition at `django/utils/timezone.py:237`. They sit in 17 distinct functions or methods:\n\n- `django/views/generic/dates.py:279` is in `DateMixin._make_date_lookup_arg`.\n- `django/http/response.py:242` is in `HttpResponseBase.set_cookie`.\n- `django/utils/dateformat.py:271` is in `DateFormat.r`, as the bare `make_aware(...)`.\n- `django/views/decorators/http.py:113` is in a nested `_pre_process_request` inside `decorator`. Those are inside `condition`, so it's listed under `condition`.\n- `django/db/models/fields/__init__.py` has two: `DateTimeField.to_python` (line 1612) and `DateTimeField.get_prep_value` (line 1671).\n- `django/db/models/functions/datetime.py:351` is in `TruncBase.convert_value`.\n- `django/db/backends/base/operations.py:640–641` (two calls) are in `BaseDatabaseOperations.year_lookup_bounds_for_datetime_field`.\n- The MySQL (line 325), SQLite (line 310) and Oracle (line 265) backends each call it in `DatabaseOperations.convert_datetimefield_value`.\n- `django/forms/utils.py:223` is in the module-level `from_current_timezone`.\n- `django/templatetags/tz.py:55` is in `do_timezone`.\n- `django/contrib/admin/views/main.py:261–262` (two calls, bare `make_aware`) are in `ChangeList.get_filters`.\n- `django/contrib/sitemaps/views.py:38` is in `_get_latest_lastmod`.\n- `django/contrib/syndication/views.py:209` and `:213` (bare `make_aware`) are in `Feed.get_feed`.\n\n```json\n{\"answer\": [\n\"django/views/generic/dates.py:DateMixin._make_date_lookup_arg\",\n\"django/http/response.py:HttpResponseBase.set_cookie\",\n\"django/utils/dateformat.py:DateFormat.r\",\n\"django/views/decorators/http.py:condition\",\n\"django/db/models/fields/__init__.py:DateTimeField.to_python\",\n\"django/db/models/fields/__init__.py:DateTimeField.get_prep_value\",\n\"django/db/models/functions/datetime.py:TruncBase.convert_value\",\n\"django/db/backends/base/operations.py:BaseDatabaseOperations.year_lookup_bounds_for_datetime_field\",\n\"django/forms/utils.py:from_current_timezone\",\n\"django/db/backends/mysql/operations.py:DatabaseOperations.convert_datetimefield_value\",\n\"django/db/backends/sqlite3/operations.py:DatabaseOperations.convert_datetimefield_value\",\n\"django/db/backends/oracle/operations.py:DatabaseOperations.convert_datetimefield_value\",\n\"django/templatetags/tz.py:do_timezone\",\n\"django/contrib/admin/views/main.py:ChangeList.get_filters\",\n\"django/contrib/sitemaps/views.py:_get_latest_lastmod\",\n\"django/contrib/syndication/views.py:Feed.get_feed\"\n]}\n```",
+    "subtype": "success",
+    "is_error": false,
+    "num_turns": 5,
+    "duration_ms": 22183,
+    "cost_usd": 0.11165459999999999,
+    "usage": {
+      "input_tokens": 10,
+      "output_tokens": 2345,
+      "cache_creation_input_tokens": 6975,
+      "cache_read_input_tokens": 44573
+    },
+    "tool_calls": {
+      "Bash": 3,
+      "Grep": 1
+    },
+    "mcp_status": "connected",
+    "api_key_source": "none",
+    "tools": [
+      "Bash",
+      "Edit",
+      "Glob",
+      "Grep",
+      "Read",
+      "Write",
+      "mcp__context-manager__context",
+      "mcp__context-manager__index_project"
+    ]
+  },
+  "score": {
+    "answered": true,
+    "recall": 1.0,
+    "precision": 1.0,
+    "missing": [],
+    "extra": [],
+    "edit_applied": null,
+    "stale": [],
+    "success": true
+  },
+  "failure": null
+}

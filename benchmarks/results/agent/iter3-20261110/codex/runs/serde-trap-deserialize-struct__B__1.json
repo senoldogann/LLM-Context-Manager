@@ -1,0 +1,46 @@
+{
+  "record_version": 2,
+  "run_id": "serde-trap-deserialize-struct__B__1",
+  "task_id": "serde-trap-deserialize-struct",
+  "repo": "serde",
+  "category": "trap",
+  "arm": "B",
+  "rep": 1,
+  "model": "gpt-6-luna",
+  "effort": "high",
+  "embedding": "local",
+  "index_copy_s": 0.04340770794078708,
+  "index_build_s": 93.0913077078294,
+  "wall_s": 12.215393832884729,
+  "transcript": {
+    "result_text": "The real calls are in four functions. The other occurrences identified by the index are inside `quote!` and generate calls in the output code.\n\n```json\n{\"answer\":[\"serde_derive/src/de.rs:deserialize_body\",\"serde_derive/src/de.rs:deserialize_externally_tagged_variant\",\"serde_derive/src/de.rs:deserialize_internally_tagged_variant\",\"serde_derive/src/de.rs:deserialize_untagged_variant\"]}\n```",
+    "subtype": "completed",
+    "is_error": false,
+    "num_turns": null,
+    "duration_ms": 12215,
+    "cost_usd": null,
+    "usage": {
+      "input_tokens": 7223,
+      "output_tokens": 404,
+      "cache_creation_input_tokens": 0,
+      "cache_read_input_tokens": 25216
+    },
+    "tool_calls": {
+      "mcp__context-manager__context": 1
+    },
+    "mcp_status": "unreported",
+    "api_key_source": "chatgpt",
+    "tools": []
+  },
+  "score": {
+    "answered": true,
+    "recall": 1.0,
+    "precision": 1.0,
+    "missing": [],
+    "extra": [],
+    "edit_applied": null,
+    "stale": [],
+    "success": true
+  },
+  "failure": null
+}

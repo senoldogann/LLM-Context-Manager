@@ -1,0 +1,47 @@
+{
+  "run_id": "express-callers-res-set__C__1",
+  "task_id": "express-callers-res-set",
+  "repo": "express",
+  "category": "callers",
+  "arm": "C",
+  "rep": 1,
+  "model": "gpt-6-luna",
+  "effort": "high",
+  "embedding": "local",
+  "index_s": 26.955428666900843,
+  "wall_s": 39.31393804191612,
+  "transcript": {
+    "result_text": "```json\n{\"answer\":[\"lib/response.js:links\",\"lib/response.js:send\",\"lib/response.js:json\",\"lib/response.js:jsonp\",\"lib/response.js:contentType\",\"lib/response.js:format\",\"lib/response.js:attachment\",\"lib/response.js:append\",\"lib/response.js:location\",\"lib/response.js:redirect\",\"lib/router/index.js:sendOptionsResponse\"]}\n```",
+    "subtype": "completed",
+    "is_error": false,
+    "num_turns": null,
+    "duration_ms": 39314,
+    "cost_usd": null,
+    "usage": {
+      "input_tokens": 32389,
+      "output_tokens": 1670,
+      "cache_creation_input_tokens": 0,
+      "cache_read_input_tokens": 73088
+    },
+    "tool_calls": {
+      "command_execution": 1,
+      "mcp__context-manager__explain": 3,
+      "mcp__context-manager__find_usages": 1,
+      "mcp__context-manager__map": 1
+    },
+    "mcp_status": "unreported",
+    "api_key_source": "chatgpt",
+    "tools": []
+  },
+  "score": {
+    "answered": true,
+    "recall": 1.0,
+    "precision": 1.0,
+    "missing": [],
+    "extra": [],
+    "edit_applied": null,
+    "stale": [],
+    "success": true
+  },
+  "failure": null
+}

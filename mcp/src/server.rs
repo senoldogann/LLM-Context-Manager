@@ -24,6 +24,20 @@ const SUPPORTED_PROTOCOL_VERSIONS: [&str; 3] =
     [LATEST_PROTOCOL_VERSION, "2025-06-18", "2025-03-26"];
 /// Okuma araçlarının süren yenilemeyi bekleyeceği en uzun süre.
 const FRESHNESS_WAIT_BUDGET: std::time::Duration = std::time::Duration::from_secs(2);
+/// `context` bekleyen yenilemeyi daha uzun bekler: ajan çoğu zaman düzenlemeden hemen
+/// sonra sorar ve embedding'li yenileme 2 saniyeyi aşınca bayat cevap ikinci bir çağrıya
+/// yol açıyordu (iterasyon 2, flask-edit-error-handler).
+/// Hata durumundaki okumaların yeniden deneme tetiklemesi arasındaki en kısa süre.
+const READ_RETRY_INTERVAL: std::time::Duration = std::time::Duration::from_secs(30);
+const CONTEXT_FRESHNESS_WAIT_BUDGET: std::time::Duration = std::time::Duration::from_secs(10);
+
+/// Aracın okuma öncesi tazelik bekleme bütçesi.
+fn freshness_budget(tool_name: &str) -> std::time::Duration {
+    match tool_name {
+        "context" => CONTEXT_FRESHNESS_WAIT_BUDGET,
+        _ => FRESHNESS_WAIT_BUDGET,
+    }
+}
 /// Okuma araçları indeksi yalnızca okur; etki alanı yerel projedir.
 const READ_ONLY_TOOL: ToolAnnotations = ToolAnnotations {
     read_only_hint: true,
@@ -51,6 +65,8 @@ pub struct ServerState {
     /// okumaları grafı bir kez yükler. Kayıt sayısı izinli projelerle sınırlıdır.
     engine_loads: std::sync::Mutex<std::collections::HashMap<String, Arc<tokio::sync::Mutex<()>>>>,
     pub(crate) index_jobs: std::sync::Mutex<std::collections::HashMap<String, IndexJob>>,
+    /// Proje başına okumanın tetiklediği son yeniden deneme anı (bkz. `claim_read_retry`).
+    read_retries: std::sync::Mutex<std::collections::HashMap<String, std::time::Instant>>,
     pub(crate) next_index_job_id: std::sync::atomic::AtomicU64,
     default_project_root: Option<PathBuf>,
     /// `CCM_PROJECT_ROOT` açıkça verildiyse istemci roots'u varsayılan kökü değiştirmez.
@@ -118,7 +134,10 @@ impl SemanticUpgradeCounts {
 #[derive(Clone)]
 pub(crate) struct IndexJob {
     pub id: u64,
-    pub receiver: tokio::sync::watch::Receiver<Option<crate::protocol::ToolResult>>,
+    /// İşin modu: farklı modda gelen istek bu işe katılmaz ve sonucunu almaz.
+    pub mode: crate::tools::IndexModeArg,
+    /// `None` iş sürüyor demektir; `Some` bitti ve sonucu alınmayı bekliyor.
+    pub receiver: tokio::sync::watch::Receiver<Option<crate::tools::FinishedIndexJob>>,
 }
 
 const DEFAULT_ENGINE_CACHE_SIZE: usize = 8;
@@ -389,6 +408,7 @@ impl ServerState {
             index_locks: std::sync::Mutex::new(std::collections::HashMap::new()),
             engine_loads: std::sync::Mutex::new(std::collections::HashMap::new()),
             index_jobs: std::sync::Mutex::new(std::collections::HashMap::new()),
+            read_retries: std::sync::Mutex::new(std::collections::HashMap::new()),
             next_index_job_id: std::sync::atomic::AtomicU64::new(1),
             default_project_root,
             project_root_is_explicit: explicit_project_root.is_some(),
@@ -470,6 +490,19 @@ impl ServerState {
     }
 
     /// Elle indeksleme sonrası otomatik yenilemeden durum doğrulaması ister.
+    /// Okumanın tetiklediği yeniden deneme hakkı: son haktan `READ_RETRY_INTERVAL`
+    /// geçtiyse `true` döner ve anı kaydeder.
+    pub(crate) fn claim_read_retry(&self, project_key: &str, now: std::time::Instant) -> bool {
+        let mut retries = self.read_retries.lock().unwrap();
+        let due = retries
+            .get(project_key)
+            .is_none_or(|last| now.duration_since(*last) >= READ_RETRY_INTERVAL);
+        if due {
+            retries.insert(project_key.to_string(), now);
+        }
+        due
+    }
+
     pub(crate) fn request_refresh(&self, project_key: &str) {
         if let Some(handle) = self.freshness_handle(project_key) {
             crate::freshness::request_rescan(&handle, project_key);
@@ -593,10 +626,24 @@ impl ServerState {
         }
         let deadline = tokio::time::Instant::now() + budget;
         let freshness = crate::freshness::wait_until_fresh(&handle, budget).await;
-        if !crate::freshness::is_settled(&freshness)
-            || freshness.waiting_for_upgrade
-            || freshness.last_error.is_some()
-        {
+        if freshness.last_error.is_some() {
+            // Hata durumundaki okuma, geri çekilme süresini beklemeden yeniden denemeyi
+            // tetikler; kalıcı bir hatada her okumanın tam tarama ödememesi için en çok
+            // `READ_RETRY_INTERVAL`'da bir. Kalan bütçe içinde sonuç gelirse taze döner.
+            if self.claim_read_retry(project_key, std::time::Instant::now()) {
+                self.request_refresh(project_key);
+            }
+            return Ok(crate::freshness::wait_until_fresh(
+                &handle,
+                deadline.saturating_duration_since(tokio::time::Instant::now()),
+            )
+            .await);
+        }
+        if freshness.persist_error.is_some() {
+            // Yazım hatası bellekteki indeksi bayatlatmaz; okuma yeniden tarama istemez.
+            return Ok(freshness);
+        }
+        if !crate::freshness::is_settled(&freshness) || freshness.waiting_for_upgrade {
             return Ok(freshness);
         }
         if let EngineSource::Live(live) = &loaded.source {
@@ -1274,6 +1321,11 @@ pub async fn handle_request(state: &Arc<ServerState>, request: JsonRpcRequest) -
     }
 }
 
+/// İstemcinin oturum başında modele verdiği sunucu talimatı. Codex ilk 512
+/// karakteri, Claude Code araç aramasında bu metni kullanır; kısa ve tek başına
+/// anlaşılır olmalı.
+const SERVER_INSTRUCTIONS: &str = "CCM answers code-structure questions from an index of this repository: who calls X, where X is used, what X does. For these, call `context` instead of Grep + Read: it returns each caller with its call-site lines and a grep-equivalent check that says whether the caller list is complete.";
+
 fn handle_initialize(id: Option<Value>, params: Option<&Value>) -> JsonRpcResponse {
     let result = json!({
         "protocolVersion": negotiate_protocol_version(params),
@@ -1288,6 +1340,7 @@ fn handle_initialize(id: Option<Value>, params: Option<&Value>) -> JsonRpcRespon
             name: "ccm-mcp".to_string(),
             version: env!("CARGO_PKG_VERSION").to_string(),
         },
+        "instructions": SERVER_INSTRUCTIONS,
     });
     create_success_response(id, result)
 }
@@ -1338,17 +1391,20 @@ fn handle_list_tools(id: Option<Value>) -> JsonRpcResponse {
         ToolDefinition {
             name: "context".to_string(),
             title: "Get Task Context".to_string(),
-            description: Some("One-call code context. Give a symbol, path:line, or natural-language task; CCM chooses structural explain or hybrid search and returns a compact task packet.".to_string()),
+            description: Some("Who calls X, where X is used, what X does: give a symbol, path:line or question. Returns X's source, each caller with its call-site lines, and a grep-equivalent check of whether that list is complete.".to_string()),
             input_schema: json!({
                 "type": "object",
                 "properties": {
-                    "query": { "type": "string", "description": "Symbol, path:line, or natural-language code question/task." },
+                    "query": { "type": "string", "description": "Symbol, path:line or question." },
                     "max_tokens": max_tokens_property(tools::DEFAULT_MAX_TOKENS),
                     "project_path": project_path_property()
                 },
                 "required": ["query"]
             }),
             annotations: READ_ONLY_TOOL,
+            // Claude Code MCP araçlarını varsayılan olarak erteler (şema ancak araç
+            // aramasıyla görünür); tek giriş noktası baştan yüklenmeli.
+            meta: Some(json!({ "anthropic/alwaysLoad": true })),
         },
         ToolDefinition {
             name: "map".to_string(),
@@ -1363,6 +1419,7 @@ fn handle_list_tools(id: Option<Value>) -> JsonRpcResponse {
                 }
             }),
             annotations: READ_ONLY_TOOL,
+            meta: None,
         },
         ToolDefinition {
             name: "explain".to_string(),
@@ -1379,6 +1436,7 @@ fn handle_list_tools(id: Option<Value>) -> JsonRpcResponse {
                 "required": ["target"]
             }),
             annotations: READ_ONLY_TOOL,
+            meta: None,
         },
         ToolDefinition {
             name: "find_usages".to_string(),
@@ -1396,6 +1454,7 @@ fn handle_list_tools(id: Option<Value>) -> JsonRpcResponse {
                 "required": ["target"]
             }),
             annotations: READ_ONLY_TOOL,
+            meta: None,
         },
         ToolDefinition {
             name: "impact_of_change".to_string(),
@@ -1413,6 +1472,7 @@ fn handle_list_tools(id: Option<Value>) -> JsonRpcResponse {
                 "required": ["file"]
             }),
             annotations: READ_ONLY_TOOL,
+            meta: None,
         },
         ToolDefinition {
             name: "search_code".to_string(),
@@ -1430,6 +1490,7 @@ fn handle_list_tools(id: Option<Value>) -> JsonRpcResponse {
                 "required": ["query"]
             }),
             annotations: READ_ONLY_TOOL,
+            meta: None,
         },
         ToolDefinition {
             name: "find_nodes".to_string(),
@@ -1447,6 +1508,7 @@ fn handle_list_tools(id: Option<Value>) -> JsonRpcResponse {
                 "required": ["query"]
             }),
             annotations: READ_ONLY_TOOL,
+            meta: None,
         },
         ToolDefinition {
             name: "trace_call_chain".to_string(),
@@ -1465,6 +1527,7 @@ fn handle_list_tools(id: Option<Value>) -> JsonRpcResponse {
                 "required": ["from", "to"]
             }),
             annotations: READ_ONLY_TOOL,
+            meta: None,
         },
         ToolDefinition {
             name: "diff_context".to_string(),
@@ -1482,11 +1545,12 @@ fn handle_list_tools(id: Option<Value>) -> JsonRpcResponse {
                 "required": ["project_path"]
             }),
             annotations: READ_ONLY_TOOL,
+            meta: None,
         },
         ToolDefinition {
             name: "index_project".to_string(),
             title: "Index Project".to_string(),
-            description: Some("Refresh the index in the background (incremental). Modes: full (default), quick (graph now, semantics later), upgrade (fill missing semantics).".to_string()),
+            description: Some("Build or refresh the index (incremental, background). Needed once per project; later edits are picked up automatically.".to_string()),
             input_schema: json!({
                 "type": "object",
                 "properties": {
@@ -1496,6 +1560,7 @@ fn handle_list_tools(id: Option<Value>) -> JsonRpcResponse {
                 "required": ["project_path"]
             }),
             annotations: INDEXING_TOOL,
+            meta: None,
         },
         ToolDefinition {
             name: "index_now".to_string(),
@@ -1510,6 +1575,7 @@ fn handle_list_tools(id: Option<Value>) -> JsonRpcResponse {
                 "required": ["project_path"]
             }),
             annotations: INDEXING_TOOL,
+            meta: None,
         },
     ];
 
@@ -1622,7 +1688,7 @@ async fn run_tool(
     if let Some(key) = &project_key {
         state.ensure_auto_refresh(key);
         if let Err(error) = state
-            .wait_until_fresh(key, &initial, FRESHNESS_WAIT_BUDGET)
+            .wait_until_fresh(key, &initial, freshness_budget(tool_name))
             .await
         {
             return Ok(engine_error_result(tool_name, &error));
@@ -1641,7 +1707,9 @@ async fn run_tool(
     let engine = loaded.engine.clone();
 
     let result = match tool_name {
-        "context" => tools::context(&engine, arguments).await?,
+        "context" => {
+            tools::context(&engine, arguments, project_path.map(std::path::Path::new)).await?
+        }
         "search_code" => tools::search_code(&engine, arguments).await?,
         "find_nodes" => tools::find_nodes(&engine, arguments).await?,
         "find_usages" => tools::find_usages(&engine, arguments).await?,

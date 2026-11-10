@@ -162,3 +162,10 @@ the final run is complete.
    structural surface with the previous navigation note. The default `preregistered` profile and
    the final 24-task A/B/C design above are unchanged; results from the product pilot are not the
    preregistered final L3 result.
+7. 2026-11-10: for the `context-first-pilot` product profile only, (a) the B note was shortened
+   and now names what `context` returns (call sites and a completeness check); (b) an optional
+   arm F (`--arms A,B,C,F`) gives B's tools plus an instruction to call `context` before any
+   other tool. F measures forced use and is reported separately; A, B and C keep their
+   definitions, so natural-use results stay comparable across pilots; (c) one Django task
+   (`django-trap-html-escape`, outside the preregistered 24) was added for a larger repository.
+   `--tasks all` and the preregistered profile are unchanged.

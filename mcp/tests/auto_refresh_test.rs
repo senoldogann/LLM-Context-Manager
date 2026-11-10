@@ -977,7 +977,7 @@ fn persist_failure_is_reported_in_the_freshness_line() -> Result<(), Box<dyn Err
     fs::set_permissions(&generation, fs::Permissions::from_mode(0o700))?;
     let text = reported?;
     assert!(
-        text.starts_with("_Index: stale · last refresh failed: index could not be saved"),
+        text.starts_with("_Index: stale · index could not be saved"),
         "unexpected freshness line: {text}"
     );
     assert!(found_node(&text, "unsaved_symbol"), "{text}");
@@ -985,7 +985,7 @@ fn persist_failure_is_reported_in_the_freshness_line() -> Result<(), Box<dyn Err
 }
 
 #[test]
-fn changes_from_a_failed_round_are_recovered_by_the_next_round() -> Result<(), Box<dyn Error>> {
+fn changes_from_a_failed_round_are_recovered_without_a_new_event() -> Result<(), Box<dyn Error>> {
     let project = tempdir()?;
     let logs = tempdir()?;
     let log_path = logs.path().join("refresh.log");
@@ -1021,22 +1021,25 @@ fn changes_from_a_failed_round_are_recovered_by_the_next_round() -> Result<(), B
         }
         std::thread::sleep(Duration::from_millis(50));
     }
-    poll_find_nodes(
+    // Okuma yapılmadan da döngü geri çekilme süresi dolunca kendisi yeniden dener.
+    let retry_started = Instant::now();
+    while !fs::read_to_string(&log_path)?
+        .contains("Retrying the failed refresh with a full comparison")
+    {
+        if retry_started.elapsed() > Duration::from_secs(20) {
+            return Err("the failed refresh was not retried without a new event".into());
+        }
+        std::thread::sleep(Duration::from_millis(100));
+    }
+    // Yeni bir dosya olayı olmadan da başarısız tur telafi edilir: hata
+    // durumundaki okuma yeniden denemeyi tetikler (yoksa döngü geri çekilme
+    // süresi dolunca kendisi dener) ve tam karşılaştırma değişikliği uygular.
+    let lost = poll_find_nodes(
         &mut session,
-        "existing_symbol",
-        Duration::from_secs(20),
-        |text| text.contains("last refresh failed"),
+        "lost_symbol",
+        Duration::from_secs(30),
+        |text| found_node(text, "lost_symbol") && text.starts_with("_Index: fresh"),
     )?;
-
-    // Sonraki olay tam karşılaştırma başlatır; başarısız turun değişikliği de uygulanır.
-    fs::write(project.path().join("later.rs"), "fn later_symbol() {}\n")?;
-    poll_find_nodes(
-        &mut session,
-        "later_symbol",
-        Duration::from_secs(20),
-        |text| found_node(text, "later_symbol") && text.starts_with("_Index: fresh"),
-    )?;
-    let lost = session.call_tool("find_nodes", json!({ "query": "lost_symbol" }))?;
     assert!(
         found_node(&lost, "lost_symbol"),
         "the change from the failed round must not be lost: {lost}"

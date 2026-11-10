@@ -19,13 +19,14 @@ from typing import cast
 
 from agent.check import apply_steps, check_tasks
 from agent.run import SYSTEM_PATH, index_db_path, prepare_workspace
-from agent.tasks import TASKS, Item, Task, label
+from agent.tasks import KNOWN_TASKS, Item, Task, label
 from freshness.repos import run_git
 
 PILOT_TASK_IDS = (
     "flask-callers-ensure-sync",
     "express-trap-req-get",
     "serde-edit-with-bound",
+    "django-trap-html-escape",
 )
 CORPUS_MANIFEST = Path(__file__).resolve().parents[1] / "corpus.json"
 
@@ -53,7 +54,7 @@ class PacketScore:
 
 def pilot_tasks() -> tuple[Task, ...]:
     """Üç context-first pilot görevini ana task tablosundan veri sırasıyla seç."""
-    selected = tuple(task for task in TASKS if task.id in PILOT_TASK_IDS)
+    selected = tuple(task for task in KNOWN_TASKS if task.id in PILOT_TASK_IDS)
     if tuple(task.id for task in selected) != PILOT_TASK_IDS:
         found = {task.id for task in selected}
         missing = [task_id for task_id in PILOT_TASK_IDS if task_id not in found]
@@ -137,6 +138,9 @@ def parse_callers(text: str) -> list[tuple[str, str]]:
 
     callers: list[tuple[str, str]] = []
     for line in lines:
+        # Girintili satırlar bir önceki caller'ın çağrı yeri satırlarıdır.
+        if line.startswith("  "):
+            continue
         if not line.startswith("- "):
             break
         fields = line[2:].split(" · ")

@@ -1,0 +1,46 @@
+{
+  "record_version": 2,
+  "run_id": "flask-callers-ensure-sync__A__1",
+  "task_id": "flask-callers-ensure-sync",
+  "repo": "flask",
+  "category": "callers",
+  "arm": "A",
+  "rep": 1,
+  "model": "gpt-6-luna",
+  "effort": "high",
+  "embedding": "local",
+  "index_copy_s": null,
+  "index_build_s": null,
+  "wall_s": 26.39245399995707,
+  "transcript": {
+    "result_text": "```json\n{\"answer\":[\"src/flask/app.py:update_template_context\",\"src/flask/app.py:handle_http_exception\",\"src/flask/app.py:handle_user_exception\",\"src/flask/app.py:handle_exception\",\"src/flask/app.py:dispatch_request\",\"src/flask/app.py:preprocess_request\",\"src/flask/app.py:process_response\",\"src/flask/app.py:do_teardown_request\",\"src/flask/app.py:do_teardown_appcontext\",\"src/flask/ctx.py:copy_current_request_context\",\"src/flask/views.py:as_view\",\"src/flask/views.py:dispatch_request\"]}\n```",
+    "subtype": "completed",
+    "is_error": false,
+    "num_turns": null,
+    "duration_ms": 26392,
+    "cost_usd": null,
+    "usage": {
+      "input_tokens": 25757,
+      "output_tokens": 811,
+      "cache_creation_input_tokens": 0,
+      "cache_read_input_tokens": 24320
+    },
+    "tool_calls": {
+      "command_execution": 3
+    },
+    "mcp_status": "unreported",
+    "api_key_source": "chatgpt",
+    "tools": []
+  },
+  "score": {
+    "answered": true,
+    "recall": 1.0,
+    "precision": 1.0,
+    "missing": [],
+    "extra": [],
+    "edit_applied": null,
+    "stale": [],
+    "success": true
+  },
+  "failure": null
+}

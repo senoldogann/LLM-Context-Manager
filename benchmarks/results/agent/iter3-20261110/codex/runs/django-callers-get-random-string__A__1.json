@@ -1,0 +1,46 @@
+{
+  "record_version": 2,
+  "run_id": "django-callers-get-random-string__A__1",
+  "task_id": "django-callers-get-random-string",
+  "repo": "django",
+  "category": "callers",
+  "arm": "A",
+  "rep": 1,
+  "model": "gpt-6-luna",
+  "effort": "high",
+  "embedding": "local",
+  "index_copy_s": null,
+  "index_build_s": null,
+  "wall_s": 28.527776083908975,
+  "transcript": {
+    "result_text": "```json\n{\"answer\":[\"django/middleware/csrf.py:_get_new_csrf_string\",\"django/core/files/storage/base.py:Storage.get_alternative_name\",\"django/core/management/utils.py:get_random_secret_key\",\"django/db/backends/oracle/creation.py:DatabaseCreation._test_database_passwd\",\"django/contrib/sessions/backends/base.py:SessionBase._get_new_session_key\",\"django/contrib/sessions/backends/base.py:SessionBase._aget_new_session_key\",\"django/contrib/auth/hashers.py:verify_password\",\"django/contrib/auth/hashers.py:make_password\",\"django/contrib/auth/hashers.py:BasePasswordHasher.salt\"]}\n```",
+    "subtype": "completed",
+    "is_error": false,
+    "num_turns": null,
+    "duration_ms": 28528,
+    "cost_usd": null,
+    "usage": {
+      "input_tokens": 17694,
+      "output_tokens": 822,
+      "cache_creation_input_tokens": 0,
+      "cache_read_input_tokens": 43648
+    },
+    "tool_calls": {
+      "command_execution": 4
+    },
+    "mcp_status": "unreported",
+    "api_key_source": "chatgpt",
+    "tools": []
+  },
+  "score": {
+    "answered": true,
+    "recall": 1.0,
+    "precision": 1.0,
+    "missing": [],
+    "extra": [],
+    "edit_applied": null,
+    "stale": [],
+    "success": true
+  },
+  "failure": null
+}

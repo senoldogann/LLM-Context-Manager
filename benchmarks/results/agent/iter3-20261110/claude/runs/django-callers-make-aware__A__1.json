@@ -1,0 +1,54 @@
+{
+  "record_version": 2,
+  "run_id": "django-callers-make-aware__A__1",
+  "task_id": "django-callers-make-aware",
+  "repo": "django",
+  "category": "callers",
+  "arm": "A",
+  "rep": 1,
+  "model": "claude-opus-5-5",
+  "effort": "high",
+  "embedding": "local",
+  "index_copy_s": null,
+  "index_build_s": null,
+  "wall_s": 18.039810041897,
+  "transcript": {
+    "result_text": "I found 18 functions and methods in `django/` that call `make_aware` directly. I searched for every `make_aware` call and used a small Python script to find the function or method around each one. For calls inside nested functions, the list gives the outermost named function, as you asked. The only case is in `django/views/decorators/http.py`, where the call sits inside closures within `condition`.\n\nA few functions call it more than once and are listed only once:\n- `ChangeList.get_filters` calls it twice, for the start and end dates.\n- `Feed.get_feed` calls it twice, for the published date and the updated date.\n- `BaseDatabaseOperations.year_lookup_bounds_for_datetime_field` calls it twice, for the lower and upper bounds.\n\nThe definition in `django/utils/timezone.py` and its entry in that file's export list are not calls, so they're excluded.\n\n```json\n{\"answer\": [\n\"django/templatetags/tz.py:do_timezone\",\n\"django/forms/utils.py:from_current_timezone\",\n\"django/utils/dateformat.py:DateFormat.r\",\n\"django/contrib/syndication/views.py:Feed.get_feed\",\n\"django/contrib/admin/views/main.py:ChangeList.get_filters\",\n\"django/contrib/sitemaps/views.py:_get_latest_lastmod\",\n\"django/http/response.py:HttpResponseBase.set_cookie\",\n\"django/db/backends/oracle/operations.py:DatabaseOperations.convert_datetimefield_value\",\n\"django/db/backends/sqlite3/operations.py:DatabaseOperations.convert_datetimefield_value\",\n\"django/db/backends/mysql/operations.py:DatabaseOperations.convert_datetimefield_value\",\n\"django/db/backends/base/operations.py:BaseDatabaseOperations.year_lookup_bounds_for_datetime_field\",\n\"django/db/models/functions/datetime.py:TruncBase.convert_value\",\n\"django/db/models/fields/__init__.py:DateTimeField.to_python\",\n\"django/db/models/fields/__init__.py:DateTimeField.get_prep_value\",\n\"django/views/decorators/http.py:condition\",\n\"django/views/generic/dates.py:DateMixin._make_date_lookup_arg\"\n]}\n```",
+    "subtype": "success",
+    "is_error": false,
+    "num_turns": 4,
+    "duration_ms": 17064,
+    "cost_usd": 0.07499720000000001,
+    "usage": {
+      "input_tokens": 8,
+      "output_tokens": 1528,
+      "cache_creation_input_tokens": 4802,
+      "cache_read_input_tokens": 29946
+    },
+    "tool_calls": {
+      "Bash": 2,
+      "Grep": 1
+    },
+    "mcp_status": "none",
+    "api_key_source": "none",
+    "tools": [
+      "Bash",
+      "Edit",
+      "Glob",
+      "Grep",
+      "Read",
+      "Write"
+    ]
+  },
+  "score": {
+    "answered": true,
+    "recall": 1.0,
+    "precision": 1.0,
+    "missing": [],
+    "extra": [],
+    "edit_applied": null,
+    "stale": [],
+    "success": true
+  },
+  "failure": null
+}

@@ -1,0 +1,46 @@
+{
+  "record_version": 2,
+  "run_id": "django-callers-make-aware__B__1",
+  "task_id": "django-callers-make-aware",
+  "repo": "django",
+  "category": "callers",
+  "arm": "B",
+  "rep": 1,
+  "model": "gpt-6-luna",
+  "effort": "high",
+  "embedding": "local",
+  "index_copy_s": 0.5250941251870245,
+  "index_build_s": 1348.7221117501613,
+  "wall_s": 23.734344457974657,
+  "transcript": {
+    "result_text": "```json\n{\"answer\":[\"django/contrib/admin/views/main.py:ChangeList.get_filters\",\"django/contrib/sitemaps/views.py:_get_latest_lastmod\",\"django/contrib/syndication/views.py:Feed.get_feed\",\"django/db/backends/base/operations.py:BaseDatabaseOperations.year_lookup_bounds_for_datetime_field\",\"django/db/backends/mysql/operations.py:DatabaseOperations.convert_datetimefield_value\",\"django/db/backends/oracle/operations.py:DatabaseOperations.convert_datetimefield_value\",\"django/db/backends/sqlite3/operations.py:DatabaseOperations.convert_datetimefield_value\",\"django/db/models/fields/__init__.py:DateTimeField.to_python\",\"django/db/models/fields/__init__.py:DateTimeField.get_prep_value\",\"django/db/models/functions/datetime.py:TruncBase.convert_value\",\"django/forms/utils.py:from_current_timezone\",\"django/http/response.py:HttpResponseBase.set_cookie\",\"django/templatetags/tz.py:do_timezone\",\"django/utils/dateformat.py:DateFormat.r\",\"django/views/decorators/http.py:condition\",\"django/views/generic/dates.py:DateMixin._make_date_lookup_arg\"]}\n```",
+    "subtype": "completed",
+    "is_error": false,
+    "num_turns": null,
+    "duration_ms": 23734,
+    "cost_usd": null,
+    "usage": {
+      "input_tokens": 14123,
+      "output_tokens": 932,
+      "cache_creation_input_tokens": 0,
+      "cache_read_input_tokens": 20480
+    },
+    "tool_calls": {
+      "mcp__context-manager__context": 1
+    },
+    "mcp_status": "unreported",
+    "api_key_source": "chatgpt",
+    "tools": []
+  },
+  "score": {
+    "answered": true,
+    "recall": 1.0,
+    "precision": 1.0,
+    "missing": [],
+    "extra": [],
+    "edit_applied": null,
+    "stale": [],
+    "success": true
+  },
+  "failure": null
+}

@@ -2,6 +2,9 @@ use anyhow::Context;
 use clap::Parser;
 use std::path::PathBuf;
 
+mod eval_report;
+mod watch;
+
 #[derive(Parser, Debug)]
 #[command(author, version, about = "CCM - Cognitive Codebase Matrix CLI", long_about = None)]
 struct Args {
@@ -27,7 +30,10 @@ enum Commands {
         #[arg(short, long)]
         db_path: Option<PathBuf>,
 
-        /// Watch for changes and re-index automatically
+        /// Watch for changes and re-index automatically. Every update compares the
+        /// whole tree with the index; a missing or invalid index is rebuilt in full.
+        /// A failed update is retried with backoff (4 attempts in total); when all
+        /// attempts fail, the last error is reported and the command exits.
         #[arg(short, long)]
         watch: bool,
     },
@@ -37,7 +43,9 @@ enum Commands {
         #[arg(short, long, default_value = "eval/golden_tasks.example.json")]
         tasks: PathBuf,
 
-        /// Write JSON report to file (defaults to stdout)
+        /// Write JSON report to file (defaults to stdout). The file is replaced
+        /// atomically (temporary file + rename) and is written even when the
+        /// quality gate fails. It must not be the --baseline file.
         #[arg(short, long)]
         report: Option<PathBuf>,
 
@@ -49,7 +57,10 @@ enum Commands {
         #[arg(long, default_value_t = 0.0)]
         min_pass_rate: f64,
 
-        /// Previous evaluation report used for regression detection
+        /// Previous evaluation report used for regression detection. It is read
+        /// before the new report is written. Passing the --report file here is
+        /// rejected so a failing run cannot overwrite its own baseline; copy the
+        /// report over the baseline after a passing run instead.
         #[arg(long)]
         baseline: Option<PathBuf>,
 
@@ -217,108 +228,16 @@ async fn main() -> anyhow::Result<()> {
             watch,
         } => {
             tracing::info!("Starting Indexer CLI");
-
-            let path_str = path.to_string_lossy();
             let db_path_str = db_path.as_ref().map(|p| p.to_string_lossy().to_string());
-
-            // First run builds the full index; later runs only apply changed paths.
-            match ccm_core::update_index(&path_str, db_path_str.as_deref()).await {
-                Ok(stats) => {
-                    tracing::info!(
-                        indexed = stats.files_indexed,
-                        failed = stats.files_failed,
-                        skipped = stats.files_skipped,
-                        nodes = stats.nodes_created,
-                        embedded_chunks = stats.embedded_chunks,
-                        reused_chunks = stats.reused_chunks,
-                        "Initial indexing complete"
-                    );
-                    if !stats.reason_counts.is_empty() {
-                        for (reason, count) in &stats.reason_counts {
-                            tracing::info!(reason = %reason, count = *count, "Index issue summary");
-                        }
-                    }
-                    if let Some(reason) = &stats.semantic_unavailable {
-                        tracing::warn!(
-                            reason = %reason,
-                            "Graph index is ready; semantic search stays off until the reason is resolved and the project is indexed again"
-                        );
-                    }
-                }
-                Err(e) => {
-                    tracing::error!("Initial indexing failed: {}", e);
-                    if !watch {
-                        std::process::exit(1);
-                    }
-                }
-            }
-
             if watch {
-                tracing::info!(path = %path.display(), "Watching for changes");
-                use notify::{RecursiveMode, Watcher};
-                use std::time::Duration;
-                use tokio::sync::mpsc;
-
-                let (tx, mut rx) = mpsc::channel(1);
-
-                // İzleme filtresi indexleyici politikasıyla tek kaynaktan yönetilir;
-                // uzantı/dizin listeleri ayrı yerde tutulmaz (DRY).
-                let watch_root = path.clone();
-                let mut watcher =
-                    notify::recommended_watcher(move |res: notify::Result<notify::Event>| {
-                        match res {
-                            Ok(event) => {
-                                let is_relevant = event.paths.iter().any(|p| {
-                                    // Araç durum dizinleri indexleyici kapsamı dışında
-                                    let skipped_dir = p.components().any(|component| {
-                                        matches!(
-                                            component.as_os_str().to_string_lossy().as_ref(),
-                                            ".ccm" | ".agent"
-                                        )
-                                    });
-                                    !skipped_dir && ccm_core::is_index_relevant_file(&watch_root, p)
-                                });
-
-                                if is_relevant {
-                                    let _ = tx.blocking_send(());
-                                }
-                            }
-                            Err(e) => tracing::error!("Watch error: {:?}", e),
-                        }
-                    })?;
-
-                // Add a path to be watched. All files and directories at that path and
-                // below will be monitored for changes.
-                watcher.watch(&path, RecursiveMode::Recursive)?;
-
-                // Debounce loop
-                while (rx.recv().await).is_some() {
-                    // Flush any other events that came properly
-                    while rx.try_recv().is_ok() {}
-
-                    tracing::info!("Change detected. Waiting for settle...");
-                    tokio::time::sleep(Duration::from_secs(2)).await;
-
-                    // Flush again
-                    while rx.try_recv().is_ok() {}
-
-                    tracing::info!("Re-indexing...");
-                    if let Err(e) = ccm_core::update_index(&path_str, db_path_str.as_deref()).await
-                    {
-                        tracing::warn!(
-                            "Incremental indexing failed: {}. Falling back to full index.",
-                            e
-                        );
-                        ccm_core::index_directory(&path_str, db_path_str.as_deref())
-                            .await
-                            .with_context(|| {
-                                format!(
-                                    "Incremental indexing and full rebuild both failed for '{}'",
-                                    path.display()
-                                )
-                            })?;
-                    }
-                }
+                watch::watch_and_index(&path, db_path_str.as_deref(), &watch::WATCH_RETRY_POLICY)
+                    .await?;
+            } else {
+                // İlk koşu tam indeksi kurar; sonrakiler yalnızca değişen yolları uygular.
+                let stats = ccm_core::update_index(&path.to_string_lossy(), db_path_str.as_deref())
+                    .await
+                    .with_context(|| format!("indexing '{}' failed", path.display()))?;
+                watch::log_index_stats(&stats);
             }
         }
         Commands::RetrievalEval {
@@ -370,81 +289,39 @@ async fn main() -> anyhow::Result<()> {
                     serde_json::from_reader(std::io::BufReader::new(file))?;
                 let tasks_file = ccm_core::eval::load_tasks(&tasks)?;
                 let report_data = ccm_core::eval::evaluate_policy(tasks_file, &policy).await?;
-                if let Some(path) = report {
-                    let file = std::fs::File::create(&path)?;
-                    let writer = std::io::BufWriter::new(file);
-                    ccm_core::eval::write_report(writer, &report_data)?;
-                    println!("Report written to {}", path.display());
-                    let summary = ccm_core::eval::summarize_report(
-                        &report_data,
-                        Some(&path.to_string_lossy()),
-                    );
-                    println!("{}", summary);
-                } else {
-                    let stdout = std::io::stdout();
-                    let handle = stdout.lock();
-                    ccm_core::eval::write_report(handle, &report_data)?;
-                    println!();
-                }
+                eval_report::emit_report(&report_data, report.as_deref())?;
                 return Ok(());
             }
-            if compare {
+            if let (Some(report_path), Some(baseline_path)) = (&report, &baseline) {
+                eval_report::ensure_distinct_report_and_baseline(report_path, baseline_path)?;
+            }
+            // Taban çizgisi değerlendirmeden ve rapor yazılmadan önce okunur.
+            let baseline_report = baseline
+                .as_deref()
+                .map(ccm_core::eval::load_report)
+                .transpose()?;
+            let verdict = if compare {
                 let report_data = ccm_core::eval::evaluate_comparison_from_path(&tasks).await?;
-                if let Some(path) = report {
-                    let file = std::fs::File::create(&path)?;
-                    let writer = std::io::BufWriter::new(file);
-                    ccm_core::eval::write_comparison_report(writer, &report_data)?;
-                    println!("Report written to {}", path.display());
-                    let summary = ccm_core::eval::summarize_comparison_report(
-                        &report_data,
-                        Some(&path.to_string_lossy()),
-                    );
-                    println!("{}", summary);
-                } else {
-                    let stdout = std::io::stdout();
-                    let handle = stdout.lock();
-                    ccm_core::eval::write_comparison_report(handle, &report_data)?;
-                    println!();
-                }
-                let baseline_report = baseline
-                    .as_deref()
-                    .map(ccm_core::eval::load_report)
-                    .transpose()?;
-                ccm_core::eval::enforce_quality_gate(
+                let verdict = eval_report::gate_verdict(
                     &report_data.hybrid,
                     min_pass_rate,
                     baseline_report.as_ref(),
                     max_regression,
-                )?;
+                );
+                eval_report::emit_comparison_report(&report_data, report.as_deref())?;
+                verdict
             } else {
                 let report_data = ccm_core::eval::evaluate_from_path(&tasks).await?;
-                if let Some(path) = report {
-                    let file = std::fs::File::create(&path)?;
-                    let writer = std::io::BufWriter::new(file);
-                    ccm_core::eval::write_report(writer, &report_data)?;
-                    println!("Report written to {}", path.display());
-                    let summary = ccm_core::eval::summarize_report(
-                        &report_data,
-                        Some(&path.to_string_lossy()),
-                    );
-                    println!("{}", summary);
-                } else {
-                    let stdout = std::io::stdout();
-                    let handle = stdout.lock();
-                    ccm_core::eval::write_report(handle, &report_data)?;
-                    println!();
-                }
-                let baseline_report = baseline
-                    .as_deref()
-                    .map(ccm_core::eval::load_report)
-                    .transpose()?;
-                ccm_core::eval::enforce_quality_gate(
+                let verdict = eval_report::gate_verdict(
                     &report_data,
                     min_pass_rate,
                     baseline_report.as_ref(),
                     max_regression,
-                )?;
-            }
+                );
+                eval_report::emit_report(&report_data, report.as_deref())?;
+                verdict
+            };
+            eval_report::enforce_verdict(verdict)?;
         }
         Commands::Learn { command } => match command {
             LearnCommand::Fixtures { out } => {

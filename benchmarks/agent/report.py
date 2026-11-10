@@ -9,12 +9,13 @@ import statistics
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Literal
 
 from agent.prices import PRICES, estimated_cost
 from freshness.jsonio import as_bool, as_float, as_int, as_list, as_object, as_str
 from freshness.model import JsonValue
 
-ARMS = ("A", "B", "C")
+ARMS = ("A", "B", "C", "F")
 CCM_TOOL_PREFIX = "mcp__context-manager__"
 BOOTSTRAP_ROUNDS = 10_000
 BOOTSTRAP_SEED = 7
@@ -25,11 +26,26 @@ class ReportError(ValueError):
     """Kayıt okunamadı ya da özetlenecek koşu yok."""
 
 
+# Ajan öncesi indeks ölçüsü: `full-index` her koşuda yapılan tam indeksleme (kayıt sürümü 1),
+# `prebuilt-copy` önceden bir kez kurulmuş indeksin kopyalanması (kayıt sürümü 2).
+IndexMeasure = Literal["full-index", "prebuilt-copy"]
+
+
+@dataclass(frozen=True)
+class IndexTiming:
+    """Bir kaydın indeks süreleri; `build_s` yalnız `prebuilt-copy` ölçüsünde dolabilir."""
+
+    measure: IndexMeasure
+    seconds: float | None
+    build_s: float | None
+
+
 @dataclass(frozen=True)
 class Outcome:
     """Raporun bir koşudan kullandığı ölçüler."""
 
     task_id: str
+    repo: str
     category: str
     arm: str
     rep: int
@@ -49,7 +65,7 @@ class Outcome:
     output_tokens: int | None
     turns: int | None
     wall_s: float | None
-    index_s: float | None
+    index: IndexTiming
     ccm_calls: int
 
 
@@ -73,6 +89,31 @@ def strings(value: JsonValue, context: str) -> tuple[str, ...]:
     )
 
 
+def index_timing(record: dict[str, JsonValue], path: Path) -> IndexTiming:
+    """Kaydın sürümüne göre indeks süreleri.
+
+    Sürüm 1 kayıtlarında `record_version` yoktur ve `index_s` tam indeksleme süresidir;
+    sürüm 2'de `index_copy_s` kopyalama, `index_build_s` tek seferlik kurulum süresidir.
+    """
+    version_value = record.get("record_version")
+    if version_value is None:
+        if "index_s" not in record:
+            raise ReportError(f"{path}: version 1 record without index_s")
+        return IndexTiming(
+            measure="full-index",
+            seconds=optional_float(record.get("index_s"), f"{path}: index_s"),
+            build_s=None,
+        )
+    version = as_int(version_value, f"{path}: record_version", ReportError)
+    if version != 2:
+        raise ReportError(f"{path}: unsupported record_version {version}")
+    return IndexTiming(
+        measure="prebuilt-copy",
+        seconds=optional_float(record.get("index_copy_s"), f"{path}: index_copy_s"),
+        build_s=optional_float(record.get("index_build_s"), f"{path}: index_build_s"),
+    )
+
+
 def read_outcome(path: Path) -> Outcome:
     """Bir koşu kaydını okur; ürün/ajan hataları başarı paydasında kalır."""
     try:
@@ -81,6 +122,8 @@ def read_outcome(path: Path) -> Outcome:
         raise ReportError(f"{path} is not JSON") from error
     record = as_object(raw, str(path), ReportError)
     task_id = as_str(record.get("task_id"), f"{path}: task_id", ReportError)
+    repo = as_str(record.get("repo"), f"{path}: repo", ReportError)
+    index = index_timing(record, path)
     category = as_str(record.get("category"), f"{path}: category", ReportError)
     arm = as_str(record.get("arm"), f"{path}: arm", ReportError)
     rep = as_int(record.get("rep"), f"{path}: rep", ReportError)
@@ -98,6 +141,7 @@ def read_outcome(path: Path) -> Outcome:
             raise ReportError(f"{path}: missing transcript/score without a failure reason")
         return Outcome(
             task_id=task_id,
+            repo=repo,
             category=category,
             arm=arm,
             rep=rep,
@@ -116,11 +160,7 @@ def read_outcome(path: Path) -> Outcome:
             output_tokens=None,
             turns=None,
             wall_s=wall_s,
-            index_s=(
-                None
-                if record.get("index_s") is None
-                else as_float(record.get("index_s"), f"{path}: index_s", ReportError)
-            ),
+            index=index,
             ccm_calls=0,
         )
 
@@ -145,6 +185,7 @@ def read_outcome(path: Path) -> Outcome:
     )
     return Outcome(
         task_id=task_id,
+        repo=repo,
         category=category,
         arm=arm,
         rep=rep,
@@ -165,11 +206,7 @@ def read_outcome(path: Path) -> Outcome:
         output_tokens=output_tokens,
         turns=optional_int(transcript.get("num_turns"), f"{path}: num_turns"),
         wall_s=wall_s,
-        index_s=(
-            None
-            if record.get("index_s") is None
-            else as_float(record.get("index_s"), f"{path}: index_s", ReportError)
-        ),
+        index=index,
         ccm_calls=sum(
             as_int(count, f"{path}: tool_calls.{name}", ReportError)
             for name, count in calls.items()
@@ -223,6 +260,12 @@ def paired_ratios(outcomes: list[Outcome], arm: str, metric: Metric) -> list[flo
     return [other[task] / base[task] for task in sorted(base) if task in other and base[task] > 0]
 
 
+def present_arms(outcomes: list[Outcome]) -> tuple[str, ...]:
+    """Kayıtlarda bulunan kollar, bilinen sırayla."""
+    found = {outcome.arm for outcome in outcomes}
+    return tuple(arm for arm in ARMS if arm in found)
+
+
 def as_metric(value: int | float | None) -> float | None:
     """İsteğe bağlı sayıyı oran metriğine çevirir."""
     return None if value is None else float(value)
@@ -255,6 +298,20 @@ def median_cell(
     return f"{prefix}{format(statistics.median(known), spec)}{suffix}"
 
 
+INDEX_COLUMNS: dict[IndexMeasure, str] = {
+    "full-index": "Median pre-index (full index per run)",
+    "prebuilt-copy": "Median index copy (prebuilt index)",
+}
+
+
+def index_measure(outcomes: list[Outcome]) -> IndexMeasure:
+    """Kayıtların ortak indeks ölçüsü; iki sürüm karışıksa tablo tek sütunla anlatılamaz."""
+    measures = sorted({outcome.index.measure for outcome in outcomes})
+    if len(measures) != 1:
+        raise ReportError(f"records mix index measures {measures}; report each version apart")
+    return measures[0]
+
+
 def arm_rows(outcomes: list[Outcome]) -> list[str]:
     """Kol bazında başarı, cevap kalitesi ve maliyet."""
     rows = [
@@ -262,7 +319,8 @@ def arm_rows(outcomes: list[Outcome]) -> list[str]:
         "",
         "| Arm | Success | 95% CI | Recall | Precision | Median cost | Total known cost "
         "| Median input tokens | Median output tokens | Median turns | Median agent wall "
-        "| Median pre-index | Runs using CCM | Stale (edit runs) | Run failures |",
+        f"| {INDEX_COLUMNS[index_measure(outcomes)]} | Runs using CCM | Stale (edit runs) "
+        "| Run failures |",
         "|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|",
     ]
     for arm in ARMS:
@@ -290,9 +348,32 @@ def arm_rows(outcomes: list[Outcome]) -> list[str]:
             f"| {median_cell([o.output_tokens for o in runs], ',.0f')} "
             f"| {median_cell([o.turns for o in runs], '.0f')} "
             f"| {median_cell([o.wall_s for o in runs], '.0f', suffix=' s')} "
-            f"| {median_cell([o.index_s for o in runs], '.1f', suffix=' s')} "
+            f"| {median_cell([o.index.seconds for o in runs], '.1f', suffix=' s')} "
             f"| {used}/{len(runs)} | {stale}/{len(edits)} | {failures}/{len(runs)} |"
         )
+    return rows
+
+
+def index_build_rows(outcomes: list[Outcome]) -> list[str]:
+    """Önceden kurulan indekslerin tek seferlik kurulum süreleri (yalnız sürüm 2 kayıtları)."""
+    if index_measure(outcomes) != "prebuilt-copy":
+        return []
+    rows = [
+        "## Prebuilt indexes",
+        "",
+        "Arms with CCM copy an index built once per repository before their runs (the cache "
+        "is shared across result directories); the arm table shows the copy time. One-time "
+        "build time of the index each repository's runs copied:",
+        "",
+        "| Repository | Build |",
+        "|---|---|",
+    ]
+    for repo in sorted({outcome.repo for outcome in outcomes}):
+        builds = sorted(
+            {o.index.build_s for o in outcomes if o.repo == repo and o.index.build_s is not None}
+        )
+        cell = ", ".join(f"{build:.1f} s" for build in builds) if builds else "—"
+        rows.append(f"| {repo} | {cell} |")
     return rows
 
 
@@ -306,12 +387,13 @@ def ratio_rows(outcomes: list[Outcome]) -> list[str]:
         "means less than A. A task is omitted from a metric ratio if any recorded repetition "
         "in either compared arm has that metric unknown.",
         "",
-        "| Metric | B / A | C / A |",
-        "|---|---|---|",
     ]
+    compared = tuple(arm for arm in present_arms(outcomes) if arm != "A")
+    rows.append("| Metric | " + " | ".join(f"{arm} / A" for arm in compared) + " |")
+    rows.append("|---|" + "---|" * len(compared))
     for name, metric in RATIO_METRICS:
         cells: list[str] = []
-        for arm in ("B", "C"):
+        for arm in compared:
             ratios = paired_ratios(outcomes, arm, metric)
             if not ratios:
                 cells.append("—")
@@ -320,7 +402,35 @@ def ratio_rows(outcomes: list[Outcome]) -> list[str]:
             cells.append(
                 f"{statistics.median(ratios):.2f} ({low:.2f}–{high:.2f}, {len(ratios)} tasks)"
             )
-        rows.append(f"| {name} | {cells[0]} | {cells[1]} |")
+        rows.append(f"| {name} | " + " | ".join(cells) + " |")
+    return rows
+
+
+def token_rows(outcomes: list[Outcome]) -> list[str]:
+    """Görev başına giriş token'ları (tekrar ortalaması) ve A'ya oranlar."""
+    arms = present_arms(outcomes)
+    compared = tuple(arm for arm in arms if arm != "A")
+    metric: Metric = lambda outcome: as_metric(outcome.input_tokens)  # noqa: E731
+    means = {arm: task_means(outcomes, arm, metric) for arm in arms}
+    rows = [
+        "## Input tokens by task",
+        "",
+        "Mean input tokens (cache included) over repetitions, and the ratio to A.",
+        "",
+        "| Task | "
+        + " | ".join(arms)
+        + (" | " + " | ".join(f"{arm}/A" for arm in compared) if compared else "")
+        + " |",
+        "|---|" + "---|" * (len(arms) + len(compared)),
+    ]
+    for task in sorted({outcome.task_id for outcome in outcomes}):
+        values = [means[arm].get(task) for arm in arms]
+        cells = ["—" if value is None else f"{value:,.0f}" for value in values]
+        base = means["A"].get(task) if "A" in means else None
+        for arm in compared:
+            value = means[arm].get(task)
+            cells.append("—" if value is None or not base else f"{value / base:.2f}")
+        rows.append(f"| `{task}` | " + " | ".join(cells) + " |")
     return rows
 
 
@@ -329,12 +439,12 @@ def category_rows(outcomes: list[Outcome]) -> list[str]:
     rows = [
         "## Success by task category",
         "",
-        "| Category | " + " | ".join(ARMS) + " |",
-        "|---|" + "---|" * len(ARMS),
+        "| Category | " + " | ".join(present_arms(outcomes)) + " |",
+        "|---|" + "---|" * len(present_arms(outcomes)),
     ]
     for category in sorted({outcome.category for outcome in outcomes}):
         cells: list[str] = []
-        for arm in ARMS:
+        for arm in present_arms(outcomes):
             runs = [o for o in outcomes if o.category == category and o.arm == arm]
             cells.append(f"{sum(o.success for o in runs)}/{len(runs)}" if runs else "—")
         rows.append(f"| {category} | " + " | ".join(cells) + " |")
@@ -343,16 +453,17 @@ def category_rows(outcomes: list[Outcome]) -> list[str]:
 
 def task_rows(outcomes: list[Outcome]) -> list[str]:
     """Görev başına başarılar ve ortalama maliyet."""
+    arms = present_arms(outcomes)
     rows = [
         "## By task",
         "",
-        "| Task | " + " | ".join(ARMS) + " | " + " | ".join(f"Cost {arm}" for arm in ARMS) + " |",
-        "|---|" + "---|" * (2 * len(ARMS)),
+        "| Task | " + " | ".join(arms) + " | " + " | ".join(f"Cost {arm}" for arm in arms) + " |",
+        "|---|" + "---|" * (2 * len(arms)),
     ]
     for task in sorted({outcome.task_id for outcome in outcomes}):
         wins: list[str] = []
         costs: list[str] = []
-        for arm in ARMS:
+        for arm in arms:
             runs = [o for o in outcomes if o.task_id == task and o.arm == arm]
             wins.append(f"{sum(o.success for o in runs)}/{len(runs)}" if runs else "—")
             known_costs = known_numbers([outcome.cost_usd for outcome in runs])
@@ -404,7 +515,8 @@ def header(setup: JsonValue, outcomes: list[Outcome]) -> list[str]:
     repetitions = as_int(settings.get("repetitions"), "settings.json: repetitions", ReportError)
     profile_value = settings.get("profile")
     profile = profile_value if isinstance(profile_value, str) else "preregistered"
-    planned = len(tasks) * len(ARMS) * repetitions
+    arm_list = as_list(settings.get("arms"), "settings.json: arms", ReportError)
+    planned = len(tasks) * len(arm_list) * repetitions
     design = (
         "preregistered final design"
         if profile == "preregistered" and len(tasks) == 24 and repetitions == 3
@@ -417,7 +529,8 @@ def header(setup: JsonValue, outcomes: list[Outcome]) -> list[str]:
     )
     arms = (
         "A=built-ins; B=default context+index_project with context note; "
-        "C=legacy full surface with legacy navigation note"
+        "C=legacy full surface with legacy navigation note; "
+        "F=B plus an instruction to call `context` first (forced use, not natural use)"
         if profile == "context-first-pilot"
         else "A=built-ins; B=preregistered full CCM surface; C=preregistered search_code only"
     )
@@ -454,10 +567,13 @@ def render(outcomes: list[Outcome], setup: JsonValue) -> str:
     """Raporun tamamı."""
     if not outcomes:
         raise ReportError("there are no completed runs to report")
+    builds = index_build_rows(outcomes)
     sections = (
         header(setup, outcomes),
         arm_rows(outcomes),
+        *((builds,) if builds else ()),
         ratio_rows(outcomes),
+        token_rows(outcomes),
         category_rows(outcomes),
         task_rows(outcomes),
         failure_rows(outcomes),

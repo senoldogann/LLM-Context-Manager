@@ -1,0 +1,55 @@
+{
+  "record_version": 2,
+  "run_id": "django-callers-get-random-string__F__1",
+  "task_id": "django-callers-get-random-string",
+  "repo": "django",
+  "category": "callers",
+  "arm": "F",
+  "rep": 1,
+  "model": "claude-opus-5-5",
+  "effort": "high",
+  "embedding": "local",
+  "index_copy_s": 0.9230416249483824,
+  "index_build_s": 2304.7229919580277,
+  "wall_s": 9.953135999850929,
+  "transcript": {
+    "result_text": "The index's grep check found 9 non-test call sites for `get_random_string` and says the caller list is complete. Every call site is inside one of the 9 functions below. Some files import it without calling it, and 4 matches in test files were left out. Calls made under a different name (through `getattr` or a runtime alias) would not show up in this search.\n\n- `django/contrib/auth/hashers.py`: `verify_password` (line 55), `make_password` (line 104), `BasePasswordHasher.salt` (line 244)\n- `django/contrib/sessions/backends/base.py`: `SessionBase._get_new_session_key` (line 195), `SessionBase._aget_new_session_key` (line 201)\n- `django/core/files/storage/base.py`: `Storage.get_alternative_name` (line 73)\n- `django/core/management/utils.py`: `get_random_secret_key` (line 84)\n- `django/db/backends/oracle/creation.py`: `DatabaseCreation._test_database_passwd` (line 407)\n- `django/middleware/csrf.py`: `_get_new_csrf_string` (line 56)\n\n```json\n{\"answer\": [\"django/contrib/auth/hashers.py:verify_password\", \"django/contrib/auth/hashers.py:make_password\", \"django/contrib/auth/hashers.py:BasePasswordHasher.salt\", \"django/contrib/sessions/backends/base.py:SessionBase._get_new_session_key\", \"django/contrib/sessions/backends/base.py:SessionBase._aget_new_session_key\", \"django/core/files/storage/base.py:Storage.get_alternative_name\", \"django/core/management/utils.py:get_random_secret_key\", \"django/db/backends/oracle/creation.py:DatabaseCreation._test_database_passwd\", \"django/middleware/csrf.py:_get_new_csrf_string\"]}\n```",
+    "subtype": "success",
+    "is_error": false,
+    "num_turns": 2,
+    "duration_ms": 9113,
+    "cost_usd": 0.0515154,
+    "usage": {
+      "input_tokens": 4,
+      "output_tokens": 781,
+      "cache_creation_input_tokens": 4153,
+      "cache_read_input_tokens": 13277
+    },
+    "tool_calls": {
+      "mcp__context-manager__context": 1
+    },
+    "mcp_status": "connected",
+    "api_key_source": "none",
+    "tools": [
+      "Bash",
+      "Edit",
+      "Glob",
+      "Grep",
+      "Read",
+      "Write",
+      "mcp__context-manager__context",
+      "mcp__context-manager__index_project"
+    ]
+  },
+  "score": {
+    "answered": true,
+    "recall": 1.0,
+    "precision": 1.0,
+    "missing": [],
+    "extra": [],
+    "edit_applied": null,
+    "stale": [],
+    "success": true
+  },
+  "failure": null
+}

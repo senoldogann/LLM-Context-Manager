@@ -74,6 +74,9 @@ pub struct ToolDefinition {
     #[serde(rename = "inputSchema")]
     pub input_schema: Value,
     pub annotations: ToolAnnotations,
+    /// İstemciye özgü meta (`anthropic/alwaysLoad`: Claude Code aracı ertelemeden yükler).
+    #[serde(rename = "_meta", skip_serializing_if = "Option::is_none")]
+    pub meta: Option<Value>,
 }
 
 /// Aracın davranış ipuçları. İstemciler (ör. otomatik onay arayüzleri) salt

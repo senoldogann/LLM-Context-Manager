@@ -1,0 +1,55 @@
+{
+  "record_version": 2,
+  "run_id": "django-callers-make-aware__F__1",
+  "task_id": "django-callers-make-aware",
+  "repo": "django",
+  "category": "callers",
+  "arm": "F",
+  "rep": 1,
+  "model": "claude-opus-5-5",
+  "effort": "high",
+  "embedding": "local",
+  "index_copy_s": 2.3967572499532253,
+  "index_build_s": 2304.7229919580277,
+  "wall_s": 15.342044166987762,
+  "transcript": {
+    "result_text": "I found 16 functions and methods in `django/` that call `make_aware` directly. The code index reports this list as complete: a text search of the 875 non-test files finds 19 call sites, and every one is inside these functions. That count leaves out test files and mentions inside strings or docstrings. One judgement call: the call in `django/views/decorators/http.py` sits in a nested function, `_pre_process_request`, so I've listed it under `condition`, the outermost named function around it.\n\nCalls written as plain `make_aware(...)`:\n- `ChangeList.get_filters` in `django/contrib/admin/views/main.py`\n- `Feed.get_feed` in `django/contrib/syndication/views.py`\n- `DateFormat.r` in `django/utils/dateformat.py`\n\nCalls written as `timezone.make_aware(...)`:\n- `_get_latest_lastmod` in `django/contrib/sitemaps/views.py`\n- `BaseDatabaseOperations.year_lookup_bounds_for_datetime_field` in `django/db/backends/base/operations.py`\n- `DatabaseOperations.convert_datetimefield_value` in the MySQL, Oracle and SQLite backends (`django/db/backends/{mysql,oracle,sqlite3}/operations.py`)\n- `DateTimeField.to_python` and `DateTimeField.get_prep_value` in `django/db/models/fields/__init__.py`\n- `TruncBase.convert_value` in `django/db/models/functions/datetime.py`\n- `from_current_timezone` in `django/forms/utils.py`\n- `HttpResponseBase.set_cookie` in `django/http/response.py`\n- `do_timezone` in `django/templatetags/tz.py`\n- `condition` in `django/views/decorators/http.py`\n- `DateMixin._make_date_lookup_arg` in `django/views/generic/dates.py`\n\n```json\n{\"answer\": [\n\"django/contrib/admin/views/main.py:ChangeList.get_filters\",\n\"django/contrib/sitemaps/views.py:_get_latest_lastmod\",\n\"django/contrib/syndication/views.py:Feed.get_feed\",\n\"django/db/backends/base/operations.py:BaseDatabaseOperations.year_lookup_bounds_for_datetime_field\",\n\"django/db/backends/mysql/operations.py:DatabaseOperations.convert_datetimefield_value\",\n\"django/db/backends/oracle/operations.py:DatabaseOperations.convert_datetimefield_value\",\n\"django/db/backends/sqlite3/operations.py:DatabaseOperations.convert_datetimefield_value\",\n\"django/db/models/fields/__init__.py:DateTimeField.to_python\",\n\"django/db/models/fields/__init__.py:DateTimeField.get_prep_value\",\n\"django/db/models/functions/datetime.py:TruncBase.convert_value\",\n\"django/forms/utils.py:from_current_timezone\",\n\"django/http/response.py:HttpResponseBase.set_cookie\",\n\"django/templatetags/tz.py:do_timezone\",\n\"django/utils/dateformat.py:DateFormat.r\",\n\"django/views/decorators/http.py:condition\",\n\"django/views/generic/dates.py:DateMixin._make_date_lookup_arg\"\n]}\n```",
+    "subtype": "success",
+    "is_error": false,
+    "num_turns": 2,
+    "duration_ms": 14152,
+    "cost_usd": 0.074365,
+    "usage": {
+      "input_tokens": 4,
+      "output_tokens": 1394,
+      "cache_creation_input_tokens": 5476,
+      "cache_read_input_tokens": 13305
+    },
+    "tool_calls": {
+      "mcp__context-manager__context": 1
+    },
+    "mcp_status": "connected",
+    "api_key_source": "none",
+    "tools": [
+      "Bash",
+      "Edit",
+      "Glob",
+      "Grep",
+      "Read",
+      "Write",
+      "mcp__context-manager__context",
+      "mcp__context-manager__index_project"
+    ]
+  },
+  "score": {
+    "answered": true,
+    "recall": 1.0,
+    "precision": 1.0,
+    "missing": [],
+    "extra": [],
+    "edit_applied": null,
+    "stale": [],
+    "success": true
+  },
+  "failure": null
+}
