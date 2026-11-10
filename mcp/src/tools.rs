@@ -311,6 +311,23 @@ fn target_form(args: &Value, key: &str, legacy_key: &str) -> Result<TargetForm> 
             });
         }
     }
+    // `yol.rs:ad`, `yol.py:Sınıf.ad`, `yol.rs:Tip::ad`: yol kısmı `:` içermez ve bir
+    // kaynak dosya uzantısıyla biter; `bound::with_bound` gibi yollar buraya düşmez.
+    if let Some((path, name)) = token.split_once(':') {
+        let name = name.trim_start_matches(':');
+        if is_source_file_path(path)
+            && !name.is_empty()
+            && name
+                .split([':', '.'])
+                .filter(|part| !part.is_empty())
+                .all(identifier_part)
+        {
+            return Ok(TargetForm::FileSymbol {
+                file: normalize_graph_path(path, project_path)?,
+                name: name.to_string(),
+            });
+        }
+    }
     Ok(TargetForm::Name(raw.to_string()))
 }
 
@@ -1453,6 +1470,17 @@ fn several_targets_text(candidates: &[String]) -> String {
         text.push_str(&format!("\n- {candidate}"));
     }
     text
+}
+
+/// Bilinen bir kaynak dosya uzantısıyla biten yol (`a/b.rs`, `x.py`, `lib/y.js`).
+fn is_source_file_path(path: &str) -> bool {
+    !path.contains(':')
+        && matches!(
+            Path::new(path)
+                .extension()
+                .and_then(|extension| extension.to_str()),
+            Some("rs" | "py" | "js" | "jsx" | "ts" | "tsx" | "mjs" | "cjs" | "go" | "java")
+        )
 }
 
 fn is_js_ts_path(path: &str) -> bool {

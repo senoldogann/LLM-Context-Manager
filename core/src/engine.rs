@@ -54,6 +54,11 @@ pub enum TargetForm {
         file: String,
         line: usize,
     },
+    /// `yol.rs:ad` (ya da `yol.py:Sınıf.ad`, `yol.rs:Tip::ad`): adı yalnız o dosyada arar.
+    FileSymbol {
+        file: String,
+        name: String,
+    },
     Name(String),
 }
 
@@ -1004,6 +1009,39 @@ impl RetrievalEngine {
                 .symbol_at(&file, line)
                 .map(|idx| graph.graph[idx].id.clone())
                 .ok_or(TargetError::NoSymbolAt { file, line }),
+            TargetForm::FileSymbol { file, name } => {
+                let leaf = name
+                    .rsplit([':', '.'])
+                    .find(|part| !part.is_empty())
+                    .unwrap_or(&name)
+                    .to_string();
+                let found: Vec<petgraph::graph::NodeIndex> = graph
+                    .symbols_named(&leaf)
+                    .into_iter()
+                    .filter(|idx| extract_file_path(&graph.graph[*idx].id) == file)
+                    .collect();
+                let target = format!("{}:{name}", file.trim_start_matches("./"));
+                match found.as_slice() {
+                    [] => Err(TargetError::NotFound(target)),
+                    [only] => Ok(graph.graph[*only].id.clone()),
+                    many => Err(TargetError::Ambiguous {
+                        target,
+                        candidates: many
+                            .iter()
+                            .map(|idx| {
+                                let node = &graph.graph[*idx];
+                                format!(
+                                    "{}:{} {:?} {}",
+                                    extract_file_path(&node.id).trim_start_matches("./"),
+                                    node.start_line,
+                                    node.node_type,
+                                    node.name
+                                )
+                            })
+                            .collect(),
+                    }),
+                }
+            }
             TargetForm::Name(name) => {
                 // Yol biçimindeki ad (`app/core.py`) dosyanın kendisidir.
                 if let Some(idx) =
