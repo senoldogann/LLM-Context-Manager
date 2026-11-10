@@ -208,3 +208,12 @@ the final run is complete.
     `scripts/rescore.py` from the stored answers; the originals are kept unchanged in
     `results/agent/iter8-20261110/<agent>/runs-preregistered-gold/` and both results are reported.
     A check of all other Tokio gold call sites found no other call inside a test module.
+13. 2026-11-10: to measure #21 (unknown names answered with a text search) and #22 (items inside
+    item-level brace macros indexed) on tasks they were not made for, two more Tokio held-out tasks
+    whose targets are defined inside `cfg_*! { … }` blocks are written before they are run or any
+    CCM packet for them is looked at, gold from `rg` over the library crates and reading each
+    enclosing function (none inside a test module): `tokio-callers-with-scheduler` (8 calls in 8
+    functions) and `tokio-callers-poll-proceed` (11 calls of `io/util` `poll_proceed_and_make_progress`,
+    defined twice as `cfg_coop!`/`cfg_not_coop!` alternatives, in 11 methods). They run with three
+    repetitions, arms Codex A and B and Claude A, B, F and H, together with a re-run of the now tuned
+    `tokio-callers-async-op`.

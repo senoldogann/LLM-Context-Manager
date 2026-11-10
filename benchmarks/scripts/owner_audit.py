@@ -105,27 +105,70 @@ def python_owners(source: str, name: str) -> set[str]:
     return owners
 
 
+def balanced_generics(text: str) -> tuple[str, str]:
+    """`<...>` ile başlayan metnin dengeli generic içeriği ve kalanı; `<` yoksa ("", metin)."""
+    if not text.startswith("<"):
+        return "", text
+    depth = 0
+    for index, character in enumerate(text):
+        depth += {"<": 1, ">": -1}.get(character, 0)
+        if depth == 0:
+            return text[1:index], text[index + 1 :]
+    return text[1:], ""
+
+
+def impl_self_types(header: str) -> set[str]:
+    """`impl` başlığındaki self tip adı ve generic argümanlarındaki tipler.
+
+    `impl<T> Schedule for Arc<Handle> where T: Convert` → {Arc, Handle}: trait (`Schedule`),
+    trait argümanları ve `where` kısıtları sayılmaz.
+    """
+    rest = header.strip().removeprefix("impl")
+    _, rest = balanced_generics(rest.lstrip())
+    rest = re.split(r"\bwhere\b|\{", rest, maxsplit=1)[0].strip()
+    # `for` en üst düzeydeyse self tip ondan sonradır (trait argümanları atlanır).
+    depth = 0
+    for match in re.finditer(r"<|>|\bfor\b", rest):
+        token = match.group(0)
+        if token in "<>":
+            depth += 1 if token == "<" else -1
+        elif depth == 0:
+            rest = rest[match.end() :].strip()
+            break
+    head = re.match(r"[\w:]+", rest)
+    if head is None:
+        return set()
+    arguments, _ = balanced_generics(rest[head.end() :])
+    return {head.group(0).rsplit("::", 1)[-1], *re.findall(r"\b[A-Z]\w*", arguments)}
+
+
 def rust_owners(source: str, name: str) -> set[str]:
-    """`fn name` tanımlarının kapsayan impl tipi, fonksiyon ve mod adları."""
+    """`fn name` tanımlarının kapsayan impl tipleri, fonksiyon ve mod adları.
+
+    `impl Trait for Arc<Handle>` içindeki fonksiyonun sahipleri `Arc` ve `Handle`'dır.
+    """
     owners: set[str] = set()
-    stack: list[tuple[int, str]] = []
-    # `{` sonraki satırda açılabilir (`where` bloğu): öğe adı o satıra kadar bekler.
-    pending: str | None = None
+    stack: list[tuple[int, frozenset[str]]] = []
+    # `{` sonraki satırda açılabilir (`where` bloğu): öğenin sahip adları o satıra kadar bekler.
+    pending: frozenset[str] | None = None
     depth = 0
     for line in source.splitlines():
         match = RS_ITEM.match(line)
         if match is not None:
-            label = match.group("fname") or match.group("mname") or match.group("iname")
             if match.group("fn") and match.group("fname") == name:
-                owners.update(owner for _, owner in stack)
-            pending = label.rsplit("::", 1)[-1] if label else None
+                owners.update(owner for _, labels in stack for owner in labels)
+            if match.group("iname"):
+                pending = frozenset(impl_self_types(line))
+            else:
+                label = match.group("fname") or match.group("mname")
+                pending = frozenset({label}) if label else None
         if pending is not None and "{" in line:
             stack.append((depth, pending))
             pending = None
         elif pending is not None and line.rstrip().endswith(";"):
             pending = None
         depth += line.count("{") - line.count("}")
-        stack = [(level, owner) for level, owner in stack if level < depth]
+        stack = [(level, labels) for level, labels in stack if level < depth]
     return owners
 
 
@@ -179,19 +222,37 @@ def audit_run(corpus: Path, record: dict[str, object]) -> RunAudit | None:
     )
 
 
+def measured_commit(agent_dir: Path) -> str:
+    """Kümenin ölçüldüğü commit (`settings.json` → `harness_revision`), kısa biçim."""
+    settings = json.loads((agent_dir / "settings.json").read_text())
+    revision = settings.get("harness_revision")
+    if not isinstance(revision, str):
+        raise ValueError(f"{agent_dir}/settings.json has no harness_revision")
+    return revision[:7]
+
+
 def main() -> None:
     """Sonuç dizinlerindeki tüm koşuları denetler ve görev başına özetler."""
     corpus = Path(sys.argv[1])
     # Düzenleme görevlerinin cevapları ajanın eklediği koda atıf yapar; korpusta yoktur.
     known = {task.id for task in KNOWN_TASKS if task.edit is None}
     print(
-        "| Results | Agent | Task | Runs | Wrong owner | Missing same-name copy "
+        "| Results | Agent | Commit | Task | Runs | Wrong owner | Missing same-name copy "
         "| Unqualified copy |"
     )
-    print("|---|---|---|---|---|---|---|")
+    print("|---|---|---|---|---|---|---|---|")
+    audited: list[str] = []
     examples: list[str] = []
     for results in (Path(argument) for argument in sys.argv[2:]):
-        for agent_dir in sorted(path for path in results.iterdir() if (path / "runs").is_dir()):
+        # Ajan başına alt dizin (`<set>/claude/runs`) ya da tek ajanlı küme (`<set>/runs`).
+        agent_dirs = (
+            [results]
+            if (results / "runs").is_dir()
+            else sorted(path for path in results.iterdir() if (path / "runs").is_dir())
+        )
+        for agent_dir in agent_dirs:
+            commit = measured_commit(agent_dir)
+            audited.append(f"{results.name}/{agent_dir.name} at `{commit}`")
             by_task: dict[str, list[RunAudit]] = {}
             for path in sorted((agent_dir / "runs").glob("*.json")):
                 record = json.loads(path.read_text())
@@ -211,11 +272,13 @@ def main() -> None:
                 unqualified = sum(1 for audit in audits if audit.unqualified_copies)
                 if wrong or missing or unqualified:
                     print(
-                        f"| {results.name} | {agent_dir.name} | `{task}` | {len(audits)} | "
-                        f"{wrong} | {missing} | {unqualified} |"
+                        f"| {results.name} | {agent_dir.name} | `{commit}` | `{task}` | "
+                        f"{len(audits)} | {wrong} | {missing} | {unqualified} |"
                     )
     print()
     print("\n".join(examples))
+    print()
+    print("Audited result sets and their measured commits: " + "; ".join(audited) + ".")
 
 
 if __name__ == "__main__":

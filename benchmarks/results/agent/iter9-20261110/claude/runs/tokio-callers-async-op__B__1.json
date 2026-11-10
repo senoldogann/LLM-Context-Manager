@@ -1,0 +1,57 @@
+{
+  "record_version": 3,
+  "run_id": "tokio-callers-async-op__B__1",
+  "task_id": "tokio-callers-async-op",
+  "repo": "tokio",
+  "category": "callers",
+  "arm": "B",
+  "rep": 1,
+  "model": "claude-opus-5-5",
+  "effort": "high",
+  "embedding": "local",
+  "index_copy_s": 0.07723441696725786,
+  "index_build_s": 265.3463085840922,
+  "wall_s": 13.306385332951322,
+  "transcript": {
+    "result_text": "The index and a grep both show 13 direct calls, each written as `trace::async_op(...)`. The index reports its caller list as complete. Every caller is in the `tokio` crate:\n\n- **`Barrier.wait`** in `tokio/src/sync/barrier.rs`, line 127\n- **`Mutex.lock`** in `tokio/src/sync/mutex.rs`, line 446\n- **`Mutex.lock_owned`** in `tokio/src/sync/mutex.rs`, line 629\n- **`Sender.closed`** in `tokio/src/sync/oneshot.rs`, line 706\n- **`RwLock.read`** in `tokio/src/sync/rwlock.rs`, line 450\n- **`RwLock.read_owned`** in `tokio/src/sync/rwlock.rs`, line 598\n- **`RwLock.write`** in `tokio/src/sync/rwlock.rs`, line 792\n- **`RwLock.write_owned`** in `tokio/src/sync/rwlock.rs`, line 927\n- **`Semaphore.acquire`** in `tokio/src/sync/semaphore.rs`, line 581\n- **`Semaphore.acquire_many`** in `tokio/src/sync/semaphore.rs`, line 628\n- **`Semaphore.acquire_owned`** in `tokio/src/sync/semaphore.rs`, line 763\n- **`Semaphore.acquire_many_owned`** in `tokio/src/sync/semaphore.rs`, line 827\n- **`Interval.tick`** in `tokio/src/time/interval.rs`, line 437\n\nSome other files contain the text \"async_op\" but don't call the function. In `sleep.rs`, `batch_semaphore.rs` and `oneshot.rs` (the `Receiver` code) it only appears inside span names or targets like `\"runtime.resource.async_op\"`. The test files match the same way.\n\n```json\n{\"answer\": [\"tokio/src/sync/barrier.rs:Barrier.wait\", \"tokio/src/sync/mutex.rs:Mutex.lock\", \"tokio/src/sync/mutex.rs:Mutex.lock_owned\", \"tokio/src/sync/oneshot.rs:Sender.closed\", \"tokio/src/sync/rwlock.rs:RwLock.read\", \"tokio/src/sync/rwlock.rs:RwLock.read_owned\", \"tokio/src/sync/rwlock.rs:RwLock.write\", \"tokio/src/sync/rwlock.rs:RwLock.write_owned\", \"tokio/src/sync/semaphore.rs:Semaphore.acquire\", \"tokio/src/sync/semaphore.rs:Semaphore.acquire_many\", \"tokio/src/sync/semaphore.rs:Semaphore.acquire_owned\", \"tokio/src/sync/semaphore.rs:Semaphore.acquire_many_owned\", \"tokio/src/time/interval.rs:Interval.tick\"]}\n```",
+    "subtype": "success",
+    "is_error": false,
+    "num_turns": 3,
+    "duration_ms": 12511,
+    "cost_usd": 0.11515460000000001,
+    "usage": {
+      "input_tokens": 4,
+      "output_tokens": 1193,
+      "cache_creation_input_tokens": 11210,
+      "cache_read_input_tokens": 7993
+    },
+    "tool_calls": {
+      "Grep": 1,
+      "mcp__context-manager__context": 1
+    },
+    "mcp_status": "connected",
+    "api_key_source": "none",
+    "tools": [
+      "Bash",
+      "Edit",
+      "Glob",
+      "Grep",
+      "Read",
+      "Write",
+      "mcp__context-manager__context",
+      "mcp__context-manager__index_project"
+    ]
+  },
+  "score": {
+    "answered": true,
+    "recall": 1.0,
+    "precision": 1.0,
+    "missing": [],
+    "extra": [],
+    "edit_applied": null,
+    "stale": [],
+    "success": true
+  },
+  "failure": null,
+  "hook": null
+}

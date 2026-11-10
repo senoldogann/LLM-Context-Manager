@@ -1,0 +1,58 @@
+{
+  "record_version": 3,
+  "run_id": "tokio-callers-poll-proceed__F__1",
+  "task_id": "tokio-callers-poll-proceed",
+  "repo": "tokio",
+  "category": "callers",
+  "arm": "F",
+  "rep": 1,
+  "model": "claude-opus-5-5",
+  "effort": "high",
+  "embedding": "local",
+  "index_copy_s": 0.0568081671372056,
+  "index_build_s": 265.3463085840922,
+  "wall_s": 13.631014458136633,
+  "transcript": {
+    "result_text": "Direct calls to `poll_proceed_and_make_progress` come from 11 trait methods across three files: `repeat.rs`, `sink.rs` and `empty.rs`, all in `tokio/src/io/util/`. I found them by searching the whole repository for the name, then matching each call line to the method around it. No other crate in the workspace calls it.\n\nThe function is defined twice in `tokio/src/io/util/mod.rs` (lines 90 and 98), but those are two alternative versions of one function, so both are covered here.\n\n- **`Repeat`** (`repeat.rs`): `poll_read` (line 58).\n- **`Sink`** (`sink.rs`): `poll_write` (61), `poll_flush` (68), `poll_shutdown` (75).\n- **`Empty`** (`empty.rs`): `poll_read` (75), `poll_fill_buf` (84), `poll_write` (100), `poll_flush` (107), `poll_shutdown` (114), `poll_write_vectored` (130), `poll_complete` (145).\n\n```json\n{\"answer\": [\"tokio/src/io/util/repeat.rs:Repeat.poll_read\", \"tokio/src/io/util/sink.rs:Sink.poll_write\", \"tokio/src/io/util/sink.rs:Sink.poll_flush\", \"tokio/src/io/util/sink.rs:Sink.poll_shutdown\", \"tokio/src/io/util/empty.rs:Empty.poll_read\", \"tokio/src/io/util/empty.rs:Empty.poll_fill_buf\", \"tokio/src/io/util/empty.rs:Empty.poll_write\", \"tokio/src/io/util/empty.rs:Empty.poll_flush\", \"tokio/src/io/util/empty.rs:Empty.poll_shutdown\", \"tokio/src/io/util/empty.rs:Empty.poll_write_vectored\", \"tokio/src/io/util/empty.rs:Empty.poll_complete\"]}\n```",
+    "subtype": "success",
+    "is_error": false,
+    "num_turns": 4,
+    "duration_ms": 12890,
+    "cost_usd": 0.07014139999999999,
+    "usage": {
+      "input_tokens": 8,
+      "output_tokens": 1113,
+      "cache_creation_input_tokens": 5215,
+      "cache_read_input_tokens": 30647
+    },
+    "tool_calls": {
+      "Bash": 1,
+      "Grep": 1,
+      "mcp__context-manager__context": 1
+    },
+    "mcp_status": "connected",
+    "api_key_source": "none",
+    "tools": [
+      "Bash",
+      "Edit",
+      "Glob",
+      "Grep",
+      "Read",
+      "Write",
+      "mcp__context-manager__context",
+      "mcp__context-manager__index_project"
+    ]
+  },
+  "score": {
+    "answered": true,
+    "recall": 1.0,
+    "precision": 1.0,
+    "missing": [],
+    "extra": [],
+    "edit_applied": null,
+    "stale": [],
+    "success": true
+  },
+  "failure": null,
+  "hook": null
+}
