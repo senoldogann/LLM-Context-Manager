@@ -110,18 +110,16 @@ wide and one repetition cannot separate small effects from run-to-run noise.
 | iteration 5 tuned (`9bb6564`) | Codex | 4 tuned | 8/8 | **0.76 (0.45–0.99)** | django capfirst 0.45, serde edit-wrap-field 0.61, flask locate-app-string 0.91, express edit-normalize-type 0.99 | |
 | iteration 5 held-out (`9bb6564`) | Claude | 4 held-out | 16/16 | 1.08 (0.32–1.48), B called CCM in 1 run | | F 0.92 (0.32–1.36); H 1.07 (0.33–1.40) |
 | iteration 5 tuned (`9bb6564`) | Claude | 4 tuned | 16/16 | 1.04 (0.75–1.64), B never called CCM | | F 0.92 (0.64–1.32); H 1.13 (0.59–1.63) |
-
 | iteration 5 held-out ×3 (`9bb6564`) | Codex | 4 held-out, 3 reps | 24/24 | 1.43 (0.61–1.77) | django iri_to_uri 0.61, express locate-trust 1.16, flask edit-method-route 1.69, serde types-deserializer 1.77 | |
 | iteration 5 held-out ×3 (`9bb6564`) | Claude | 4 held-out, 3 reps | 48/48 | 1.06 (0.53–1.08), B called CCM in 3 of 12 runs (all Django) | django iri_to_uri 0.53, express 1.06, flask 1.06, serde 1.08 | F 0.99 (0.51–1.27); H 0.95 (0.53–0.97) |
-
 | large-repository ×3 (`516ed4c` harness, `9bb6564` product) | Codex | 2 held-out, 3 reps | 12/12 | | django constant_time_compare 0.67, django urlencode trap 0.51 | |
 | large-repository ×3 (`516ed4c` harness, `9bb6564` product) | Claude | 2 held-out, 3 reps | 24/24 | B called CCM in 3 of 6 runs (all on constant_time_compare) | django constant_time_compare 0.51, urlencode trap 1.08 | F 0.58, 1.10; H 0.43, 1.34 |
-
 | iteration 7 (`e805025`) | Codex | Tokio 2 held-out + Django urlencode tuned, 3 reps | 18/18 | | tokio sleep_until 0.65, tokio catch_unwind trap 1.36; tuned django urlencode 0.30 (was 0.51) | |
 | iteration 7 (`e805025`) | Claude | Tokio 2 held-out + Django urlencode tuned, 3 reps | 36/36 | B called CCM in 1 of 9 runs (tokio sleep_until) | tokio sleep_until 0.84, catch_unwind trap 1.30; tuned urlencode 0.91 | F 0.87, 1.33, 0.66 (urlencode was 1.10); H 0.77, 1.22, 0.91 |
-
 | iteration 8 (`4c5f193`) | Codex | Tokio 2 held-out + catch_unwind tuned, 3 reps | 18/18 | | tokio async_op 2.28, tokio yield_now trap 1.46; tuned catch_unwind 1.29 (was 1.36) | |
 | iteration 8 (`4c5f193`) | Claude | Tokio 2 held-out + catch_unwind tuned, 3 reps | 34/36 | B called CCM in 2 of 9 runs | tokio async_op 1.02, yield_now trap 0.98; tuned catch_unwind 1.17 | F 1.01, 0.91, 0.93; H 0.86, 0.65, 1.12 |
+| iteration 9 (`31502d6`) | Codex | Tokio 2 held-out + async_op tuned, 3 reps | 18/18 | | tokio with_scheduler 0.83, poll_proceed 1.10; tuned async_op 0.85 (was 2.28) | |
+| iteration 9 (`31502d6`) | Claude | Tokio 2 held-out + async_op tuned, 3 reps | 36/36 | B called CCM in 7 of 9 runs | tokio with_scheduler 0.93, poll_proceed 1.18; tuned async_op 0.50 (was 1.02) | F 0.72, 1.58, 0.63; H 1.06, 1.25, 0.75 |
 
 Iteration 8 (`iter8-20261110/`, reading rule in its `PLAN.md`): the saving held for no agent and
 task. Tokio `async_op` is defined inside `cfg_trace! { … }` and is not in the index, so
@@ -134,9 +132,6 @@ after the runs (amendment 12) and the task's records were rescored from the stor
 correctly leaving the test out) and Claude 6 of 12; with the corrected gold, Codex passes all six
 and Claude fails 2 (answers that included test functions). The original records and a report on
 them are kept in `runs-preregistered-gold/` and `report-preregistered-gold.md`.
-
-| iteration 9 (`31502d6`) | Codex | Tokio 2 held-out + async_op tuned, 3 reps | 18/18 | | tokio with_scheduler 0.83, poll_proceed 1.10; tuned async_op 0.85 (was 2.28) | |
-| iteration 9 (`31502d6`) | Claude | Tokio 2 held-out + async_op tuned, 3 reps | 36/36 | B called CCM in 7 of 9 runs | tokio with_scheduler 0.93, poll_proceed 1.18; tuned async_op 0.50 (was 1.02) | F 0.72, 1.58, 0.63; H 1.06, 1.25, 0.75 |
 
 Iteration 9 (`iter9-20261110/`, reading rule in its `PLAN.md`): `async_op` is now indexed (#22)
 and both agents answered it with one `context` call (Codex B 32 k ×3 against A 36–39 k, Claude B
