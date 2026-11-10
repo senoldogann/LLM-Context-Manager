@@ -1,0 +1,62 @@
+{
+  "run_id": "serde-callers-expr-is-missing__C__1",
+  "task_id": "serde-callers-expr-is-missing",
+  "repo": "serde",
+  "category": "callers",
+  "arm": "C",
+  "rep": 1,
+  "model": "claude-opus-5-5",
+  "effort": "high",
+  "embedding": "local",
+  "index_s": 255.2857811250724,
+  "wall_s": 12.357616625027731,
+  "transcript": {
+    "result_text": "Seven functions call `expr_is_missing` directly, and all of them are in `serde_derive/src/de.rs`. I searched every file under `serde_derive/src/` for the name; the only other matches are calls to `expr_is_missing_seq`, which is a different function, so I left them out. To find which function contains each call, I matched every call's line number to the nearest top-level `fn` above it.\n\n| Call site(s) | Containing function |\n|---|---|\n| de.rs:711 | `deserialize_seq` |\n| de.rs:813 | `deserialize_seq_in_place` |\n| de.rs:1872 | `deserialize_internally_tagged_variant` |\n| de.rs:1917 | `deserialize_untagged_variant` |\n| de.rs:1960 | `deserialize_externally_tagged_newtype_variant` |\n| de.rs:2630, 2681 | `deserialize_map` |\n| de.rs:2835 | `deserialize_map_in_place` |\n\n```json\n{\"answer\": [\"serde_derive/src/de.rs:deserialize_seq\", \"serde_derive/src/de.rs:deserialize_seq_in_place\", \"serde_derive/src/de.rs:deserialize_internally_tagged_variant\", \"serde_derive/src/de.rs:deserialize_untagged_variant\", \"serde_derive/src/de.rs:deserialize_externally_tagged_newtype_variant\", \"serde_derive/src/de.rs:deserialize_map\", \"serde_derive/src/de.rs:deserialize_map_in_place\"]}\n```",
+    "subtype": "success",
+    "is_error": false,
+    "num_turns": 3,
+    "duration_ms": 10927,
+    "cost_usd": 0.07258780000000001,
+    "usage": {
+      "input_tokens": 6,
+      "output_tokens": 1004,
+      "cache_creation_input_tokens": 5889,
+      "cache_read_input_tokens": 26859
+    },
+    "tool_calls": {
+      "Bash": 1,
+      "Grep": 1
+    },
+    "mcp_status": "connected",
+    "api_key_source": "none",
+    "tools": [
+      "Bash",
+      "Edit",
+      "Glob",
+      "Grep",
+      "Read",
+      "Write",
+      "mcp__context-manager__diff_context",
+      "mcp__context-manager__explain",
+      "mcp__context-manager__find_nodes",
+      "mcp__context-manager__find_usages",
+      "mcp__context-manager__impact_of_change",
+      "mcp__context-manager__index_now",
+      "mcp__context-manager__index_project",
+      "mcp__context-manager__map",
+      "mcp__context-manager__search_code",
+      "mcp__context-manager__trace_call_chain"
+    ]
+  },
+  "score": {
+    "answered": true,
+    "recall": 1.0,
+    "precision": 1.0,
+    "missing": [],
+    "extra": [],
+    "edit_applied": null,
+    "stale": [],
+    "success": true
+  },
+  "failure": null
+}

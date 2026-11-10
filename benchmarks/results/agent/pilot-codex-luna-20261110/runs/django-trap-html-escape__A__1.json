@@ -1,0 +1,44 @@
+{
+  "run_id": "django-trap-html-escape__A__1",
+  "task_id": "django-trap-html-escape",
+  "repo": "django",
+  "category": "trap",
+  "arm": "A",
+  "rep": 1,
+  "model": "gpt-6-luna",
+  "effort": "high",
+  "embedding": "local",
+  "index_s": null,
+  "wall_s": 48.73436550004408,
+  "transcript": {
+    "result_text": "```json\n{\"answer\":[\"django/contrib/auth/admin.py:UserAdmin.user_change_password\",\"django/contrib/syndication/views.py:Feed.item_title\",\"django/forms/utils.py:ErrorList.get_json_data\",\"django/template/base.py:Template.get_exception_info\",\"django/template/defaultfilters.py:force_escape\",\"django/template/defaultfilters.py:linebreaksbr\",\"django/template/defaultfilters.py:linenumbers\",\"django/template/defaulttags.py:DebugNode.render\",\"django/utils/html.py:Urlizer.handle_word\",\"django/utils/html.py:conditional_escape\",\"django/utils/html.py:linebreaks\"]}\n```",
+    "subtype": "completed",
+    "is_error": false,
+    "num_turns": null,
+    "duration_ms": 48734,
+    "cost_usd": null,
+    "usage": {
+      "input_tokens": 37842,
+      "output_tokens": 1961,
+      "cache_creation_input_tokens": 0,
+      "cache_read_input_tokens": 242304
+    },
+    "tool_calls": {
+      "command_execution": 7
+    },
+    "mcp_status": "unreported",
+    "api_key_source": "chatgpt",
+    "tools": []
+  },
+  "score": {
+    "answered": true,
+    "recall": 1.0,
+    "precision": 1.0,
+    "missing": [],
+    "extra": [],
+    "edit_applied": null,
+    "stale": [],
+    "success": true
+  },
+  "failure": null
+}

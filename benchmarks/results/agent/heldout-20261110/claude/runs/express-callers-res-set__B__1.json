@@ -1,0 +1,54 @@
+{
+  "run_id": "express-callers-res-set__B__1",
+  "task_id": "express-callers-res-set",
+  "repo": "express",
+  "category": "callers",
+  "arm": "B",
+  "rep": 1,
+  "model": "claude-opus-5-5",
+  "effort": "high",
+  "embedding": "local",
+  "index_s": 29.792801457922906,
+  "wall_s": 17.917938250117004,
+  "transcript": {
+    "result_text": "Nine methods in `lib/response.js` and one helper in `lib/router/index.js` call `res.set`. I searched `lib/` for every `.set(` and `.header(` call and left out `app.set` (all of `lib/application.js`) and the doc-comment examples. No code in `lib/` calls `res.header(...)` or `self.set`, and none calls it indirectly with `.call` or `.apply`. Every match is `this.set(...)` inside a `res.*` method, or `res.set(...)` in the router.\n\n**`lib/response.js`**\n- `res.links` (line 94): sets `Link`\n- `res.send` (lines 175, 199, 206, 223): sets `Content-Type`, `Content-Length` and `ETag`\n- `res.json` (line 276): sets `Content-Type`\n- `res.jsonp` (lines 320, 321, 331, 332): sets `X-Content-Type-Options` and `Content-Type`\n- `res.type` / `res.contentType` (line 625): one function, named `contentType`, and assigned to both properties\n- `res.format` (line 699): the call is inside a callback; `format` is the outermost named method\n- `res.attachment` (line 725): sets `Content-Disposition`\n- `res.append` (line 756)\n- `res.location` (line 924): sets `Location`\n- `res.redirect` (line 982): sets `Content-Length`\n\n**`lib/router/index.js`**\n- `sendOptionsResponse` (line 654): `res.set('Allow', body)`\n\nThe calls at line 798 are `res.set` calling itself, so they're excluded.\n\n```json\n{\"answer\": [\"lib/response.js:links\", \"lib/response.js:send\", \"lib/response.js:json\", \"lib/response.js:jsonp\", \"lib/response.js:contentType\", \"lib/response.js:format\", \"lib/response.js:attachment\", \"lib/response.js:append\", \"lib/response.js:location\", \"lib/response.js:redirect\", \"lib/router/index.js:sendOptionsResponse\"]}\n```",
+    "subtype": "success",
+    "is_error": false,
+    "num_turns": 3,
+    "duration_ms": 15853,
+    "cost_usd": 0.0714244,
+    "usage": {
+      "input_tokens": 6,
+      "output_tokens": 1356,
+      "cache_creation_input_tokens": 4978,
+      "cache_read_input_tokens": 22282
+    },
+    "tool_calls": {
+      "Bash": 1,
+      "Grep": 1
+    },
+    "mcp_status": "connected",
+    "api_key_source": "none",
+    "tools": [
+      "Bash",
+      "Edit",
+      "Glob",
+      "Grep",
+      "Read",
+      "Write",
+      "mcp__context-manager__context",
+      "mcp__context-manager__index_project"
+    ]
+  },
+  "score": {
+    "answered": true,
+    "recall": 1.0,
+    "precision": 1.0,
+    "missing": [],
+    "extra": [],
+    "edit_applied": null,
+    "stale": [],
+    "success": true
+  },
+  "failure": null
+}
