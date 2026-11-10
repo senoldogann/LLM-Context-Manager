@@ -14,6 +14,7 @@ import fcntl
 import hashlib
 import json
 import os
+import shlex
 import shutil
 import signal
 import subprocess
@@ -32,7 +33,9 @@ from freshness.repos import WorkspaceError, export_corpus, init_git, run_git
 
 # F yalnız context-first-pilot profilinde: B'nin araçları + `context`'i önce çağırma talimatı.
 # Doğal kullanım kollarından (A/B/C) ayrı etiketlenir; onların karşılaştırmasını değiştirmez.
-Arm = Literal["A", "B", "C", "F"]
+# H yalnız context-first-pilot profilinde ve Claude Code'da: B'nin araçları ve notu + kurulumla
+# gelen isteğe bağlı Grep hook'u (`ccm-mcp hook claude-pre-tool-use`). Doğal kullanım değildir.
+Arm = Literal["A", "B", "C", "F", "H"]
 Embedding = Literal["local", "openai"]
 # subscription: `claude setup-token` ile üretilen abonelik jetonu; api-key: ücretli API anahtarı.
 Auth = Literal["subscription", "api-key"]
@@ -56,7 +59,7 @@ AUTH_MARKERS = (
     "could not be refreshed",
 )
 # Kayıt biçimi: 2'de `index_copy_s` ve `index_build_s` vardır; 1'de (alan yok) `index_s`.
-RECORD_VERSION = 2
+RECORD_VERSION = 3
 INDEX_CACHE_SCHEMA = 1
 # Ajanın gerçekten başladığını gösteren ilk döküm olayı.
 START_EVENTS: dict[AgentName, str] = {"claude": "system/init", "codex": "thread.started"}
@@ -230,7 +233,9 @@ class Init:
 class RunRecord:
     """Bir koşunun kaydı; `runs/<run_id>.json` olarak yazılır.
 
-    Sürüm 2: `index_copy_s` önceden kurulmuş indeksin çalışma kopyasına kopyalanma süresi,
+    Sürüm 3: `hook` H kolunda hook kararlarının sayısıdır (`{"deny": n, "pass_": m}`), diğer
+    kollarda `null`. Sürüm 2: `index_copy_s` önceden kurulmuş indeksin çalışma kopyasına
+    kopyalanma süresi,
     `index_build_s` o indeksin bir kez kurulma süresidir (A kolunda ikisi de `null`). Sürüm 1
     kayıtlarında `record_version` yoktur ve `index_s` her koşuda yapılan tam indekslemedir.
     """
@@ -251,6 +256,15 @@ class RunRecord:
     transcript: Transcript | None
     score: Score | None
     failure: str | None
+    hook: HookCounts | None
+
+
+@dataclass(frozen=True)
+class HookCounts:
+    """H kolunda hook'un kararları: kaç Grep paketle karşılandı, kaçı geçti."""
+
+    deny: int
+    pass_: int
 
 
 @dataclass(frozen=True)
@@ -261,6 +275,7 @@ class RunPaths:
     stderr: Path
     diff: Path
     record: Path
+    hook_log: Path
 
 
 @dataclass(frozen=True)
@@ -329,6 +344,7 @@ def run_paths(out_dir: Path, name: str) -> RunPaths:
         stderr=transcript.with_suffix(".stderr"),
         diff=out_dir / "diffs" / f"{name}.diff",
         record=record_path(out_dir, name),
+        hook_log=transcript.with_suffix(".hook.jsonl"),
     )
 
 
@@ -378,10 +394,10 @@ def granted_tools(profile: ProductProfile, arm: Arm) -> tuple[str, ...]:
     """Ürün profili ve kola göre ajana açılan CCM araçları."""
     if arm == "A":
         return ()
-    if arm == "F" and profile != "context-first-pilot":
-        raise SetupError("arm F exists only in the context-first-pilot profile")
+    if arm in ("F", "H") and profile != "context-first-pilot":
+        raise SetupError(f"arm {arm} exists only in the context-first-pilot profile")
     if profile == "context-first-pilot":
-        return CONTEXT_DEFAULT_TOOLS if arm in ("B", "F") else LEGACY_CCM_TOOLS
+        return CONTEXT_DEFAULT_TOOLS if arm in ("B", "F", "H") else LEGACY_CCM_TOOLS
     return LEGACY_CCM_TOOLS if arm == "B" else ("search_code",)
 
 
@@ -389,7 +405,7 @@ def uses_legacy_discovery(profile: ProductProfile, arm: Arm) -> bool:
     """Bu kol eski yapısal araçların tools/list içinde görünmesini gerektiriyor mu."""
     if arm == "A":
         return False
-    if arm == "F":
+    if arm in ("F", "H"):
         return False
     return profile == "preregistered" or arm == "C"
 
@@ -398,12 +414,12 @@ def arm_note(profile: ProductProfile, arm: Arm) -> str:
     """Kolun ürün yönlendirme notu; baseline not eklemez."""
     if arm == "A":
         return ""
-    if arm == "F" and profile != "context-first-pilot":
-        raise SetupError("arm F exists only in the context-first-pilot profile")
+    if arm in ("F", "H") and profile != "context-first-pilot":
+        raise SetupError(f"arm {arm} exists only in the context-first-pilot profile")
     if profile == "context-first-pilot":
         if arm == "F":
             return CONTEXT_NOTE + FORCED_NOTE
-        return CONTEXT_NOTE if arm == "B" else GRAPH_NOTE
+        return CONTEXT_NOTE if arm in ("B", "H") else GRAPH_NOTE
     return GRAPH_NOTE if arm == "B" else SEARCH_NOTE
 
 
@@ -776,7 +792,9 @@ def write_private(path: Path, text: str) -> None:
         handle.write(text)
 
 
-def claude_command(settings: Settings, task: Task, arm: Arm, config_path: Path) -> list[str]:
+def claude_command(
+    settings: Settings, task: Task, arm: Arm, config_path: Path, hooks_path: Path | None
+) -> list[str]:
     """Kolun `claude -p` komutu; kollar yalnız MCP araçları ve proje notunda ayrışır."""
     command = [
         str(settings.agent_bin),
@@ -812,6 +830,8 @@ def claude_command(settings: Settings, task: Task, arm: Arm, config_path: Path) 
         "--allowedTools",
         ",".join([*BUILTIN_TOOLS, *(mcp_tool(tool) for tool in granted)]),
     ]
+    if hooks_path is not None:
+        command += ["--settings", str(hooks_path)]
     return [*command, "--disallowedTools", ",".join(denied)] if denied else command
 
 
@@ -1029,8 +1049,40 @@ def clear_attempt(paths: RunPaths) -> None:
 
     Böylece yeni kayıtla birlikte duran her dosya bu denemeye aittir.
     """
-    for path in (paths.transcript, paths.stderr, paths.diff):
+    for path in (paths.transcript, paths.stderr, paths.diff, paths.hook_log):
         path.unlink(missing_ok=True)
+
+
+def hook_settings(settings: Settings, server_env: dict[str, str], hook_log: Path) -> str:
+    """H kolunun Claude Code ayarı: Grep için PreToolUse hook'u (`--settings` dosyası)."""
+    environment = {**server_env, "CCM_HOOK_LOG": str(hook_log)}
+    assignments = " ".join(f"{key}={shlex.quote(value)}" for key, value in environment.items())
+    command = (
+        f"env {assignments} {shlex.quote(str(settings.ccm_bin_dir / 'ccm-mcp'))} "
+        "hook claude-pre-tool-use"
+    )
+    hooks: dict[str, JsonValue] = {
+        "PreToolUse": [
+            {"matcher": "Grep", "hooks": [{"type": "command", "command": command, "timeout": 10}]}
+        ]
+    }
+    return json.dumps({"hooks": hooks}, indent=2)
+
+
+def hook_counts(hook_log: Path) -> HookCounts:
+    """Hook günlüğündeki kararların sayısı; hook hiç çağrılmadıysa sıfırdır."""
+    if not hook_log.is_file():
+        return HookCounts(deny=0, pass_=0)
+    decisions = [
+        as_str(
+            as_object(json.loads(line), str(hook_log), TranscriptError).get("decision"),
+            f"{hook_log}: decision",
+            TranscriptError,
+        )
+        for line in hook_log.read_text().splitlines()
+        if line.strip()
+    ]
+    return HookCounts(deny=decisions.count("deny"), pass_=decisions.count("pass"))
 
 
 def marker_contents(workspace: Path, files: tuple[str, ...]) -> dict[str, str | None]:
@@ -1055,15 +1107,22 @@ def agent_invocation(
     home: Path,
     secrets: Secrets,
     server_env: dict[str, str] | None,
+    hook_log: Path,
 ) -> tuple[list[str], dict[str, str]]:
     """Seçilen ajanın komutu ve ortamı; CCM sunucusu yalnız B ve C kollarında verilir."""
     if settings.agent == "claude":
         config_path = work / "mcp.json"
+        hooks_path: Path | None = None
         if server_env is not None:
             write_private(config_path, json.dumps(mcp_config(settings, server_env), indent=2))
-        return claude_command(settings, task, arm, config_path), claude_env(
+            if arm == "H":
+                hooks_path = work / "hooks.json"
+                write_private(hooks_path, hook_settings(settings, server_env, hook_log))
+        return claude_command(settings, task, arm, config_path, hooks_path), claude_env(
             home, settings.auth, secrets
         )
+    if arm == "H":
+        raise SetupError("arm H (Claude Code Grep hook) is not available for Codex")
     if settings.codex_home is None:
         raise SetupError("--agent codex needs --codex-home")
     server = (
@@ -1182,7 +1241,7 @@ def run_one(settings: Settings, task: Task, arm: Arm, rep: int, secrets: Secrets
                 workspace, env, uses_legacy_discovery(settings.profile, arm)
             )
         command, agent_env = agent_invocation(
-            settings, task, arm, work, workspace, home, secrets, server_env
+            settings, task, arm, work, workspace, home, secrets, server_env, paths.hook_log
         )
         agent_started = time.monotonic()
         wall_s = run_agent(
@@ -1238,6 +1297,7 @@ def run_one(settings: Settings, task: Task, arm: Arm, rep: int, secrets: Secrets
         transcript=transcript,
         score=result,
         failure=failure,
+        hook=hook_counts(paths.hook_log) if arm == "H" else None,
     )
     write_record(paths.record, record)
     return record

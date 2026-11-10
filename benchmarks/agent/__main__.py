@@ -41,7 +41,7 @@ from freshness.repos import run_git
 
 PACKAGE_DIR = Path(__file__).resolve().parent
 DEFAULT_ARMS = "A,B,C"
-KNOWN_ARMS: tuple[Arm, ...] = ("A", "B", "C", "F")
+KNOWN_ARMS: tuple[Arm, ...] = ("A", "B", "C", "F", "H")
 HARNESS_PATHS = ("benchmarks/agent", "benchmarks/pyproject.toml", "benchmarks/corpus.json")
 CCM_SOURCE_PATHS = ("core", "mcp", "cli", "npm", "Cargo.toml", "Cargo.lock", "SKILL.md")
 SETUP_SCHEMA_VERSION = 1
@@ -366,8 +366,10 @@ def command_run(
         raise HarnessError("--repetitions must be at least 1")
     if max_total_usd < settings.max_budget_usd:
         raise HarnessError("--max-total-usd must be at least --max-budget-usd")
-    if "F" in arms and settings.profile != "context-first-pilot":
-        raise HarnessError("arm F exists only in the context-first-pilot profile")
+    if ("F" in arms or "H" in arms) and settings.profile != "context-first-pilot":
+        raise HarnessError("arms F and H exist only in the context-first-pilot profile")
+    if "H" in arms and settings.agent != "claude":
+        raise HarnessError("arm H (Claude Code Grep hook) is only defined for --agent claude")
     with exclusive_out_dir(settings.out_dir), sigterm_raises():
         try:
             return run_missing(settings, repetitions, raw_tasks, arms, max_total_usd)
@@ -525,7 +527,8 @@ def build_parser() -> argparse.ArgumentParser:
     run.add_argument(
         "--arms",
         default=DEFAULT_ARMS,
-        help="comma-separated arms; F (forced context-first) exists only in context-first-pilot",
+        help="comma-separated arms; F (forced context-first) and H (Claude Code Grep hook) exist "
+        "only in context-first-pilot",
     )
     run.add_argument("--agent", choices=("claude", "codex"), required=True)
     run.add_argument(

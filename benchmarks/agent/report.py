@@ -15,7 +15,7 @@ from agent.prices import PRICES, estimated_cost
 from freshness.jsonio import as_bool, as_float, as_int, as_list, as_object, as_str
 from freshness.model import JsonValue
 
-ARMS = ("A", "B", "C", "F")
+ARMS = ("A", "B", "C", "F", "H")
 CCM_TOOL_PREFIX = "mcp__context-manager__"
 BOOTSTRAP_ROUNDS = 10_000
 BOOTSTRAP_SEED = 7
@@ -67,6 +67,9 @@ class Outcome:
     wall_s: float | None
     index: IndexTiming
     ccm_calls: int
+    # H kolunda hook'un paketle karşıladığı ve geçirdiği Grep sayısı; diğer kollarda None.
+    hook_deny: int | None
+    hook_pass: int | None
 
 
 Metric = Callable[[Outcome], float | None]
@@ -105,13 +108,53 @@ def index_timing(record: dict[str, JsonValue], path: Path) -> IndexTiming:
             build_s=None,
         )
     version = as_int(version_value, f"{path}: record_version", ReportError)
-    if version != 2:
+    if version not in (2, 3):
         raise ReportError(f"{path}: unsupported record_version {version}")
     return IndexTiming(
         measure="prebuilt-copy",
         seconds=optional_float(record.get("index_copy_s"), f"{path}: index_copy_s"),
         build_s=optional_float(record.get("index_build_s"), f"{path}: index_build_s"),
     )
+
+
+@dataclass(frozen=True)
+class HookDecisions:
+    """Kayıttaki hook kararları (sürüm 3, H kolu)."""
+
+    deny: int
+    pass_: int
+
+
+def hook_decisions(record: dict[str, JsonValue], path: Path) -> HookDecisions | None:
+    """Sürüm 3 kaydında `hook` alanı; yoksa ya da `null` ise None."""
+    value = record.get("hook")
+    if value is None:
+        return None
+    data = as_object(value, f"{path}: hook", ReportError)
+    return HookDecisions(
+        deny=as_int(data.get("deny"), f"{path}: hook.deny", ReportError),
+        pass_=as_int(data.get("pass_"), f"{path}: hook.pass_", ReportError),
+    )
+
+
+def hook_rows(outcomes: list[Outcome]) -> list[str]:
+    """H kolunda görev başına hook kararları; H yoksa boş."""
+    hooked = [outcome for outcome in outcomes if outcome.hook_deny is not None]
+    if not hooked:
+        return []
+    rows = [
+        "## Hook decisions (arm H)",
+        "",
+        "Greps answered with the `context` packet (deny) and greps let through (pass), per run.",
+        "",
+        "| Task | Run | Deny | Pass |",
+        "|---|---|---|---|",
+    ]
+    for outcome in sorted(hooked, key=lambda item: (item.task_id, item.rep)):
+        rows.append(
+            f"| `{outcome.task_id}` | {outcome.rep} | {outcome.hook_deny} | {outcome.hook_pass} |"
+        )
+    return rows
 
 
 def read_outcome(path: Path) -> Outcome:
@@ -124,6 +167,7 @@ def read_outcome(path: Path) -> Outcome:
     task_id = as_str(record.get("task_id"), f"{path}: task_id", ReportError)
     repo = as_str(record.get("repo"), f"{path}: repo", ReportError)
     index = index_timing(record, path)
+    hook = hook_decisions(record, path)
     category = as_str(record.get("category"), f"{path}: category", ReportError)
     arm = as_str(record.get("arm"), f"{path}: arm", ReportError)
     rep = as_int(record.get("rep"), f"{path}: rep", ReportError)
@@ -162,6 +206,8 @@ def read_outcome(path: Path) -> Outcome:
             wall_s=wall_s,
             index=index,
             ccm_calls=0,
+            hook_deny=hook.deny if hook else None,
+            hook_pass=hook.pass_ if hook else None,
         )
 
     transcript = as_object(transcript_value, f"{path}: transcript", ReportError)
@@ -212,6 +258,8 @@ def read_outcome(path: Path) -> Outcome:
             for name, count in calls.items()
             if name.startswith(CCM_TOOL_PREFIX)
         ),
+        hook_deny=hook.deny if hook else None,
+        hook_pass=hook.pass_ if hook else None,
     )
 
 
@@ -530,7 +578,9 @@ def header(setup: JsonValue, outcomes: list[Outcome]) -> list[str]:
     arms = (
         "A=built-ins; B=default context+index_project with context note; "
         "C=legacy full surface with legacy navigation note; "
-        "F=B plus an instruction to call `context` first (forced use, not natural use)"
+        "F=B plus an instruction to call `context` first (forced use, not natural use); "
+        "H=B plus the opt-in Claude Code Grep hook (installed product configuration, not "
+        "natural use)"
         if profile == "context-first-pilot"
         else "A=built-ins; B=preregistered full CCM surface; C=preregistered search_code only"
     )
@@ -568,6 +618,7 @@ def render(outcomes: list[Outcome], setup: JsonValue) -> str:
     if not outcomes:
         raise ReportError("there are no completed runs to report")
     builds = index_build_rows(outcomes)
+    hooks = hook_rows(outcomes)
     sections = (
         header(setup, outcomes),
         arm_rows(outcomes),
@@ -576,6 +627,7 @@ def render(outcomes: list[Outcome], setup: JsonValue) -> str:
         token_rows(outcomes),
         category_rows(outcomes),
         task_rows(outcomes),
+        *((hooks,) if hooks else ()),
         failure_rows(outcomes),
     )
     return "\n\n".join("\n".join(section) for section in sections) + "\n"
