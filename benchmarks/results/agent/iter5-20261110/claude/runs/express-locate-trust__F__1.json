@@ -1,0 +1,56 @@
+{
+  "record_version": 3,
+  "run_id": "express-locate-trust__F__1",
+  "task_id": "express-locate-trust",
+  "repo": "express",
+  "category": "locate",
+  "arm": "F",
+  "rep": 1,
+  "model": "claude-opus-5-5",
+  "effort": "high",
+  "embedding": "local",
+  "index_copy_s": 0.006443582940846682,
+  "index_build_s": 4.664784332970157,
+  "wall_s": 6.501850791042671,
+  "transcript": {
+    "result_text": "The function is `compileTrust`, defined at `lib/utils.js:215` and exported as `exports.compileTrust`.\n\nIt handles each kind of value like this:\n- **Function:** returned unchanged.\n- **`true`:** returns a function that always returns `true`.\n- **Number:** treated as a hop count, so it returns `function(a, i){ return i < val }`.\n- **String:** split on commas, trimmed, then passed on as a list.\n- **Anything else** (an array, or a falsy value turned into `[]`): passed to `proxyaddr.compile(val || [])`.\n\nIt has one caller, `app.set` in `lib/application.js:389`. When `trust proxy` is set, that line stores the result as `trust proxy fn`.\n\n```json\n{\"answer\": [\"lib/utils.js:compileTrust\"]}\n```",
+    "subtype": "success",
+    "is_error": false,
+    "num_turns": 2,
+    "duration_ms": 5822,
+    "cost_usd": 0.0392112,
+    "usage": {
+      "input_tokens": 4,
+      "output_tokens": 436,
+      "cache_creation_input_tokens": 3477,
+      "cache_read_input_tokens": 13296
+    },
+    "tool_calls": {
+      "mcp__context-manager__context": 1
+    },
+    "mcp_status": "connected",
+    "api_key_source": "none",
+    "tools": [
+      "Bash",
+      "Edit",
+      "Glob",
+      "Grep",
+      "Read",
+      "Write",
+      "mcp__context-manager__context",
+      "mcp__context-manager__index_project"
+    ]
+  },
+  "score": {
+    "answered": true,
+    "recall": 1.0,
+    "precision": 1.0,
+    "missing": [],
+    "extra": [],
+    "edit_applied": null,
+    "stale": [],
+    "success": true
+  },
+  "failure": null,
+  "hook": null
+}

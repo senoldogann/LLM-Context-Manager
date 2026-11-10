@@ -1,0 +1,57 @@
+{
+  "record_version": 3,
+  "run_id": "django-trap-capfirst__B__1",
+  "task_id": "django-trap-capfirst",
+  "repo": "django",
+  "category": "trap",
+  "arm": "B",
+  "rep": 1,
+  "model": "claude-opus-5-5",
+  "effort": "high",
+  "embedding": "local",
+  "index_copy_s": 0.4571990000549704,
+  "index_build_s": 1230.484017916955,
+  "wall_s": 24.07151300017722,
+  "transcript": {
+    "result_text": "I found 17 functions and methods in `django/` that call `django.utils.text.capfirst` directly. I grepped every `capfirst` reference, checked where each module imports it from, and matched each call to the function that contains it.\n\n- **Excluded:** `django/contrib/admin/helpers.py` imports `capfirst` from `django.template.defaultfilters`, so its calls are the template filter and don't count. The template-only uses in the admin `.html` files are left out for the same reason.\n- **No hidden callers:** nothing imports the function under another name or calls it as `text.capfirst`.\n- **Nested functions:** the calls in `contrib/admin/utils.py` sit inside a nested `format_callback`, so they're listed under the outer `get_deleted_objects`. The calls in `admin_list.py` are listed under `date_hierarchy`.\n\n```json\n{\"answer\": [\n\"django/test/selenium.py:SeleniumTestCaseBase.__new__\",\n\"django/db/models/base.py:Model.date_error_message\",\n\"django/db/models/base.py:Model.unique_error_message\",\n\"django/db/models/fields/__init__.py:Field.formfield\",\n\"django/forms/models.py:BaseInlineFormSet.add_fields\",\n\"django/contrib/admin/sites.py:AdminSite._build_app_dict\",\n\"django/contrib/admin/utils.py:get_deleted_objects\",\n\"django/contrib/admin/options.py:ModelAdmin._get_action_description\",\n\"django/contrib/admin/options.py:ModelAdmin.history_view\",\n\"django/contrib/admin/templatetags/admin_list.py:date_hierarchy\",\n\"django/contrib/auth/forms.py:AuthenticationForm.__init__\",\n\"django/contrib/auth/management/commands/createsuperuser.py:Command.handle\",\n\"django/contrib/auth/management/commands/createsuperuser.py:Command._get_input_message\",\n\"django/contrib/auth/management/commands/createsuperuser.py:Command._validate_username\"\n]}\n```",
+    "subtype": "success",
+    "is_error": false,
+    "num_turns": 5,
+    "duration_ms": 23221,
+    "cost_usd": 0.11965160000000001,
+    "usage": {
+      "input_tokens": 10,
+      "output_tokens": 1829,
+      "cache_creation_input_tokens": 9157,
+      "cache_read_input_tokens": 48878
+    },
+    "tool_calls": {
+      "Bash": 3,
+      "Grep": 1
+    },
+    "mcp_status": "connected",
+    "api_key_source": "none",
+    "tools": [
+      "Bash",
+      "Edit",
+      "Glob",
+      "Grep",
+      "Read",
+      "Write",
+      "mcp__context-manager__context",
+      "mcp__context-manager__index_project"
+    ]
+  },
+  "score": {
+    "answered": true,
+    "recall": 1.0,
+    "precision": 1.0,
+    "missing": [],
+    "extra": [],
+    "edit_applied": null,
+    "stale": [],
+    "success": true
+  },
+  "failure": null,
+  "hook": null
+}

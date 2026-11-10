@@ -1,0 +1,55 @@
+{
+  "record_version": 3,
+  "run_id": "django-trap-capfirst__A__1",
+  "task_id": "django-trap-capfirst",
+  "repo": "django",
+  "category": "trap",
+  "arm": "A",
+  "rep": 1,
+  "model": "claude-opus-5-5",
+  "effort": "high",
+  "embedding": "local",
+  "index_copy_s": null,
+  "index_build_s": null,
+  "wall_s": 30.029183459002525,
+  "transcript": {
+    "result_text": "I found 14 functions and methods that call `django.utils.text.capfirst` directly.\n\nI started with a text search for `capfirst` across `django/`, checked how each file imports it, and then parsed the files' syntax trees to find the function or method that contains each call.\n\n- **Left out:** `django/contrib/admin/helpers.py` imports `capfirst` from `django.template.defaultfilters`, so its calls don't count. The `|capfirst` uses in templates are the template filter too.\n- **No other import routes:** nothing in `django/` calls it as `text.capfirst` or assigns it to another name, so a search on the bare name catches every direct call.\n- **Nested function:** in `django/contrib/admin/utils.py`, both calls are inside a nested `format_callback`, so I listed the outer function, `get_deleted_objects`.\n- **Checked by hand:** `django/test/selenium.py` uses `match` syntax, which the installed Python 3.9 couldn't parse. I read that file directly; its call is in `SeleniumTestCaseBase.__new__`.\n\n```json\n{\"answer\": [\"django/test/selenium.py:SeleniumTestCaseBase.__new__\", \"django/contrib/auth/forms.py:AuthenticationForm.__init__\", \"django/contrib/auth/management/commands/createsuperuser.py:Command.handle\", \"django/contrib/auth/management/commands/createsuperuser.py:Command._get_input_message\", \"django/contrib/auth/management/commands/createsuperuser.py:Command._validate_username\", \"django/db/models/base.py:Model.date_error_message\", \"django/db/models/base.py:Model.unique_error_message\", \"django/db/models/fields/__init__.py:Field.formfield\", \"django/forms/models.py:BaseInlineFormSet.add_fields\", \"django/contrib/admin/options.py:ModelAdmin._get_action_description\", \"django/contrib/admin/options.py:ModelAdmin.history_view\", \"django/contrib/admin/templatetags/admin_list.py:date_hierarchy\", \"django/contrib/admin/sites.py:AdminSite._build_app_dict\", \"django/contrib/admin/utils.py:get_deleted_objects\"]}\n```",
+    "subtype": "success",
+    "is_error": false,
+    "num_turns": 7,
+    "duration_ms": 29247,
+    "cost_usd": 0.1401658,
+    "usage": {
+      "input_tokens": 14,
+      "output_tokens": 2735,
+      "cache_creation_input_tokens": 8958,
+      "cache_read_input_tokens": 68729
+    },
+    "tool_calls": {
+      "Bash": 5,
+      "Grep": 1
+    },
+    "mcp_status": "none",
+    "api_key_source": "none",
+    "tools": [
+      "Bash",
+      "Edit",
+      "Glob",
+      "Grep",
+      "Read",
+      "Write"
+    ]
+  },
+  "score": {
+    "answered": true,
+    "recall": 1.0,
+    "precision": 1.0,
+    "missing": [],
+    "extra": [],
+    "edit_applied": null,
+    "stale": [],
+    "success": true
+  },
+  "failure": null,
+  "hook": null
+}

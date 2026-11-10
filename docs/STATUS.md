@@ -4,17 +4,17 @@ The current state of CCM and the next steps, for the owner and for any agent tha
 work. Keep it current: replace lines that stop being true instead of appending history (git log and
 `benchmarks/results/` are the history).
 
-Last updated: 2026-11-10. Where work stopped: **four measured product iterations; PR #12 merged,
-iteration 4 (opt-in Grep hook, review fixes, `self = this` aliases) on `feat/iteration4-hook`.**
-CCM does not yet lower token use on held-out tasks for either agent: held-out B/A medians are above
-1 in every iteration except Codex in iteration 1. Where it pays is the large repository (Django,
-155 k lines) when the packet ends the search: on Django caller tasks, tuned and held-out, Codex
-B/A was 0.30–0.80 in iterations 2–4 and Claude's forced F/A 0.49–0.60; the held-out Django trap of
-iteration 4 (`capfirst`) still cost Codex 1.60. Claude Code never calls CCM on its own (0 of 33 B
-runs), and the opt-in hook answered no grep in iteration 4 because Claude's greps are cheaper than
-the packet. Single runs move by up to ±50 % between identical configurations (arm H vs B on tasks
-where the hook passed every grep), so per-task differences below that are not evidence. The
-commits behind each figure are in "Agent pilots" below.
+Last updated: 2026-11-10. Where work stopped: **five measured product iterations; PRs #12, #13
+and #14 merged; iteration 5 (`9bb6564`) recorded.** CCM does not yet lower token use on held-out
+tasks as a whole: held-out B/A medians stay at or above 1.05 for both agents in iterations 2–5.
+Where it pays is the large repository (Django, 155 k lines) when the packet ends the search: in
+iteration 5 every Django B run of both agents used fewer tokens than A (Codex 0.45 and 0.70, Claude
+0.32 and 0.75), and Codex's tuned median fell to 0.76 (0.45–0.99). Claude Code called CCM on its own
+for the first time in iteration 5 (1 of 8 B runs, held-out Django `iri_to_uri`, B/A 0.32); across
+all pilots it did so in 1 of 41 B runs. The opt-in hook now answers greps (16 of 119 recorded greps
+offline, 1 of 11 in iteration 5's H runs). Single runs move by up to ±50 % between identical
+configurations, so per-task differences below that are not evidence. The commits behind each
+figure are in "Agent pilots" below.
 
 ## Goal
 
@@ -105,6 +105,16 @@ wide and one repetition cannot separate small effects from run-to-run noise.
 | iteration 4 tuned (`ed0f4e8`) | Codex | 4 tuned | 8/8 | 1.04 (0.49–1.49) | django make_aware 0.49, deserialize-struct 0.71, res-send 1.37, error-handler 1.49 | |
 | iteration 4 held-out (`ed0f4e8`) | Claude | 4 held-out | 16/16 | 1.09 (1.05–2.56), B never called CCM | | F 1.14 (0.86–1.28); H 1.49 (0.72–1.69) |
 | iteration 4 tuned (`ed0f4e8`) | Claude | 4 tuned | 16/16 | 1.31 (0.64–2.10), B never called CCM | | F 1.59 (0.60–2.04); H 0.93 (0.64–1.13) |
+| iteration 5 held-out (`9bb6564`) | Codex | 4 held-out | 7/8 | 1.05 (0.70–2.11) | django iri_to_uri 0.70, express locate-trust 1.04, serde types-deserializer 1.06, flask edit-method-route 2.11 | |
+| iteration 5 tuned (`9bb6564`) | Codex | 4 tuned | 8/8 | **0.76 (0.45–0.99)** | django capfirst 0.45, serde edit-wrap-field 0.61, flask locate-app-string 0.91, express edit-normalize-type 0.99 | |
+| iteration 5 held-out (`9bb6564`) | Claude | 4 held-out | 16/16 | 1.08 (0.32–1.48), B called CCM in 1 run | | F 0.92 (0.32–1.36); H 1.07 (0.33–1.40) |
+| iteration 5 tuned (`9bb6564`) | Claude | 4 tuned | 16/16 | 1.04 (0.75–1.64), B never called CCM | | F 0.92 (0.64–1.32); H 1.13 (0.59–1.63) |
+
+Iteration 5, Claude per task (input tokens / A). Held-out: django iri_to_uri B 0.32, F 0.32,
+H 0.33; express locate-trust B 1.08, F 0.72, H 1.06; flask edit-method-route B 1.09, F 1.36,
+H 1.08; serde types-deserializer B 1.48, F 1.13, H 1.40. Tuned: django capfirst B 0.75, F 0.64,
+H 0.59; express edit-normalize-type B 0.87, F 0.76, H 0.68; flask locate-app-string B 1.64,
+F 1.09, H 1.63; serde edit-wrap-field B 1.22, F 1.32, H 1.58.
 
 Iteration 4, Claude per task (input tokens / A). Held-out: django capfirst B 2.56, F 1.28, H 1.64;
 express edit-normalize-type B 1.05, F 1.15, H 1.34; flask locate-app-string B 1.08, F 1.12, H 1.69;
@@ -119,9 +129,17 @@ grep 2,455), 2 packets did not claim a complete list. Its latency on Django was 
 (median 0.88 s, 5 calls on the copied embedding index; one cold call in a run took 6.2 s). H
 therefore measured B plus noise; its numbers are not evidence about the hook.
 
+**Arm H, iteration 5 (compact hook answers, PR #14).** The hook ran on 11 greps in 8 H runs and
+answered 1 (Django `iri_to_uri`, 948 chars, 680 ms); it let 10 through (4 patterns not a single
+symbol, 1 definition search, 3 answers not shorter than the grep, 1 packet not complete, 1 index
+with pending changes after an edit). In that H run Claude had already called `context` itself and
+stopped after the hook's answer. One answered grep is not enough to measure the hook; H in
+iteration 5 is again mostly B plus noise. Offline, on all 119 recorded greps, the hook answers 16
+with 35 % less text (`hook-replay-20261110/`).
+
 Results, reports, run records and task selections are in `benchmarks/results/agent/`
 (`heldout-20261110/`, `pilot-*-20261110/`, `iter2-20261110/`, `iter3-20261110/`,
-`iter4-20261110/`); transcripts stay
+`iter4-20261110/`, `iter5-20261110/`, `hook-replay-20261110/`); transcripts stay
 local. Failures kept in the records:
 
 - Iteration-1 tuned sets stopped at the Django task: the frozen harness rebuilt the index with local
@@ -140,6 +158,11 @@ local. Failures kept in the records:
   killed twice by the supervising session's background limits and once the host was saturated by
   other work (load average up to 255; the Django index took 4,500 s instead of 1,349 s), so wall
   times in iteration 4 are not comparable; token counts are unaffected.
+- Iteration 5: Codex B in `express-edit-normalize-type` left out `normalizeTypes` on purpose
+  ("excluding the normalizeTypes call chain") while using only `rg`, no CCM; a misread question.
+  Iteration 5 ran from a fresh clone in `~/Documents/ccm-work` with the corpus fetched again at
+  the same pinned commits, because the original checkout under `~/Desktop` became unreadable to
+  the session.
 - One iteration-1 graph-only `context` query about `res.set` was seen by the supervising agent while
   the held-out runs were already running (disclosed in `heldout-20261110/SELECTION.md`).
 
@@ -161,28 +184,29 @@ What the transcripts show:
   other module; Codex re-checked with `rg` and a natural-language query with the dotted path inside
   routed to an unrelated 12 KB `Engine` packet. Edit tasks remain more expensive for Codex B
   (1.49–2.24): it edits first and then asks CCM to confirm.
-- **Claude Code never called CCM in natural use** (0 of 33 B runs on 2026-11-09 and 2026-11-10),
-  with the tool loaded, a usage note, short server instructions and `anthropic/alwaysLoad`. Its
+- **Iteration 5 (proved imports, Python `test/` packages, several-target queries):** the Django
+  `capfirst` packet now says "call list complete" and matches the gold; Codex B answered the
+  tuned trap with `context` alone (B/A 0.45, was 1.60). Its remaining losses are edit tasks it
+  solves with `rg` and `sed` (flask edit-method-route 2.11).
+- **Claude Code called CCM on its own once** (1 of 41 B runs on 2026-11-09 and 2026-11-10: held-out
+  Django `iri_to_uri` in iteration 5, one `context` call and no grep, 18,014 vs 56,682 input
+  tokens), with the tool loaded, a usage note, short server instructions and
+  `anthropic/alwaysLoad`. Its
   Grep tool caps output, so its baseline is cheaper than Codex's. When forced (F), it always
   re-checks the answer with one or more Greps; F saved tokens on some tasks and cost more on others.
 
 ## Next steps, in order
 
-1. **Make the check prove what it can and stay in the question's scope** (generic, from the
-   iteration-4 transcripts): treat a line the graph attributes to another same-named definition as
-   proven when the file imports the name from that definition's module; when a question names a
-   directory (`in lib/`), report outside lines only inside it and count the rest; route a
-   natural-language query that contains exactly one resolvable dotted path to that target; drop
-   duplicate needles in the headline.
-2. **Claude Code adoption through the hook.** Iteration 4's hook answered no grep because it
-   compared the full packet with Claude's short `content` greps (median 718 chars). It now answers
-   with a compact text (target, check, one line per caller) and only when that is shorter than the
-   grep output; replayed offline on the 119 recorded greps it answers 16 with 35 % less text
-   (`benchmarks/results/agent/hook-replay-20261110/`). Whether Claude then stops searching is
-   measured by arm H in the next pilot. Alternation patterns (`a|def b`, 49 of 119) are not
-   answered yet.
-3. **Repetitions**: three repetitions of the held-out sets per agent before any claim beyond "pilot";
-   iteration 4 shows identical configurations differing by up to ±50 % in a single run.
+1. **Repetitions before any further tuning.** Iteration 5 is the first pilot where the large
+   repository pays for both agents (every Django B run below A) and where Claude chose CCM once;
+   with one run per cell and ±50 % noise between identical configurations, three repetitions of
+   the iteration-5 held-out set per agent (A, B, F, H) are needed to tell whether this holds.
+2. **Edit tasks.** Codex B still costs more than A on Flask edits (2.11 in iteration 5, 1.49 in
+   iteration 4): it edits with `sed` and asks CCM only to confirm. Look at what the packet could give
+   before the edit (the call sites to change) instead of after it.
+3. **Hook coverage.** The hook answers only single-symbol greps; 49 of 119 recorded greps were
+   alternations (`a|def b`). Splitting an alternation into a symbol and a definition search is the
+   next candidate, measured offline with `scripts/hook_replay.py` before any agent run.
 4. Release the fixes (npm launcher roots bug, refresh retry) as 0.5.1 after owner approval.
 5. After the product configuration is stable, the preregistered L3 final experiment (24 tasks × 3
    arms × 3 repetitions per agent) with separate quota approval.
