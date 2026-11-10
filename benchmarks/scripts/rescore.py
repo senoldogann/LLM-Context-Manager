@@ -61,14 +61,16 @@ def main() -> None:
     records = sorted(runs.glob(f"{task_id}__*.json"))
     if not records:
         raise RescoreError(f"no records for {task_id} under {runs}")
+    # Önce bütün yeni puanlar hesaplanır: bir kayıtta hata olursa hiçbir dosya değişmez.
+    originals = [(path, json.loads(path.read_text())) for path in records]
+    updated = [(path, record, rescore_record(task, record)) for path, record in originals]
     backup = out_dir / backup_name
     backup.mkdir(exist_ok=False)
-    for path in records:
+    for path, _, _ in updated:
         shutil.copy2(path, backup / path.name)
-        record = json.loads(path.read_text())
-        updated = rescore_record(task, record)
-        write_atomic(path, json.dumps(updated, indent=2, ensure_ascii=False))
-        print(f"{path.name}: success {record['score']['success']} -> {asdict_success(updated)}")
+    for path, record, new in updated:
+        write_atomic(path, json.dumps(new, indent=2, ensure_ascii=False))
+        print(f"{path.name}: success {record['score']['success']} -> {asdict_success(new)}")
 
 
 if __name__ == "__main__":

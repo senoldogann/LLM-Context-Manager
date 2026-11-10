@@ -137,8 +137,11 @@ Scoring caveat (all pilots): answers are scored per file and function name. Two 
 same name in one file count as one expected item (`RequestFactory.generic` and
 `AsyncRequestFactory.generic` in the `urlencode` trap), and the class name in an answer is not
 checked (`BaseModelAdmin.get_preserved_filters` passes for `ModelAdmin.get_preserved_filters`).
-The preregistered scorer is kept so results stay comparable; a class-aware rescoring would be
-reported separately.
+The preregistered scorer is kept so results stay comparable. An owner audit of all 2026-11-10
+result sets (`owner-audit-20261110/`, `scripts/owner_audit.py`, edit tasks excluded) found 6 runs
+that passed but name a wrong owner or miss a same-named copy: 4 Claude runs of the Django
+`urlencode` trap (iterations 6 and 7) and 2 Codex runs of Tokio `async_op` (iteration 8). Success
+rates for those cells would be lower under owner-aware scoring; token ratios are unaffected.
 
 Per-run input tokens for iteration 7 (`iter7-20261110/`, reading rule in its `PLAN.md`): Tokio
 `sleep_until` Codex A 51 k, 80 k, 53 k and B 44 k, 43 k, 33 k; Claude A 26–38 k and B 19 k (with
@@ -192,7 +195,7 @@ with 35 % less text (`hook-replay-20261110/`).
 Results, reports, run records and task selections are in `benchmarks/results/agent/`
 (`heldout-20261110/`, `pilot-*-20261110/`, `iter2-20261110/`, `iter3-20261110/`,
 `iter4-20261110/`, `iter5-20261110/`, `iter5-reps-20261110/`, `iter6-20261110/`, `iter7-20261110/`, `iter8-20261110/`,
-`hook-replay-20261110/`); transcripts stay
+`hook-replay-20261110/`, `owner-audit-20261110/`); transcripts stay
 local. Failures kept in the records:
 
 - Iteration-1 tuned sets stopped at the Django task: the frozen harness rebuilt the index with local
