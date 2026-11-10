@@ -1,0 +1,57 @@
+{
+  "record_version": 3,
+  "run_id": "tokio-trap-catch-unwind__B__1",
+  "task_id": "tokio-trap-catch-unwind",
+  "repo": "tokio",
+  "category": "trap",
+  "arm": "B",
+  "rep": 1,
+  "model": "claude-opus-5-5",
+  "effort": "high",
+  "embedding": "local",
+  "index_copy_s": 0.06543416599743068,
+  "index_build_s": 202.65235587512143,
+  "wall_s": 15.067216249881312,
+  "transcript": {
+    "result_text": "Only one function calls it: `AtomicWaker::do_register`.\n\nThe helper is declared inside `do_register` (`tokio/src/sync/task/atomic_waker.rs:179`), so nothing outside that function can reach it. All three of its calls are inside `do_register`, which runs from line 175 to before line 303:\n\n- Line 195: `catch_unwind(move || waker.into_waker())`\n- Line 224: `let _ = catch_unwind(move || { ... })`\n- Line 252: `let _ = catch_unwind(move || { ... })`\n\nEvery other `catch_unwind` match in the workspace is a call to `std::panic::catch_unwind` (for example in `harness.rs`, `watch.rs` and `reusable_box.rs`), so none of them count.\n\n```json\n{\"answer\": [\"tokio/src/sync/task/atomic_waker.rs:AtomicWaker.do_register\"]}\n```",
+    "subtype": "success",
+    "is_error": false,
+    "num_turns": 4,
+    "duration_ms": 14162,
+    "cost_usd": 0.0737518,
+    "usage": {
+      "input_tokens": 8,
+      "output_tokens": 892,
+      "cache_creation_input_tokens": 6134,
+      "cache_read_input_tokens": 34039
+    },
+    "tool_calls": {
+      "Grep": 2,
+      "Read": 1
+    },
+    "mcp_status": "connected",
+    "api_key_source": "none",
+    "tools": [
+      "Bash",
+      "Edit",
+      "Glob",
+      "Grep",
+      "Read",
+      "Write",
+      "mcp__context-manager__context",
+      "mcp__context-manager__index_project"
+    ]
+  },
+  "score": {
+    "answered": true,
+    "recall": 1.0,
+    "precision": 1.0,
+    "missing": [],
+    "extra": [],
+    "edit_applied": null,
+    "stale": [],
+    "success": true
+  },
+  "failure": null,
+  "hook": null
+}

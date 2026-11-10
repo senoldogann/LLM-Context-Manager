@@ -1,0 +1,47 @@
+{
+  "record_version": 3,
+  "run_id": "tokio-callers-sleep-until__B__2",
+  "task_id": "tokio-callers-sleep-until",
+  "repo": "tokio",
+  "category": "callers",
+  "arm": "B",
+  "rep": 2,
+  "model": "gpt-6-luna",
+  "effort": "high",
+  "embedding": "local",
+  "index_copy_s": 0.07481604209169745,
+  "index_build_s": 202.65235587512143,
+  "wall_s": 35.91361845820211,
+  "transcript": {
+    "result_text": "The library crates contain these 10 functions or methods that call `sleep_until`:\n\n```json\n{\"answer\":[\"tokio-stream/src/stream_ext/throttle.rs:throttle\",\"tokio-stream/src/stream_ext/timeout.rs:Timeout.new\",\"tokio-test/src/io.rs:Mock.poll_read\",\"tokio-test/src/io.rs:Mock.poll_write\",\"tokio-test/src/stream_mock.rs:StreamMock.poll_next\",\"tokio-util/src/time/delay_queue.rs:DelayQueue.insert_at\",\"tokio-util/src/time/delay_queue.rs:DelayQueue.remove\",\"tokio-util/src/time/delay_queue.rs:DelayQueue.poll_idx\",\"tokio/src/time/interval.rs:internal_interval_at\",\"tokio/src/time/timeout.rs:timeout_at\"]}\n```",
+    "subtype": "completed",
+    "is_error": false,
+    "num_turns": null,
+    "duration_ms": 35914,
+    "cost_usd": null,
+    "usage": {
+      "input_tokens": 4908,
+      "output_tokens": 967,
+      "cache_creation_input_tokens": 0,
+      "cache_read_input_tokens": 38144
+    },
+    "tool_calls": {
+      "mcp__context-manager__context": 2
+    },
+    "mcp_status": "unreported",
+    "api_key_source": "chatgpt",
+    "tools": []
+  },
+  "score": {
+    "answered": true,
+    "recall": 1.0,
+    "precision": 1.0,
+    "missing": [],
+    "extra": [],
+    "edit_applied": null,
+    "stale": [],
+    "success": true
+  },
+  "failure": null,
+  "hook": null
+}

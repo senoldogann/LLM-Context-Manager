@@ -7,7 +7,9 @@
       "url": "https://github.com/serde-rs/serde.git",
       "ref": "v1.0.219",
       "commit": "49d098debdf8b5c38bfb6868f455c6ce542c422c",
-      "languages": ["rust"],
+      "languages": [
+        "rust"
+      ],
       "size_hint": "medium",
       "notes": "Serde serialization framework; strong AST structure, trait-heavy."
     },
@@ -16,7 +18,9 @@
       "url": "https://github.com/pallets/flask.git",
       "ref": "3.0.3",
       "commit": "c12a5d874c5a014495eb2db8a73f40037bc813ac",
-      "languages": ["python"],
+      "languages": [
+        "python"
+      ],
       "size_hint": "small",
       "notes": "Flask micro-framework; request routing and app lifecycle."
     },
@@ -25,7 +29,9 @@
       "url": "https://github.com/expressjs/express.git",
       "ref": "4.19.2",
       "commit": "04bc62787be974874bc1467b23606c36bc9779ba",
-      "languages": ["javascript"],
+      "languages": [
+        "javascript"
+      ],
       "size_hint": "medium",
       "notes": "Express web framework; middleware chain and router."
     },
@@ -34,9 +40,22 @@
       "url": "https://github.com/django/django.git",
       "ref": "5.1",
       "commit": "373cb3037fe4e67adbac9ac43340391e859aa957",
-      "languages": ["python"],
+      "languages": [
+        "python"
+      ],
       "size_hint": "large",
       "notes": "Django web framework; large Python codebase for the L1 freshness benchmark (S1)."
+    },
+    {
+      "name": "tokio",
+      "url": "https://github.com/tokio-rs/tokio.git",
+      "ref": "tokio-1.41.1",
+      "commit": "bb7ca7507b94d01ffe0e275ddc669734ab3bf783",
+      "languages": [
+        "rust"
+      ],
+      "size_hint": "large",
+      "notes": "Tokio async runtime workspace (tokio, tokio-util, tokio-stream, tokio-test, tokio-macros); about 112 k non-test lines of Rust, the second large repository for the agent pilots."
     }
   ]
 }

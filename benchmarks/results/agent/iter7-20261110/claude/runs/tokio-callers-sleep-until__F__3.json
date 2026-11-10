@@ -1,0 +1,57 @@
+{
+  "record_version": 3,
+  "run_id": "tokio-callers-sleep-until__F__3",
+  "task_id": "tokio-callers-sleep-until",
+  "repo": "tokio",
+  "category": "callers",
+  "arm": "F",
+  "rep": 3,
+  "model": "claude-opus-5-5",
+  "effort": "high",
+  "embedding": "local",
+  "index_copy_s": 0.10782149992883205,
+  "index_build_s": 202.65235587512143,
+  "wall_s": 12.770609833067283,
+  "transcript": {
+    "result_text": "Ten functions in the library crates call `tokio::time::sleep_until` directly. I found them with the code index and confirmed the list with a plain text search of the `src/` directories in all four crates:\n\n- **tokio**\n  - `internal_interval_at` (`tokio/src/time/interval.rs:135`, `:138`). One of the two calls is inside a closure.\n  - `timeout_at` (`tokio/src/time/timeout.rs:149`)\n- **tokio-util**: three `DelayQueue` methods in `tokio-util/src/time/delay_queue.rs`\n  - `insert_at` (`:567`)\n  - `remove` (`:763`)\n  - `poll_idx` (`:1159`, inside a closure)\n- **tokio-stream**\n  - `throttle` (`tokio-stream/src/stream_ext/throttle.rs:17`)\n  - `Timeout::new` (`tokio-stream/src/stream_ext/timeout.rs:33`)\n- **tokio-test**\n  - `Mock::poll_read` (`tokio-test/src/io.rs:371`)\n  - `Mock::poll_write` (`tokio-test/src/io.rs:430`)\n  - `StreamMock::poll_next` (`tokio-test/src/stream_mock.rs:135`)\n\nI left out the remaining matches because they are only in doc comments: the example in `tokio/src/time/sleep.rs` and the one in `tokio/src/sync/mod.rs`.\n\n```json\n{\"answer\": [\"tokio/src/time/interval.rs:internal_interval_at\", \"tokio/src/time/timeout.rs:timeout_at\", \"tokio-util/src/time/delay_queue.rs:DelayQueue.insert_at\", \"tokio-util/src/time/delay_queue.rs:DelayQueue.remove\", \"tokio-util/src/time/delay_queue.rs:DelayQueue.poll_idx\", \"tokio-stream/src/stream_ext/throttle.rs:throttle\", \"tokio-stream/src/stream_ext/timeout.rs:Timeout.new\", \"tokio-test/src/io.rs:Mock.poll_read\", \"tokio-test/src/io.rs:Mock.poll_write\", \"tokio-test/src/stream_mock.rs:StreamMock.poll_next\"]}\n```",
+    "subtype": "success",
+    "is_error": false,
+    "num_turns": 3,
+    "duration_ms": 12060,
+    "cost_usd": 0.0790824,
+    "usage": {
+      "input_tokens": 6,
+      "output_tokens": 1235,
+      "cache_creation_input_tokens": 6201,
+      "cache_read_input_tokens": 23752
+    },
+    "tool_calls": {
+      "Grep": 1,
+      "mcp__context-manager__context": 1
+    },
+    "mcp_status": "connected",
+    "api_key_source": "none",
+    "tools": [
+      "Bash",
+      "Edit",
+      "Glob",
+      "Grep",
+      "Read",
+      "Write",
+      "mcp__context-manager__context",
+      "mcp__context-manager__index_project"
+    ]
+  },
+  "score": {
+    "answered": true,
+    "recall": 1.0,
+    "precision": 1.0,
+    "missing": [],
+    "extra": [],
+    "edit_applied": null,
+    "stale": [],
+    "success": true
+  },
+  "failure": null,
+  "hook": null
+}

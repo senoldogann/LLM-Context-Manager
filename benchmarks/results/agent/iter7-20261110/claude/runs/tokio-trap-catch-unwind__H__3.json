@@ -1,0 +1,60 @@
+{
+  "record_version": 3,
+  "run_id": "tokio-trap-catch-unwind__H__3",
+  "task_id": "tokio-trap-catch-unwind",
+  "repo": "tokio",
+  "category": "trap",
+  "arm": "H",
+  "rep": 3,
+  "model": "claude-opus-5-5",
+  "effort": "high",
+  "embedding": "local",
+  "index_copy_s": 0.0814519168343395,
+  "index_build_s": 202.65235587512143,
+  "wall_s": 10.848785832989961,
+  "transcript": {
+    "result_text": "Only one function calls the helper: `AtomicWaker::do_register`.\n\nThe `catch_unwind` helper is defined inside `do_register` itself (`tokio/src/sync/task/atomic_waker.rs:179`), so no code outside that method can call it. `do_register` calls it three times:\n- line 195, wrapping `waker.into_waker()`\n- line 224, wrapping the drop of `old_waker`\n- line 252, wrapping `old_waker.wake()`\n\nEvery other `catch_unwind` call in the workspace is `std::panic::catch_unwind`, called either as `panic::catch_unwind` or through a direct `std` import as in `tokio/tests/task_blocking.rs`. Those don't count.\n\n```json\n{\"answer\": [\"tokio/src/sync/task/atomic_waker.rs:AtomicWaker.do_register\"]}\n```",
+    "subtype": "success",
+    "is_error": false,
+    "num_turns": 3,
+    "duration_ms": 9977,
+    "cost_usd": 0.0697424,
+    "usage": {
+      "input_tokens": 6,
+      "output_tokens": 664,
+      "cache_creation_input_tokens": 6475,
+      "cache_read_input_tokens": 23192
+    },
+    "tool_calls": {
+      "Grep": 1,
+      "Read": 1
+    },
+    "mcp_status": "connected",
+    "api_key_source": "none",
+    "tools": [
+      "Bash",
+      "Edit",
+      "Glob",
+      "Grep",
+      "Read",
+      "Write",
+      "mcp__context-manager__context",
+      "mcp__context-manager__index_project"
+    ]
+  },
+  "score": {
+    "answered": true,
+    "recall": 1.0,
+    "precision": 1.0,
+    "missing": [],
+    "extra": [],
+    "edit_applied": null,
+    "stale": [],
+    "success": true
+  },
+  "failure": null,
+  "hook": {
+    "deny": 0,
+    "pass_": 1
+  }
+}

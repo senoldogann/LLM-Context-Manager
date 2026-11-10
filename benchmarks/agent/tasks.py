@@ -1183,6 +1183,56 @@ DJANGO_ITERATION6_TASKS: tuple[Task, ...] = (
     ),
 )
 
+TOKIO_TASKS: tuple[Task, ...] = (
+    Task(
+        id="tokio-callers-sleep-until",
+        repo="tokio",
+        category="callers",
+        answer_kind="symbols",
+        question=(
+            "Which functions or methods in the library crates of this workspace (`tokio`, "
+            "`tokio-util`, `tokio-stream`, `tokio-test`; not tests, benches or examples) call "
+            "`tokio::time::sleep_until` directly?"
+        ),
+        expected=(
+            sym("tokio-test/src/stream_mock.rs", "poll_next"),
+            *symbols("tokio-test/src/io.rs", ("poll_read", "poll_write")),
+            sym("tokio-stream/src/stream_ext/timeout.rs", "new"),
+            sym("tokio-stream/src/stream_ext/throttle.rs", "throttle"),
+            *symbols("tokio-util/src/time/delay_queue.rs", ("insert_at", "remove", "poll_idx")),
+            sym("tokio/src/time/interval.rs", "internal_interval_at"),
+            sym("tokio/src/time/timeout.rs", "timeout_at"),
+        ),
+        edit=None,
+        notes=(
+            "rg '(^|[^\\w.])sleep_until\\s*\\(' over the library crates, each call read in "
+            "its enclosing function: 11 call sites in 10 functions (two cfg branches in "
+            "internal_interval_at); mentions in doc comments are not calls. Held out "
+            "(preregistration amendment 10)."
+        ),
+    ),
+    Task(
+        id="tokio-trap-catch-unwind",
+        repo="tokio",
+        category="trap",
+        answer_kind="symbols",
+        question=(
+            "`tokio/src/sync/task/atomic_waker.rs` defines a helper function `catch_unwind`. Which "
+            "functions or methods in the library crates of this workspace call that helper "
+            "directly? Calls to `std::panic::catch_unwind` do not count."
+        ),
+        expected=(sym("tokio/src/sync/task/atomic_waker.rs", "do_register"),),
+        edit=None,
+        notes=(
+            "The helper is nested inside AtomicWaker::do_register and is called three times "
+            "there (lines 195, 224, 252); the other eleven `catch_unwind(` calls in the library "
+            "crates (signal/reusable_box.rs, sync/watch.rs, runtime/task/harness.rs, "
+            "tokio-test/src/io.rs and the helper's own body) call std::panic::catch_unwind. Held "
+            "out (preregistration amendment 10)."
+        ),
+    ),
+)
+
 TASKS: tuple[Task, ...] = FLASK_TASKS + EXPRESS_TASKS + SERDE_TASKS
 # Ürün pilotlarının seçebildiği tüm görevler; `--tasks all` yalnız ön kayıtlı 24 görevdir.
 KNOWN_TASKS: tuple[Task, ...] = (
@@ -1193,4 +1243,5 @@ KNOWN_TASKS: tuple[Task, ...] = (
     + DJANGO_ITERATION4_TASKS
     + DJANGO_ITERATION5_TASKS
     + DJANGO_ITERATION6_TASKS
+    + TOKIO_TASKS
 )

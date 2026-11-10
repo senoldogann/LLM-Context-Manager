@@ -1,0 +1,55 @@
+{
+  "record_version": 3,
+  "run_id": "tokio-trap-catch-unwind__A__1",
+  "task_id": "tokio-trap-catch-unwind",
+  "repo": "tokio",
+  "category": "trap",
+  "arm": "A",
+  "rep": 1,
+  "model": "claude-opus-5-5",
+  "effort": "high",
+  "embedding": "local",
+  "index_copy_s": null,
+  "index_build_s": null,
+  "wall_s": 8.706268166890368,
+  "transcript": {
+    "result_text": "The helper `catch_unwind` is a nested function declared inside `AtomicWaker::do_register` (`tokio/src/sync/task/atomic_waker.rs:179`). Because it is local to that method, no other code can call it. It is called three times, all inside `do_register`:\n- line 195 wraps `waker.into_waker()`\n- line 224 wraps dropping the old waker\n- line 252 wraps `old_waker.wake()`\n\nThe only call to `std::panic::catch_unwind` is the one inside the helper itself (line 180), and it doesn't count.\n\n```json\n{\"answer\": [\"tokio/src/sync/task/atomic_waker.rs:AtomicWaker.do_register\"]}\n```",
+    "subtype": "success",
+    "is_error": false,
+    "num_turns": 3,
+    "duration_ms": 8069,
+    "cost_usd": 0.055384,
+    "usage": {
+      "input_tokens": 6,
+      "output_tokens": 626,
+      "cache_creation_input_tokens": 4849,
+      "cache_read_input_tokens": 20240
+    },
+    "tool_calls": {
+      "Grep": 1,
+      "Read": 1
+    },
+    "mcp_status": "none",
+    "api_key_source": "none",
+    "tools": [
+      "Bash",
+      "Edit",
+      "Glob",
+      "Grep",
+      "Read",
+      "Write"
+    ]
+  },
+  "score": {
+    "answered": true,
+    "recall": 1.0,
+    "precision": 1.0,
+    "missing": [],
+    "extra": [],
+    "edit_applied": null,
+    "stale": [],
+    "success": true
+  },
+  "failure": null,
+  "hook": null
+}

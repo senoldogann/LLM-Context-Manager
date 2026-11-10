@@ -1,0 +1,59 @@
+{
+  "record_version": 3,
+  "run_id": "django-trap-urlencode__B__3",
+  "task_id": "django-trap-urlencode",
+  "repo": "django",
+  "category": "trap",
+  "arm": "B",
+  "rep": 3,
+  "model": "claude-opus-5-5",
+  "effort": "high",
+  "embedding": "local",
+  "index_copy_s": 0.574355416931212,
+  "index_build_s": 1230.484017916955,
+  "wall_s": 20.099229959072545,
+  "transcript": {
+    "result_text": "Eight functions and methods in `django/` call `django.utils.http.urlencode` directly. I searched for every `urlencode` reference, checked where each name is imported from, and recorded the function or method that contains each call. I also searched for other ways to reach it, such as `from django.utils import http` followed by `http.urlencode`, and found none.\n\n| Call site | Containing function or method |\n|---|---|\n| `django/test/client.py:399` | `RequestFactory.__init__` |\n| `django/test/client.py:669` | `RequestFactory.generic` |\n| `django/test/client.py:769` | `AsyncRequestFactory.generic` |\n| `django/contrib/admin/views/main.py:306` | `ChangeList.get_query_string` |\n| `django/contrib/admin/templatetags/admin_urls.py:69` | `add_preserved_filters` |\n| `django/contrib/admin/options.py:1246` | `ModelAdmin.get_preserved_filters` |\n| `django/contrib/admin/widgets.py:162` | `ForeignKeyRawIdWidget.get_context` |\n| `django/utils/http.py:80` | `urlencode` |\n\nTwo judgement calls:\n- **`django/utils/http.py`:** I included its own `urlencode`, because it calls `original_urlencode` (the standard-library `urllib.parse.urlencode` imported under another name). That doesn't technically meet your rule. If you only want callers of the Django helper, drop that entry.\n- **Class names:** I only confirmed the containing class at the `test/client.py` call sites. The other class names (`ChangeList`, `ModelAdmin`, `ForeignKeyRawIdWidget`) are what those Django files normally define; I didn't check them.\n\nExcluded, as you asked:\n- **Standard-library calls:** `django/test/testcases.py` (inside `assertURLEqual`), `django/http/request.py` and `django/utils/html.py` import `urlencode` from `urllib.parse`.\n- **`QueryDict.urlencode` and its callers:** the method itself, `request.GET.urlencode()` in admin `options.py`, `querystring.urlencode` in `auth/views.py`, and `query_dict.urlencode()` in `defaulttags.py`.\n- **The template filter:** `defaultfilters.urlencode` and the `|urlencode` uses in templates.\n\n```json\n{\"answer\": [\"django/test/client.py:RequestFactory.__init__\", \"django/test/client.py:RequestFactory.generic\", \"django/test/client.py:AsyncRequestFactory.generic\", \"django/contrib/admin/views/main.py:ChangeList.get_query_string\", \"django/contrib/admin/templatetags/admin_urls.py:add_preserved_filters\", \"django/contrib/admin/options.py:ModelAdmin.get_preserved_filters\", \"django/contrib/admin/widgets.py:ForeignKeyRawIdWidget.get_context\", \"django/utils/http.py:urlencode\"]}\n```",
+    "subtype": "success",
+    "is_error": false,
+    "num_turns": 5,
+    "duration_ms": 19201,
+    "cost_usd": 0.09596460000000001,
+    "usage": {
+      "input_tokens": 8,
+      "output_tokens": 1908,
+      "cache_creation_input_tokens": 6367,
+      "cache_read_input_tokens": 34183
+    },
+    "tool_calls": {
+      "Bash": 1,
+      "Grep": 3
+    },
+    "mcp_status": "connected",
+    "api_key_source": "none",
+    "tools": [
+      "Bash",
+      "Edit",
+      "Glob",
+      "Grep",
+      "Read",
+      "Write",
+      "mcp__context-manager__context",
+      "mcp__context-manager__index_project"
+    ]
+  },
+  "score": {
+    "answered": true,
+    "recall": 1.0,
+    "precision": 0.8571428571428571,
+    "missing": [],
+    "extra": [
+      "django/utils/http.py:urlencode"
+    ],
+    "edit_applied": null,
+    "stale": [],
+    "success": true
+  },
+  "failure": null,
+  "hook": null
+}
