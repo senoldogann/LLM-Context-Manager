@@ -12,6 +12,7 @@ const { execFileSync, spawnSync } = require('node:child_process');
 const {
     MCP_ARGS,
     MCP_ENV,
+    binaryLockPath,
     classifyManifestError,
     classifyManifestText,
     cliChildEnv,
@@ -389,7 +390,50 @@ test('concurrent cache finalization replaces a corrupt target without races', as
 
     assert.equal(fs.readFileSync(binPath, 'utf8'), 'verified-binary');
     assert.equal(await verifyCachedBinary(binPath), true);
-    assert.equal(fs.existsSync(`${binPath}.lock`), false);
+    assert.equal(fs.existsSync(binaryLockPath(binPath)), false);
+    assert.deepEqual(fs.readdirSync(directory).filter((name) => name.endsWith('.tmp')), []);
+});
+
+test('cache finalization does not need hard links (linkSync throws EPERM)', async (t) => {
+    const { directory } = tempConfig();
+    const binPath = path.join(directory, 'ccm-cli');
+    const firstTmp = path.join(directory, 'first.tmp');
+    const secondTmp = path.join(directory, 'second.tmp');
+    fs.writeFileSync(firstTmp, 'verified-binary');
+    fs.writeFileSync(secondTmp, 'verified-binary');
+    // exFAT ve bazı ağ disklerindeki davranış: hard link desteklenmez.
+    t.mock.method(fs, 'linkSync', () => {
+        const error = new Error('EPERM: operation not permitted, link');
+        error.code = 'EPERM';
+        throw error;
+    });
+
+    await Promise.all([
+        finalizeDownloadedBinary(binPath, firstTmp, true),
+        finalizeDownloadedBinary(binPath, secondTmp, true)
+    ]);
+
+    assert.equal(fs.linkSync.mock.callCount(), 0);
+    assert.equal(fs.readFileSync(binPath, 'utf8'), 'verified-binary');
+    assert.equal(await verifyCachedBinary(binPath), true);
+    assert.equal(fs.existsSync(binaryLockPath(binPath)), false);
+});
+
+test('cache finalization takes over a lock whose owner process is dead', async () => {
+    const { directory } = tempConfig();
+    const binPath = path.join(directory, 'ccm-cli');
+    const downloadTmp = path.join(directory, 'download.tmp');
+    fs.writeFileSync(downloadTmp, 'verified-binary');
+    const deadChild = spawnSync(process.execPath, ['-e', '']);
+    assert.equal(deadChild.status, 0);
+    const lockPath = binaryLockPath(binPath);
+    fs.mkdirSync(lockPath);
+    fs.writeFileSync(path.join(lockPath, 'owner'), `${deadChild.pid}\n`);
+
+    await finalizeDownloadedBinary(binPath, downloadTmp, true);
+
+    assert.equal(fs.readFileSync(binPath, 'utf8'), 'verified-binary');
+    assert.equal(fs.existsSync(lockPath), false);
 });
 
 test('temporary download paths are unique even within one process', () => {

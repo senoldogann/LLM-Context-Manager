@@ -1543,6 +1543,9 @@ async fn assigned_member_target(
     let Some((receiver, member)) = expressions[0].rsplit_once('.') else {
         return Ok(None);
     };
+    if !receiver_identifies_callers(receiver) {
+        return Ok(None);
+    }
     Ok(Some(MemberTarget {
         node_id: node.id.clone(),
         hint: MemberCallHint {
@@ -1759,6 +1762,17 @@ async fn receiver_call_evidence(
     Ok(suggestions)
 }
 
+/// Alıcı adı çağıranları tanımlar mı. `exports.f = function` ya da
+/// `Foo.prototype.f = function` başka adlarla çağrılır (`utils.f(`, `obj.f(`):
+/// yalnız atanan ifadeyi aramak gerçek çağıranları düşürür ve yanlış bir "tam"
+/// iddiası doğururdu; bu hedefler graf yolunda kalır.
+fn receiver_identifies_callers(receiver: &str) -> bool {
+    receiver != "exports"
+        && receiver != "module.exports"
+        && receiver != "module"
+        && !receiver.split('.').any(|part| part == "prototype")
+}
+
 /// Atama zincirindeki iç takma ad düğümünü atar: `res.contentType = res.type =
 /// function contentType` iki düğüm üretir (619-626 ve 620-626); aynı dosyada,
 /// aynı satırda biten ve başka bir caller'ın içinde başlayan düğüm aynı gövdedir.
@@ -1794,6 +1808,9 @@ async fn sole_assigned_member_target(
     let Some((receiver, member)) = expression.rsplit_once('.') else {
         return Ok(None);
     };
+    if !receiver_identifies_callers(receiver) {
+        return Ok(None);
+    }
     if !identifier_part(member) || receiver.is_empty() || !receiver.split('.').all(identifier_part)
     {
         return Ok(None);
@@ -2513,7 +2530,9 @@ async fn context_packet(
         })
         .collect();
     if importers > 0 {
-        caller_lines.push(format!("  + {importers} files that only import it"));
+        caller_lines.push(format!(
+            "  + {importers} files that import it (module-level uses there count as inside)"
+        ));
     }
 
     let budget = max_tokens.saturating_mul(CHARS_PER_TOKEN);

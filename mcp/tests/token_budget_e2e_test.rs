@@ -127,6 +127,15 @@ fn fixture_files() -> Vec<(String, String)> {
         "app/late.py".into(),
         "def late(handler):\n    return handler.escape(1)\n".into(),
     ));
+    // `exports.f = function`: çağıranlar başka adla çağırır; graf yolunda kalmalı.
+    files.push((
+        "lib/utils.js".into(),
+        "exports.normalizeKey = function normalizeKey(x) {\n  return x;\n};\n".into(),
+    ));
+    files.push((
+        "lib/consumer.js".into(),
+        "var utils = require('./utils');\n\nfunction consume() {\n  return utils.normalizeKey(1);\n}\n".into(),
+    ));
     let mut hub = String::from("def hub():\n    return 0\n");
     for index in 0..30 {
         hub.push_str(&format!("\n\ndef caller_{index:02}():\n    return hub()\n"));
@@ -814,5 +823,20 @@ fn context_check_separates_external_modules_and_unlinked_calls() {
     assert!(
         !text.contains("- Function: shout"),
         "stdlib html.escape must not be reported as a caller: {text}"
+    );
+}
+
+#[test]
+fn context_keeps_callers_of_exported_functions() {
+    let mut server = Server::start();
+    let (text, is_error) = server.call("context", json!({"query": "normalizeKey"}));
+    assert!(!is_error, "{text}");
+    assert!(
+        text.contains("consume · lib/consumer.js"),
+        "the caller through another receiver must stay listed: {text}"
+    );
+    assert!(
+        !text.contains("0 call sites, all inside the 0 callers"),
+        "no completeness claim over an empty list: {text}"
     );
 }

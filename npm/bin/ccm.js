@@ -529,19 +529,77 @@ function processIsAlive(pid) {
     }
 }
 
+const LOCK_OWNER_FILE = 'owner';
+
 /**
- * Kilidi pid içeriğiyle birlikte tek adımda oluşturur: pid önce geçici dosyaya
- * yazılır, sonra `linkSync` ile kilit yoluna bağlanır. Böylece başka bir proses
- * kilidi hiçbir zaman boş (pid'siz) göremez ve canlı kilidi bayat sanıp silemez.
- * Kilit zaten varsa `EEXIST` hatası fırlatılır.
+ * Kilit dizini içindeki sahip pid dosyasının yolunu döndürür.
+ */
+function lockOwnerPath(lockPath) {
+    return path.join(lockPath, LOCK_OWNER_FILE);
+}
+
+/**
+ * Kilidi pid içeriğiyle birlikte tek adımda oluşturur: önce benzersiz bir geçici
+ * dizin açılır, pid onun içindeki dosyaya yazılır, sonra dizin `renameSync` ile
+ * kilit yoluna taşınır. Dizin taşıma hard link gerektirmez (exFAT, ağ diskleri)
+ * ve atomiktir; kilit hiçbir zaman pid'siz görünmez. Kilit doluysa taşıma
+ * başarısız olur ve özgün hata olduğu gibi fırlatılır.
  */
 function createPidLockAtomic(lockPath) {
-    const tempPath = createUniqueTmpPath(lockPath);
-    fs.writeFileSync(tempPath, `${process.pid}\n`, { encoding: 'utf8', mode: 0o600, flag: 'wx' });
+    const tempDir = createUniqueTmpPath(lockPath);
+    fs.mkdirSync(tempDir, { mode: 0o700 });
     try {
-        fs.linkSync(tempPath, lockPath);
-    } finally {
-        fs.unlinkSync(tempPath);
+        fs.writeFileSync(lockOwnerPath(tempDir), `${process.pid}\n`, {
+            encoding: 'utf8',
+            mode: 0o600,
+            flag: 'wx'
+        });
+        fs.renameSync(tempDir, lockPath);
+    } catch (error) {
+        fs.rmSync(tempDir, { recursive: true, force: true });
+        throw error;
+    }
+}
+
+/**
+ * Kilit dizinini oluşturma hatasının "kilit başka bir proseste" anlamına gelip
+ * gelmediğine karar verir. POSIX dolu hedef dizin için EEXIST/ENOTEMPTY verir;
+ * Windows ve bazı ağ dosya sistemleri EPERM/EACCES verir, bu durumda hedefin
+ * gerçekten var olması şart koşulur.
+ */
+function isLockHeldError(errorCode, lockExists) {
+    if (errorCode === 'EEXIST' || errorCode === 'ENOTEMPTY') return true;
+    return (errorCode === 'EPERM' || errorCode === 'EACCES') && lockExists;
+}
+
+/**
+ * Kilidi atomik olarak kaldırır: dizin önce benzersiz bir çöp yoluna taşınır,
+ * sonra silinir. Böylece yarım silinmiş (boş) bir kilit dizini hiçbir zaman
+ * kilit yolunda kalmaz. Kilit zaten yoksa `false` döner.
+ */
+function removeLockAtomic(lockPath) {
+    const trashPath = createUniqueTmpPath(lockPath);
+    try {
+        fs.renameSync(lockPath, trashPath);
+    } catch (error) {
+        if (error.code === 'ENOENT') return false;
+        throw error;
+    }
+    fs.rmSync(trashPath, { recursive: true, force: false });
+    return true;
+}
+
+/**
+ * Kilit sahibinin hâlâ yaşayıp yaşamadığını okur. Kilit bu arada bırakıldıysa
+ * (ENOENT) sahip canlı sayılır ve döngü yeniden dener; okunamayan veya bozuk
+ * pid ölü sayılır, böylece bayat kilit devralınabilir.
+ */
+function lockOwnerIsAlive(lockPath) {
+    try {
+        const owner = Number.parseInt(fs.readFileSync(lockOwnerPath(lockPath), 'utf8').trim(), 10);
+        return processIsAlive(owner);
+    } catch (readError) {
+        return readError.code === 'ENOENT';
     }
 }
 
@@ -552,20 +610,9 @@ async function acquireFileLock(lockPath, timeoutMs) {
             createPidLockAtomic(lockPath);
             return;
         } catch (error) {
-            if (error.code !== 'EEXIST') throw error;
-            let ownerAlive = true;
-            try {
-                const owner = Number.parseInt(fs.readFileSync(lockPath, 'utf8').trim(), 10);
-                ownerAlive = processIsAlive(owner);
-            } catch (readError) {
-                if (readError.code !== 'ENOENT') ownerAlive = false;
-            }
-            if (!ownerAlive) {
-                try {
-                    fs.unlinkSync(lockPath);
-                } catch (unlinkError) {
-                    if (unlinkError.code !== 'ENOENT') throw unlinkError;
-                }
+            if (!isLockHeldError(error.code, fs.existsSync(lockPath))) throw error;
+            if (!lockOwnerIsAlive(lockPath)) {
+                removeLockAtomic(lockPath);
                 continue;
             }
             if (Date.now() - startedAt >= timeoutMs) {
@@ -577,7 +624,7 @@ async function acquireFileLock(lockPath, timeoutMs) {
 }
 
 async function finalizeDownloadedBinary(binPath, tmpPath, downloadVerified) {
-    const lockPath = `${binPath}.lock`;
+    const lockPath = binaryLockPath(binPath);
     await acquireFileLock(lockPath, 30_000);
     try {
         const downloadedHash = await sha256File(tmpPath);
@@ -595,12 +642,16 @@ async function finalizeDownloadedBinary(binPath, tmpPath, downloadVerified) {
         fs.renameSync(tmpPath, binPath);
         if (downloadVerified) writeBinaryChecksumSidecar(binPath, downloadedHash);
     } finally {
-        try {
-            fs.unlinkSync(lockPath);
-        } catch (error) {
-            if (error.code !== 'ENOENT') throw error;
-        }
+        removeLockAtomic(lockPath);
     }
+}
+
+/**
+ * İkili önbellek kilidinin dizin yolu. Eski sürümlerin `.lock` dosyasıyla
+ * çakışmasın diye ayrı bir ad kullanılır.
+ */
+function binaryLockPath(binPath) {
+    return `${binPath}.lockdir`;
 }
 
 function checksumSidecarPath(binPath) {
@@ -978,6 +1029,7 @@ module.exports = {
     MCP_ARGS,
     MCP_ENV,
     backupFileOnce,
+    binaryLockPath,
     classifyManifestError,
     classifyManifestText,
     cliChildEnv,

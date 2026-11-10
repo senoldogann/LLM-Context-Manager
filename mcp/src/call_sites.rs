@@ -132,6 +132,9 @@ pub(crate) struct CheckCounts {
     /// Grafın aynı adlı başka bir tanıma bağladığı geçişler ve o tanımların yerleri.
     pub elsewhere: usize,
     pub elsewhere_targets: BTreeSet<String>,
+    /// Kapsamı başka tanıma bağlı geçişler: kapsam bazında (satır bazında değil)
+    /// atandıkları için tamlık başlığı onları açıkça gösterir.
+    pub elsewhere_hits: Vec<Hit>,
     pub text: usize,
     /// Hedefin kendi gövdesindeki (özyinelemeli) çağrılar.
     pub recursive: usize,
@@ -201,17 +204,142 @@ fn followed_by_call(rest: &str, lang: Lang) -> bool {
     false
 }
 
-/// Geçiş satır yorumunun içinde mi (dizgi içindeki işaretler yaklaşık kabul edilir).
-fn in_comment(line: &str, position: usize, lang: Lang) -> bool {
-    let prefix = &line[..position];
-    let trimmed = line.trim_start();
-    match lang {
-        Lang::Python => prefix.contains('#'),
-        Lang::Rust | Lang::JavaScript => {
-            prefix.contains("//") || trimmed.starts_with('*') || trimmed.starts_with("/*")
-        }
-        Lang::Other => false,
+/// Satırın bir konumunun bölgesi: kod, dizgi içi ya da satır yorumu.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Region {
+    Code,
+    Text,
+    Comment,
+}
+
+/// Tarayıcı yığınının çerçevesi: açık dizgi (enterpolasyonlu mu) ya da dizgi
+/// içindeki `{…}`/`${…}` kod bölümü (iç içe süslü parantez derinliği).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Frame {
+    Str { quote: char, interpolating: bool },
+    Interp { depth: usize },
+}
+
+/// Python dizgi öneki f-string mi (`f"`, `rf'`, `Fr"`): tırnaktan hemen önceki en
+/// çok iki harf `f` içeriyor ve onlardan önce tanımlayıcı karakteri yok.
+fn python_fstring_prefix(chars: &[char], quote_at: usize) -> bool {
+    let mut start = quote_at;
+    while start > 0 && quote_at - start < 2 && chars[start - 1].is_ascii_alphabetic() {
+        start -= 1;
     }
+    let prefix: String = chars[start..quote_at].iter().collect();
+    let standalone = start == 0 || !is_ident_char(chars[start - 1]);
+    standalone && prefix.to_ascii_lowercase().contains('f')
+}
+
+/// `prefix` sonundaki konumun bölgesi. Yorum işareti yalnız kodda, enterpolasyon
+/// yalnız f-string ve JS şablon dizgisinde, Rust karakter sabiti (`'"'`) atlanarak.
+fn scan_region(prefix: &str, lang: Lang) -> Region {
+    let chars: Vec<char> = prefix.chars().collect();
+    let mut stack: Vec<Frame> = Vec::new();
+    let mut index = 0;
+    while index < chars.len() {
+        let character = chars[index];
+        let next = chars.get(index + 1).copied();
+        match stack.last().copied() {
+            Some(Frame::Str {
+                quote,
+                interpolating,
+            }) => {
+                if character == '\\' {
+                    index += 2;
+                    continue;
+                }
+                if character == quote {
+                    stack.pop();
+                } else if interpolating
+                    && lang == Lang::JavaScript
+                    && character == '$'
+                    && next == Some('{')
+                {
+                    stack.push(Frame::Interp { depth: 1 });
+                    index += 2;
+                    continue;
+                } else if interpolating && lang == Lang::Python && character == '{' {
+                    if next == Some('{') {
+                        index += 2;
+                        continue;
+                    }
+                    stack.push(Frame::Interp { depth: 1 });
+                }
+            }
+            frame => {
+                if lang == Lang::Python && character == '#' {
+                    return Region::Comment;
+                }
+                if matches!(lang, Lang::Rust | Lang::JavaScript)
+                    && character == '/'
+                    && next == Some('/')
+                {
+                    return Region::Comment;
+                }
+                if lang == Lang::Rust && character == '\'' {
+                    // Karakter sabiti: `'x'` ya da `'\x'`; ömür (`'a`) kapanmaz, atlanmaz.
+                    if next == Some('\\') {
+                        if let Some(close) =
+                            chars[index + 2..].iter().take(10).position(|c| *c == '\'')
+                        {
+                            index += close + 3;
+                            continue;
+                        }
+                    } else if chars.get(index + 2) == Some(&'\'') {
+                        index += 3;
+                        continue;
+                    }
+                }
+                if let Some(Frame::Interp { depth }) = frame {
+                    if character == '{' {
+                        stack.pop();
+                        stack.push(Frame::Interp { depth: depth + 1 });
+                    } else if character == '}' {
+                        stack.pop();
+                        if depth > 1 {
+                            stack.push(Frame::Interp { depth: depth - 1 });
+                        }
+                    }
+                }
+                let opens = match lang {
+                    Lang::Python => character == '"' || character == '\'',
+                    Lang::JavaScript => matches!(character, '"' | '\'' | '`'),
+                    Lang::Rust => character == '"',
+                    Lang::Other => false,
+                };
+                if opens {
+                    let interpolating = match lang {
+                        Lang::JavaScript => character == '`',
+                        Lang::Python => python_fstring_prefix(&chars, index),
+                        Lang::Rust | Lang::Other => false,
+                    };
+                    stack.push(Frame::Str {
+                        quote: character,
+                        interpolating,
+                    });
+                }
+            }
+        }
+        index += 1;
+    }
+    match stack.last() {
+        Some(Frame::Str { .. }) => Region::Text,
+        Some(Frame::Interp { .. }) | None => Region::Code,
+    }
+}
+
+/// Geçiş satır yorumunun ya da blok yorumu satırının içinde mi. Blok yorum satırı
+/// `* `, `*/`, `/*` ile başlar; `*slot = f(x)` gibi dereferans kod sayılır.
+fn in_comment(line: &str, position: usize, lang: Lang) -> bool {
+    let trimmed = line.trim_start();
+    let block_line = matches!(lang, Lang::Rust | Lang::JavaScript)
+        && (trimmed == "*"
+            || trimmed.starts_with("* ")
+            || trimmed.starts_with("*/")
+            || trimmed.starts_with("/*"));
+    block_line || scan_region(&line[..position], lang) == Region::Comment
 }
 
 /// Python üçlü tırnak durumları: her satırın başında açık bir docstring/üçlü
@@ -230,38 +358,19 @@ fn triple_quote_states(source: &str, lang: Lang) -> Vec<bool> {
     states
 }
 
-/// Geçiş bir dizginin ya da docstring'in içinde mi (yaklaşık: satır içindeki
-/// kaçışsız tırnakların teklik sayısı). Rust'ta `'` ömür işareti olduğu için sayılmaz.
+/// Geçiş bir dizginin ya da docstring'in içinde mi. Python üçlü tırnakları
+/// satır başı durumundan izlenir; satır içi dizgiler `scan_region` ile.
 fn in_text(line: &str, position: usize, lang: Lang, doc_open: bool) -> bool {
     let prefix = &line[..position];
     if lang == Lang::Python {
-        let triples = prefix.matches("\"\"\"").count() + prefix.matches("'''").count();
+        let triples = prefix.matches("\"\"\"").count() + prefix.matches("\'\'\'").count();
         if doc_open ^ (triples % 2 == 1) {
             return true;
         }
+        let without_triples = prefix.replace("\"\"\"", "").replace("\'\'\'", "");
+        return scan_region(&without_triples, lang) == Region::Text;
     }
-    let quotes: &[char] = match lang {
-        Lang::Python => &['"', '\''],
-        Lang::JavaScript => &['"', '\'', '`'],
-        Lang::Rust => &['"'],
-        Lang::Other => &[],
-    };
-    let cleaned = prefix
-        .replace("\"\"\"", "")
-        .replace("'''", "")
-        .replace("\\\\", "")
-        .replace("\\\"", "")
-        .replace("\\'", "");
-    let mut inside: Option<char> = None;
-    for character in cleaned.chars() {
-        match inside {
-            Some(quote) if character == quote => inside = None,
-            Some(_) => {}
-            None if quotes.contains(&character) => inside = Some(character),
-            None => {}
-        }
-    }
-    inside.is_some()
+    scan_region(prefix, lang) == Region::Text
 }
 
 /// Geçiş bir tanımın adı mı (`def ad`, `async def ad`, `pub fn ad`, `function ad`).
@@ -325,16 +434,30 @@ pub(crate) struct PythonExternals {
     pub external_lines: HashSet<usize>,
 }
 
-/// İndekslenmiş Python dosyalarından projenin üst düzey modül adları: `django/utils/x.py`
-/// → `django`; `src/flask/app.py` → `flask`; `setup.py` → `setup`.
+/// İndekslenmiş Python dosyalarından projenin içe aktarılabilir üst düzey adları:
+/// bir dosyanın `__init__.py` taşıyan kesintisiz üst dizin zincirinin en üstteki
+/// dizini (`lib/mypkg/util.py` → `mypkg`, `django/utils/html.py` → `django`); paket
+/// dışındaki dosyada dosyanın kendisi (`setup.py` → `setup`).
 pub(crate) fn python_roots(paths: &[&str]) -> HashSet<String> {
+    let packages: HashSet<&str> = paths
+        .iter()
+        .filter_map(|path| path.strip_suffix("/__init__.py"))
+        .collect();
     paths
         .iter()
         .filter(|path| lang_of(path) == Lang::Python)
         .filter_map(|path| {
-            let path = path.strip_prefix("src/").unwrap_or(path);
-            let first = path.split('/').next()?;
-            Some(first.strip_suffix(".py").unwrap_or(first).to_string())
+            let (mut directory, file) = match path.rsplit_once('/') {
+                Some((directory, file)) => (Some(directory), file),
+                None => (None, *path),
+            };
+            let mut root: Option<&str> = None;
+            while let Some(current) = directory.filter(|dir| packages.contains(dir)) {
+                root = Some(current.rsplit('/').next().unwrap_or(current));
+                directory = current.rsplit_once('/').map(|(parent, _)| parent);
+            }
+            let name = root.unwrap_or_else(|| file.strip_suffix(".py").unwrap_or(file));
+            (!name.is_empty()).then(|| name.to_string())
         })
         .collect()
 }
@@ -472,7 +595,12 @@ pub(crate) fn file_hits(
                 } else if lang == Lang::Python
                     && match receiver_before(line, position) {
                         Some(receiver) => externals.modules.contains_key(receiver),
-                        None => externals.names.contains_key(target_name),
+                        // `self.helper.ad(` ya da `obj().ad(`: zincir ya da çağrı alıcısı
+                        // dış modül adı değildir.
+                        None => {
+                            !line[..position].ends_with('.')
+                                && externals.names.contains_key(target_name)
+                        }
                     }
                 {
                     HitKind::External
@@ -590,11 +718,12 @@ fn line_matches_index(symbol: &SymbolSpan, line: usize, disk_line: &str) -> bool
     let Some(indexed) = symbol.content.lines().nth(line - first) else {
         return false;
     };
-    let indexed = indexed.trim();
-    if indexed.is_empty() {
-        return disk_line.trim().is_empty();
+    // İçeriğin ilk satırı sütun ortasından başlayabilir; diğerleri birebir eşleşmeli.
+    if line == first {
+        disk_line.trim_end().ends_with(indexed.trim())
+    } else {
+        disk_line.trim() == indexed.trim()
     }
-    disk_line.contains(indexed)
 }
 
 /// Bir dosyanın kaynağı ve geçişleri; `read_sources` sonucundan üretilir.
@@ -643,6 +772,7 @@ pub(crate) fn reconcile(
         aliases: Vec::new(),
         elsewhere: 0,
         elsewhere_targets: BTreeSet::new(),
+        elsewhere_hits: Vec::new(),
         text: 0,
         recursive: 0,
         other_type_methods: 0,
@@ -754,6 +884,7 @@ pub(crate) fn reconcile(
                 Some(location) => {
                     counts.elsewhere += 1;
                     counts.elsewhere_targets.insert(location.clone());
+                    counts.elsewhere_hits.push(hit);
                 }
                 None => outside.push(hit),
             }
@@ -870,7 +1001,31 @@ pub(crate) fn outcome_text(
         .iter()
         .filter(|hit| hit.kind != HitKind::Call)
         .collect();
-    let mut text = if calls_out.is_empty() {
+    let elsewhere_calls: Vec<&Hit> = counts
+        .elsewhere_hits
+        .iter()
+        .filter(|hit| hit.kind == HitKind::Call)
+        .collect();
+    let mut text = if !counts.aliases.is_empty() {
+        let aliases: Vec<&Hit> = counts.aliases.iter().collect();
+        let mut text = "Check: NOT complete. It is imported under another name; calls through that alias are not checked:\n".to_string();
+        text.push_str(&hit_lines(&aliases));
+        text
+    } else if spec.kind == CheckKind::MemberCalls && counts.calls == 0 {
+        format!(
+            "Check: no call of {label} found in the {} indexed non-test files{scope}; calls through other names or receivers are not checked.\n",
+            counts.files
+        )
+    } else if calls_out.is_empty() && !elsewhere_calls.is_empty() {
+        let mut text = format!(
+            "Check: call list complete if the graph is right about {} line(s) it resolves to another definition with this name ({}); every other call site of {label} in the {} indexed non-test files{scope} is inside the {caller_count} callers below:\n",
+            elsewhere_calls.len(),
+            counts.elsewhere_targets.iter().map(String::as_str).collect::<Vec<_>>().join(", "),
+            counts.files
+        );
+        text.push_str(&hit_lines(&elsewhere_calls));
+        text
+    } else if calls_out.is_empty() {
         format!(
             "Check: call list complete. A grep for {label} in the {} indexed non-test files{scope} finds {} call sites, all inside the {caller_count} callers below; no other grep is needed.\n",
             counts.files, counts.calls
@@ -913,16 +1068,14 @@ fn hit_lines(hits: &[&Hit]) -> String {
 
 fn counts_suffix(spec: &CheckSpec, counts: &CheckCounts) -> String {
     let mut text = String::new();
-    if counts.elsewhere > 0 {
-        let targets: Vec<&str> = counts
-            .elsewhere_targets
-            .iter()
-            .map(String::as_str)
-            .collect();
+    let elsewhere_uses = counts
+        .elsewhere_hits
+        .iter()
+        .filter(|hit| hit.kind != HitKind::Call)
+        .count();
+    if elsewhere_uses > 0 {
         text.push_str(&format!(
-            " {} more match(es) are calls the graph resolves to another definition with this name ({}) and are not listed.",
-            counts.elsewhere,
-            targets.join(", ")
+            " {elsewhere_uses} other use(s) sit in functions the graph links to another definition with this name."
         ));
     }
     if counts.external > 0 {
@@ -931,12 +1084,6 @@ fn counts_suffix(spec: &CheckSpec, counts: &CheckCounts) -> String {
             " {} more match(es) belong to external modules ({}) and are not listed.",
             counts.external,
             modules.join(", ")
-        ));
-    }
-    for alias in &counts.aliases {
-        text.push_str(&format!(
-            " Aliased import at {}:{} (`{}`): calls through the alias are not checked.",
-            alias.file, alias.line, alias.text
         ));
     }
     if counts.recursive > 0 {
@@ -1140,6 +1287,83 @@ mod tests {
         .map(|hit| hit.kind)
         .collect();
         assert_eq!(kinds, vec![HitKind::OtherTypeMethod, HitKind::Call]);
+    }
+
+    #[test]
+    fn calls_in_interpolations_and_after_string_markers_are_calls() {
+        let ext = PythonExternals::default();
+        let kinds = |path: &str, source: &str, name: &str| -> Vec<HitKind> {
+            file_hits(path, source, &name_spec(name), name, &ext)
+                .iter()
+                .map(|hit| hit.kind)
+                .collect()
+        };
+        assert_eq!(
+            kinds("a.py", "x = f\"{escape(v)}\"\n", "escape"),
+            vec![HitKind::Call]
+        );
+        assert_eq!(
+            kinds("a.py", "x = f\"{{escape(v)}}\"\n", "escape"),
+            vec![HitKind::Text]
+        );
+        assert_eq!(
+            kinds("a.js", "s = `a ${build(x)}`;\n", "build"),
+            vec![HitKind::Call]
+        );
+        assert_eq!(
+            kinds("a.py", "return '#' + escape(x)\n", "escape"),
+            vec![HitKind::Call]
+        );
+        assert_eq!(
+            kinds("a.js", "return 'http://a/' + build(x);\n", "build"),
+            vec![HitKind::Call]
+        );
+        assert_eq!(
+            kinds("a.rs", "    *slot = compute(x);\n", "compute"),
+            vec![HitKind::Call]
+        );
+        assert_eq!(
+            kinds("a.rs", "if c == '\"' { parse_str(x) }\n", "parse_str"),
+            vec![HitKind::Call]
+        );
+        assert!(kinds("a.rs", "     * compute(x) in a doc block\n", "compute").is_empty());
+        assert!(kinds("a.py", "y = 1  # escape(x)\n", "escape").is_empty());
+    }
+
+    #[test]
+    fn chained_receivers_are_not_external_modules() {
+        let roots: HashSet<String> = ["app".to_string()].into_iter().collect();
+        let source = "from html import escape\n\ndef f(self):\n    return self.helper.escape(1) + obj().escape(2)\n";
+        let externals = python_externals(source, &roots);
+        let hits = file_hits(
+            "app/t.py",
+            source,
+            &name_spec("escape"),
+            "escape",
+            &externals,
+        );
+        let calls: Vec<HitKind> = hits.iter().skip(1).map(|hit| hit.kind).collect();
+        assert_eq!(calls, vec![HitKind::Call]);
+    }
+
+    #[test]
+    fn python_roots_follow_package_directories() {
+        let paths = [
+            "lib/mypkg/__init__.py",
+            "lib/mypkg/util.py",
+            "django/__init__.py",
+            "django/utils/__init__.py",
+            "django/utils/html.py",
+            "setup.py",
+        ];
+        let roots = python_roots(&paths);
+        for expected in ["mypkg", "django", "setup"] {
+            assert!(roots.contains(expected), "{roots:?}");
+        }
+        assert!(
+            !roots.contains("html") && !roots.contains("lib"),
+            "{roots:?}"
+        );
     }
 
     #[test]

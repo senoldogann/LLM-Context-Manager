@@ -27,6 +27,8 @@ const FRESHNESS_WAIT_BUDGET: std::time::Duration = std::time::Duration::from_sec
 /// `context` bekleyen yenilemeyi daha uzun bekler: ajan çoğu zaman düzenlemeden hemen
 /// sonra sorar ve embedding'li yenileme 2 saniyeyi aşınca bayat cevap ikinci bir çağrıya
 /// yol açıyordu (iterasyon 2, flask-edit-error-handler).
+/// Hata durumundaki okumaların yeniden deneme tetiklemesi arasındaki en kısa süre.
+const READ_RETRY_INTERVAL: std::time::Duration = std::time::Duration::from_secs(30);
 const CONTEXT_FRESHNESS_WAIT_BUDGET: std::time::Duration = std::time::Duration::from_secs(10);
 
 /// Aracın okuma öncesi tazelik bekleme bütçesi.
@@ -63,6 +65,8 @@ pub struct ServerState {
     /// okumaları grafı bir kez yükler. Kayıt sayısı izinli projelerle sınırlıdır.
     engine_loads: std::sync::Mutex<std::collections::HashMap<String, Arc<tokio::sync::Mutex<()>>>>,
     pub(crate) index_jobs: std::sync::Mutex<std::collections::HashMap<String, IndexJob>>,
+    /// Proje başına okumanın tetiklediği son yeniden deneme anı (bkz. `claim_read_retry`).
+    read_retries: std::sync::Mutex<std::collections::HashMap<String, std::time::Instant>>,
     pub(crate) next_index_job_id: std::sync::atomic::AtomicU64,
     default_project_root: Option<PathBuf>,
     /// `CCM_PROJECT_ROOT` açıkça verildiyse istemci roots'u varsayılan kökü değiştirmez.
@@ -404,6 +408,7 @@ impl ServerState {
             index_locks: std::sync::Mutex::new(std::collections::HashMap::new()),
             engine_loads: std::sync::Mutex::new(std::collections::HashMap::new()),
             index_jobs: std::sync::Mutex::new(std::collections::HashMap::new()),
+            read_retries: std::sync::Mutex::new(std::collections::HashMap::new()),
             next_index_job_id: std::sync::atomic::AtomicU64::new(1),
             default_project_root,
             project_root_is_explicit: explicit_project_root.is_some(),
@@ -485,6 +490,19 @@ impl ServerState {
     }
 
     /// Elle indeksleme sonrası otomatik yenilemeden durum doğrulaması ister.
+    /// Okumanın tetiklediği yeniden deneme hakkı: son haktan `READ_RETRY_INTERVAL`
+    /// geçtiyse `true` döner ve anı kaydeder.
+    pub(crate) fn claim_read_retry(&self, project_key: &str, now: std::time::Instant) -> bool {
+        let mut retries = self.read_retries.lock().unwrap();
+        let due = retries
+            .get(project_key)
+            .is_none_or(|last| now.duration_since(*last) >= READ_RETRY_INTERVAL);
+        if due {
+            retries.insert(project_key.to_string(), now);
+        }
+        due
+    }
+
     pub(crate) fn request_refresh(&self, project_key: &str) {
         if let Some(handle) = self.freshness_handle(project_key) {
             crate::freshness::request_rescan(&handle, project_key);
@@ -608,15 +626,22 @@ impl ServerState {
         }
         let deadline = tokio::time::Instant::now() + budget;
         let freshness = crate::freshness::wait_until_fresh(&handle, budget).await;
-        if freshness.last_error.is_some() || freshness.persist_error.is_some() {
-            // Hata durumundaki okuma, geri çekilme süresini beklemeden yeniden
-            // denemeyi tetikler; kalan bütçe içinde sonuç gelirse taze döner.
-            self.request_refresh(project_key);
+        if freshness.last_error.is_some() {
+            // Hata durumundaki okuma, geri çekilme süresini beklemeden yeniden denemeyi
+            // tetikler; kalıcı bir hatada her okumanın tam tarama ödememesi için en çok
+            // `READ_RETRY_INTERVAL`'da bir. Kalan bütçe içinde sonuç gelirse taze döner.
+            if self.claim_read_retry(project_key, std::time::Instant::now()) {
+                self.request_refresh(project_key);
+            }
             return Ok(crate::freshness::wait_until_fresh(
                 &handle,
                 deadline.saturating_duration_since(tokio::time::Instant::now()),
             )
             .await);
+        }
+        if freshness.persist_error.is_some() {
+            // Yazım hatası bellekteki indeksi bayatlatmaz; okuma yeniden tarama istemez.
+            return Ok(freshness);
         }
         if !crate::freshness::is_settled(&freshness) || freshness.waiting_for_upgrade {
             return Ok(freshness);

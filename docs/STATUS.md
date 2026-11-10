@@ -52,6 +52,13 @@ embeddings. The check covers indexed non-test files; calls that never name the t
 (getattr, runtime aliases) are out of reach of both text and graph, and the packet says so.
 Implementation: `mcp/src/call_sites.rs`, `context` in `mcp/src/tools.rs`.
 
+An independent code review after iteration 3 found ways the check could claim completeness wrongly
+(calls inside f-strings and template literals or after a `#`/`//` inside a string read as text;
+`exports.f = function` targets lost their real callers; aliased imports and lines the graph
+attributes to another same-named definition did not soften the headline; a weak stale-line guard).
+The fixes make the check stricter and are tested (unit and end-to-end, release preflight packets
+unchanged), but they came after the iteration-3 runs and have no agent measurement yet.
+
 ## What the measurements cover
 
 | Level | Question | Measures | Does not cover |
