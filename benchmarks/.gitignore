@@ -14,3 +14,5 @@ __pycache__/
 
 # L3 ajan dökümleri büyük: koşu kayıtları (runs/), farklar (diffs/) ve rapor izlenir
 results/agent/*/transcripts/
+results/agent/*/*/transcripts/
+results/agent/**/.lock

@@ -128,6 +128,8 @@ pub(crate) struct CheckCounts {
     pub elsewhere: usize,
     pub elsewhere_targets: BTreeSet<String>,
     pub text: usize,
+    /// Hedefin kendi gövdesindeki (özyinelemeli) çağrılar.
+    pub recursive: usize,
 }
 
 /// Dosya uzantısından dil.
@@ -545,6 +547,8 @@ pub(crate) struct IndexFacts {
     pub files_in_scope: usize,
     /// Aynı adlı başka tanıma bağlanan kapsamlar (`kapsam anahtarı → yol:satır`).
     pub elsewhere: HashMap<String, String>,
+    /// Hedefin kendi anahtarı: gövdesindeki geçişler özyinelemedir, eksik caller değil.
+    pub target_key: String,
 }
 
 /// Geçişleri listelenen kullanımlarla karşılaştırır; test dosyalarındaki geçişler
@@ -561,6 +565,7 @@ pub(crate) fn reconcile(
         roots,
         files_in_scope,
         elsewhere,
+        target_key,
     } = facts;
     let mut counts = CheckCounts {
         files: *files_in_scope,
@@ -573,6 +578,7 @@ pub(crate) fn reconcile(
         elsewhere: 0,
         elsewhere_targets: BTreeSet::new(),
         text: 0,
+        recursive: 0,
     };
     let mut outside = Vec::new();
     for scanned_file in scanned {
@@ -648,7 +654,24 @@ pub(crate) fn reconcile(
                 }
             }
             let key = scope.map_or(file.file_key.as_str(), |symbol| symbol.key.as_str());
-            if listed.contains(key) {
+            // Atama zincirinin takma adları (`res.contentType = res.type = function`)
+            // aynı satırda biten iç içe düğümlerdir; biri listelenmişse satır onundur.
+            let alias_listed = scope.is_some_and(|symbol| {
+                file.symbols.iter().any(|other| {
+                    other.end == symbol.end
+                        && other.start <= symbol.start
+                        && listed.contains(&other.key)
+                })
+            });
+            // Hedefin kendi gövdesi (ya da onun içindeki iç ad): özyineleme.
+            let inside_target = file.symbols.iter().any(|other| {
+                other.key == *target_key && other.start <= hit.line && hit.line <= other.end
+            });
+            if inside_target && !listed.contains(key) {
+                counts.recursive += 1;
+                continue;
+            }
+            if listed.contains(key) || alias_listed {
                 if hit.kind == HitKind::Call {
                     counts.calls += 1;
                 } else {
@@ -841,6 +864,12 @@ fn counts_suffix(spec: &CheckSpec, counts: &CheckCounts) -> String {
         text.push_str(&format!(
             " Aliased import at {}:{} (`{}`): calls through the alias are not checked.",
             alias.file, alias.line, alias.text
+        ));
+    }
+    if counts.recursive > 0 {
+        text.push_str(&format!(
+            " {} call(s) inside the target itself (recursion) are not listed.",
+            counts.recursive
         ));
     }
     if counts.text > 0 {

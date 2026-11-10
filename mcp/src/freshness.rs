@@ -47,8 +47,40 @@ pub(crate) struct ProjectFreshness {
     /// Semantik yükseltme (hızlı indeks ya da embedding modeli değişikliği)
     /// vektör tablosunu arka planda yeniden kuruyor.
     pub semantic_upgrade_running: bool,
+    /// Son yenileme turunun hatası; sonraki başarılı tur temizler. Hata varken
+    /// döngü geri çekilmeli yeniden deneme planlar (bkz. `RetryDebt`).
     pub last_error: Option<String>,
+    /// Canlı indeksin diske yazım hatası. Bellekteki indeks güncel olabilir;
+    /// sonraki başarılı yazım temizler. Yenileme hatasından ayrı tutulur: biri
+    /// diğerinin başarısıyla silinmemeli ya da yanlışlıkla yeniden yazılmamalı.
+    pub persist_error: Option<String>,
     pub semantic_unavailable: Option<String>,
+}
+
+/// Başarısız yenileme turundan kalan iş: değişiklikler uygulanamadan bekleyen
+/// küme boşaltıldığı için bir sonraki tur tam karşılaştırmadır. `due` geldiğinde
+/// döngü yeni bir dosya olayı beklemeden kendini uyandırır.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct RetryDebt {
+    pub attempt: u32,
+    pub due: tokio::time::Instant,
+}
+
+/// İlk otomatik yeniden denemenin gecikmesi; her başarısız turda ikiye katlanır.
+const RETRY_BASE: Duration = Duration::from_secs(5);
+/// Otomatik yeniden deneme gecikmesinin üst sınırı.
+const RETRY_CAP: Duration = Duration::from_secs(300);
+
+/// Başarısız turdan sonraki borç: deneme sayısı artar, gecikme üstel büyür ve
+/// `RETRY_CAP` ile sınırlanır. Saf fonksiyon; zaman çağırandan gelir.
+pub(crate) fn next_retry(previous: Option<&RetryDebt>, now: tokio::time::Instant) -> RetryDebt {
+    let attempt = previous.map_or(1, |debt| debt.attempt.saturating_add(1));
+    let factor = 2u32.saturating_pow(attempt.saturating_sub(1).min(16));
+    let delay = RETRY_BASE.saturating_mul(factor).min(RETRY_CAP);
+    RetryDebt {
+        attempt,
+        due: now + delay,
+    }
 }
 
 /// Okumanın beklemesine gerek yoksa `true`: bekleyen iş yoktur ya da iş
@@ -66,6 +98,7 @@ pub(crate) fn disabled_freshness() -> ProjectFreshness {
         waiting_for_upgrade: false,
         semantic_upgrade_running: false,
         last_error: None,
+        persist_error: None,
         semantic_unavailable: None,
     }
 }
@@ -91,7 +124,8 @@ pub(crate) fn format_freshness_line(
     let fresh = freshness.watcher == WatcherStatus::Active
         && freshness.pending_paths == 0
         && !freshness.refresh_in_flight
-        && freshness.last_error.is_none();
+        && freshness.last_error.is_none()
+        && freshness.persist_error.is_none();
     let mut parts: Vec<String> = Vec::new();
     match &freshness.watcher {
         WatcherStatus::Active if fresh => {
@@ -119,6 +153,9 @@ pub(crate) fn format_freshness_line(
             }
             if let Some(error) = &freshness.last_error {
                 parts.push(format!("last refresh failed: {}", error));
+            }
+            if let Some(error) = &freshness.persist_error {
+                parts.push(format!("index could not be saved: {}", error));
             }
         }
         WatcherStatus::Disabled => parts.push("auto-refresh off".to_string()),
@@ -223,6 +260,7 @@ pub(crate) fn inactive_handle(watcher: WatcherStatus) -> Arc<FreshnessHandle> {
         waiting_for_upgrade: false,
         semantic_upgrade_running: false,
         last_error: None,
+        persist_error: None,
         semantic_unavailable: None,
     });
     Arc::new(FreshnessHandle {
@@ -278,6 +316,7 @@ pub(crate) fn start_auto_refresh(
         waiting_for_upgrade: false,
         semantic_upgrade_running: false,
         last_error: None,
+        persist_error: None,
         semantic_unavailable: None,
     });
     let handle = Arc::new(FreshnessHandle {
@@ -444,18 +483,37 @@ async fn run_refresh_loop(
     let mut pending: HashSet<PathBuf> = HashSet::new();
     let mut waiting_for_upgrade = false;
     // Başarısız bir tur değişiklikleri uygulayamadan bekleyen kümeyi boşaltır;
-    // sonraki tur bu yüzden tam karşılaştırma yapar, kaybolan değişiklik kalmaz.
-    let mut rescan_after_failure = false;
+    // borç varken sonraki tur tam karşılaştırmadır ve `due` gelince döngü
+    // kendiliğinden yeniden dener (önceden yeni bir dosya olayı gelene kadar
+    // indeks bayat ve hata kalıcı kalıyordu).
+    let mut retry: Option<RetryDebt> = None;
     loop {
         // Bekleyen iş yoksa ya da iş hızlı indeks yükseltmesi yüzünden
         // ertelendiyse yeni sinyal beklenir; yükseltme bitince
-        // `end_semantic_upgrade` döngüyü uyandırır.
+        // `end_semantic_upgrade` döngüyü uyandırır. Yeniden deneme borcu varsa
+        // bekleme borcun vadesiyle sınırlıdır.
         if pending.is_empty() || waiting_for_upgrade {
-            let Some(signal) = signals.recv().await else {
-                return;
+            let due = retry.filter(|_| !waiting_for_upgrade).map(|debt| debt.due);
+            let received = match due {
+                // Süre dolarsa `None`: yeniden deneme vakti geldi.
+                Some(due) => tokio::time::timeout_at(due, signals.recv()).await.ok(),
+                None => Some(signals.recv().await),
             };
-            log_signal(&project_key, &signal);
-            pending.insert(pending_path(&signal, &root));
+            match received {
+                Some(None) => return,
+                Some(Some(signal)) => {
+                    log_signal(&project_key, &signal);
+                    pending.insert(pending_path(&signal, &root));
+                }
+                None => {
+                    tracing::info!(
+                        project = %project_key,
+                        attempt = retry.map_or(0, |debt| debt.attempt),
+                        "Retrying the failed refresh with a full comparison"
+                    );
+                    pending.insert(root.clone());
+                }
+            }
             let count = pending.len();
             handle
                 .state
@@ -495,7 +553,7 @@ async fn run_refresh_loop(
             freshness.refresh_in_flight = true;
             freshness.waiting_for_upgrade = false;
         });
-        if rescan_after_failure {
+        if retry.is_some() {
             pending.insert(root.clone());
         }
         let request = refresh_request(&pending, &root);
@@ -510,7 +568,10 @@ async fn run_refresh_loop(
             }
             Err(error) => Err(error),
         };
-        rescan_after_failure = outcome.is_err();
+        retry = match &outcome {
+            Ok(_) => None,
+            Err(_) => Some(next_retry(retry.as_ref(), tokio::time::Instant::now())),
+        };
         pending.clear();
         handle.state.send_modify(|freshness| {
             // Yenileme sırasında kuyruğa düşen olaylar bir sonraki turu başlatır.
@@ -571,7 +632,12 @@ fn spawn_persist(
     tokio::spawn(async move {
         match live.persist().await {
             Ok(ccm_core::live::LivePersist::Persisted)
-            | Ok(ccm_core::live::LivePersist::UpToDate) => {}
+            | Ok(ccm_core::live::LivePersist::UpToDate) => {
+                // Yazımlar sıralıdır; başarılı yazım önceki yazım hatasını geçersiz kılar.
+                handle
+                    .state
+                    .send_if_modified(|freshness| freshness.persist_error.take().is_some());
+            }
             Ok(ccm_core::live::LivePersist::Superseded) => {
                 tracing::info!(
                     project = %project_key,
@@ -586,10 +652,10 @@ fn spawn_persist(
                     error = %error,
                     "Live index could not be persisted; the next full comparison reconciles the index on disk"
                 );
-                let summary = summarize_error(&format!("index could not be saved: {}", error));
+                let summary = summarize_error(&error.to_string());
                 handle
                     .state
-                    .send_modify(|freshness| freshness.last_error = Some(summary));
+                    .send_modify(|freshness| freshness.persist_error = Some(summary));
             }
         }
     });
@@ -879,6 +945,28 @@ fn inject_targeted_refresh_failure(request: &RefreshRequest) -> anyhow::Result<(
 
 #[cfg(test)]
 mod tests {
+    use super::{next_retry, Duration, RETRY_CAP};
+
+    #[test]
+    fn retry_debt_backs_off_exponentially_and_is_capped() {
+        let now = tokio::time::Instant::now();
+        let first = next_retry(None, now);
+        assert_eq!(
+            (first.attempt, first.due - now),
+            (1, Duration::from_secs(5))
+        );
+        let second = next_retry(Some(&first), now);
+        assert_eq!(
+            (second.attempt, second.due - now),
+            (2, Duration::from_secs(10))
+        );
+        let mut debt = second;
+        for _ in 0..40 {
+            debt = next_retry(Some(&debt), now);
+        }
+        assert_eq!(debt.due - now, RETRY_CAP);
+    }
+
     use super::{directory_event_needs_rescan, signal_for_path, RefreshSignal};
     use notify::event::{CreateKind, DataChange, MetadataKind, ModifyKind, RemoveKind, RenameMode};
     use notify::EventKind;

@@ -1458,10 +1458,12 @@ async fn vector_index_health(
         )
         .await
         {
+            // Satır değil farklı düğüm sayılır: çok parçalı düğümler satır
+            // sayısını şişirip vektörü silinmiş dosyaları gizliyordu.
             Ok(store) => store
-                .validate_table()
+                .distinct_node_count()
                 .await
-                .map(|rows| rows >= semantic_nodes),
+                .map(|nodes| nodes >= semantic_nodes),
             Err(error) => Err(error),
         }
     };
@@ -1576,7 +1578,10 @@ async fn upgrade_active_index_semantics_inner(
         );
     }
 
-    let activation_generation = read_current_pointer_value(artifact_parent)?;
+    // Kurulumun beklediği generation, verinin okunduğu generation'dır. İşaretçiyi
+    // ikinci kez okumak, arada etkinleşen başka bir generation'ı eski veriyle
+    // ezmeye izin veriyordu (CAS boşa düşerdi).
+    let activation_generation = active.generation_id.clone();
     let generation_id = new_generation_id();
     let generations_root = artifact_parent.join(GENERATIONS_DIRECTORY);
     std::fs::create_dir_all(&generations_root)?;
@@ -1586,12 +1591,25 @@ async fn upgrade_active_index_semantics_inner(
     let staged_graph_path = staging_root.join("ccm_graph.json");
 
     // Active generation'dan graph + manifest'i taşı; vektör staging'de sıfırdan kurulur.
-    // MCP canlı yenilemesi etkin generation'a önce grafı sonra manifesti yazar;
-    // manifest önce kopyalanınca kopyalanan manifest graftan yeni olamaz. Vektörler
-    // kopyalanan graftan üretilir, böylece staging grafıyla birebir eşleşir.
+    // Kopya etkinleştirme kilidi altında alınır: MCP canlı yenilemesi etkin
+    // generation'ı aynı kilitle yerinde yazar, böylece graf ve manifest aynı
+    // sürümden gelir. Vektörler kopyalanan graftan üretilir.
     let staged_manifest_path = staging_root.join("ccm_manifest.json");
-    let manifest = read_manifest(&active.manifest_path)?;
-    std::fs::copy(&active.graph_path, &staged_graph_path)?;
+    let manifest = {
+        let _activation_lock = ActivationLock::acquire(artifact_parent)?;
+        let current = read_current_pointer_value(artifact_parent)?;
+        if current != activation_generation {
+            std::fs::remove_dir_all(&staging_root)?;
+            anyhow::bail!(
+                "Index changed concurrently while a semantic upgrade was starting (expected {:?}, found {:?}); retry the upgrade",
+                activation_generation,
+                current
+            );
+        }
+        let manifest = read_manifest(&active.manifest_path)?;
+        std::fs::copy(&active.graph_path, &staged_graph_path)?;
+        manifest
+    };
     let graph = CodeGraph::from_file(&staged_graph_path.to_string_lossy())?;
     let semantic_nodes = semantic_node_count(&graph);
     if semantic_nodes == 0 {

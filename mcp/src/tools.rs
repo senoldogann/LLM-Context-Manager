@@ -420,16 +420,8 @@ pub async fn index_project(
     let job_key = crate::server::project_key_for_path(project_path);
 
     let job = match claim_index_job(&state, project_path, &job_key, mode) {
-        IndexJobClaim::Existing(job) => {
-            let finished = job.receiver.borrow().clone();
-            return Ok(match finished {
-                Some(result) => {
-                    state.remove_index_job_if_id(&job_key, job.id);
-                    result
-                }
-                None => index_in_progress_result(project_path),
-            });
-        }
+        IndexJobClaim::Joined(_) => return Ok(index_in_progress_result(project_path)),
+        IndexJobClaim::Collected(finished) => return Ok(collected_result(&finished)),
         IndexJobClaim::Started(job) => job,
         IndexJobClaim::Rejected(result) => return Ok(result),
     };
@@ -463,21 +455,82 @@ pub async fn index_now(state: Arc<crate::server::ServerState>, args: &Value) -> 
     let job_key = crate::server::project_key_for_path(project_path);
 
     match claim_index_job(&state, project_path, &job_key, mode) {
-        IndexJobClaim::Existing(job) | IndexJobClaim::Started(job) => {
+        IndexJobClaim::Joined(job) | IndexJobClaim::Started(job) => {
             Ok(wait_for_index_job(&state, &job_key, job).await)
         }
+        IndexJobClaim::Collected(finished) => Ok(collected_result(&finished)),
         IndexJobClaim::Rejected(result) => Ok(result),
     }
 }
 
+/// Bitmiş indeks işinin saklanan sonucu ve bitiş anı.
+#[derive(Debug, Clone)]
+pub(crate) struct FinishedIndexJob {
+    pub result: ToolResult,
+    pub finished_at: std::time::Instant,
+}
+
 /// Projede indeksleme işi talebinin sonucu.
 enum IndexJobClaim {
-    /// Projede iş zaten var: sürüyor ya da sonucu alınmayı bekliyor.
-    Existing(crate::server::IndexJob),
+    /// Aynı modda süren işe katılındı.
+    Joined(crate::server::IndexJob),
+    /// Aynı modda bitmiş ama sonucu alınmamış işin sonucu alındı ve kayıt silindi.
+    Collected(FinishedIndexJob),
     /// Yeni iş kaydedildi ve başlatıldı.
     Started(crate::server::IndexJob),
-    /// Sonucu alınmamış iş sınırı dolu.
+    /// Farklı modda iş sürüyor ya da sonucu alınmamış iş sınırı dolu.
     Rejected(ToolResult),
+}
+
+/// Projedeki mevcut işin durumu (karar için gereken kadarı).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ExistingJob {
+    None,
+    Running(IndexModeArg),
+    Finished(IndexModeArg),
+}
+
+/// Talebin kararı; saf fonksiyon `decide_claim` üretir.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ClaimDecision {
+    Start,
+    Join,
+    Collect,
+    /// Bitmiş işin sonucu farklı moda aittir: atılır ve yeni iş başlar.
+    DiscardAndStart,
+    RejectModeConflict(IndexModeArg),
+}
+
+/// Talep kararı. Farklı moddaki iş isteğe "yapıldı" diye dönmez: süren iş
+/// varken açık hata, bitmiş iş varken o sonuç atılıp yeni iş başlar. Aynı
+/// moddaki bitmiş işin sonucu alınır (iptal edilen `index_now` ve zaman aşımına
+/// uğrayan `index_project` sonucu böyle teslim edilir) ve cevap bunun önceki
+/// bir işin sonucu olduğunu söyler.
+fn decide_claim(existing: ExistingJob, requested: IndexModeArg) -> ClaimDecision {
+    match existing {
+        ExistingJob::None => ClaimDecision::Start,
+        ExistingJob::Running(mode) if mode == requested => ClaimDecision::Join,
+        ExistingJob::Running(mode) => ClaimDecision::RejectModeConflict(mode),
+        ExistingJob::Finished(mode) if mode == requested => ClaimDecision::Collect,
+        ExistingJob::Finished(_) => ClaimDecision::DiscardAndStart,
+    }
+}
+
+/// Alınan önceki iş sonucunu, kaç saniye önce bittiğini söyleyerek döndürür.
+fn collected_result(finished: &FinishedIndexJob) -> ToolResult {
+    let mut result = finished.result.clone();
+    let note = format!(
+        "Result of the index job that finished {}s ago (started by an earlier call). Call again to start a new index.\n\n",
+        finished.finished_at.elapsed().as_secs()
+    );
+    match result.content.first_mut() {
+        Some(first) => first.text = format!("{note}{}", first.text),
+        None => result.content.push(ToolResultContent {
+            content_type: "text".to_string(),
+            text: note,
+        }),
+    }
+    result
 }
 
 /// Projede süren işi döndürür ya da yeni iş kaydedip başlatır. Denetim ve kayıt
@@ -492,8 +545,47 @@ fn claim_index_job(
 ) -> IndexJobClaim {
     const MAX_INDEX_JOBS: usize = 64;
     let mut jobs = state.index_jobs.lock().unwrap();
-    if let Some(existing) = jobs.get(job_key) {
-        return IndexJobClaim::Existing(existing.clone());
+    let existing = match jobs.get(job_key) {
+        None => ExistingJob::None,
+        Some(job) if job.receiver.borrow().is_none() => ExistingJob::Running(job.mode),
+        Some(job) => ExistingJob::Finished(job.mode),
+    };
+    match decide_claim(existing, mode) {
+        ClaimDecision::Start => {}
+        ClaimDecision::Join => {
+            let job = jobs
+                .get(job_key)
+                .expect("running job checked above")
+                .clone();
+            return IndexJobClaim::Joined(job);
+        }
+        ClaimDecision::Collect => {
+            let job = jobs.remove(job_key).expect("finished job checked above");
+            let finished = job
+                .receiver
+                .borrow()
+                .clone()
+                .expect("finished job carries its result");
+            return IndexJobClaim::Collected(finished);
+        }
+        ClaimDecision::DiscardAndStart => {
+            let discarded = jobs.remove(job_key).expect("finished job checked above");
+            tracing::info!(
+                path = %project_path,
+                job = discarded.id,
+                previous_mode = ?discarded.mode,
+                requested_mode = ?mode,
+                "Discarding an uncollected index result of another mode; starting a new job"
+            );
+        }
+        ClaimDecision::RejectModeConflict(running) => {
+            return IndexJobClaim::Rejected(index_task_failed_result(
+                project_path,
+                &format!(
+                    "a {running:?} index job is running for this project; wait for it (call again with mode {running:?}) before starting a {mode:?} index"
+                ),
+            ));
+        }
     }
     if jobs.len() >= MAX_INDEX_JOBS {
         return IndexJobClaim::Rejected(index_task_failed_result(
@@ -506,6 +598,7 @@ fn claim_index_job(
         id: state
             .next_index_job_id
             .fetch_add(1, std::sync::atomic::Ordering::Relaxed),
+        mode,
         receiver,
     };
     jobs.insert(job_key.to_string(), job.clone());
@@ -532,7 +625,7 @@ fn spawn_index_job(
     job_key: String,
     job_id: u64,
     mode: IndexModeArg,
-    sender: tokio::sync::watch::Sender<Option<ToolResult>>,
+    sender: tokio::sync::watch::Sender<Option<FinishedIndexJob>>,
 ) {
     tokio::spawn(async move {
         let worker_state = state.clone();
@@ -543,7 +636,11 @@ fn spawn_index_job(
             Ok(result) => result,
             Err(error) => index_task_failed_result(&project_path, &error.to_string()),
         };
-        if sender.send(Some(result)).is_err() {
+        let finished = FinishedIndexJob {
+            result,
+            finished_at: std::time::Instant::now(),
+        };
+        if sender.send(Some(finished)).is_err() {
             tracing::warn!(
                 path = %project_path,
                 job = job_id,
@@ -566,9 +663,9 @@ async fn wait_for_index_job(
     let mut receiver = job.receiver;
     loop {
         let finished = receiver.borrow_and_update().clone();
-        if let Some(result) = finished {
+        if let Some(finished) = finished {
             state.remove_index_job_if_id(job_key, job.id);
-            return result;
+            return finished.result;
         }
         if receiver.changed().await.is_err() {
             return index_task_failed_result(job_key, "index job completed without a result");
@@ -1397,6 +1494,67 @@ fn assigned_callable<'a>(
         .then_some((current, expressions))
 }
 
+/// Gövdenin başındaki atama zinciri (`req.get =\nreq.header = function …`) bir
+/// fonksiyona bağlanıyorsa atanan üye ifadeleri; değilse `None`.
+fn assignment_members(tree: &tree_sitter::Tree, content: &str) -> Option<Vec<String>> {
+    let mut current = tree.root_node().named_child(0)?;
+    if current.kind() == "expression_statement" {
+        current = current.named_child(0)?;
+    }
+    let mut expressions = Vec::new();
+    while current.kind() == "assignment_expression" {
+        let left = current.child_by_field_name("left")?;
+        if let Some(binding) = member_expression(left, content) {
+            expressions.push(binding);
+        }
+        current = current.child_by_field_name("right")?;
+    }
+    (!expressions.is_empty() && matches!(current.kind(), "function_expression" | "arrow_function"))
+        .then_some(expressions)
+}
+
+/// JS/TS hedefi `alıcı.üye = function` atamasıyla tanımlandıysa onu alıcı
+/// duyarlı hedefe çevirir. Sorgu tanım dosyasını söylemese de (`res.set`) çıplak
+/// ad (`set`) yerine atanan ifadeler aranır: aksi halde aynı adlı başka alıcıların
+/// (`app.set`) çağrıları caller ve "dışarıda kalan" satır olarak karışıyordu.
+async fn assigned_member_target(
+    engine: &Arc<RetrievalEngine>,
+    node_id: &str,
+) -> Result<Option<MemberTarget>> {
+    let graph = engine.graph.read().await;
+    let Some(idx) = graph.find_node_index_by_id(node_id) else {
+        return Ok(None);
+    };
+    let node = &graph.graph[idx];
+    let path = ccm_core::engine::extract_file_path(&node.id);
+    let path = path.trim_start_matches("./");
+    if !is_js_ts_path(path)
+        || !matches!(
+            node.node_type,
+            ccm_core::graph::NodeType::Function | ccm_core::graph::NodeType::Method
+        )
+    {
+        return Ok(None);
+    }
+    let tree = ccm_core::parser::CodeParser::new().parse_tree(&node.content, js_language(path))?;
+    let Some(expressions) = assignment_members(&tree, &node.content) else {
+        return Ok(None);
+    };
+    let Some((receiver, member)) = expressions[0].rsplit_once('.') else {
+        return Ok(None);
+    };
+    Ok(Some(MemberTarget {
+        node_id: node.id.clone(),
+        hint: MemberCallHint {
+            receiver: receiver.to_string(),
+            member: member.to_string(),
+            scope: None,
+            definition_file: Some(path.to_string()),
+        },
+        expressions,
+    }))
+}
+
 async fn member_call_target(
     engine: &Arc<RetrievalEngine>,
     query: &str,
@@ -1522,6 +1680,18 @@ async fn receiver_call_evidence(
     }
     let graph = engine.graph.read().await;
     let mut suggestions = Vec::new();
+    // Hedefin kendi gövdesindeki düğümler (atama zincirinin iç adı, ör.
+    // `res.set = res.header = function header`) caller değil, hedefin kendisidir.
+    let target_span = graph
+        .find_node_index_by_id(&target.node_id)
+        .map(|idx| &graph.graph[idx])
+        .map(|node| {
+            (
+                ccm_core::engine::extract_file_path(&node.id),
+                node.start_line,
+                node.end_line,
+            )
+        });
 
     for idx in graph.graph.node_indices() {
         let node = &graph.graph[idx];
@@ -1534,9 +1704,17 @@ async fn receiver_call_evidence(
         if target.node_id == node.id {
             continue;
         }
+        if target_span.as_ref().is_some_and(|(file, start, end)| {
+            *file == ccm_core::engine::extract_file_path(&node.id)
+                && *start <= node.start_line
+                && node.end_line <= *end
+        }) {
+            continue;
+        }
         let path = ccm_core::engine::extract_file_path(&node.id);
         let path = path.trim_start_matches("./");
-        if !is_js_ts_path(path) {
+        // Test dosyaları caller listesine girmez (graf yolundaki `tests` ayrımıyla aynı).
+        if !is_js_ts_path(path) || is_test_path(path) {
             continue;
         }
         if hint
@@ -1576,8 +1754,96 @@ async fn receiver_call_evidence(
                 &right.title,
             ))
     });
+    let mut suggestions = drop_alias_inner_callers(suggestions);
     suggestions.truncate(RECEIVER_EVIDENCE_LIMIT);
     Ok(suggestions)
+}
+
+/// Atama zincirindeki iç takma ad düğümünü atar: `res.contentType = res.type =
+/// function contentType` iki düğüm üretir (619-626 ve 620-626); aynı dosyada,
+/// aynı satırda biten ve başka bir caller'ın içinde başlayan düğüm aynı gövdedir.
+fn drop_alias_inner_callers(
+    suggestions: Vec<ccm_core::engine::ContextSuggestion>,
+) -> Vec<ccm_core::engine::ContextSuggestion> {
+    let spans: Vec<(Option<String>, Option<usize>, Option<usize>)> = suggestions
+        .iter()
+        .map(|item| (item.file_path.clone(), item.start_line, item.end_line))
+        .collect();
+    suggestions
+        .into_iter()
+        .filter(|item| {
+            !spans.iter().any(|(file, start, end)| {
+                *file == item.file_path
+                    && *end == item.end_line
+                    && start
+                        .zip(item.start_line)
+                        .is_some_and(|(outer, inner)| outer < inner)
+            })
+        })
+        .collect()
+}
+
+/// Sorgunun tamamı tek bir `alıcı.üye` ifadesiyse (`res.set`) ve projede o ifadeye
+/// atanmış tek bir JS/TS fonksiyonu varsa onu hedef seçer. Dosya adı eşleşmesinden
+/// (`test/res.set.js`) önce gelir; birden çok aday varsa seçim yapılmaz.
+async fn sole_assigned_member_target(
+    engine: &Arc<RetrievalEngine>,
+    query: &str,
+) -> Result<Option<MemberTarget>> {
+    let expression = query.trim().trim_matches('`');
+    let Some((receiver, member)) = expression.rsplit_once('.') else {
+        return Ok(None);
+    };
+    if !identifier_part(member) || receiver.is_empty() || !receiver.split('.').all(identifier_part)
+    {
+        return Ok(None);
+    }
+    let graph = engine.graph.read().await;
+    let mut found: Vec<(String, String, usize, Vec<String>)> = Vec::new();
+    for idx in graph.graph.node_indices() {
+        let node = &graph.graph[idx];
+        let path = ccm_core::engine::extract_file_path(&node.id);
+        let path = path.trim_start_matches("./");
+        if !is_js_ts_path(path)
+            || is_test_path(path)
+            || !matches!(
+                node.node_type,
+                ccm_core::graph::NodeType::Function | ccm_core::graph::NodeType::Method
+            )
+        {
+            continue;
+        }
+        // Ucuz ön süzgeç: ifadeyi metin olarak içermeyen gövde ayrıştırılmaz.
+        if !node.content.contains(expression) {
+            continue;
+        }
+        let tree =
+            ccm_core::parser::CodeParser::new().parse_tree(&node.content, js_language(path))?;
+        if let Some((_, expressions)) = assigned_callable(&tree, &node.content, expression) {
+            found.push((
+                node.id.clone(),
+                path.to_string(),
+                node.end_line,
+                expressions,
+            ));
+        }
+    }
+    // Atama zincirinin iç adı aynı satırda biten ikinci bir düğümdür; tek gövde sayılır.
+    found.sort_by_key(|(id, path, end, _)| (path.clone(), *end, id.len()));
+    found.dedup_by(|later, earlier| later.1 == earlier.1 && later.2 == earlier.2);
+    let [(node_id, path, _, expressions)] = found.as_slice() else {
+        return Ok(None);
+    };
+    Ok(Some(MemberTarget {
+        node_id: node_id.clone(),
+        hint: MemberCallHint {
+            receiver: receiver.to_string(),
+            member: member.to_string(),
+            scope: None,
+            definition_file: Some(path.clone()),
+        },
+        expressions: expressions.clone(),
+    }))
 }
 
 /// Tool: context
@@ -1601,6 +1867,32 @@ pub async fn context(
     let max_tokens = max_tokens_from_args(args)?;
     let budget_chars = max_tokens.saturating_mul(CHARS_PER_TOKEN);
 
+    // Tek `alıcı.üye` ifadesi ve ona atanmış tek fonksiyon: alıcı duyarlı hedef.
+    if let Some(target) = sole_assigned_member_target(engine, query).await? {
+        let explanation = match engine.explain(&target.node_id).await {
+            Ok(explanation) => explanation,
+            Err(error) => return Ok(tool_error(error.to_string())),
+        };
+        let evidence = receiver_call_evidence(engine, &target).await?;
+        let callers = context_callers(engine, &explanation, Some(&evidence)).await?;
+        let text = context_packet(
+            engine,
+            root,
+            &explanation,
+            &callers,
+            Some(&target),
+            max_tokens,
+        )
+        .await;
+        return Ok(ToolResult {
+            content: vec![ToolResultContent {
+                content_type: "text".to_string(),
+                text,
+            }],
+            is_error: None,
+        });
+    }
+
     // Önce aynı metni hedef gibi çözmeyi dene. Bu; sembol, dosya, path:line ve
     // node ID girişlerini semantik arama yapmadan deterministik olarak cevaplar.
     // Yalnızca bulunamayan ad doğal dil aramasına düşer; belirsiz hedef sessizce
@@ -1614,8 +1906,21 @@ pub async fn context(
                 Ok(explanation) => explanation,
                 Err(error) => return Ok(tool_error(error.to_string())),
             };
-            let callers = context_callers(engine, &explanation, None).await?;
-            let text = context_packet(engine, root, &explanation, &callers, None, max_tokens).await;
+            let member = assigned_member_target(engine, &node_id).await?;
+            let evidence = match member.as_ref() {
+                Some(target) => Some(receiver_call_evidence(engine, target).await?),
+                None => None,
+            };
+            let callers = context_callers(engine, &explanation, evidence.as_deref()).await?;
+            let text = context_packet(
+                engine,
+                root,
+                &explanation,
+                &callers,
+                member.as_ref(),
+                max_tokens,
+            )
+            .await;
             return Ok(ToolResult {
                 content: vec![ToolResultContent {
                     content_type: "text".to_string(),
@@ -1661,6 +1966,11 @@ pub async fn context(
     let selected_node_id = hinted_target
         .as_deref()
         .or_else(|| hits.first().and_then(|hit| hit.node_id.as_deref()));
+    let member_target = match (member_target, selected_node_id) {
+        (Some(target), _) => Some(target),
+        (None, Some(node_id)) => assigned_member_target(engine, node_id).await?,
+        (None, None) => None,
+    };
     let hinted_callers = if let Some(target) = member_target.as_ref() {
         Some(receiver_call_evidence(engine, target).await?)
     } else {
@@ -2033,6 +2343,7 @@ async fn call_site_check(
                 roots,
                 files_in_scope,
                 elsewhere,
+                target_key: listed_key(target_id),
             };
             let outcome =
                 crate::call_sites::reconcile(&scanned, spec, target_name, &facts, &is_test_path);
@@ -2669,6 +2980,30 @@ pub async fn diff_context(engine: &Arc<RetrievalEngine>, args: &Value) -> Result
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn index_job_claims_never_return_another_mode_or_join_it() {
+        use super::{decide_claim, ClaimDecision, ExistingJob, IndexModeArg};
+        let full = IndexModeArg::Full;
+        let quick = IndexModeArg::Quick;
+        assert_eq!(decide_claim(ExistingJob::None, full), ClaimDecision::Start);
+        assert_eq!(
+            decide_claim(ExistingJob::Running(full), full),
+            ClaimDecision::Join
+        );
+        assert_eq!(
+            decide_claim(ExistingJob::Running(quick), full),
+            ClaimDecision::RejectModeConflict(quick)
+        );
+        assert_eq!(
+            decide_claim(ExistingJob::Finished(full), full),
+            ClaimDecision::Collect
+        );
+        assert_eq!(
+            decide_claim(ExistingJob::Finished(quick), full),
+            ClaimDecision::DiscardAndStart
+        );
+    }
+
     use super::{
         index_response_timeout, member_call_hints, normalize_graph_node_id, normalize_graph_path,
         scoped_symbol_hints,

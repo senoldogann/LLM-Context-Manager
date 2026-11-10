@@ -9,6 +9,7 @@ import statistics
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Literal
 
 from agent.prices import PRICES, estimated_cost
 from freshness.jsonio import as_bool, as_float, as_int, as_list, as_object, as_str
@@ -25,11 +26,26 @@ class ReportError(ValueError):
     """Kayıt okunamadı ya da özetlenecek koşu yok."""
 
 
+# Ajan öncesi indeks ölçüsü: `full-index` her koşuda yapılan tam indeksleme (kayıt sürümü 1),
+# `prebuilt-copy` önceden bir kez kurulmuş indeksin kopyalanması (kayıt sürümü 2).
+IndexMeasure = Literal["full-index", "prebuilt-copy"]
+
+
+@dataclass(frozen=True)
+class IndexTiming:
+    """Bir kaydın indeks süreleri; `build_s` yalnız `prebuilt-copy` ölçüsünde dolabilir."""
+
+    measure: IndexMeasure
+    seconds: float | None
+    build_s: float | None
+
+
 @dataclass(frozen=True)
 class Outcome:
     """Raporun bir koşudan kullandığı ölçüler."""
 
     task_id: str
+    repo: str
     category: str
     arm: str
     rep: int
@@ -49,7 +65,7 @@ class Outcome:
     output_tokens: int | None
     turns: int | None
     wall_s: float | None
-    index_s: float | None
+    index: IndexTiming
     ccm_calls: int
 
 
@@ -73,6 +89,31 @@ def strings(value: JsonValue, context: str) -> tuple[str, ...]:
     )
 
 
+def index_timing(record: dict[str, JsonValue], path: Path) -> IndexTiming:
+    """Kaydın sürümüne göre indeks süreleri.
+
+    Sürüm 1 kayıtlarında `record_version` yoktur ve `index_s` tam indeksleme süresidir;
+    sürüm 2'de `index_copy_s` kopyalama, `index_build_s` tek seferlik kurulum süresidir.
+    """
+    version_value = record.get("record_version")
+    if version_value is None:
+        if "index_s" not in record:
+            raise ReportError(f"{path}: version 1 record without index_s")
+        return IndexTiming(
+            measure="full-index",
+            seconds=optional_float(record.get("index_s"), f"{path}: index_s"),
+            build_s=None,
+        )
+    version = as_int(version_value, f"{path}: record_version", ReportError)
+    if version != 2:
+        raise ReportError(f"{path}: unsupported record_version {version}")
+    return IndexTiming(
+        measure="prebuilt-copy",
+        seconds=optional_float(record.get("index_copy_s"), f"{path}: index_copy_s"),
+        build_s=optional_float(record.get("index_build_s"), f"{path}: index_build_s"),
+    )
+
+
 def read_outcome(path: Path) -> Outcome:
     """Bir koşu kaydını okur; ürün/ajan hataları başarı paydasında kalır."""
     try:
@@ -81,6 +122,8 @@ def read_outcome(path: Path) -> Outcome:
         raise ReportError(f"{path} is not JSON") from error
     record = as_object(raw, str(path), ReportError)
     task_id = as_str(record.get("task_id"), f"{path}: task_id", ReportError)
+    repo = as_str(record.get("repo"), f"{path}: repo", ReportError)
+    index = index_timing(record, path)
     category = as_str(record.get("category"), f"{path}: category", ReportError)
     arm = as_str(record.get("arm"), f"{path}: arm", ReportError)
     rep = as_int(record.get("rep"), f"{path}: rep", ReportError)
@@ -98,6 +141,7 @@ def read_outcome(path: Path) -> Outcome:
             raise ReportError(f"{path}: missing transcript/score without a failure reason")
         return Outcome(
             task_id=task_id,
+            repo=repo,
             category=category,
             arm=arm,
             rep=rep,
@@ -116,11 +160,7 @@ def read_outcome(path: Path) -> Outcome:
             output_tokens=None,
             turns=None,
             wall_s=wall_s,
-            index_s=(
-                None
-                if record.get("index_s") is None
-                else as_float(record.get("index_s"), f"{path}: index_s", ReportError)
-            ),
+            index=index,
             ccm_calls=0,
         )
 
@@ -145,6 +185,7 @@ def read_outcome(path: Path) -> Outcome:
     )
     return Outcome(
         task_id=task_id,
+        repo=repo,
         category=category,
         arm=arm,
         rep=rep,
@@ -165,11 +206,7 @@ def read_outcome(path: Path) -> Outcome:
         output_tokens=output_tokens,
         turns=optional_int(transcript.get("num_turns"), f"{path}: num_turns"),
         wall_s=wall_s,
-        index_s=(
-            None
-            if record.get("index_s") is None
-            else as_float(record.get("index_s"), f"{path}: index_s", ReportError)
-        ),
+        index=index,
         ccm_calls=sum(
             as_int(count, f"{path}: tool_calls.{name}", ReportError)
             for name, count in calls.items()
@@ -261,6 +298,20 @@ def median_cell(
     return f"{prefix}{format(statistics.median(known), spec)}{suffix}"
 
 
+INDEX_COLUMNS: dict[IndexMeasure, str] = {
+    "full-index": "Median pre-index (full index per run)",
+    "prebuilt-copy": "Median index copy (prebuilt index)",
+}
+
+
+def index_measure(outcomes: list[Outcome]) -> IndexMeasure:
+    """Kayıtların ortak indeks ölçüsü; iki sürüm karışıksa tablo tek sütunla anlatılamaz."""
+    measures = sorted({outcome.index.measure for outcome in outcomes})
+    if len(measures) != 1:
+        raise ReportError(f"records mix index measures {measures}; report each version apart")
+    return measures[0]
+
+
 def arm_rows(outcomes: list[Outcome]) -> list[str]:
     """Kol bazında başarı, cevap kalitesi ve maliyet."""
     rows = [
@@ -268,7 +319,8 @@ def arm_rows(outcomes: list[Outcome]) -> list[str]:
         "",
         "| Arm | Success | 95% CI | Recall | Precision | Median cost | Total known cost "
         "| Median input tokens | Median output tokens | Median turns | Median agent wall "
-        "| Median pre-index | Runs using CCM | Stale (edit runs) | Run failures |",
+        f"| {INDEX_COLUMNS[index_measure(outcomes)]} | Runs using CCM | Stale (edit runs) "
+        "| Run failures |",
         "|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|",
     ]
     for arm in ARMS:
@@ -296,9 +348,32 @@ def arm_rows(outcomes: list[Outcome]) -> list[str]:
             f"| {median_cell([o.output_tokens for o in runs], ',.0f')} "
             f"| {median_cell([o.turns for o in runs], '.0f')} "
             f"| {median_cell([o.wall_s for o in runs], '.0f', suffix=' s')} "
-            f"| {median_cell([o.index_s for o in runs], '.1f', suffix=' s')} "
+            f"| {median_cell([o.index.seconds for o in runs], '.1f', suffix=' s')} "
             f"| {used}/{len(runs)} | {stale}/{len(edits)} | {failures}/{len(runs)} |"
         )
+    return rows
+
+
+def index_build_rows(outcomes: list[Outcome]) -> list[str]:
+    """Önceden kurulan indekslerin tek seferlik kurulum süreleri (yalnız sürüm 2 kayıtları)."""
+    if index_measure(outcomes) != "prebuilt-copy":
+        return []
+    rows = [
+        "## Prebuilt indexes",
+        "",
+        "Arms with CCM copy an index built once per repository before their runs (the cache "
+        "is shared across result directories); the arm table shows the copy time. One-time "
+        "build time of the index each repository's runs copied:",
+        "",
+        "| Repository | Build |",
+        "|---|---|",
+    ]
+    for repo in sorted({outcome.repo for outcome in outcomes}):
+        builds = sorted(
+            {o.index.build_s for o in outcomes if o.repo == repo and o.index.build_s is not None}
+        )
+        cell = ", ".join(f"{build:.1f} s" for build in builds) if builds else "—"
+        rows.append(f"| {repo} | {cell} |")
     return rows
 
 
@@ -492,9 +567,11 @@ def render(outcomes: list[Outcome], setup: JsonValue) -> str:
     """Raporun tamamı."""
     if not outcomes:
         raise ReportError("there are no completed runs to report")
+    builds = index_build_rows(outcomes)
     sections = (
         header(setup, outcomes),
         arm_rows(outcomes),
+        *((builds,) if builds else ()),
         ratio_rows(outcomes),
         token_rows(outcomes),
         category_rows(outcomes),

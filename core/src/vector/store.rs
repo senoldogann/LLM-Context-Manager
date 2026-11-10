@@ -340,6 +340,39 @@ impl LanceDbStore {
         }
     }
 
+    /// Tablodaki farklı düğüm sayısı: parça kimliklerinin `#chunkN` eki atılır.
+    /// Satır sayısı parça sayısıdır; çok parçalı düğümler onu şişirir ve vektörü
+    /// silinmiş dosyaları gizlerdi. Kapsam denetimi bu sayıyı kullanır.
+    pub async fn distinct_node_count(&self) -> Result<usize> {
+        let table = self.table().await?;
+        let batches: Vec<RecordBatch> = table
+            .query()
+            .select(lancedb::query::Select::columns(&["id"]))
+            .execute()
+            .await
+            .with_context(|| {
+                format!(
+                    "vector table '{}' ids could not be queried",
+                    self.table_name
+                )
+            })?
+            .try_collect()
+            .await?;
+        let mut nodes = std::collections::HashSet::new();
+        for batch in batches {
+            let ids = batch
+                .column_by_name("id")
+                .ok_or_else(|| anyhow::anyhow!("Missing 'id' column in vector table"))?
+                .as_any()
+                .downcast_ref::<StringArray>()
+                .ok_or_else(|| anyhow::anyhow!("Failed to cast 'id' column to StringArray"))?;
+            for row in 0..batch.num_rows() {
+                nodes.insert(node_id_of_chunk(ids.value(row)).to_string());
+            }
+        }
+        Ok(nodes.len())
+    }
+
     pub async fn validate_table(&self) -> Result<usize> {
         let table = self.table().await?;
         table
@@ -933,9 +966,32 @@ pub(crate) fn semantic_chunks(text: &str, max_chars: usize, overlap: usize) -> V
     chunks
 }
 
+/// Parça kimliğinin düğüm kimliği: `düğüm#chunkN` → `düğüm`; parçasız kimlik aynen kalır.
+fn node_id_of_chunk(id: &str) -> &str {
+    match id.rsplit_once("#chunk") {
+        Some((node, index)) if !index.is_empty() && index.bytes().all(|b| b.is_ascii_digit()) => {
+            node
+        }
+        _ => id,
+    }
+}
+
 #[cfg(test)]
 mod chunk_tests {
-    use super::{namespace_for_uri, semantic_chunks};
+    use super::{namespace_for_uri, node_id_of_chunk, semantic_chunks};
+
+    #[test]
+    fn chunk_ids_map_to_their_node() {
+        assert_eq!(
+            node_id_of_chunk("./a.py:symbol:f#chunk3"),
+            "./a.py:symbol:f"
+        );
+        assert_eq!(node_id_of_chunk("./a.py:symbol:f"), "./a.py:symbol:f");
+        assert_eq!(
+            node_id_of_chunk("./a#chunky.py:symbol:f"),
+            "./a#chunky.py:symbol:f"
+        );
+    }
 
     #[test]
     fn generation_database_keeps_the_project_fixture_namespace() {

@@ -118,7 +118,10 @@ impl SemanticUpgradeCounts {
 #[derive(Clone)]
 pub(crate) struct IndexJob {
     pub id: u64,
-    pub receiver: tokio::sync::watch::Receiver<Option<crate::protocol::ToolResult>>,
+    /// İşin modu: farklı modda gelen istek bu işe katılmaz ve sonucunu almaz.
+    pub mode: crate::tools::IndexModeArg,
+    /// `None` iş sürüyor demektir; `Some` bitti ve sonucu alınmayı bekliyor.
+    pub receiver: tokio::sync::watch::Receiver<Option<crate::tools::FinishedIndexJob>>,
 }
 
 const DEFAULT_ENGINE_CACHE_SIZE: usize = 8;
@@ -593,10 +596,17 @@ impl ServerState {
         }
         let deadline = tokio::time::Instant::now() + budget;
         let freshness = crate::freshness::wait_until_fresh(&handle, budget).await;
-        if !crate::freshness::is_settled(&freshness)
-            || freshness.waiting_for_upgrade
-            || freshness.last_error.is_some()
-        {
+        if freshness.last_error.is_some() || freshness.persist_error.is_some() {
+            // Hata durumundaki okuma, geri çekilme süresini beklemeden yeniden
+            // denemeyi tetikler; kalan bütçe içinde sonuç gelirse taze döner.
+            self.request_refresh(project_key);
+            return Ok(crate::freshness::wait_until_fresh(
+                &handle,
+                deadline.saturating_duration_since(tokio::time::Instant::now()),
+            )
+            .await);
+        }
+        if !crate::freshness::is_settled(&freshness) || freshness.waiting_for_upgrade {
             return Ok(freshness);
         }
         if let EngineSource::Live(live) = &loaded.source {
@@ -1274,6 +1284,11 @@ pub async fn handle_request(state: &Arc<ServerState>, request: JsonRpcRequest) -
     }
 }
 
+/// İstemcinin oturum başında modele verdiği sunucu talimatı. Codex ilk 512
+/// karakteri, Claude Code araç aramasında bu metni kullanır; kısa ve tek başına
+/// anlaşılır olmalı.
+const SERVER_INSTRUCTIONS: &str = "CCM answers code-structure questions from an index of this repository: who calls X, where X is used, what X does. For these, call `context` instead of Grep + Read: it returns each caller with its call-site lines and a grep-equivalent check that says whether the caller list is complete.";
+
 fn handle_initialize(id: Option<Value>, params: Option<&Value>) -> JsonRpcResponse {
     let result = json!({
         "protocolVersion": negotiate_protocol_version(params),
@@ -1288,6 +1303,7 @@ fn handle_initialize(id: Option<Value>, params: Option<&Value>) -> JsonRpcRespon
             name: "ccm-mcp".to_string(),
             version: env!("CARGO_PKG_VERSION").to_string(),
         },
+        "instructions": SERVER_INSTRUCTIONS,
     });
     create_success_response(id, result)
 }
@@ -1349,6 +1365,9 @@ fn handle_list_tools(id: Option<Value>) -> JsonRpcResponse {
                 "required": ["query"]
             }),
             annotations: READ_ONLY_TOOL,
+            // Claude Code MCP araçlarını varsayılan olarak erteler (şema ancak araç
+            // aramasıyla görünür); tek giriş noktası baştan yüklenmeli.
+            meta: Some(json!({ "anthropic/alwaysLoad": true })),
         },
         ToolDefinition {
             name: "map".to_string(),
@@ -1363,6 +1382,7 @@ fn handle_list_tools(id: Option<Value>) -> JsonRpcResponse {
                 }
             }),
             annotations: READ_ONLY_TOOL,
+            meta: None,
         },
         ToolDefinition {
             name: "explain".to_string(),
@@ -1379,6 +1399,7 @@ fn handle_list_tools(id: Option<Value>) -> JsonRpcResponse {
                 "required": ["target"]
             }),
             annotations: READ_ONLY_TOOL,
+            meta: None,
         },
         ToolDefinition {
             name: "find_usages".to_string(),
@@ -1396,6 +1417,7 @@ fn handle_list_tools(id: Option<Value>) -> JsonRpcResponse {
                 "required": ["target"]
             }),
             annotations: READ_ONLY_TOOL,
+            meta: None,
         },
         ToolDefinition {
             name: "impact_of_change".to_string(),
@@ -1413,6 +1435,7 @@ fn handle_list_tools(id: Option<Value>) -> JsonRpcResponse {
                 "required": ["file"]
             }),
             annotations: READ_ONLY_TOOL,
+            meta: None,
         },
         ToolDefinition {
             name: "search_code".to_string(),
@@ -1430,6 +1453,7 @@ fn handle_list_tools(id: Option<Value>) -> JsonRpcResponse {
                 "required": ["query"]
             }),
             annotations: READ_ONLY_TOOL,
+            meta: None,
         },
         ToolDefinition {
             name: "find_nodes".to_string(),
@@ -1447,6 +1471,7 @@ fn handle_list_tools(id: Option<Value>) -> JsonRpcResponse {
                 "required": ["query"]
             }),
             annotations: READ_ONLY_TOOL,
+            meta: None,
         },
         ToolDefinition {
             name: "trace_call_chain".to_string(),
@@ -1465,6 +1490,7 @@ fn handle_list_tools(id: Option<Value>) -> JsonRpcResponse {
                 "required": ["from", "to"]
             }),
             annotations: READ_ONLY_TOOL,
+            meta: None,
         },
         ToolDefinition {
             name: "diff_context".to_string(),
@@ -1482,6 +1508,7 @@ fn handle_list_tools(id: Option<Value>) -> JsonRpcResponse {
                 "required": ["project_path"]
             }),
             annotations: READ_ONLY_TOOL,
+            meta: None,
         },
         ToolDefinition {
             name: "index_project".to_string(),
@@ -1496,6 +1523,7 @@ fn handle_list_tools(id: Option<Value>) -> JsonRpcResponse {
                 "required": ["project_path"]
             }),
             annotations: INDEXING_TOOL,
+            meta: None,
         },
         ToolDefinition {
             name: "index_now".to_string(),
@@ -1510,6 +1538,7 @@ fn handle_list_tools(id: Option<Value>) -> JsonRpcResponse {
                 "required": ["project_path"]
             }),
             annotations: INDEXING_TOOL,
+            meta: None,
         },
     ];
 

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import re
+from collections.abc import Mapping
 from dataclasses import dataclass
 
 from agent.tasks import AnswerKind, Edit, Item, Task, label
@@ -116,9 +117,16 @@ def marker_files(edit: Edit) -> tuple[str, ...]:
     return tuple(sorted({marker.file for marker in (*edit.present, *edit.absent)}))
 
 
-def edit_applied(edit: Edit, contents: dict[str, str]) -> bool:
-    """Değişiklik yapıldı mı: tüm `present` işaretleri var, hiçbir `absent` işareti yok."""
-    squashed = {path: squash(text) for path, text in contents.items()}
+def edit_applied(edit: Edit, contents: Mapping[str, str | None]) -> bool:
+    """Değişiklik yapıldı mı: tüm `present` işaretleri var, hiçbir `absent` işareti yok.
+
+    `None` içerik, ajanın işaret dosyasını sildiğini ya da taşıdığını gösterir: beklenen
+    değişiklik o dosyada yapılmamıştır, puan `False` olur.
+    """
+    present_files = {path: text for path, text in contents.items() if text is not None}
+    if len(present_files) != len(contents):
+        return False
+    squashed = {path: squash(text) for path, text in present_files.items()}
     present = all(squash(marker.text) in squashed[marker.file] for marker in edit.present)
     absent = not any(squash(marker.text) in squashed[marker.file] for marker in edit.absent)
     return present and absent
@@ -131,8 +139,11 @@ def stale_items(edit: Edit, keys: tuple[Key, ...]) -> tuple[str, ...]:
     return tuple(listed + skipped)
 
 
-def score(task: Task, text: str, workspace_name: str, contents: dict[str, str]) -> Score:
-    """Cevabı puanlar; `contents` düzenleme görevlerinde işaret dosyalarının son hâlidir."""
+def score(task: Task, text: str, workspace_name: str, contents: Mapping[str, str | None]) -> Score:
+    """Cevabı puanlar; `contents` düzenleme görevlerinde işaret dosyalarının son hâlidir.
+
+    Silinmiş ya da taşınmış işaret dosyasının içeriği `None`dır (bkz. `edit_applied`).
+    """
     applied = None if task.edit is None else edit_applied(task.edit, contents)
     entries = answer_entries(text)
     if entries is None:

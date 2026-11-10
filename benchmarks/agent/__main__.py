@@ -3,12 +3,16 @@
 from __future__ import annotations
 
 import argparse
-import hashlib
+import fcntl
 import json
 import os
+import signal
 import subprocess
 import sys
+from collections.abc import Iterator
+from contextlib import contextmanager
 from pathlib import Path
+from types import FrameType
 
 from agent import codex
 from agent.check import check_tasks
@@ -25,8 +29,11 @@ from agent.run import (
     QuotaError,
     Secrets,
     Settings,
+    SetupError,
+    file_sha256,
     record_path,
     run_one,
+    write_atomic,
 )
 from agent.tasks import KNOWN_TASKS, TASKS, Task
 from freshness.model import JsonValue
@@ -38,10 +45,70 @@ KNOWN_ARMS: tuple[Arm, ...] = ("A", "B", "C", "F")
 HARNESS_PATHS = ("benchmarks/agent", "benchmarks/pyproject.toml", "benchmarks/corpus.json")
 CCM_SOURCE_PATHS = ("core", "mcp", "cli", "npm", "Cargo.toml", "Cargo.lock", "SKILL.md")
 SETUP_SCHEMA_VERSION = 1
+# `run` çıkış kodları; `--help` metni ve README ile aynı tutulur.
+EXIT_BUDGET = 3
+EXIT_QUOTA = 4
+EXIT_ISOLATION = 5
+EXIT_AUTH = 6
+EXIT_SETUP = 7
+EXIT_TERMINATED = 128 + signal.SIGTERM
+RUN_EXIT_CODES = f"""\
+exit codes:
+  0    every planned run has a record
+  {EXIT_BUDGET}    stopped before a run that could push the total over --max-total-usd
+  {EXIT_QUOTA}    usage or rate limit; rerun the same command after it resets
+  {EXIT_ISOLATION}    isolation check failed; no record written
+  {EXIT_AUTH}    authentication failed; no record written
+  {EXIT_SETUP}    setup or infrastructure failure (workspace, index cache, credentials, agent
+       start); no record written, rerunning the same command retries that run
+  {EXIT_TERMINATED}  SIGTERM; the running agent was stopped, no record written
+  1    harness error, e.g. another process holds <out-dir>/.lock
+"""
 
 
 class HarnessError(RuntimeError):
     """Ölçüm kurulamadı ya da kayıtlı koşuyla uyumsuz ayar istendi."""
+
+
+class HarnessTerminated(BaseException):
+    """Harness SIGTERM aldı; `finally` blokları ajanı durdurup geçici dizinleri silebilsin.
+
+    KeyboardInterrupt gibi `BaseException`dır: koşu hatası yakalayan bloklar onu tutmaz.
+    """
+
+
+def raise_terminated(signum: int, frame: FrameType | None) -> None:
+    """SIGTERM işleyicisi: sinyali istisnaya çevirir."""
+    raise HarnessTerminated(f"received signal {signum}")
+
+
+@contextmanager
+def sigterm_raises() -> Iterator[None]:
+    """Blok süresince SIGTERM'i `HarnessTerminated` istisnasına çevirir, sonra eskisini kurar."""
+    previous = signal.signal(signal.SIGTERM, raise_terminated)
+    try:
+        yield
+    finally:
+        signal.signal(signal.SIGTERM, previous)
+
+
+@contextmanager
+def exclusive_out_dir(out_dir: Path) -> Iterator[None]:
+    """Sonuç dizinini blok süresince tek sürece ayırır (`<out_dir>/.lock`, bloklamayan flock).
+
+    Aynı dizinde ikinci bir harness aynı koşuyu yeniden başlatıp kayıtları ezebilirdi.
+    """
+    out_dir.mkdir(parents=True, exist_ok=True)
+    lock_path = out_dir / ".lock"
+    with lock_path.open("w") as lock:
+        try:
+            fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError as error:
+            raise HarnessError(
+                f"another harness process holds {lock_path}; wait for it to finish or use "
+                "another --out-dir"
+            ) from error
+        yield
 
 
 def repository_root() -> Path:
@@ -77,15 +144,6 @@ def command_text(argv: tuple[str, ...], cwd: Path | None = None) -> str:
             f"{' '.join(argv)} exited {completed.returncode}: {completed.stderr.strip()}"
         )
     return completed.stdout.strip()
-
-
-def sha256(path: Path) -> str:
-    """Bir çalıştırılabilir dosyanın ölçüm kimliği."""
-    digest = hashlib.sha256()
-    with path.open("rb") as handle:
-        for block in iter(lambda: handle.read(1024 * 1024), b""):
-            digest.update(block)
-    return digest.hexdigest()
 
 
 def ccm_dirty(root: Path) -> bool:
@@ -130,8 +188,8 @@ def environment_json(settings: Settings, revision: str) -> dict[str, JsonValue]:
         "ccm_version": command_text((str(cli), "--version")),
         "ccm_commit": revision,
         "ccm_dirty": ccm_dirty(root),
-        "ccm_cli_sha256": sha256(cli),
-        "ccm_mcp_sha256": sha256(mcp),
+        "ccm_cli_sha256": file_sha256(cli),
+        "ccm_mcp_sha256": file_sha256(mcp),
     }
 
 
@@ -165,9 +223,7 @@ def write_or_verify_setup(path: Path, setup: dict[str, JsonValue]) -> None:
                 f"{path} does not match this run configuration; use a new output directory"
             )
         return
-    temporary = path.with_suffix(".tmp")
-    temporary.write_text(json.dumps(setup, indent=2, ensure_ascii=False) + "\n")
-    temporary.replace(path)
+    write_atomic(path, json.dumps(setup, indent=2, ensure_ascii=False) + "\n")
 
 
 def selected_tasks(raw: str) -> tuple[Task, ...]:
@@ -303,7 +359,8 @@ def command_run(
 
     Bir koşu en çok `--max-budget-usd` harcayabildiği için, harcanan tutara bu eklendiğinde
     `--max-total-usd` aşılacaksa yeni koşu başlatılmaz (çıkış kodu 3); aynı komut daha yüksek
-    bir sınırla yeniden çalıştırılırsa kaldığı yerden sürer.
+    bir sınırla yeniden çalıştırılırsa kaldığı yerden sürer. Komut boyunca sonuç dizini
+    `<out_dir>/.lock` ile bu sürece ayrılır; SIGTERM ajanı durdurur ve kayıt yazılmaz.
     """
     if repetitions < 1:
         raise HarnessError("--repetitions must be at least 1")
@@ -311,6 +368,22 @@ def command_run(
         raise HarnessError("--max-total-usd must be at least --max-budget-usd")
     if "F" in arms and settings.profile != "context-first-pilot":
         raise HarnessError("arm F exists only in the context-first-pilot profile")
+    with exclusive_out_dir(settings.out_dir), sigterm_raises():
+        try:
+            return run_missing(settings, repetitions, raw_tasks, arms, max_total_usd)
+        except HarnessTerminated as error:
+            print(f"stopping: {error}; the running agent was stopped, no record written.")
+            return EXIT_TERMINATED
+
+
+def run_missing(
+    settings: Settings,
+    repetitions: int,
+    raw_tasks: str,
+    arms: tuple[Arm, ...],
+    max_total_usd: float,
+) -> int:
+    """Kilit alınmış sonuç dizininde ayarları doğrular ve eksik koşuları sırayla yürütür."""
     tasks = selected_tasks(raw_tasks)
     validate_paths(settings)
     problems = check_tasks(tasks, settings.corpus_dir)
@@ -338,21 +411,25 @@ def command_run(
                         f"exceed --max-total-usd {max_total_usd:.2f}",
                         flush=True,
                     )
-                    return 3
+                    return EXIT_BUDGET
                 print(f"[{completed + 1}/{total}] run {name} (spent ${spent:.2f})", flush=True)
                 try:
                     record = run_one(settings, task, arm, repetition, secrets)
                 except QuotaError as error:
                     print(f"stopping at {name}: usage or rate limit ({error}).", flush=True)
                     print("Rerun the same command after the limit resets.", flush=True)
-                    return 4
+                    return EXIT_QUOTA
                 except IsolationError as error:
                     print(f"stopping at {name}: isolation check failed: {error}", flush=True)
-                    return 5
+                    return EXIT_ISOLATION
                 except AuthError as error:
                     print(f"stopping at {name}: authentication failed ({error}).", flush=True)
                     print("Create a new token with `claude setup-token` (or log in again).")
-                    return 6
+                    return EXIT_AUTH
+                except SetupError as error:
+                    print(f"stopping at {name}: setup failed ({error}).", flush=True)
+                    print("No record was written; fix the cause and rerun the same command.")
+                    return EXIT_SETUP
                 completed += 1
                 known_cost = None if record.transcript is None else record.transcript.cost_usd
                 if known_cost is not None:
@@ -412,7 +489,12 @@ def build_parser() -> argparse.ArgumentParser:
         help="index edit tasks before editing, then check the first live post-edit context packet",
     )
 
-    run = commands.add_parser("run", help="run or resume the three-arm agent benchmark")
+    run = commands.add_parser(
+        "run",
+        help="run or resume the three-arm agent benchmark",
+        epilog=RUN_EXIT_CODES,
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
     run.add_argument("--model", required=True)
     run.add_argument("--effort", required=True)
     run.add_argument("--embedding", choices=("local", "openai"), required=True)
@@ -461,6 +543,14 @@ def build_parser() -> argparse.ArgumentParser:
     run.add_argument("--ccm-model-dir", type=Path, required=True)
     run.add_argument("--corpus-dir", type=Path, required=True)
     run.add_argument("--out-dir", type=Path, required=True)
+    run.add_argument(
+        "--index-cache-dir",
+        type=Path,
+        required=True,
+        help="where each repository's index is built once (outside the repository); an "
+        "entry is keyed by repository, corpus HEAD, embedding source and model, and the "
+        "ccm-cli hash, and is only reused when its entry.json matches",
+    )
 
     report = commands.add_parser("report", help="render a Markdown report from completed runs")
     report.add_argument("--out-dir", type=Path, required=True)
@@ -495,6 +585,7 @@ def main() -> int:
         codex_home=None if codex_home is None else codex_home.expanduser().resolve(),
         ccm_bin_dir=namespace.ccm_bin_dir.resolve(),
         ccm_model_dir=namespace.ccm_model_dir.resolve(),
+        index_cache_dir=namespace.index_cache_dir.expanduser().resolve(),
         corpus_dir=namespace.corpus_dir.resolve(),
         out_dir=namespace.out_dir.resolve(),
     )

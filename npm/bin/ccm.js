@@ -529,13 +529,28 @@ function processIsAlive(pid) {
     }
 }
 
+/**
+ * Kilidi pid içeriğiyle birlikte tek adımda oluşturur: pid önce geçici dosyaya
+ * yazılır, sonra `linkSync` ile kilit yoluna bağlanır. Böylece başka bir proses
+ * kilidi hiçbir zaman boş (pid'siz) göremez ve canlı kilidi bayat sanıp silemez.
+ * Kilit zaten varsa `EEXIST` hatası fırlatılır.
+ */
+function createPidLockAtomic(lockPath) {
+    const tempPath = createUniqueTmpPath(lockPath);
+    fs.writeFileSync(tempPath, `${process.pid}\n`, { encoding: 'utf8', mode: 0o600, flag: 'wx' });
+    try {
+        fs.linkSync(tempPath, lockPath);
+    } finally {
+        fs.unlinkSync(tempPath);
+    }
+}
+
 async function acquireFileLock(lockPath, timeoutMs) {
     const startedAt = Date.now();
     while (true) {
         try {
-            const descriptor = fs.openSync(lockPath, 'wx', 0o600);
-            fs.writeFileSync(descriptor, `${process.pid}\n`, 'utf8');
-            return descriptor;
+            createPidLockAtomic(lockPath);
+            return;
         } catch (error) {
             if (error.code !== 'EEXIST') throw error;
             let ownerAlive = true;
@@ -563,7 +578,7 @@ async function acquireFileLock(lockPath, timeoutMs) {
 
 async function finalizeDownloadedBinary(binPath, tmpPath, downloadVerified) {
     const lockPath = `${binPath}.lock`;
-    const descriptor = await acquireFileLock(lockPath, 30_000);
+    await acquireFileLock(lockPath, 30_000);
     try {
         const downloadedHash = await sha256File(tmpPath);
         if (fs.existsSync(binPath)) {
@@ -580,7 +595,6 @@ async function finalizeDownloadedBinary(binPath, tmpPath, downloadVerified) {
         fs.renameSync(tmpPath, binPath);
         if (downloadVerified) writeBinaryChecksumSidecar(binPath, downloadedHash);
     } finally {
-        fs.closeSync(descriptor);
         try {
             fs.unlinkSync(lockPath);
         } catch (error) {
@@ -614,22 +628,40 @@ async function extractGzip(source, destination) {
     );
 }
 
-async function getBinary() {
-    // Detect which tool to run
-    let commandName = 'ccm-cli';
-    const binName = path.basename(process.argv[1]);
+/**
+ * Tam `process.argv` dizisinden hangi aracın çalışacağını çözer; girdiyi
+ * değiştirmez. Dönüş etiketlidir:
+ * - `{ kind: 'mcp', command: 'ccm-mcp', args }`: `ccm-mcp` bin adıyla ya da
+ *   `npx … mcp` ile çağrıldı (`mcp` alt komutu argümanlardan çıkarılır),
+ * - `{ kind: 'install' }`: `install` alt komutu,
+ * - `{ kind: 'cli', command: 'ccm-cli', args }`: diğer her şey.
+ */
+function parseLaunch(argv) {
+    if (typeof argv[1] !== 'string' || argv[1] === '') {
+        throw new Error(`Cannot determine the invoked script from argv: ${JSON.stringify(argv)}`);
+    }
+    const binName = path.basename(argv[1]);
+    const userArgs = argv.slice(2);
 
     if (binName.includes('mcp')) {
-        commandName = 'ccm-mcp';
-    } else if (process.argv[2] === 'mcp') {
-        commandName = 'ccm-mcp';
-        process.argv.splice(2, 1);
-    } else if (process.argv[2] === 'install') {
-        await installMcp();
-        process.exit(0);
+        return { kind: 'mcp', command: 'ccm-mcp', args: userArgs };
     }
+    if (userArgs[0] === 'mcp') {
+        return { kind: 'mcp', command: 'ccm-mcp', args: userArgs.slice(1) };
+    }
+    if (userArgs[0] === 'install') {
+        return { kind: 'install' };
+    }
+    return { kind: 'cli', command: 'ccm-cli', args: userArgs };
+}
 
-    return await getBinaryFor(commandName);
+/**
+ * CLI komutları için env: kullanıcı CCM_PROJECT_ROOT vermediyse cwd kök olur.
+ * MCP modunda bu fonksiyon kullanılmaz; açık kök istemcinin MCP roots ile
+ * bildirdiği çalışma alanını ezer (bkz. sunucudaki project_root_is_explicit).
+ */
+function cliChildEnv(env, cwd) {
+    return { ...env, CCM_PROJECT_ROOT: env.CCM_PROJECT_ROOT || cwd };
 }
 
 function downloadFile(url, dest, redirectsRemaining = 5) {
@@ -675,20 +707,34 @@ function downloadFile(url, dest, redirectsRemaining = 5) {
     });
 }
 
-async function downloadFileWithRetry(url, dest, attempts = DOWNLOAD_ATTEMPTS) {
+/**
+ * İndirmeyi artan bekleme ile yeniden dener; her denemede uyarı yazar ve son
+ * hatayı fırlatır. 404 kalıcıdır: yeniden denenmez, hemen fırlatılır.
+ */
+async function retryDownloadUnlessNotFound(url, attempts, download) {
     let lastError;
     for (let attempt = 1; attempt <= attempts; attempt++) {
         try {
-            await downloadFile(url, dest);
-            return;
+            return await download();
         } catch (error) {
             lastError = error;
             if (error.statusCode === 404 || attempt === attempts) break;
-            console.warn(`[CCM] Download interrupted; retrying (${attempt}/${attempts})...`);
+            console.warn(
+                `[CCM] Download interrupted; retrying (${attempt}/${attempts})...`,
+                { url, error: error.message }
+            );
             await new Promise((resolve) => setTimeout(resolve, attempt * 500));
         }
     }
     throw lastError;
+}
+
+async function downloadFileWithRetry(url, dest, attempts = DOWNLOAD_ATTEMPTS) {
+    await retryDownloadUnlessNotFound(url, attempts, () => downloadFile(url, dest));
+}
+
+function downloadTextWithRetry(url, attempts) {
+    return retryDownloadUnlessNotFound(url, attempts, () => downloadText(url));
 }
 
 function downloadText(url, redirectsRemaining = 5) {
@@ -728,16 +774,80 @@ function downloadText(url, redirectsRemaining = 5) {
     });
 }
 
+/**
+ * Sürümün checksum manifestinin durumunu döndürür:
+ * - `{ kind: 'available', checksums }`: manifest indirildi ve geçerli,
+ * - `{ kind: 'absent' }`: sürümde manifest yok (404),
+ * - `{ kind: 'fetch-failed', url, error }`: ağ hatası (yeniden denemelerden
+ *   sonra) ya da bozuk manifest. Geçici olabileceği için önbelleğe alınmaz.
+ */
 async function getChecksums() {
     if (checksumCache) return checksumCache;
 
     const url = `https://github.com/${REPO}/releases/download/v${VERSION}/${CHECKSUMS_FILE}`;
+    let text;
     try {
-        const text = await downloadText(url);
-        checksumCache = parseChecksums(text);
-        return checksumCache;
-    } catch (err) {
-        return null;
+        text = await downloadTextWithRetry(url, DOWNLOAD_ATTEMPTS);
+    } catch (error) {
+        return rememberChecksumManifest(classifyManifestError(url, error));
+    }
+    return rememberChecksumManifest(classifyManifestText(url, text));
+}
+
+function rememberChecksumManifest(manifest) {
+    if (manifest.kind !== 'fetch-failed') checksumCache = manifest;
+    return manifest;
+}
+
+/** İndirme hatasını sınıflandırır: yalnız 404 "manifest yok" anlamına gelir. */
+function classifyManifestError(url, error) {
+    if (error.statusCode === 404) return { kind: 'absent' };
+    return { kind: 'fetch-failed', url, error };
+}
+
+/**
+ * İndirilen manifest metnini sınıflandırır. Hiç girdisi olmayan ya da geçersiz
+ * SHA-256 değeri içeren manifest bozuktur ve 'fetch-failed' sayılır; "manifest
+ * yok" ile karıştırılıp doğrulamasız kuruluma izin vermez.
+ */
+function classifyManifestText(url, text) {
+    const checksums = parseChecksums(text);
+    if (checksums.size === 0) {
+        return { kind: 'fetch-failed', url, error: new Error('Checksum manifest contains no entries') };
+    }
+    const malformed = [...checksums]
+        .filter(([, hash]) => !/^[a-f0-9]{64}$/.test(hash))
+        .map(([filename]) => filename);
+    if (malformed.length > 0) {
+        return {
+            kind: 'fetch-failed',
+            url,
+            error: new Error(`Checksum manifest has invalid SHA-256 values for: ${malformed.join(', ')}`)
+        };
+    }
+    return { kind: 'available', checksums };
+}
+
+/**
+ * Manifest durumundan ikilinin beklenen hash'ini çözer:
+ * - `{ kind: 'verified', hash }`: beklenen hash bulundu,
+ * - `{ kind: 'absent', detail }`: sürümde bu ikili için checksum yok,
+ * - `{ kind: 'fetch-failed', url, error }`: manifest alınamadı; asla atlanamaz.
+ */
+function resolveExpectedChecksum(manifest, candidates) {
+    switch (manifest.kind) {
+        case 'available': {
+            const names = candidates.flatMap((name) => [name, `${name}.exe`]);
+            const hash = names.map((name) => manifest.checksums.get(name)).find(Boolean);
+            if (hash) return { kind: 'verified', hash };
+            return { kind: 'absent', detail: `Checksum not found for binary (looked up: ${names.join(', ')})` };
+        }
+        case 'absent':
+            return { kind: 'absent', detail: 'Checksum manifest not found' };
+        case 'fetch-failed':
+            return manifest;
+        default:
+            throw new Error(`Unhandled checksum manifest kind: ${manifest.kind}`);
     }
 }
 
@@ -781,59 +891,79 @@ function sha256File(filePath) {
     });
 }
 
+/**
+ * İndirilen dosyayı sürüm manifestine göre doğrular; doğrulandıysa `true`,
+ * kullanıcının izniyle doğrulamasız geçildiyse `false` döner. İzin yalnız
+ * sürümde checksum gerçekten yoksa geçerlidir; manifest alınamazsa her zaman
+ * hata fırlatılır (geçici ağ hatası doğrulamasız kurulum sebebi değildir).
+ */
 async function verifyChecksum(filePath, candidates) {
-    const checksums = await getChecksums();
-    if (!checksums) {
-        if (allowUnverifiedBinaries()) {
-            console.warn('[CCM] Checksum manifest not found. Proceeding without verification.');
-            return false;
+    const expected = resolveExpectedChecksum(await getChecksums(), candidates);
+    switch (expected.kind) {
+        case 'verified': {
+            const actual = await sha256File(filePath);
+            if (actual !== expected.hash) {
+                throw new Error(`Checksum mismatch for ${filePath}. Expected ${expected.hash}, got ${actual}`);
+            }
+            return true;
         }
-        throw new Error('Checksum manifest not found. Set CCM_ALLOW_UNVERIFIED_BINARIES=1 to bypass.');
+        case 'absent':
+            if (allowUnverifiedBinaries()) {
+                console.warn(`[CCM] ${expected.detail}. Proceeding without verification.`);
+                return false;
+            }
+            throw new Error(`${expected.detail}. Set CCM_ALLOW_UNVERIFIED_BINARIES=1 to bypass.`);
+        case 'fetch-failed':
+            throw new Error(
+                `Could not obtain the checksum manifest ${expected.url}: ${expected.error.message}. ` +
+                    'The binary was not installed; CCM_ALLOW_UNVERIFIED_BINARIES only bypasses releases ' +
+                    'that publish no checksum manifest.',
+                { cause: expected.error }
+            );
+        default:
+            throw new Error(`Unhandled expected checksum kind: ${expected.kind}`);
     }
+}
 
-    const expected = candidates
-        .map((name) => [name, `${name}.exe`])
-        .flat()
-        .map((name) => checksums.get(name))
-        .find(Boolean);
-    if (!expected) {
-        if (allowUnverifiedBinaries()) {
-            console.warn('[CCM] Checksum not found for binary. Proceeding without verification.');
-            return false;
+/** İkiliyi stdio'yu devrederek başlatır ve çıkış kodunu sürecin çıkışına taşır. */
+function runBinary(binPath, args, env) {
+    const child = spawn(binPath, args, { stdio: 'inherit', env });
+
+    child.on('error', (error) => {
+        console.error(`[CCM Error] Failed to start binary: ${error.message}`);
+        process.exit(1);
+    });
+    child.on('exit', (code, signal) => {
+        if (signal) {
+            console.error(`[CCM Error] Binary terminated by signal ${signal}`);
+            process.exit(1);
         }
-        throw new Error('Checksum not found for binary. Set CCM_ALLOW_UNVERIFIED_BINARIES=1 to bypass.');
-    }
-
-    const actual = await sha256File(filePath);
-    if (actual !== expected) {
-        throw new Error(`Checksum mismatch. Expected ${expected}, got ${actual}`);
-    }
-    return true;
+        process.exit(typeof code === 'number' ? code : 1);
+    });
 }
 
 async function main() {
     try {
-        const binPath = await getBinary();
-        const args = process.argv.slice(2);
-
-        // `mcp` için kök enjekte edilmez: açık CCM_PROJECT_ROOT istemcinin MCP
-        // roots ile bildirdiği çalışma alanını ezer. CLI komutları cwd'yi kullanır.
-        const env = args[0] === 'mcp'
-            ? process.env
-            : { ...process.env, CCM_PROJECT_ROOT: process.env.CCM_PROJECT_ROOT || process.cwd() };
-        const child = spawn(binPath, args, { stdio: 'inherit', env });
-
-        child.on('error', (error) => {
-            console.error(`[CCM Error] Failed to start binary: ${error.message}`);
-            process.exit(1);
-        });
-        child.on('exit', (code, signal) => {
-            if (signal) {
-                console.error(`[CCM Error] Binary terminated by signal ${signal}`);
-                process.exit(1);
-            }
-            process.exit(typeof code === 'number' ? code : 1);
-        });
+        const launch = parseLaunch(process.argv);
+        switch (launch.kind) {
+            case 'install':
+                await installMcp();
+                process.exit(0);
+                return;
+            case 'mcp':
+                // Kök enjekte edilmez; kullanıcının verdiği CCM_PROJECT_ROOT olduğu gibi kalır.
+                runBinary(await getBinaryFor(launch.command), launch.args, process.env);
+                return;
+            case 'cli':
+                runBinary(
+                    await getBinaryFor(launch.command),
+                    launch.args,
+                    cliChildEnv(process.env, process.cwd())
+                );
+                return;
+            default:
+                throw new Error(`Unhandled launch kind: ${launch.kind}`);
+        }
     } catch (err) {
         console.error(`[CCM Error] ${err.message}`);
         process.exit(1);
@@ -848,6 +978,9 @@ module.exports = {
     MCP_ARGS,
     MCP_ENV,
     backupFileOnce,
+    classifyManifestError,
+    classifyManifestText,
+    cliChildEnv,
     createUniqueTmpPath,
     extractGzip,
     finalizeDownloadedBinary,
@@ -856,6 +989,8 @@ module.exports = {
     installCodexTomlConfig,
     installJsonConfig,
     parseChecksums,
+    parseLaunch,
+    resolveExpectedChecksum,
     resolveRedirectUrl,
     verifyCachedBinary,
     verifyChecksum,

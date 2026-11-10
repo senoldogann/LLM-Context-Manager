@@ -5,11 +5,16 @@ const os = require('node:os');
 const path = require('node:path');
 const test = require('node:test');
 const zlib = require('node:zlib');
+const https = require('node:https');
+const { EventEmitter } = require('node:events');
 const { execFileSync, spawnSync } = require('node:child_process');
 
 const {
     MCP_ARGS,
     MCP_ENV,
+    classifyManifestError,
+    classifyManifestText,
+    cliChildEnv,
     createUniqueTmpPath,
     extractGzip,
     finalizeDownloadedBinary,
@@ -17,7 +22,10 @@ const {
     installClaudeCodeConfig,
     installCodexTomlConfig,
     installJsonConfig,
+    parseLaunch,
+    resolveExpectedChecksum,
     verifyCachedBinary,
+    verifyChecksum,
     writeJsonAtomic
 } = require('../bin/ccm.js');
 
@@ -42,8 +50,8 @@ function sha256(filePath) {
     return crypto.createHash('sha256').update(fs.readFileSync(filePath)).digest('hex');
 }
 
-function writeVerifiedCache(home, sourcePath) {
-    const binPath = cachedBinaryPath(home, 'ccm-cli');
+function writeVerifiedCache(home, commandName, sourcePath) {
+    const binPath = cachedBinaryPath(home, commandName);
     fs.mkdirSync(path.dirname(binPath), { recursive: true });
     fs.copyFileSync(sourcePath, binPath);
     fs.chmodSync(binPath, 0o755);
@@ -399,7 +407,7 @@ test('verified binary cache works without a network request', () => {
         fs.chmodSync(sourcePath, 0o755);
         expectedOutput = /^cached-cli-ok/;
     }
-    writeVerifiedCache(directory, sourcePath);
+    writeVerifiedCache(directory, 'ccm-cli', sourcePath);
 
     const result = spawnSync(process.execPath, [wrapperPath, '--version'], {
         encoding: 'utf8',
@@ -420,7 +428,7 @@ test('verified binary cache works without a network request', () => {
 
 test('corrupted binary cache fails sidecar verification', async () => {
     const { directory } = tempConfig();
-    const binPath = writeVerifiedCache(directory, process.execPath);
+    const binPath = writeVerifiedCache(directory, 'ccm-cli', process.execPath);
     fs.appendFileSync(binPath, 'corruption');
 
     assert.equal(await verifyCachedBinary(binPath), false);
@@ -432,7 +440,7 @@ test('wrapper returns nonzero when the cached binary terminates by signal', () =
     const scriptPath = path.join(directory, 'signal.sh');
     fs.writeFileSync(scriptPath, '#!/bin/sh\nkill -TERM $$\n');
     fs.chmodSync(scriptPath, 0o755);
-    writeVerifiedCache(directory, scriptPath);
+    writeVerifiedCache(directory, 'ccm-cli', scriptPath);
 
     const result = spawnSync(process.execPath, [wrapperPath, '--version'], {
         encoding: 'utf8',
@@ -454,4 +462,137 @@ test('release asset job only runs for tag refs', () => {
     const releaseJob = workflow.split('\n  release:')[1].split('\n  prepare-npm:')[0];
 
     assert.match(releaseJob, /\n    if: github\.ref_type == 'tag'\n/);
+});
+
+test('launch parsing selects the tool without mutating argv', () => {
+    const npxMcp = ['/usr/bin/node', '/cache/_npx/bin/ccm-cli', 'mcp', '--stdio'];
+    assert.deepEqual(parseLaunch(npxMcp), { kind: 'mcp', command: 'ccm-mcp', args: ['--stdio'] });
+    assert.deepEqual(npxMcp, ['/usr/bin/node', '/cache/_npx/bin/ccm-cli', 'mcp', '--stdio']);
+
+    assert.deepEqual(parseLaunch(['/usr/bin/node', '/usr/local/bin/ccm-mcp', '--stdio']), {
+        kind: 'mcp',
+        command: 'ccm-mcp',
+        args: ['--stdio']
+    });
+    assert.deepEqual(parseLaunch(['/usr/bin/node', '/usr/local/bin/ccm-cli', 'query', 'main']), {
+        kind: 'cli',
+        command: 'ccm-cli',
+        args: ['query', 'main']
+    });
+    assert.deepEqual(parseLaunch(['/usr/bin/node', '/usr/local/bin/ccm-cli']), {
+        kind: 'cli',
+        command: 'ccm-cli',
+        args: []
+    });
+    assert.deepEqual(parseLaunch(['/usr/bin/node', '/usr/local/bin/ccm-cli', 'install']), { kind: 'install' });
+    assert.throws(() => parseLaunch(['/usr/bin/node']), /Cannot determine the invoked script/);
+});
+
+test('CLI env defaults the project root to cwd and keeps a user-provided root', () => {
+    assert.equal(cliChildEnv({}, '/work/repo').CCM_PROJECT_ROOT, '/work/repo');
+    assert.equal(cliChildEnv({ CCM_PROJECT_ROOT: '/explicit' }, '/work/repo').CCM_PROJECT_ROOT, '/explicit');
+});
+
+/** Ortamı ve argümanları yazdıran sahte ikiliyi önbelleğe koyup sarmalayıcıyı çalıştırır. */
+function runWrapperWithEchoBinary(commandName, scriptPath, args, extraEnv) {
+    const { directory } = tempConfig();
+    const binaryPath = path.join(directory, 'echo-env.sh');
+    fs.writeFileSync(binaryPath, '#!/bin/sh\necho "root=${CCM_PROJECT_ROOT-unset} args=$*"\n');
+    fs.chmodSync(binaryPath, 0o755);
+    writeVerifiedCache(directory, commandName, binaryPath);
+
+    const env = { ...process.env, HOME: directory, USERPROFILE: directory, CCM_BINARY_VERSION: '', ...extraEnv };
+    if (!('CCM_PROJECT_ROOT' in extraEnv)) delete env.CCM_PROJECT_ROOT;
+    return spawnSync(process.execPath, [scriptPath, ...args], { encoding: 'utf8', cwd: directory, env });
+}
+
+test('MCP mode never injects CCM_PROJECT_ROOT so client roots stay authoritative', () => {
+    if (process.platform === 'win32') return;
+
+    const viaSubcommand = runWrapperWithEchoBinary('ccm-mcp', wrapperPath, ['mcp', '--flag'], {});
+    assert.equal(viaSubcommand.status, 0, viaSubcommand.stderr);
+    assert.equal(viaSubcommand.stdout.trim(), 'root=unset args=--flag');
+
+    // `ccm-mcp` bin adı npm'in bin bağlantısıdır; sembolik bağla taklit edilir.
+    const { directory } = tempConfig();
+    const mcpBinLink = path.join(directory, 'ccm-mcp');
+    fs.symlinkSync(wrapperPath, mcpBinLink);
+    const viaBinName = runWrapperWithEchoBinary('ccm-mcp', mcpBinLink, ['--flag'], {});
+    assert.equal(viaBinName.status, 0, viaBinName.stderr);
+    assert.equal(viaBinName.stdout.trim(), 'root=unset args=--flag');
+
+    const userRoot = runWrapperWithEchoBinary('ccm-mcp', wrapperPath, ['mcp'], { CCM_PROJECT_ROOT: '/explicit' });
+    assert.equal(userRoot.status, 0, userRoot.stderr);
+    assert.equal(userRoot.stdout.trim(), 'root=/explicit args=');
+});
+
+test('CLI mode passes the working directory as CCM_PROJECT_ROOT', () => {
+    if (process.platform === 'win32') return;
+
+    const result = runWrapperWithEchoBinary('ccm-cli', wrapperPath, ['query', 'main'], {});
+    assert.equal(result.status, 0, result.stderr);
+    const cwd = fs.realpathSync(result.stdout.trim().match(/^root=(\S+)/)[1]);
+    assert.equal(path.basename(cwd).startsWith('ccm-installer-'), true, result.stdout);
+    assert.match(result.stdout, / args=query main$/m);
+});
+
+const SHA_A = 'a'.repeat(64);
+
+test('checksum manifest states keep absent, failed and malformed apart', () => {
+    const url = 'https://github.com/example/checksums.txt';
+    const notFound = Object.assign(new Error('Failed to download: 404'), { statusCode: 404 });
+    const reset = Object.assign(new Error('socket hang up'), { code: 'ECONNRESET' });
+
+    assert.deepEqual(classifyManifestError(url, notFound), { kind: 'absent' });
+    assert.deepEqual(classifyManifestError(url, reset), { kind: 'fetch-failed', url, error: reset });
+
+    const available = classifyManifestText(url, `${SHA_A}  ccm-mcp-x86_64-unknown-linux-gnu.gz\n`);
+    assert.equal(available.kind, 'available');
+    assert.equal(classifyManifestText(url, '<html>rate limited</html>').kind, 'fetch-failed');
+    assert.equal(classifyManifestText(url, '').kind, 'fetch-failed');
+
+    assert.deepEqual(resolveExpectedChecksum(available, ['ccm-mcp-x86_64-unknown-linux-gnu.gz']), {
+        kind: 'verified',
+        hash: SHA_A
+    });
+    assert.equal(resolveExpectedChecksum(available, ['other-binary']).kind, 'absent');
+    assert.equal(resolveExpectedChecksum({ kind: 'absent' }, ['any']).kind, 'absent');
+    assert.equal(resolveExpectedChecksum({ kind: 'fetch-failed', url, error: reset }, ['any']).kind, 'fetch-failed');
+});
+
+/** `https.get`'i ağa çıkmadan cevap veren bir sahteyle değiştirir. */
+function stubHttpsGet(t, respond) {
+    t.mock.method(https, 'get', (url, callback) => {
+        const request = new EventEmitter();
+        request.setTimeout = () => request;
+        request.destroy = (error) => request.emit('error', error);
+        setImmediate(() => respond(request, callback));
+        return request;
+    });
+}
+
+test('a manifest network failure is never bypassed by the unverified-binary opt-in', async (t) => {
+    t.mock.method(console, 'warn', () => {});
+    const previousOptIn = process.env.CCM_ALLOW_UNVERIFIED_BINARIES;
+    process.env.CCM_ALLOW_UNVERIFIED_BINARIES = '1';
+    t.after(() => {
+        if (previousOptIn === undefined) delete process.env.CCM_ALLOW_UNVERIFIED_BINARIES;
+        else process.env.CCM_ALLOW_UNVERIFIED_BINARIES = previousOptIn;
+    });
+    const { directory } = tempConfig();
+    const filePath = path.join(directory, 'downloaded.bin');
+    fs.writeFileSync(filePath, 'payload');
+
+    stubHttpsGet(t, (request) => request.emit('error', Object.assign(new Error('socket hang up'), { code: 'ECONNRESET' })));
+    await assert.rejects(verifyChecksum(filePath, ['downloaded.bin']), (error) => {
+        assert.match(error.message, /Could not obtain the checksum manifest .*socket hang up/);
+        assert.equal(error.statusCode, undefined, 'must not look like a missing binary (404)');
+        return true;
+    });
+
+    // Sürümde manifest yoksa (404) açık izinle doğrulamasız devam edilir.
+    t.mock.restoreAll();
+    t.mock.method(console, 'warn', () => {});
+    stubHttpsGet(t, (request, callback) => callback({ statusCode: 404, headers: {}, resume: () => {} }));
+    assert.equal(await verifyChecksum(filePath, ['downloaded.bin']), false);
 });
