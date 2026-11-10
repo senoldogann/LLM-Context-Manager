@@ -1,0 +1,56 @@
+{
+  "record_version": 3,
+  "run_id": "django-callers-iri-to-uri__F__1",
+  "task_id": "django-callers-iri-to-uri",
+  "repo": "django",
+  "category": "callers",
+  "arm": "F",
+  "rep": 1,
+  "model": "claude-opus-5-5",
+  "effort": "high",
+  "embedding": "local",
+  "index_copy_s": 0.6533130418974906,
+  "index_build_s": 1230.484017916955,
+  "wall_s": 11.211644707946107,
+  "transcript": {
+    "result_text": "Ten functions and methods in `django/` call `iri_to_uri` directly. I got this from the code index; its check against a plain text search found all 13 call sites inside these ten. That count leaves out test files and the one mention in `django/utils/http.py`, which is only a comment.\n\n- `django/contrib/flatpages/models.py`: `FlatPage.get_absolute_url`\n- `django/contrib/syndication/views.py`: `add_domain`\n- `django/http/request.py`: `HttpRequest._get_full_path` and `HttpRequest.build_absolute_uri`\n- `django/http/response.py`: `HttpResponseRedirectBase.__init__`\n- `django/template/defaultfilters.py`: `iriencode`\n- `django/templatetags/static.py`: `PrefixNode.handle_simple`\n- `django/utils/feedgenerator.py`: `SyndicationFeed.__init__`, `SyndicationFeed.add_item` and `Enclosure.__init__`\n\nCalls made through `getattr` or an alias, where the name never appears in the source, wouldn't show up in this search.\n\n```json\n{\"answer\": [\"django/contrib/flatpages/models.py:FlatPage.get_absolute_url\", \"django/contrib/syndication/views.py:add_domain\", \"django/http/request.py:HttpRequest._get_full_path\", \"django/http/request.py:HttpRequest.build_absolute_uri\", \"django/http/response.py:HttpResponseRedirectBase.__init__\", \"django/template/defaultfilters.py:iriencode\", \"django/templatetags/static.py:PrefixNode.handle_simple\", \"django/utils/feedgenerator.py:SyndicationFeed.__init__\", \"django/utils/feedgenerator.py:SyndicationFeed.add_item\", \"django/utils/feedgenerator.py:Enclosure.__init__\"]}\n```",
+    "subtype": "success",
+    "is_error": false,
+    "num_turns": 2,
+    "duration_ms": 10275,
+    "cost_usd": 0.054320999999999994,
+    "usage": {
+      "input_tokens": 4,
+      "output_tokens": 706,
+      "cache_creation_input_tokens": 4691,
+      "cache_read_input_tokens": 13285
+    },
+    "tool_calls": {
+      "mcp__context-manager__context": 1
+    },
+    "mcp_status": "connected",
+    "api_key_source": "none",
+    "tools": [
+      "Bash",
+      "Edit",
+      "Glob",
+      "Grep",
+      "Read",
+      "Write",
+      "mcp__context-manager__context",
+      "mcp__context-manager__index_project"
+    ]
+  },
+  "score": {
+    "answered": true,
+    "recall": 1.0,
+    "precision": 1.0,
+    "missing": [],
+    "extra": [],
+    "edit_applied": null,
+    "stale": [],
+    "success": true
+  },
+  "failure": null,
+  "hook": null
+}

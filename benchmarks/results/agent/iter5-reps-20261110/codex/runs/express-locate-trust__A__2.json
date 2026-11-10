@@ -1,0 +1,47 @@
+{
+  "record_version": 3,
+  "run_id": "express-locate-trust__A__2",
+  "task_id": "express-locate-trust",
+  "repo": "express",
+  "category": "locate",
+  "arm": "A",
+  "rep": 2,
+  "model": "gpt-6-luna",
+  "effort": "high",
+  "embedding": "local",
+  "index_copy_s": null,
+  "index_build_s": null,
+  "wall_s": 13.310954291839153,
+  "transcript": {
+    "result_text": "`compileTrust` in `lib/utils.js` converts the setting value into the proxy trust function.\n\n```json\n{\"answer\":[\"lib/utils.js:compileTrust\"]}\n```",
+    "subtype": "completed",
+    "is_error": false,
+    "num_turns": null,
+    "duration_ms": 13311,
+    "cost_usd": null,
+    "usage": {
+      "input_tokens": 13434,
+      "output_tokens": 288,
+      "cache_creation_input_tokens": 0,
+      "cache_read_input_tokens": 18048
+    },
+    "tool_calls": {
+      "command_execution": 2
+    },
+    "mcp_status": "unreported",
+    "api_key_source": "chatgpt",
+    "tools": []
+  },
+  "score": {
+    "answered": true,
+    "recall": 1.0,
+    "precision": 1.0,
+    "missing": [],
+    "extra": [],
+    "edit_applied": null,
+    "stale": [],
+    "success": true
+  },
+  "failure": null,
+  "hook": null
+}

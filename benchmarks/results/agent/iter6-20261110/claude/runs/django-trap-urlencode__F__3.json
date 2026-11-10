@@ -1,0 +1,58 @@
+{
+  "record_version": 3,
+  "run_id": "django-trap-urlencode__F__3",
+  "task_id": "django-trap-urlencode",
+  "repo": "django",
+  "category": "trap",
+  "arm": "F",
+  "rep": 3,
+  "model": "claude-opus-5-5",
+  "effort": "high",
+  "embedding": "local",
+  "index_copy_s": 0.24302966706454754,
+  "index_build_s": 1230.484017916955,
+  "wall_s": 16.01862637512386,
+  "transcript": {
+    "result_text": "I found seven functions or methods in `django/` that call `django.utils.http.urlencode` directly. A grep over every `urlencode` occurrence and every `django.utils.http` import confirms the list, and none of these files import it under another name.\n\n**Calls that count:**\n- `django/contrib/admin/options.py:1246`, in `ModelAdmin.get_preserved_filters`. Line 1241 in the same method is `request.GET.urlencode()`, a `QueryDict` call, so it doesn't count.\n- `django/contrib/admin/templatetags/admin_urls.py:69`, in `add_preserved_filters`.\n- `django/contrib/admin/views/main.py:306`, in `ChangeList.get_query_string`.\n- `django/contrib/admin/widgets.py:162`, in `ForeignKeyRawIdWidget.get_context`.\n- `django/test/client.py:399`, in `RequestFactory.__init__`.\n- `django/test/client.py:669`, in `RequestFactory.generic`.\n- `django/test/client.py:769`, in `AsyncRequestFactory.generic`.\n\n**Excluded:**\n- `django/http/request.py`, `django/utils/html.py` and `django/test/testcases.py` call the standard-library `urllib.parse.urlencode`.\n- `django/contrib/auth/views.py:190` and `django/template/defaulttags.py:1208` call `QueryDict.urlencode`.\n- `django/template/defaultfilters.py:365` defines the template filter.\n- `django/utils/http.py:80` is inside `urlencode` itself and calls the standard-library version (imported as `original_urlencode`).\n\n```json\n{\"answer\": [\"django/contrib/admin/options.py:ModelAdmin.get_preserved_filters\", \"django/contrib/admin/templatetags/admin_urls.py:add_preserved_filters\", \"django/contrib/admin/views/main.py:ChangeList.get_query_string\", \"django/contrib/admin/widgets.py:ForeignKeyRawIdWidget.get_context\", \"django/test/client.py:RequestFactory.__init__\", \"django/test/client.py:RequestFactory.generic\", \"django/test/client.py:AsyncRequestFactory.generic\"]}\n```",
+    "subtype": "success",
+    "is_error": false,
+    "num_turns": 5,
+    "duration_ms": 15196,
+    "cost_usd": 0.0947922,
+    "usage": {
+      "input_tokens": 8,
+      "output_tokens": 1430,
+      "cache_creation_input_tokens": 7374,
+      "cache_read_input_tokens": 35841
+    },
+    "tool_calls": {
+      "Grep": 2,
+      "Read": 1,
+      "mcp__context-manager__context": 1
+    },
+    "mcp_status": "connected",
+    "api_key_source": "none",
+    "tools": [
+      "Bash",
+      "Edit",
+      "Glob",
+      "Grep",
+      "Read",
+      "Write",
+      "mcp__context-manager__context",
+      "mcp__context-manager__index_project"
+    ]
+  },
+  "score": {
+    "answered": true,
+    "recall": 1.0,
+    "precision": 1.0,
+    "missing": [],
+    "extra": [],
+    "edit_applied": null,
+    "stale": [],
+    "success": true
+  },
+  "failure": null,
+  "hook": null
+}

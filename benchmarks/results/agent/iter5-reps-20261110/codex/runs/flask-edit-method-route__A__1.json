@@ -1,0 +1,48 @@
+{
+  "record_version": 3,
+  "run_id": "flask-edit-method-route__A__1",
+  "task_id": "flask-edit-method-route",
+  "repo": "flask",
+  "category": "edit",
+  "arm": "A",
+  "rep": 1,
+  "model": "gpt-6-luna",
+  "effort": "high",
+  "embedding": "local",
+  "index_copy_s": null,
+  "index_build_s": null,
+  "wall_s": 22.77965062484145,
+  "transcript": {
+    "result_text": "Applied the change in `src/flask/sansio/scaffold.py`. The methods that directly call `_method_route` are:\n\n```json\n{\"answer\":[\"src/flask/sansio/scaffold.py:Scaffold.get\",\"src/flask/sansio/scaffold.py:Scaffold.post\",\"src/flask/sansio/scaffold.py:Scaffold.put\",\"src/flask/sansio/scaffold.py:Scaffold.delete\",\"src/flask/sansio/scaffold.py:Scaffold.options_route\"]}\n```",
+    "subtype": "completed",
+    "is_error": false,
+    "num_turns": null,
+    "duration_ms": 22780,
+    "cost_usd": null,
+    "usage": {
+      "input_tokens": 33767,
+      "output_tokens": 769,
+      "cache_creation_input_tokens": 0,
+      "cache_read_input_tokens": 9856
+    },
+    "tool_calls": {
+      "command_execution": 2,
+      "file_change": 1
+    },
+    "mcp_status": "unreported",
+    "api_key_source": "chatgpt",
+    "tools": []
+  },
+  "score": {
+    "answered": true,
+    "recall": 1.0,
+    "precision": 1.0,
+    "missing": [],
+    "extra": [],
+    "edit_applied": true,
+    "stale": [],
+    "success": true
+  },
+  "failure": null,
+  "hook": null
+}

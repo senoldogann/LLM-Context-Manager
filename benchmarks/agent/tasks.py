@@ -1129,6 +1129,60 @@ DJANGO_ITERATION5_TASKS: tuple[Task, ...] = (
     ),
 )
 
+DJANGO_ITERATION6_TASKS: tuple[Task, ...] = (
+    Task(
+        id="django-callers-constant-time-compare",
+        repo="django",
+        category="callers",
+        answer_kind="symbols",
+        question=(
+            "Which functions or methods in `django/` call "
+            "`django.utils.crypto.constant_time_compare` directly?"
+        ),
+        expected=(
+            *symbols("django/contrib/auth/__init__.py", ("login", "get_user")),
+            sym("django/contrib/auth/hashers.py", "verify"),
+            sym("django/contrib/auth/tokens.py", "check_token"),
+            sym("django/core/signing.py", "unsign"),
+            sym("django/middleware/csrf.py", "_does_token_match"),
+        ),
+        edit=None,
+        notes=(
+            "Python ast over django/**/*.py: names bound by `from django.utils.crypto import "
+            "constant_time_compare`; 10 call sites in 9 functions (four password hashers each "
+            "have a `verify` method, scored as one file-level name). Held out for the "
+            "2026-11-10 large-repository pilot (preregistration amendment 9)."
+        ),
+    ),
+    Task(
+        id="django-trap-urlencode",
+        repo="django",
+        category="trap",
+        answer_kind="symbols",
+        question=(
+            "Which functions or methods in `django/` call `django.utils.http.urlencode` directly? "
+            "Calls to the standard-library `urllib.parse.urlencode`, to the `QueryDict.urlencode` "
+            "method and to the `urlencode` template filter do not count."
+        ),
+        expected=(
+            sym("django/contrib/admin/options.py", "get_preserved_filters"),
+            sym("django/contrib/admin/templatetags/admin_urls.py", "add_preserved_filters"),
+            sym("django/contrib/admin/views/main.py", "get_query_string"),
+            sym("django/contrib/admin/widgets.py", "get_context"),
+            *symbols("django/test/client.py", ("__init__", "generic")),
+        ),
+        edit=None,
+        notes=(
+            "Python ast over django/**/*.py: names bound by `from django.utils.http import "
+            "urlencode`; 7 calls in 7 functions. django/http/request.py, django/utils/html.py "
+            "and django/test/testcases.py call the standard-library urlencode; "
+            "`request.GET.urlencode()` and `query_dict.urlencode()` are QueryDict methods; "
+            "django/template/defaultfilters.py defines the filter. Held out for the 2026-11-10 "
+            "large-repository pilot (preregistration amendment 9)."
+        ),
+    ),
+)
+
 TASKS: tuple[Task, ...] = FLASK_TASKS + EXPRESS_TASKS + SERDE_TASKS
 # Ürün pilotlarının seçebildiği tüm görevler; `--tasks all` yalnız ön kayıtlı 24 görevdir.
 KNOWN_TASKS: tuple[Task, ...] = (
@@ -1138,4 +1192,5 @@ KNOWN_TASKS: tuple[Task, ...] = (
     + DJANGO_ITERATION3_TASKS
     + DJANGO_ITERATION4_TASKS
     + DJANGO_ITERATION5_TASKS
+    + DJANGO_ITERATION6_TASKS
 )
