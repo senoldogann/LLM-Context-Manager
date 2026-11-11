@@ -116,7 +116,11 @@ fn fixture_files() -> Vec<(String, String)> {
     // Tokio düzeni: `globals` hem fonksiyon hem çağıranın yerel değişkeni; aynı adlı iki
     // ilişkili fonksiyon (`Registration::` ve `PollEvented::new_with_interest_and_handle`).
     for (path, content) in [
-        ("sig/src/lib.rs", "mod io;\nmod signal;\n"),
+        ("sig/src/lib.rs", "mod io;\nmod signal;\nmod inline;\n"),
+        (
+            "sig/src/inline.rs",
+            "mod first {\n    pub(crate) fn shared_name() -> u8 {\n        1\n    }\n}\n\nmod second {\n    pub(crate) fn shared_name() -> u8 {\n        2\n    }\n}\n\npub(crate) fn use_first() -> u8 {\n    first::shared_name()\n}\n",
+        ),
         ("sig/src/signal/mod.rs", "pub(crate) mod registry;\nmod unix;\n"),
         ("sig/src/signal/registry.rs", "pub(crate) fn globals() -> u8 {\n    1\n}\n"),
         (
@@ -785,6 +789,14 @@ fn context_lists_each_call_site_line_once_and_resolves_type_qualified_rust_names
         "{text}"
     );
     assert!(text.contains("reregister"), "{text}");
+    // Satır içi modül niteleyicisi (`first::shared_name`) de sahibi seçer.
+    let (text, is_error) = server.call("context", json!({"query": "first::shared_name"}));
+    assert!(!is_error, "{text}");
+    assert!(!text.contains("is not in the index"), "{text}");
+    assert!(
+        text.contains("Function `shared_name` · sig/src/inline.rs:2"),
+        "{text}"
+    );
     // Niteleyicisiz ad iki tanıma uyar: adaylar listelenir (hedef hatası), "indekste yok"
     // denmez.
     let (text, _) = server.call("context", json!({"query": "new_with_interest_and_handle"}));

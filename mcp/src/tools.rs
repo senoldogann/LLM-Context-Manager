@@ -1587,11 +1587,20 @@ async fn scoped_symbol_targets(engine: &Arc<RetrievalEngine>, query: &str) -> Sc
             _ => matches,
         };
         // `Tip::ad`: aynı adlı tanımlardan kapsayan tipi ya da dosya modülü `Tip` olan.
+        // Sahibi uyan tanım yoksa adaylar süzgeçsiz kalır: ad "indekste yok" sayılmaz.
         let matches: Vec<petgraph::graph::NodeIndex> = match (&hint.owner, matches.len()) {
-            (Some(owner), count) if count > 1 => matches
-                .into_iter()
-                .filter(|idx| owner_names(&graph, *idx).iter().any(|name| name == owner))
-                .collect(),
+            (Some(owner), count) if count > 1 => {
+                let owned: Vec<petgraph::graph::NodeIndex> = matches
+                    .iter()
+                    .copied()
+                    .filter(|idx| owner_names(&graph, *idx).iter().any(|name| name == owner))
+                    .collect();
+                if owned.is_empty() {
+                    matches
+                } else {
+                    owned
+                }
+            }
             _ => matches,
         };
         match matches.as_slice() {
@@ -1639,7 +1648,7 @@ async fn scoped_symbol_targets(engine: &Arc<RetrievalEngine>, query: &str) -> Sc
     }
 }
 
-/// Düğümün sahip adları: kapsayan sınıf/yapı/enum/trait ve dosyasının modül adı
+/// Düğümün sahip adları: kapsayan sınıf/yapı/enum/trait/satır içi modül ve dosyasının modül adı
 /// (`registration.rs` → `registration`, `mod.rs` → dizin adı).
 fn owner_names(graph: &ccm_core::graph::CodeGraph, idx: petgraph::graph::NodeIndex) -> Vec<String> {
     let mut names: Vec<String> = graph
@@ -1651,6 +1660,7 @@ fn owner_names(graph: &ccm_core::graph::CodeGraph, idx: petgraph::graph::NodeInd
             matches!(
                 node.node_type,
                 ccm_core::graph::NodeType::Class
+                    | ccm_core::graph::NodeType::Module
                     | ccm_core::graph::NodeType::Struct
                     | ccm_core::graph::NodeType::Enum
                     | ccm_core::graph::NodeType::Trait
@@ -1678,13 +1688,26 @@ fn owner_names(graph: &ccm_core::graph::CodeGraph, idx: petgraph::graph::NodeInd
 
 /// Sorgu birden çok açık hedef adlandırdığında dönen metin: anlamsal aramaya
 /// düşmek yerine adaylar listelenir (yanlış paket, doğru soruyu tekrar sordurur).
-fn several_targets_text(candidates: &[String]) -> String {
+/// Liste `budget_chars` karakteri aşmaz; sığmayan aday sayısı sonda yazılır.
+fn several_targets_text(candidates: &[String], budget_chars: usize) -> String {
     let mut text = format!(
         "The query names {} different code targets; ask `context` about one of them (path:line or the dotted name):",
         candidates.len()
     );
+    let mut shown = 0;
     for candidate in candidates {
-        text.push_str(&format!("\n- {candidate}"));
+        let line = format!("\n- {candidate}");
+        if char_count(&text) + char_count(&line) > budget_chars {
+            break;
+        }
+        text.push_str(&line);
+        shown += 1;
+    }
+    if shown < candidates.len() {
+        text.push_str(&format!(
+            "\n+ {} more; name the file (path:line) to narrow the query",
+            candidates.len() - shown
+        ));
     }
     text
 }
@@ -2542,7 +2565,7 @@ pub async fn context(
             return Ok(ToolResult {
                 content: vec![ToolResultContent {
                     content_type: "text".to_string(),
-                    text: several_targets_text(&candidates),
+                    text: several_targets_text(&candidates, budget_chars),
                 }],
                 is_error: None,
             });
@@ -3675,6 +3698,18 @@ pub async fn diff_context(engine: &Arc<RetrievalEngine>, args: &Value) -> Result
 
 #[cfg(test)]
 mod tests {
+
+    #[test]
+    fn several_targets_text_keeps_to_the_budget_and_counts_the_rest() {
+        let candidates: Vec<String> = (0..50)
+            .map(|n| format!("src/f{n}.rs:1 Function new"))
+            .collect();
+        let text = super::several_targets_text(&candidates, 400);
+        assert!(text.chars().count() <= 400 + 80, "{text}");
+        assert!(text.contains("more; name the file"), "{text}");
+        let all = super::several_targets_text(&candidates[..2], 4_000);
+        assert!(!all.contains("more;"), "{all}");
+    }
 
     #[test]
     fn python_import_paths_reads_from_and_dotted_import_statements() {
