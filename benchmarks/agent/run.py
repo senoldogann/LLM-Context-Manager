@@ -49,6 +49,9 @@ CODEX_FORBIDDEN_ITEMS = ("web_search", "image_generation", "collab_tool_call")
 AUTH_SOURCE: dict[Auth, str] = {"subscription": "none", "api-key": "ANTHROPIC_API_KEY"}
 # Sınır ya da aşırı yük hatası ajanın başarısızlığı değildir: koşu kaydedilmez, ölçüm durur.
 QUOTA_MARKERS = ("usage limit", "rate limit", "rate_limit", "limit reached", "overloaded")
+# Claude Code sınır hatasını sonuç olayında HTTP durumuyla da bildirir; metin değişebilir
+# ("You've hit your weekly limit" hiçbir işaretle eşleşmez), durum kodu değişmez.
+QUOTA_HTTP_STATUS = 429
 # Kimlik doğrulama hatası da (geçersiz ya da iptal edilmiş jeton) ajanın başarısızlığı değildir.
 AUTH_MARKERS = (
     "failed to authenticate",
@@ -211,6 +214,8 @@ class Transcript:
     result_text: str
     subtype: str
     is_error: bool
+    # Claude Code'un API hatası HTTP durumu (`api_error_status`); hata yoksa ve Codex'te None.
+    api_error_status: int | None
     # Codex `exec` tur sayısı ve dolar maliyeti bildirmez: o ajanda ikisi de None'dır.
     num_turns: int | None
     duration_ms: int
@@ -458,7 +463,10 @@ def verify_isolation(transcript: Transcript, profile: ProductProfile, arm: Arm, 
 def hit_quota(transcript: Transcript) -> bool:
     """Sonuç bir kullanım ya da hız sınırı veya aşırı yük hatası mı."""
     text = transcript.result_text.lower()
-    return transcript.is_error and any(marker in text for marker in QUOTA_MARKERS)
+    return transcript.is_error and (
+        transcript.api_error_status == QUOTA_HTTP_STATUS
+        or any(marker in text for marker in QUOTA_MARKERS)
+    )
 
 
 def hit_auth_failure(transcript: Transcript) -> bool:
@@ -974,10 +982,14 @@ def transcript_from(
     """Sonuç olayını ölçülere çevirir; eksik alan biçim hatasıdır."""
     usage = as_object(result.get("usage"), "result.usage", TranscriptError)
     text = result.get("result")
+    status = result.get("api_error_status")
     return Transcript(
         result_text="" if text is None else as_str(text, "result.result", TranscriptError),
         subtype=as_str(result.get("subtype"), "result.subtype", TranscriptError),
         is_error=as_bool(result.get("is_error"), "result.is_error", TranscriptError),
+        api_error_status=(
+            None if status is None else as_int(status, "result.api_error_status", TranscriptError)
+        ),
         num_turns=as_int(result.get("num_turns"), "result.num_turns", TranscriptError),
         duration_ms=as_int(result.get("duration_ms"), "result.duration_ms", TranscriptError),
         cost_usd=as_float(result.get("total_cost_usd"), "result.total_cost_usd", TranscriptError),
@@ -1174,6 +1186,7 @@ def codex_transcript(result: codex.CodexResult, wall_s: float) -> Transcript:
         result_text=result.result_text if result.failure is None else result.failure,
         subtype="completed" if result.failure is None else "failed",
         is_error=result.failure is not None,
+        api_error_status=None,
         num_turns=None,
         duration_ms=round(wall_s * 1000),
         cost_usd=None,
