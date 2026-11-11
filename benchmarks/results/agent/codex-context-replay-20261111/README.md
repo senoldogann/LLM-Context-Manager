@@ -68,6 +68,13 @@ product (`ad29ffc`) and this branch, on graph-only indexes.
 - **Packet size:** packets grow by 30–380 characters (the files line).
 - **Unchanged:** no other query changed its kind.
 
+## Held-out outcome (amendment 19)
+
+The held-out run (`heldout19-20261111/`) found that the files line left out files whose only
+calls are at module level (`UserModel = get_user_model()`). That made all three D runs of
+`django-impact-get-user-model` fail. The line was removed after the run. Changes 1 and 2 are
+kept.
+
 ## What this does not show
 
 The replay shows the packets. It cannot show whether Codex stops asking or stops running `rg`.

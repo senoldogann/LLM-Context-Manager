@@ -1,0 +1,48 @@
+{
+  "record_version": 3,
+  "run_id": "django-callers-call-command__D__3",
+  "task_id": "django-callers-call-command",
+  "repo": "django",
+  "category": "callers",
+  "arm": "D",
+  "rep": 3,
+  "model": "gpt-6-luna",
+  "effort": "high",
+  "embedding": "local",
+  "index_copy_s": 2.126941499998793,
+  "index_build_s": 1140.598946291022,
+  "wall_s": 41.752880291081965,
+  "transcript": {
+    "result_text": "```json\n{\"answer\":[\"django/core/management/commands/testserver.py:Command.handle\",\"django/db/backends/base/creation.py:BaseDatabaseCreation.create_test_db\",\"django/test/runner.py:DiscoverRunner.run_checks\",\"django/test/testcases.py:TransactionTestCase._fixture_setup\",\"django/test/testcases.py:TransactionTestCase._fixture_teardown\",\"django/test/testcases.py:TestCase.setUpClass\",\"django/test/testcases.py:TestCase._fixture_setup\"]}\n```",
+    "subtype": "completed",
+    "is_error": false,
+    "api_error_status": null,
+    "num_turns": null,
+    "duration_ms": 41753,
+    "cost_usd": null,
+    "usage": {
+      "input_tokens": 16424,
+      "output_tokens": 590,
+      "cache_creation_input_tokens": 0,
+      "cache_read_input_tokens": 20480
+    },
+    "tool_calls": {
+      "mcp__context-manager__context": 1
+    },
+    "mcp_status": "unreported",
+    "api_key_source": "chatgpt",
+    "tools": []
+  },
+  "score": {
+    "answered": true,
+    "recall": 1.0,
+    "precision": 1.0,
+    "missing": [],
+    "extra": [],
+    "edit_applied": null,
+    "stale": [],
+    "success": true
+  },
+  "failure": null,
+  "hook": null
+}

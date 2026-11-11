@@ -1,0 +1,48 @@
+{
+  "record_version": 3,
+  "run_id": "django-impact-get-current-site__D__2",
+  "task_id": "django-impact-get-current-site",
+  "repo": "django",
+  "category": "files",
+  "arm": "D",
+  "rep": 2,
+  "model": "gpt-6-luna",
+  "effort": "high",
+  "embedding": "local",
+  "index_copy_s": 1.20753683289513,
+  "index_build_s": 1140.598946291022,
+  "wall_s": 22.83751108380966,
+  "transcript": {
+    "result_text": "```json\n{\"answer\":[\"django/contrib/auth/forms.py\",\"django/contrib/auth/views.py\",\"django/contrib/contenttypes/views.py\",\"django/contrib/flatpages/templatetags/flatpages.py\",\"django/contrib/flatpages/views.py\",\"django/contrib/redirects/middleware.py\",\"django/contrib/sitemaps/views.py\",\"django/contrib/sites/middleware.py\",\"django/contrib/syndication/views.py\"]}\n```",
+    "subtype": "completed",
+    "is_error": false,
+    "api_error_status": null,
+    "num_turns": null,
+    "duration_ms": 22838,
+    "cost_usd": null,
+    "usage": {
+      "input_tokens": 4633,
+      "output_tokens": 502,
+      "cache_creation_input_tokens": 0,
+      "cache_read_input_tokens": 28544
+    },
+    "tool_calls": {
+      "mcp__context-manager__context": 1
+    },
+    "mcp_status": "unreported",
+    "api_key_source": "chatgpt",
+    "tools": []
+  },
+  "score": {
+    "answered": true,
+    "recall": 1.0,
+    "precision": 1.0,
+    "missing": [],
+    "extra": [],
+    "edit_applied": null,
+    "stale": [],
+    "success": true
+  },
+  "failure": null,
+  "hook": null
+}

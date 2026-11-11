@@ -1,0 +1,53 @@
+{
+  "record_version": 3,
+  "run_id": "django-impact-get-user-model__D__1",
+  "task_id": "django-impact-get-user-model",
+  "repo": "django",
+  "category": "files",
+  "arm": "D",
+  "rep": 1,
+  "model": "gpt-6-luna",
+  "effort": "high",
+  "embedding": "local",
+  "index_copy_s": 1.1767647911328822,
+  "index_build_s": 1140.598946291022,
+  "wall_s": 58.704682582989335,
+  "transcript": {
+    "result_text": "```json\n{\"answer\":[\"django/contrib/auth/__init__.py\",\"django/contrib/auth/apps.py\",\"django/contrib/auth/backends.py\",\"django/contrib/auth/management/commands/createsuperuser.py\",\"django/test/signals.py\"]}\n```",
+    "subtype": "completed",
+    "is_error": false,
+    "api_error_status": null,
+    "num_turns": null,
+    "duration_ms": 58705,
+    "cost_usd": null,
+    "usage": {
+      "input_tokens": 12304,
+      "output_tokens": 443,
+      "cache_creation_input_tokens": 0,
+      "cache_read_input_tokens": 20608
+    },
+    "tool_calls": {
+      "mcp__context-manager__context": 1
+    },
+    "mcp_status": "unreported",
+    "api_key_source": "chatgpt",
+    "tools": []
+  },
+  "score": {
+    "answered": true,
+    "recall": 0.5555555555555556,
+    "precision": 1.0,
+    "missing": [
+      "django/contrib/auth/forms.py",
+      "django/contrib/auth/handlers/modwsgi.py",
+      "django/contrib/auth/management/commands/changepassword.py",
+      "django/contrib/auth/views.py"
+    ],
+    "extra": [],
+    "edit_applied": null,
+    "stale": [],
+    "success": false
+  },
+  "failure": null,
+  "hook": null
+}

@@ -1,0 +1,48 @@
+{
+  "record_version": 3,
+  "run_id": "sklearn-callers-compute-class-weight__D__2",
+  "task_id": "sklearn-callers-compute-class-weight",
+  "repo": "scikit-learn",
+  "category": "callers",
+  "arm": "D",
+  "rep": 2,
+  "model": "gpt-6-luna",
+  "effort": "high",
+  "embedding": "local",
+  "index_copy_s": 0.3669221659656614,
+  "index_build_s": 578.0081130419858,
+  "wall_s": 56.55578558309935,
+  "transcript": {
+    "result_text": "```json\n{\"answer\":[\"sklearn/linear_model/_logistic.py:_logistic_regression_path\",\"sklearn/linear_model/_logistic.py:LogisticRegressionCV.fit\",\"sklearn/linear_model/_stochastic_gradient.py:BaseSGDClassifier._partial_fit\",\"sklearn/svm/_base.py:BaseSVC._validate_targets\",\"sklearn/svm/_base.py:_fit_liblinear\",\"sklearn/utils/class_weight.py:compute_sample_weight\"]}\n```",
+    "subtype": "completed",
+    "is_error": false,
+    "api_error_status": null,
+    "num_turns": null,
+    "duration_ms": 56556,
+    "cost_usd": null,
+    "usage": {
+      "input_tokens": 5988,
+      "output_tokens": 902,
+      "cache_creation_input_tokens": 0,
+      "cache_read_input_tokens": 40320
+    },
+    "tool_calls": {
+      "mcp__context-manager__context": 2
+    },
+    "mcp_status": "unreported",
+    "api_key_source": "chatgpt",
+    "tools": []
+  },
+  "score": {
+    "answered": true,
+    "recall": 1.0,
+    "precision": 1.0,
+    "missing": [],
+    "extra": [],
+    "edit_applied": null,
+    "stale": [],
+    "success": true
+  },
+  "failure": null,
+  "hook": null
+}

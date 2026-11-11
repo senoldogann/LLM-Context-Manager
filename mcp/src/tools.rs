@@ -1676,24 +1676,6 @@ fn owner_names(graph: &ccm_core::graph::CodeGraph, idx: petgraph::graph::NodeInd
     names
 }
 
-/// Kanıtlı çağrıların (`calls…`; `may call` ve referans değil) dosyaları, tek satır.
-fn call_files_line(callers: &[ccm_core::engine::ContextSuggestion]) -> Option<String> {
-    let files: std::collections::BTreeSet<&str> = callers
-        .iter()
-        .filter(|caller| caller.node_type.as_deref() != Some("File"))
-        .filter(|caller| caller.reason.starts_with("calls"))
-        .filter_map(|caller| caller.file_path.as_deref())
-        .map(|path| path.trim_start_matches("./"))
-        .collect();
-    (!files.is_empty()).then(|| {
-        format!(
-            "Files with calls ({}): {}\n",
-            files.len(),
-            files.into_iter().collect::<Vec<_>>().join(", ")
-        )
-    })
-}
-
 /// Sorgu birden çok açık hedef adlandırdığında dönen metin: anlamsal aramaya
 /// düşmek yerine adaylar listelenir (yanlış paket, doğru soruyu tekrar sordurur).
 fn several_targets_text(candidates: &[String]) -> String {
@@ -3170,16 +3152,7 @@ async fn context_packet(
         Some(_) if shown < caller_lines.len() => output.push_str(
             "Check skipped: the caller list below was cut; raise max_tokens for the full list and the check.\n",
         ),
-        Some(check) => {
-            output.push_str(&check);
-            // "Hangi dosyalar" sorusunun cevabı: liste tamken kanıtlı çağrıların dosyaları tek
-            // satırda; ajan bunu çağıran, referans ve import satırlarından yeniden türetmez.
-            if check.starts_with("Check: call list complete.") {
-                if let Some(line) = call_files_line(&callers) {
-                    output.push_str(&line);
-                }
-            }
-        }
+        Some(check) => output.push_str(&check),
         None => {}
     }
     used = char_count(&output) + char_count(&caller_section);

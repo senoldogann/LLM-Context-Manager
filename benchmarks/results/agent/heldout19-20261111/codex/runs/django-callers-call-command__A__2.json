@@ -1,0 +1,53 @@
+{
+  "record_version": 3,
+  "run_id": "django-callers-call-command__A__2",
+  "task_id": "django-callers-call-command",
+  "repo": "django",
+  "category": "callers",
+  "arm": "A",
+  "rep": 2,
+  "model": "gpt-6-luna",
+  "effort": "high",
+  "embedding": "local",
+  "index_copy_s": null,
+  "index_build_s": null,
+  "wall_s": 38.430286874994636,
+  "transcript": {
+    "result_text": "```json\n{\"answer\":[\"django/core/management/commands/testserver.py:Command.handle\",\"django/db/backends/base/creation.py:BaseDatabaseCreation.create_test_db\"]}\n```",
+    "subtype": "completed",
+    "is_error": false,
+    "api_error_status": null,
+    "num_turns": null,
+    "duration_ms": 38430,
+    "cost_usd": null,
+    "usage": {
+      "input_tokens": 5119,
+      "output_tokens": 724,
+      "cache_creation_input_tokens": 0,
+      "cache_read_input_tokens": 28288
+    },
+    "tool_calls": {
+      "command_execution": 2
+    },
+    "mcp_status": "unreported",
+    "api_key_source": "chatgpt",
+    "tools": []
+  },
+  "score": {
+    "answered": true,
+    "recall": 0.3333333333333333,
+    "precision": 1.0,
+    "missing": [
+      "django/test/runner.py:run_checks",
+      "django/test/testcases.py:_fixture_setup",
+      "django/test/testcases.py:_fixture_teardown",
+      "django/test/testcases.py:setUpClass"
+    ],
+    "extra": [],
+    "edit_applied": null,
+    "stale": [],
+    "success": false
+  },
+  "failure": null,
+  "hook": null
+}

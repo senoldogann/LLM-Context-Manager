@@ -1,0 +1,48 @@
+{
+  "record_version": 3,
+  "run_id": "sklearn-impact-pairwise-distances__D__1",
+  "task_id": "sklearn-impact-pairwise-distances",
+  "repo": "scikit-learn",
+  "category": "files",
+  "arm": "D",
+  "rep": 1,
+  "model": "gpt-6-luna",
+  "effort": "high",
+  "embedding": "local",
+  "index_copy_s": 1.031845291145146,
+  "index_build_s": 578.0081130419858,
+  "wall_s": 34.26221349998377,
+  "transcript": {
+    "result_text": "```json\n{\"answer\":[\"sklearn/cluster/_hdbscan/hdbscan.py\",\"sklearn/cluster/_optics.py\",\"sklearn/covariance/_empirical_covariance.py\",\"sklearn/manifold/_t_sne.py\",\"sklearn/metrics/cluster/_unsupervised.py\",\"sklearn/metrics/pairwise.py\",\"sklearn/neighbors/_nca.py\",\"sklearn/utils/estimator_checks.py\",\"sklearn/utils/graph.py\"]}\n```",
+    "subtype": "completed",
+    "is_error": false,
+    "api_error_status": null,
+    "num_turns": null,
+    "duration_ms": 34262,
+    "cost_usd": null,
+    "usage": {
+      "input_tokens": 6910,
+      "output_tokens": 479,
+      "cache_creation_input_tokens": 0,
+      "cache_read_input_tokens": 28544
+    },
+    "tool_calls": {
+      "mcp__context-manager__context": 1
+    },
+    "mcp_status": "unreported",
+    "api_key_source": "chatgpt",
+    "tools": []
+  },
+  "score": {
+    "answered": true,
+    "recall": 1.0,
+    "precision": 1.0,
+    "missing": [],
+    "extra": [],
+    "edit_applied": null,
+    "stale": [],
+    "success": true
+  },
+  "failure": null,
+  "hook": null
+}
