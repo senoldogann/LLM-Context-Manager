@@ -1735,6 +1735,373 @@ LARGE_REPO_HELD_OUT_TASKS: tuple[Task, ...] = (
 
 TASKS: tuple[Task, ...] = FLASK_TASKS + EXPRESS_TASKS + SERDE_TASKS
 # Ürün pilotlarının seçebildiği tüm görevler; `--tasks all` yalnız ön kayıtlı 24 görevdir.
+# Amendment 17: yeni held-out görevler; `scripts/select_heldout.py` ve
+# `scripts/rust_callers_gold.py` ile seçildi, altın cevaplar aynı betiklerden.
+LARGE_REPO_17_HELD_OUT_TASKS: tuple[Task, ...] = (
+    Task(
+        id="django-callers-log-response",
+        repo="django",
+        category="callers",
+        answer_kind="symbols",
+        question=(
+            "Which functions or methods in `django/` (not test files: `tests/` directories, "
+            "`test_*.py`; the `django/test/` package counts) call the function `log_response` "
+            "defined in `django/utils/log.py` directly? Calls through another name it is imported "
+            "under, or through a module that re-exports it, count; passing it as a value without "
+            "calling it does not count. List each calling function or method once; a call inside "
+            "a nested function may be named by either function."
+        ),
+        expected=(
+            sym("django/core/handlers/base.py", "get_response"),
+            sym("django/core/handlers/exception.py", "response_for_exception"),
+            sym("django/middleware/csrf.py", "_reject"),
+            sym("django/utils/cache.py", "_precondition_failed"),
+            sym_with(
+                "django/views/decorators/http.py", "require_http_methods", ("decorator", "inner")
+            ),
+        ),
+        edit=None,
+        notes=(
+            "scripts/python_callers_gold.py: 9 call sites in 5 functions. "
+            "Held out (preregistration amendment 17)."
+        ),
+    ),
+    Task(
+        id="django-callers-get-default-timezone",
+        repo="django",
+        category="callers",
+        answer_kind="symbols",
+        question=(
+            "Which functions or methods in `django/` (not test files: `tests/` directories, "
+            "`test_*.py`; the `django/test/` package counts) call the function "
+            "`get_default_timezone` defined in `django/utils/timezone.py` directly? Calls through "
+            "another name it is imported under, or through a module that re-exports it, count; "
+            "passing it as a value without calling it does not count. List each calling function "
+            "or method once; a call inside a nested function may be named by either function."
+        ),
+        expected=(
+            sym("django/contrib/syndication/views.py", "get_feed"),
+            sym("django/db/models/fields/__init__.py", "get_prep_value"),
+            sym("django/db/models/fields/__init__.py", "to_python"),
+            sym("django/templatetags/tz.py", "do_timezone"),
+            sym("django/utils/dateformat.py", "__init__"),
+            sym("django/utils/dateformat.py", "r"),
+            sym("django/utils/timezone.py", "get_current_timezone"),
+            sym("django/utils/timezone.py", "get_default_timezone_name"),
+        ),
+        edit=None,
+        notes=(
+            "scripts/python_callers_gold.py: 9 call sites in 9 functions. "
+            "Held out (preregistration amendment 17)."
+        ),
+    ),
+    Task(
+        id="django-callers-get-text-list",
+        repo="django",
+        category="callers",
+        answer_kind="symbols",
+        question=(
+            "Which functions or methods in `django/` (not test files: `tests/` directories, "
+            "`test_*.py`; the `django/test/` package counts) call the function `get_text_list` "
+            "defined in `django/utils/text.py` directly? Calls through another name it is "
+            "imported under, or through a module that re-exports it, count; passing it as a value "
+            "without calling it does not count. List each calling function or method once; a call "
+            "inside a nested function may be named by either function."
+        ),
+        expected=(
+            sym("django/contrib/admin/models.py", "get_change_message"),
+            sym_with("django/contrib/admin/options.py", "get_formset", ("hand_clean_DELETE",)),
+            sym("django/core/management/commands/makemessages.py", "handle"),
+            sym("django/db/models/base.py", "unique_error_message"),
+            sym("django/forms/models.py", "get_unique_error_message"),
+            sym("django/template/base.py", "invalid_block_tag"),
+        ),
+        edit=None,
+        notes=(
+            "scripts/python_callers_gold.py: 6 call sites in 6 functions. "
+            "Held out (preregistration amendment 17)."
+        ),
+    ),
+    Task(
+        id="django-impact-get-docs-version",
+        repo="django",
+        category="files",
+        answer_kind="files",
+        question=(
+            "Which files in `django/` (not test files: `tests/` directories, `test_*.py`; the "
+            "`django/test/` package counts) call the function `get_docs_version` defined in "
+            "`django/utils/version.py` directly? Calls through another name it is imported under, "
+            "or through a module that re-exports it, count; passing it as a value without calling "
+            "it does not count."
+        ),
+        expected=(
+            path_item("django/core/management/commands/optimizemigration.py"),
+            path_item("django/core/management/commands/squashmigrations.py"),
+            path_item("django/core/management/templates.py"),
+            path_item("django/db/backends/mysql/validation.py"),
+            path_item("django/db/migrations/questioner.py"),
+            path_item("django/db/migrations/serializer.py"),
+            path_item("django/db/migrations/state.py"),
+            path_item("django/utils/deconstruct.py"),
+            path_item("django/views/csrf.py"),
+            path_item("django/views/debug.py"),
+        ),
+        edit=None,
+        notes=(
+            "scripts/python_callers_gold.py: 11 call sites in 11 functions. "
+            "Held out (preregistration amendment 17)."
+        ),
+    ),
+    Task(
+        id="django-trap-resolve",
+        repo="django",
+        category="trap",
+        answer_kind="symbols",
+        question=(
+            "Which functions or methods in `django/` (not test files: `tests/` directories, "
+            "`test_*.py`; the `django/test/` package counts) call the function `resolve` defined "
+            "in `django/urls/base.py` directly? Calls through another name it is imported under, "
+            "or through a module that re-exports it, count; passing it as a value without calling "
+            "it does not count. Calls to the `resolve` methods of `URLResolver`, `URLPattern` or "
+            "other objects do not count. List each calling function or method once; a call inside "
+            "a nested function may be named by either function."
+        ),
+        expected=(
+            sym("django/contrib/admin/sites.py", "catch_all_view"),
+            sym("django/contrib/admin/templatetags/admin_urls.py", "add_preserved_filters"),
+            sym("django/test/client.py", "request"),
+            sym("django/urls/base.py", "is_valid_path"),
+            sym("django/urls/base.py", "translate_url"),
+            sym("django/views/debug.py", "get_caller"),
+        ),
+        edit=None,
+        notes=(
+            "scripts/python_callers_gold.py: 7 call sites in 7 functions. "
+            "Held out (preregistration amendment 17)."
+        ),
+    ),
+    Task(
+        id="sklearn-callers-indexable",
+        repo="scikit-learn",
+        category="callers",
+        answer_kind="symbols",
+        question=(
+            "Which functions or methods in `sklearn/` (not test files: `tests/` directories, "
+            "`test_*.py`) call the function `indexable` defined in `sklearn/utils/validation.py` "
+            "directly? Calls through another name it is imported under, or through a module that "
+            "re-exports it, count; passing it as a value without calling it does not count. List "
+            "each calling function or method once; a call inside a nested function may be named "
+            "by either function."
+        ),
+        expected=(
+            sym("sklearn/calibration.py", "fit"),
+            sym("sklearn/model_selection/_classification_threshold.py", "fit"),
+            sym("sklearn/model_selection/_search.py", "fit"),
+            sym("sklearn/model_selection/_split.py", "_split"),
+            sym("sklearn/model_selection/_split.py", "split"),
+            sym("sklearn/model_selection/_split.py", "train_test_split"),
+            sym("sklearn/model_selection/_validation.py", "cross_val_predict"),
+            sym("sklearn/model_selection/_validation.py", "cross_validate"),
+            sym("sklearn/model_selection/_validation.py", "learning_curve"),
+            sym("sklearn/model_selection/_validation.py", "permutation_test_score"),
+            sym("sklearn/model_selection/_validation.py", "validation_curve"),
+        ),
+        edit=None,
+        notes=(
+            "scripts/python_callers_gold.py: 14 call sites in 14 functions. "
+            "Held out (preregistration amendment 17)."
+        ),
+    ),
+    Task(
+        id="sklearn-callers-empirical-covariance",
+        repo="scikit-learn",
+        category="callers",
+        answer_kind="symbols",
+        question=(
+            "Which functions or methods in `sklearn/` (not test files: `tests/` directories, "
+            "`test_*.py`) call the function `empirical_covariance` defined in "
+            "`sklearn/covariance/_empirical_covariance.py` directly? Calls through another name "
+            "it is imported under, or through a module that re-exports it, count; passing it as a "
+            "value without calling it does not count. List each calling function or method once; "
+            "a call inside a nested function may be named by either function."
+        ),
+        expected=(
+            sym("sklearn/covariance/_empirical_covariance.py", "fit"),
+            sym("sklearn/covariance/_empirical_covariance.py", "score"),
+            sym("sklearn/covariance/_graph_lasso.py", "fit"),
+            sym("sklearn/covariance/_graph_lasso.py", "graphical_lasso_path"),
+            sym("sklearn/covariance/_shrunk_covariance.py", "_ledoit_wolf"),
+            sym("sklearn/covariance/_shrunk_covariance.py", "_oas"),
+            sym("sklearn/covariance/_shrunk_covariance.py", "fit"),
+            sym("sklearn/discriminant_analysis.py", "_cov"),
+        ),
+        edit=None,
+        notes=(
+            "scripts/python_callers_gold.py: 11 call sites in 9 functions. "
+            "Held out (preregistration amendment 17)."
+        ),
+    ),
+    Task(
+        id="sklearn-callers-gen-even-slices",
+        repo="scikit-learn",
+        category="callers",
+        answer_kind="symbols",
+        question=(
+            "Which functions or methods in `sklearn/` (not test files: `tests/` directories, "
+            "`test_*.py`) call the function `gen_even_slices` defined in "
+            "`sklearn/utils/_chunking.py` directly? Calls through another name it is imported "
+            "under, or through a module that re-exports it, count; passing it as a value without "
+            "calling it does not count. List each calling function or method once; a call inside "
+            "a nested function may be named by either function."
+        ),
+        expected=(
+            sym("sklearn/decomposition/_dict_learning.py", "_sparse_encode"),
+            sym("sklearn/decomposition/_lda.py", "_e_step"),
+            sym("sklearn/metrics/pairwise.py", "_parallel_pairwise"),
+            sym("sklearn/neighbors/_base.py", "kneighbors"),
+            sym("sklearn/neighbors/_base.py", "radius_neighbors"),
+            sym("sklearn/neural_network/_rbm.py", "fit"),
+        ),
+        edit=None,
+        notes=(
+            "scripts/python_callers_gold.py: 6 call sites in 6 functions. "
+            "Held out (preregistration amendment 17)."
+        ),
+    ),
+    Task(
+        id="sklearn-impact-check-scoring",
+        repo="scikit-learn",
+        category="files",
+        answer_kind="files",
+        question=(
+            "Which files in `sklearn/` (not test files: `tests/` directories, `test_*.py`) call "
+            "the function `check_scoring` defined in `sklearn/metrics/_scorer.py` directly? Calls "
+            "through another name it is imported under, or through a module that re-exports it, "
+            "count; passing it as a value without calling it does not count."
+        ),
+        expected=(
+            path_item("sklearn/ensemble/_hist_gradient_boosting/gradient_boosting.py"),
+            path_item("sklearn/feature_selection/_rfe.py"),
+            path_item("sklearn/inspection/_permutation_importance.py"),
+            path_item("sklearn/linear_model/_ridge.py"),
+            path_item("sklearn/metrics/_scorer.py"),
+            path_item("sklearn/model_selection/_classification_threshold.py"),
+            path_item("sklearn/model_selection/_search.py"),
+            path_item("sklearn/model_selection/_validation.py"),
+        ),
+        edit=None,
+        notes=(
+            "scripts/python_callers_gold.py: 14 call sites in 13 functions. "
+            "Held out (preregistration amendment 17)."
+        ),
+    ),
+    Task(
+        id="sklearn-trap-normalize",
+        repo="scikit-learn",
+        category="trap",
+        answer_kind="symbols",
+        question=(
+            "Which functions or methods in `sklearn/` (not test files: `tests/` directories, "
+            "`test_*.py`) call the function `normalize` defined in "
+            "`sklearn/preprocessing/_data.py` directly? Calls through another name it is imported "
+            "under, or through a module that re-exports it, count; passing it as a value without "
+            "calling it does not count. Calls to `unicodedata.normalize` or to other objects' "
+            "`normalize` methods do not count. List each calling function or method once; a call "
+            "inside a nested function may be named by either function."
+        ),
+        expected=(
+            sym("sklearn/datasets/_twenty_newsgroups.py", "fetch_20newsgroups_vectorized"),
+            sym("sklearn/feature_extraction/text.py", "transform"),
+            sym("sklearn/impute/_iterative.py", "_get_abs_corr_mat"),
+            sym("sklearn/metrics/pairwise.py", "cosine_similarity"),
+            sym("sklearn/metrics/pairwise.py", "paired_cosine_distances"),
+            sym("sklearn/preprocessing/_data.py", "transform"),
+        ),
+        edit=None,
+        notes=(
+            "scripts/python_callers_gold.py: 10 call sites in 7 functions. "
+            "Held out (preregistration amendment 17)."
+        ),
+    ),
+    Task(
+        id="tokio-callers-uninit",
+        repo="tokio",
+        category="callers",
+        answer_kind="symbols",
+        question=(
+            "Which functions or methods in the library crates of this workspace (`tokio`, "
+            "`tokio-util`, `tokio-stream`, `tokio-test`, `tokio-macros`; not tests, benches or "
+            "examples) call `ReadBuf::uninit` (defined in `tokio/src/io/read_buf.rs`) directly? "
+            "Calls to `MaybeUninit::uninit` do not count. Platform-specific code counts."
+        ),
+        expected=(
+            sym("tokio-util/src/udp/frame.rs", "poll_next"),
+            sym("tokio-util/src/util/poll_buf.rs", "poll_read_buf"),
+            sym("tokio/src/io/read_buf.rs", "take"),
+            sym("tokio/src/io/util/read_buf.rs", "poll"),
+            sym("tokio/src/io/util/read_to_end.rs", "poll_read_to_end"),
+            sym("tokio/src/io/util/vec_with_initialized.rs", "get_read_buf"),
+        ),
+        edit=None,
+        notes=(
+            "scripts/rust_callers_gold.py: 6 call sites in 6 functions. "
+            "Held out (preregistration amendment 17)."
+        ),
+    ),
+    Task(
+        id="tokio-callers-globals",
+        repo="tokio",
+        category="callers",
+        answer_kind="symbols",
+        question=(
+            "Which functions or methods in the library crates of this workspace (`tokio`, "
+            "`tokio-util`, `tokio-stream`, `tokio-test`, `tokio-macros`; not tests, benches or "
+            "examples) call `globals` (defined in `tokio/src/signal/registry.rs`) directly? "
+            "Platform-specific code (Unix and Windows) counts."
+        ),
+        expected=(
+            sym("tokio/src/runtime/signal/mod.rs", "new"),
+            sym("tokio/src/runtime/signal/mod.rs", "process"),
+            sym("tokio/src/signal/unix.rs", "signal_enable"),
+            sym("tokio/src/signal/unix.rs", "signal_with_handle"),
+            sym("tokio/src/signal/windows/sys.rs", "handler"),
+            sym("tokio/src/signal/windows/sys.rs", "new"),
+        ),
+        edit=None,
+        notes=(
+            "scripts/rust_callers_gold.py: 6 call sites in 6 functions. "
+            "Held out (preregistration amendment 17)."
+        ),
+    ),
+    Task(
+        id="tokio-trap-new-with-interest-and-handle",
+        repo="tokio",
+        category="trap",
+        answer_kind="symbols",
+        question=(
+            "Which functions or methods in the library crates of this workspace (`tokio`, "
+            "`tokio-util`, `tokio-stream`, `tokio-test`, `tokio-macros`; not tests, benches or "
+            "examples) call `Registration::new_with_interest_and_handle` (defined in "
+            "`tokio/src/runtime/io/registration.rs`) directly? Calls to "
+            "`PollEvented::new_with_interest_and_handle` (defined in "
+            "`tokio/src/io/poll_evented.rs`) do not count, but that method may itself be a "
+            "caller. Platform-specific code counts."
+        ),
+        expected=(
+            sym("tokio/src/io/async_fd.rs", "try_new_with_handle_and_interest"),
+            sym("tokio/src/io/bsd/poll_aio.rs", "new_with_interest"),
+            sym("tokio/src/io/poll_evented.rs", "new_with_interest_and_handle"),
+            sym("tokio/src/io/poll_evented.rs", "reregister"),
+        ),
+        edit=None,
+        notes=(
+            "scripts/rust_callers_gold.py: 4 call sites in 4 functions. "
+            "Held out (preregistration amendment 17)."
+        ),
+    ),
+)
+
+
 KNOWN_TASKS: tuple[Task, ...] = (
     TASKS
     + DJANGO_TASKS
@@ -1747,4 +2114,5 @@ KNOWN_TASKS: tuple[Task, ...] = (
     + TOKIO_HELD_OUT_TASKS
     + TOKIO_MACRO_TASKS
     + LARGE_REPO_HELD_OUT_TASKS
+    + LARGE_REPO_17_HELD_OUT_TASKS
 )

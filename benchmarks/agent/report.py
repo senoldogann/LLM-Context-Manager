@@ -138,21 +138,22 @@ def hook_decisions(record: dict[str, JsonValue], path: Path) -> HookDecisions | 
 
 
 def hook_rows(outcomes: list[Outcome]) -> list[str]:
-    """H kolunda görev başına hook kararları; H yoksa boş."""
+    """Hook kurulu kollarda (H; Claude Code'da D) görev başına hook kararları; yoksa boş."""
     hooked = [outcome for outcome in outcomes if outcome.hook_deny is not None]
     if not hooked:
         return []
     rows = [
-        "## Hook decisions (arm H)",
+        "## Hook decisions (arms with the Grep hook)",
         "",
         "Greps answered with the `context` packet (deny) and greps let through (pass), per run.",
         "",
-        "| Task | Run | Deny | Pass |",
-        "|---|---|---|---|",
+        "| Task | Arm | Run | Deny | Pass |",
+        "|---|---|---|---|---|",
     ]
-    for outcome in sorted(hooked, key=lambda item: (item.task_id, item.rep)):
+    for outcome in sorted(hooked, key=lambda item: (item.task_id, item.arm, item.rep)):
         rows.append(
-            f"| `{outcome.task_id}` | {outcome.rep} | {outcome.hook_deny} | {outcome.hook_pass} |"
+            f"| `{outcome.task_id}` | {outcome.arm} | {outcome.rep} | {outcome.hook_deny} "
+            f"| {outcome.hook_pass} |"
         )
     return rows
 

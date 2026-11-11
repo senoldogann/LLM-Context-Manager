@@ -263,35 +263,38 @@ What the transcripts show:
 
 ## Next steps, in order
 
-1. **Dotted Python paths.** In 10 of 36 scikit-learn D runs Codex first asked `context` for the
-   public import path (`sklearn.utils.shuffle`, `sklearn.get_config`); CCM answered "not in the
-   index" and fell back to a text search that misses alias imports, which caused both of
-   `sklearn-trap-shuffle`'s D failures. Resolve `package.module.name` through `__init__.py`
-   re-exports to the defining symbol, then measure it on new held-out tasks.
+1. **Dotted Python paths: done in #26.** `sklearn.utils.shuffle` and `from a.b import c` now
+   resolve through `__init__.py` re-exports to the defining function (before: "not in the
+   index" in 10 of 36 scikit-learn D runs, and both `sklearn-trap-shuffle` D failures).
 2. **Scorer: generic owners: done** (amendment 16). `path:Arc<Handle>.schedule` is now read as
    `schedule`; the stored answers were rescored read-only (`large-repo-20261111/RESCORE.md`).
    Two tuned-task runs change, both fail → pass; no other published run changes.
-3. **Large-repository experiment: done** (amendment 15, `large-repo-20261111/`): no detectable
+3. **Second held-out set (amendment 17), running.** Thirteen new large-repository tasks
+   (Django, scikit-learn, Tokio), arms A and D, both agents. D includes #26 and #28, and for
+   Claude Code also the Grep hook (the analysis is in `claude-d-analysis-20261111/`). If both
+   intervals contain 1.00 again, STATUS records that as the boundary result and this line of
+   work ends.
+4. **Large-repository experiment: done** (amendment 15, `large-repo-20261111/`): no detectable
    difference on held-out tasks for either agent.
-4. **Unknown names and macro bodies: done in #21 and #22.** Tokio `async_op` went from B/A 2.28 to
+5. **Unknown names and macro bodies: done in #21 and #22.** Tokio `async_op` went from B/A 2.28 to
    0.85 (Codex) and 1.02 to 0.50 (Claude); all 441 functions in Tokio's item-level macro bodies
    are now indexed.
-5. **Rust path targets and standard-library calls: done in #19.** Not yet shown to help: on the
+6. **Rust path targets and standard-library calls: done in #19.** Not yet shown to help: on the
    tuned Tokio trap Codex went from 1.36 to 1.29 and Claude B stayed above A.
-6. **Python method calls on other objects: done in #17.** Calls `x.name(` on objects that no import
+7. **Python method calls on other objects: done in #17.** Calls `x.name(` on objects that no import
    binds are listed under their own headline instead of making the check "NOT complete"; on the
    tuned `urlencode` trap Codex B/A went from 0.51 to 0.30 and Claude F from 1.10 to 0.66.
-7. **Small repositories: documented limit.** In the repeated Codex runs B costs more than A on
+8. **Small repositories: documented limit.** In the repeated Codex runs B costs more than A on
    Flask edits (1.69) and Serde trait implementors (1.77) in all three repetitions. The transcripts
    show why: A answers with one or two `rg` calls; B makes the same calls plus a CCM call (a
    natural-language query that missed on Serde, a confirmation after the edit on Flask), and each
    extra turn re-sends the whole context (about 15–20 k input tokens with cache). CCM can only save
    where its answer replaces at least one search turn, which on these repositories it rarely does.
-8. **Hook alternations: not pursued.** Of the 49 recorded greps the hook could not parse, 10 are one
+9. **Hook alternations: not pursued.** Of the 49 recorded greps the hook could not parse, 10 are one
    tuned task's `_find_error_handler|def handle_exception`; the rest are varied regexes (alias and
    import checks, receivers, look-arounds). Supporting them would fit one task, not a pattern.
-9. Release the fixes (npm launcher roots bug, refresh retry) as 0.5.1 after owner approval.
-10. The preregistered L3 final run: done (`final-l3-20261110/`).
+10. Release the fixes (npm launcher roots bug, refresh retry) as 0.5.1 after owner approval.
+11. The preregistered L3 final run: done (`final-l3-20261110/`).
 
 ## Running the L3 experiment
 
