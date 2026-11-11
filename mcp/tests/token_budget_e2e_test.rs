@@ -113,6 +113,28 @@ fn fixture_files() -> Vec<(String, String)> {
     ] {
         files.push((path.into(), content.into()));
     }
+    // Tokio düzeni: `globals` hem fonksiyon hem çağıranın yerel değişkeni; aynı adlı iki
+    // ilişkili fonksiyon (`Registration::` ve `PollEvented::new_with_interest_and_handle`).
+    for (path, content) in [
+        ("sig/src/lib.rs", "mod io;\nmod signal;\n"),
+        ("sig/src/signal/mod.rs", "pub(crate) mod registry;\nmod unix;\n"),
+        ("sig/src/signal/registry.rs", "pub(crate) fn globals() -> u8 {\n    1\n}\n"),
+        (
+            "sig/src/signal/unix.rs",
+            "use crate::signal::registry::globals;\n\npub(crate) fn signal_enable() -> u8 {\n    let globals = globals();\n    let first = globals + 1;\n    let second = globals + 2;\n    first + second\n}\n",
+        ),
+        ("sig/src/io/mod.rs", "mod poll_evented;\nmod registration;\n"),
+        (
+            "sig/src/io/registration.rs",
+            "pub(crate) struct Registration;\n\nimpl Registration {\n    pub(crate) fn new_with_interest_and_handle() -> u8 {\n        1\n    }\n}\n",
+        ),
+        (
+            "sig/src/io/poll_evented.rs",
+            "use crate::io::registration::Registration;\n\npub(crate) struct PollEvented;\n\nimpl PollEvented {\n    pub(crate) fn new_with_interest_and_handle() -> u8 {\n        Registration::new_with_interest_and_handle()\n    }\n\n    pub(crate) fn reregister() -> u8 {\n        Registration::new_with_interest_and_handle()\n    }\n}\n",
+        ),
+    ] {
+        files.push((path.into(), content.into()));
+    }
     // Çok baytlı gövde: bütçe karakterle ölçülmeli, bayt değil.
     files.push((
         "app/cjk.py".into(),
@@ -729,6 +751,46 @@ fn context_resolves_dotted_python_paths_through_reexports() {
     assert!(
         text.starts_with("File · sklearn/utils/_indexing.py")
             || text.contains("\nFile · sklearn/utils/_indexing.py"),
+        "{text}"
+    );
+}
+
+#[test]
+fn context_lists_each_call_site_line_once_and_resolves_type_qualified_rust_names() {
+    let mut server = Server::start();
+    // Codex'in tokio-callers-globals D koşuları: `let globals = globals();` iki kez ve
+    // hayalet "+2 more" görünce her çağıranı ayrıca sordu.
+    let (text, is_error) = server.call("context", json!({"query": "globals"}));
+    assert!(!is_error, "{text}");
+    assert_eq!(
+        text.matches("4: let globals = globals();").count(),
+        1,
+        "{text}"
+    );
+    assert!(!text.contains("more"), "{text}");
+    // Codex'in tokio-trap D#3 sorgusu: önceden "is not in the index" diyordu.
+    let (text, is_error) = server.call(
+        "context",
+        json!({"query": "Registration::new_with_interest_and_handle"}),
+    );
+    assert!(!is_error, "{text}");
+    assert!(!text.contains("is not in the index"), "{text}");
+    assert!(
+        text.contains("Function `new_with_interest_and_handle` · sig/src/io/registration.rs"),
+        "{text}"
+    );
+    assert!(text.contains("reregister"), "{text}");
+    // "Hangi dosyalar" cevabı tek satırda.
+    assert!(
+        text.contains("Files with calls (1): sig/src/io/poll_evented.rs"),
+        "{text}"
+    );
+    // Niteleyicisiz ad iki tanıma uyar: adaylar listelenir (hedef hatası), "indekste yok"
+    // denmez.
+    let (text, _) = server.call("context", json!({"query": "new_with_interest_and_handle"}));
+    assert!(!text.contains("is not in the index"), "{text}");
+    assert!(
+        text.contains("sig/src/io/registration.rs") && text.contains("sig/src/io/poll_evented.rs"),
         "{text}"
     );
 }

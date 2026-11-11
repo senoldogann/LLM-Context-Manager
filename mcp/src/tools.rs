@@ -1299,6 +1299,9 @@ struct ScopedSymbolHint {
     /// Noktalı Python yolu (`sklearn.utils.shuffle`): tanım dosyalarında yoksa
     /// paketlerin yeniden dışa aktarmaları üzerinden çözülür.
     dotted: Option<String>,
+    /// `Tip::ad` niteleyicisinin son parçası: aynı adlı birden çok tanımdan kapsayan
+    /// tipi (ya da modülü) bu olanı seçer.
+    owner: Option<String>,
 }
 
 /// Sorgudaki Python import bildirimlerinin hedefleri.
@@ -1469,9 +1472,15 @@ fn scoped_symbol_hints(query: &str) -> Vec<ScopedSymbolHint> {
                 definition_files: files,
                 code_like: false,
                 dotted: Some(part.to_string()),
+                owner: None,
             });
             continue;
         }
+        let owner = part
+            .rsplit_once("::")
+            .and_then(|(qualifier, _)| qualifier.rsplit("::").next())
+            .filter(|owner| identifier_part(owner))
+            .map(str::to_string);
         let symbol = if let Some((qualifier, symbol)) = part.rsplit_once("::") {
             if qualifier.is_empty()
                 || !identifier_part(symbol)
@@ -1491,6 +1500,7 @@ fn scoped_symbol_hints(query: &str) -> Vec<ScopedSymbolHint> {
             definition_files: definition_file.iter().cloned().collect(),
             code_like: part.contains("::") || backticked.contains(part) || code_like_name(symbol),
             dotted: None,
+            owner,
         });
     }
     for dotted in python_import_paths(query).symbols {
@@ -1501,6 +1511,7 @@ fn scoped_symbol_hints(query: &str) -> Vec<ScopedSymbolHint> {
                 definition_files: files,
                 code_like: false,
                 dotted: Some(dotted),
+                owner: None,
             });
         }
     }
@@ -1537,6 +1548,9 @@ async fn scoped_symbol_targets(engine: &Arc<RetrievalEngine>, query: &str) -> Sc
         })
         .collect();
     let mut resolved: Vec<petgraph::graph::NodeIndex> = Vec::new();
+    // Tek bir ipucunun birden çok tanıma uyduğu adaylar: hiçbir ipucu tek hedefe çözülmezse
+    // "indekste yok" demek yerine bunlar listelenir.
+    let mut ambiguous: Vec<petgraph::graph::NodeIndex> = Vec::new();
     for hint in &hints {
         // Düz sözcükler (`call`, `HTML`) kapsam olsa bile hedef olmaz; yalnız modül
         // yoluyla ya da kod gibi yazılmış ad aday olur.
@@ -1572,10 +1586,22 @@ async fn scoped_symbol_targets(engine: &Arc<RetrievalEngine>, query: &str) -> Sc
                 .collect(),
             _ => matches,
         };
-        if let [only] = matches.as_slice() {
-            if !resolved.contains(only) {
-                resolved.push(*only);
+        // `Tip::ad`: aynı adlı tanımlardan kapsayan tipi ya da dosya modülü `Tip` olan.
+        let matches: Vec<petgraph::graph::NodeIndex> = match (&hint.owner, matches.len()) {
+            (Some(owner), count) if count > 1 => matches
+                .into_iter()
+                .filter(|idx| owner_names(&graph, *idx).iter().any(|name| name == owner))
+                .collect(),
+            _ => matches,
+        };
+        match matches.as_slice() {
+            [only] => {
+                if !resolved.contains(only) {
+                    resolved.push(*only);
+                }
             }
+            [] => {}
+            many => ambiguous.extend(many.iter().copied()),
         }
     }
     // `import a.b as x`: hedef modül dosyasıdır.
@@ -1587,6 +1613,11 @@ async fn scoped_symbol_targets(engine: &Arc<RetrievalEngine>, query: &str) -> Sc
                 }
             }
         }
+    }
+    if resolved.is_empty() && !ambiguous.is_empty() {
+        ambiguous.sort_unstable();
+        ambiguous.dedup();
+        resolved = ambiguous;
     }
     match resolved.as_slice() {
         [] => ScopedTargets::None,
@@ -1606,6 +1637,61 @@ async fn scoped_symbol_targets(engine: &Arc<RetrievalEngine>, query: &str) -> Sc
                 .collect(),
         ),
     }
+}
+
+/// Düğümün sahip adları: kapsayan sınıf/yapı/enum/trait ve dosyasının modül adı
+/// (`registration.rs` → `registration`, `mod.rs` → dizin adı).
+fn owner_names(graph: &ccm_core::graph::CodeGraph, idx: petgraph::graph::NodeIndex) -> Vec<String> {
+    let mut names: Vec<String> = graph
+        .graph
+        .edges_directed(idx, petgraph::Direction::Incoming)
+        .filter(|edge| matches!(edge.weight(), ccm_core::graph::EdgeType::Contains))
+        .map(|edge| &graph.graph[edge.source()])
+        .filter(|node| {
+            matches!(
+                node.node_type,
+                ccm_core::graph::NodeType::Class
+                    | ccm_core::graph::NodeType::Struct
+                    | ccm_core::graph::NodeType::Enum
+                    | ccm_core::graph::NodeType::Trait
+            )
+        })
+        .map(|node| node.name.clone())
+        .collect();
+    let path = ccm_core::engine::extract_file_path(&graph.graph[idx].id);
+    let stem_path = Path::new(path.trim_start_matches("./")).with_extension("");
+    let parts: Vec<&str> = stem_path
+        .iter()
+        .filter_map(|part| part.to_str())
+        .rev()
+        .take(2)
+        .collect();
+    match parts.as_slice() {
+        [stem, parent, ..] if matches!(*stem, "mod" | "lib" | "__init__") => {
+            names.push((*parent).to_string())
+        }
+        [stem, ..] => names.push((*stem).to_string()),
+        [] => {}
+    }
+    names
+}
+
+/// Kanıtlı çağrıların (`calls…`; `may call` ve referans değil) dosyaları, tek satır.
+fn call_files_line(callers: &[ccm_core::engine::ContextSuggestion]) -> Option<String> {
+    let files: std::collections::BTreeSet<&str> = callers
+        .iter()
+        .filter(|caller| caller.node_type.as_deref() != Some("File"))
+        .filter(|caller| caller.reason.starts_with("calls"))
+        .filter_map(|caller| caller.file_path.as_deref())
+        .map(|path| path.trim_start_matches("./"))
+        .collect();
+    (!files.is_empty()).then(|| {
+        format!(
+            "Files with calls ({}): {}\n",
+            files.len(),
+            files.into_iter().collect::<Vec<_>>().join(", ")
+        )
+    })
 }
 
 /// Sorgu birden çok açık hedef adlandırdığında dönen metin: anlamsal aramaya
@@ -3084,7 +3170,16 @@ async fn context_packet(
         Some(_) if shown < caller_lines.len() => output.push_str(
             "Check skipped: the caller list below was cut; raise max_tokens for the full list and the check.\n",
         ),
-        Some(check) => output.push_str(&check),
+        Some(check) => {
+            output.push_str(&check);
+            // "Hangi dosyalar" sorusunun cevabı: liste tamken kanıtlı çağrıların dosyaları tek
+            // satırda; ajan bunu çağıran, referans ve import satırlarından yeniden türetmez.
+            if check.starts_with("Check: call list complete.") {
+                if let Some(line) = call_files_line(&callers) {
+                    output.push_str(&line);
+                }
+            }
+        }
         None => {}
     }
     used = char_count(&output) + char_count(&caller_section);
