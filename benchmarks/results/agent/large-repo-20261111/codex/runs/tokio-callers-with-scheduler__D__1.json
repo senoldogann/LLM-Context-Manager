@@ -1,0 +1,47 @@
+{
+  "record_version": 3,
+  "run_id": "tokio-callers-with-scheduler__D__1",
+  "task_id": "tokio-callers-with-scheduler",
+  "repo": "tokio",
+  "category": "callers",
+  "arm": "D",
+  "rep": 1,
+  "model": "gpt-6-luna",
+  "effort": "high",
+  "embedding": "local",
+  "index_copy_s": 0.13825691700913012,
+  "index_build_s": 265.3463085840922,
+  "wall_s": 15.200069208163768,
+  "transcript": {
+    "result_text": "```json\n{\"answer\":[\"tokio/src/runtime/context.rs:defer\",\"tokio/src/runtime/scheduler/current_thread/mod.rs:Handle.dump\",\"tokio/src/runtime/scheduler/current_thread/mod.rs:Arc.schedule\",\"tokio/src/runtime/scheduler/current_thread/mod.rs:Arc.unhandled_panic\",\"tokio/src/runtime/scheduler/multi_thread/worker.rs:with_current\",\"tokio/src/runtime/scheduler/multi_thread_alt/worker.rs:with_current\",\"tokio/src/runtime/task/trace/mod.rs:trace_leaf\",\"tokio/src/runtime/time/entry.rs:generate_shard_id\"]}\n```",
+    "subtype": "completed",
+    "is_error": false,
+    "num_turns": null,
+    "duration_ms": 15200,
+    "cost_usd": null,
+    "usage": {
+      "input_tokens": 11934,
+      "output_tokens": 569,
+      "cache_creation_input_tokens": 0,
+      "cache_read_input_tokens": 20736
+    },
+    "tool_calls": {
+      "mcp__context-manager__context": 1
+    },
+    "mcp_status": "unreported",
+    "api_key_source": "chatgpt",
+    "tools": []
+  },
+  "score": {
+    "answered": true,
+    "recall": 1.0,
+    "precision": 1.0,
+    "missing": [],
+    "extra": [],
+    "edit_applied": null,
+    "stale": [],
+    "success": true
+  },
+  "failure": null,
+  "hook": null
+}

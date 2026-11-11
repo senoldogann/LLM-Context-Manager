@@ -1,0 +1,47 @@
+{
+  "record_version": 3,
+  "run_id": "sklearn-callers-check-cv__A__3",
+  "task_id": "sklearn-callers-check-cv",
+  "repo": "scikit-learn",
+  "category": "callers",
+  "arm": "A",
+  "rep": 3,
+  "model": "gpt-6-luna",
+  "effort": "high",
+  "embedding": "local",
+  "index_copy_s": null,
+  "index_build_s": null,
+  "wall_s": 44.549074582988396,
+  "transcript": {
+    "result_text": "```json\n{\"answer\":[\"sklearn/calibration.py:CalibratedClassifierCV.fit\",\"sklearn/ensemble/_stacking.py:_BaseStacking.fit\",\"sklearn/feature_selection/_rfe.py:RFECV.fit\",\"sklearn/feature_selection/_sequential.py:SequentialFeatureSelector.fit\",\"sklearn/linear_model/_coordinate_descent.py:LinearModelCV.fit\",\"sklearn/linear_model/_coordinate_descent.py:LinearModelCV.get_metadata_routing\",\"sklearn/linear_model/_least_angle.py:LarsCV.fit\",\"sklearn/linear_model/_least_angle.py:LarsCV.get_metadata_routing\",\"sklearn/linear_model/_logistic.py:LogisticRegressionCV.fit\",\"sklearn/linear_model/_omp.py:OrthogonalMatchingPursuitCV.fit\",\"sklearn/covariance/_graph_lasso.py:GraphicalLassoCV.fit\",\"sklearn/covariance/_graph_lasso.py:GraphicalLassoCV.get_metadata_routing\",\"sklearn/model_selection/_classification_threshold.py:TunedThresholdClassifierCV._fit\",\"sklearn/model_selection/_search.py:BaseSearchCV.fit\",\"sklearn/model_selection/_search_successive_halving.py:BaseSuccessiveHalving.fit\",\"sklearn/model_selection/_validation.py:cross_validate\",\"sklearn/model_selection/_validation.py:cross_val_predict\",\"sklearn/model_selection/_validation.py:permutation_test_score\",\"sklearn/model_selection/_validation.py:learning_curve\",\"sklearn/model_selection/_validation.py:validation_curve\"]}\n```",
+    "subtype": "completed",
+    "is_error": false,
+    "num_turns": null,
+    "duration_ms": 44549,
+    "cost_usd": null,
+    "usage": {
+      "input_tokens": 5388,
+      "output_tokens": 2043,
+      "cache_creation_input_tokens": 0,
+      "cache_read_input_tokens": 40320
+    },
+    "tool_calls": {
+      "command_execution": 3
+    },
+    "mcp_status": "unreported",
+    "api_key_source": "chatgpt",
+    "tools": []
+  },
+  "score": {
+    "answered": true,
+    "recall": 1.0,
+    "precision": 1.0,
+    "missing": [],
+    "extra": [],
+    "edit_applied": null,
+    "stale": [],
+    "success": true
+  },
+  "failure": null,
+  "hook": null
+}

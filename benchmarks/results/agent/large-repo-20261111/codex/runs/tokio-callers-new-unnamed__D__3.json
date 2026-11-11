@@ -1,0 +1,47 @@
+{
+  "record_version": 3,
+  "run_id": "tokio-callers-new-unnamed__D__3",
+  "task_id": "tokio-callers-new-unnamed",
+  "repo": "tokio",
+  "category": "callers",
+  "arm": "D",
+  "rep": 3,
+  "model": "gpt-6-luna",
+  "effort": "high",
+  "embedding": "local",
+  "index_copy_s": 0.20060999994166195,
+  "index_build_s": 265.3463085840922,
+  "wall_s": 17.566473917104304,
+  "transcript": {
+    "result_text": "All direct calls are in `tokio`; the complete call-site check found 11 containing functions or methods.\n\n```json\n{\"answer\":[\"tokio/src/runtime/blocking/pool.rs:Spawner.spawn_blocking\",\"tokio/src/runtime/blocking/pool.rs:Spawner.spawn_mandatory_blocking\",\"tokio/src/runtime/handle.rs:Handle.spawn\",\"tokio/src/runtime/handle.rs:Handle.block_on\",\"tokio/src/runtime/local_runtime/runtime.rs:LocalRuntime.spawn_local\",\"tokio/src/runtime/local_runtime/runtime.rs:LocalRuntime.block_on\",\"tokio/src/runtime/runtime.rs:Runtime.spawn\",\"tokio/src/runtime/runtime.rs:Runtime.block_on\",\"tokio/src/task/local.rs:spawn_local\",\"tokio/src/task/local.rs:LocalSet.spawn_local\",\"tokio/src/task/spawn.rs:spawn\"]}\n```",
+    "subtype": "completed",
+    "is_error": false,
+    "num_turns": null,
+    "duration_ms": 17566,
+    "cost_usd": null,
+    "usage": {
+      "input_tokens": 7615,
+      "output_tokens": 713,
+      "cache_creation_input_tokens": 0,
+      "cache_read_input_tokens": 25600
+    },
+    "tool_calls": {
+      "mcp__context-manager__context": 1
+    },
+    "mcp_status": "unreported",
+    "api_key_source": "chatgpt",
+    "tools": []
+  },
+  "score": {
+    "answered": true,
+    "recall": 1.0,
+    "precision": 1.0,
+    "missing": [],
+    "extra": [],
+    "edit_applied": null,
+    "stale": [],
+    "success": true
+  },
+  "failure": null,
+  "hook": null
+}

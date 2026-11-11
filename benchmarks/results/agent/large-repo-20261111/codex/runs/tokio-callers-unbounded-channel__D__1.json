@@ -1,0 +1,48 @@
+{
+  "record_version": 3,
+  "run_id": "tokio-callers-unbounded-channel__D__1",
+  "task_id": "tokio-callers-unbounded-channel",
+  "repo": "tokio",
+  "category": "callers",
+  "arm": "D",
+  "rep": 1,
+  "model": "gpt-6-luna",
+  "effort": "high",
+  "embedding": "local",
+  "index_copy_s": 0.21948391711339355,
+  "index_build_s": 265.3463085840922,
+  "wall_s": 29.28319058404304,
+  "transcript": {
+    "result_text": "I found two library call sites.\n\n```json\n{\"answer\":[\"tokio-test/src/io.rs:Inner.new\",\"tokio-util/src/task/spawn_pinned.rs:LocalWorkerHandle.new_worker\"]}\n```",
+    "subtype": "completed",
+    "is_error": false,
+    "num_turns": null,
+    "duration_ms": 29283,
+    "cost_usd": null,
+    "usage": {
+      "input_tokens": 22083,
+      "output_tokens": 1144,
+      "cache_creation_input_tokens": 0,
+      "cache_read_input_tokens": 54016
+    },
+    "tool_calls": {
+      "command_execution": 2,
+      "mcp__context-manager__context": 2
+    },
+    "mcp_status": "unreported",
+    "api_key_source": "chatgpt",
+    "tools": []
+  },
+  "score": {
+    "answered": true,
+    "recall": 1.0,
+    "precision": 1.0,
+    "missing": [],
+    "extra": [],
+    "edit_applied": null,
+    "stale": [],
+    "success": true
+  },
+  "failure": null,
+  "hook": null
+}

@@ -1,0 +1,47 @@
+{
+  "record_version": 3,
+  "run_id": "tokio-impact-enter-runtime__D__3",
+  "task_id": "tokio-impact-enter-runtime",
+  "repo": "tokio",
+  "category": "files",
+  "arm": "D",
+  "rep": 3,
+  "model": "gpt-6-luna",
+  "effort": "high",
+  "embedding": "local",
+  "index_copy_s": 0.13918841700069606,
+  "index_build_s": 265.3463085840922,
+  "wall_s": 14.376818208023906,
+  "transcript": {
+    "result_text": "The direct calls are all in `tokio` library source files.\n\n```json\n{\"answer\":[\"tokio/src/runtime/handle.rs\",\"tokio/src/runtime/scheduler/current_thread/mod.rs\",\"tokio/src/runtime/scheduler/multi_thread/mod.rs\",\"tokio/src/runtime/scheduler/multi_thread/worker.rs\",\"tokio/src/runtime/scheduler/multi_thread_alt/mod.rs\",\"tokio/src/runtime/scheduler/multi_thread_alt/worker.rs\"]}\n```",
+    "subtype": "completed",
+    "is_error": false,
+    "num_turns": null,
+    "duration_ms": 14377,
+    "cost_usd": null,
+    "usage": {
+      "input_tokens": 6370,
+      "output_tokens": 473,
+      "cache_creation_input_tokens": 0,
+      "cache_read_input_tokens": 25984
+    },
+    "tool_calls": {
+      "mcp__context-manager__context": 1
+    },
+    "mcp_status": "unreported",
+    "api_key_source": "chatgpt",
+    "tools": []
+  },
+  "score": {
+    "answered": true,
+    "recall": 1.0,
+    "precision": 1.0,
+    "missing": [],
+    "extra": [],
+    "edit_applied": null,
+    "stale": [],
+    "success": true
+  },
+  "failure": null,
+  "hook": null
+}

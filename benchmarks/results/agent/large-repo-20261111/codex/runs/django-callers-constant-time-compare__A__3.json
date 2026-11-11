@@ -1,0 +1,47 @@
+{
+  "record_version": 3,
+  "run_id": "django-callers-constant-time-compare__A__3",
+  "task_id": "django-callers-constant-time-compare",
+  "repo": "django",
+  "category": "callers",
+  "arm": "A",
+  "rep": 3,
+  "model": "gpt-6-luna",
+  "effort": "high",
+  "embedding": "local",
+  "index_copy_s": null,
+  "index_build_s": null,
+  "wall_s": 18.273688999935985,
+  "transcript": {
+    "result_text": "The direct callers are:\n\n```json\n{\"answer\":[\"django/middleware/csrf.py:_does_token_match\",\"django/core/signing.py:Signer.unsign\",\"django/contrib/auth/hashers.py:PBKDF2PasswordHasher.verify\",\"django/contrib/auth/hashers.py:BCryptSHA256PasswordHasher.verify\",\"django/contrib/auth/hashers.py:ScryptPasswordHasher.verify\",\"django/contrib/auth/hashers.py:MD5PasswordHasher.verify\",\"django/contrib/auth/tokens.py:PasswordResetTokenGenerator.check_token\",\"django/contrib/auth/__init__.py:login\",\"django/contrib/auth/__init__.py:get_user\"]}\n```",
+    "subtype": "completed",
+    "is_error": false,
+    "num_turns": null,
+    "duration_ms": 18274,
+    "cost_usd": null,
+    "usage": {
+      "input_tokens": 16812,
+      "output_tokens": 709,
+      "cache_creation_input_tokens": 0,
+      "cache_read_input_tokens": 30080
+    },
+    "tool_calls": {
+      "command_execution": 3
+    },
+    "mcp_status": "unreported",
+    "api_key_source": "chatgpt",
+    "tools": []
+  },
+  "score": {
+    "answered": true,
+    "recall": 1.0,
+    "precision": 1.0,
+    "missing": [],
+    "extra": [],
+    "edit_applied": null,
+    "stale": [],
+    "success": true
+  },
+  "failure": null,
+  "hook": null
+}

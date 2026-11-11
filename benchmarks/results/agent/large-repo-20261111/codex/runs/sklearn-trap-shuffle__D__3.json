@@ -1,0 +1,57 @@
+{
+  "record_version": 3,
+  "run_id": "sklearn-trap-shuffle__D__3",
+  "task_id": "sklearn-trap-shuffle",
+  "repo": "scikit-learn",
+  "category": "trap",
+  "arm": "D",
+  "rep": 3,
+  "model": "gpt-6-luna",
+  "effort": "high",
+  "embedding": "local",
+  "index_copy_s": 0.490859542042017,
+  "index_build_s": 898.3562989169732,
+  "wall_s": 34.28794458392076,
+  "transcript": {
+    "result_text": "```json\n{\"answer\":[\"sklearn/neural_network/_multilayer_perceptron.py:BaseMultilayerPerceptron._fit_stochastic\",\"sklearn/utils/estimator_checks.py:check_sample_weights_invariance\",\"sklearn/utils/estimator_checks.py:check_clustering\",\"sklearn/utils/estimator_checks.py:check_classifiers_train\",\"sklearn/utils/estimator_checks.py:check_outliers_train\",\"sklearn/utils/estimator_checks.py:check_classifiers_classes\",\"sklearn/utils/estimator_checks.py:check_outliers_fit_predict\"]}\n```",
+    "subtype": "completed",
+    "is_error": false,
+    "num_turns": null,
+    "duration_ms": 34288,
+    "cost_usd": null,
+    "usage": {
+      "input_tokens": 7887,
+      "output_tokens": 1364,
+      "cache_creation_input_tokens": 0,
+      "cache_read_input_tokens": 81792
+    },
+    "tool_calls": {
+      "command_execution": 4,
+      "mcp__context-manager__context": 1
+    },
+    "mcp_status": "unreported",
+    "api_key_source": "chatgpt",
+    "tools": []
+  },
+  "score": {
+    "answered": true,
+    "recall": 0.4666666666666667,
+    "precision": 1.0,
+    "missing": [
+      "sklearn/datasets/_kddcup99.py:fetch_kddcup99",
+      "sklearn/datasets/_rcv1.py:fetch_rcv1",
+      "sklearn/datasets/_samples_generator.py:make_classification",
+      "sklearn/datasets/_samples_generator.py:make_regression",
+      "sklearn/datasets/_samples_generator.py:make_circles",
+      "sklearn/datasets/_samples_generator.py:make_moons",
+      "sklearn/datasets/_samples_generator.py:make_blobs",
+      "sklearn/datasets/_samples_generator.py:make_gaussian_quantiles"
+    ],
+    "extra": [],
+    "edit_applied": null,
+    "stale": [],
+    "success": false
+  },
+  "failure": null,
+  "hook": null
+}

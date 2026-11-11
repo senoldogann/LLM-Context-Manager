@@ -1,0 +1,47 @@
+{
+  "record_version": 3,
+  "run_id": "tokio-trap-try-with__A__2",
+  "task_id": "tokio-trap-try-with",
+  "repo": "tokio",
+  "category": "trap",
+  "arm": "A",
+  "rep": 2,
+  "model": "gpt-6-luna",
+  "effort": "high",
+  "embedding": "local",
+  "index_copy_s": null,
+  "index_build_s": null,
+  "wall_s": 26.943963791942224,
+  "transcript": {
+    "result_text": "`LocalKey.with` directly calls the task-local `try_with` method. The other matches are calls on thread-local keys.\n\n```json\n{\"answer\":[\"tokio/src/task/task_local.rs:LocalKey.with\"]}\n```",
+    "subtype": "completed",
+    "is_error": false,
+    "num_turns": null,
+    "duration_ms": 26944,
+    "cost_usd": null,
+    "usage": {
+      "input_tokens": 12195,
+      "output_tokens": 1147,
+      "cache_creation_input_tokens": 0,
+      "cache_read_input_tokens": 41856
+    },
+    "tool_calls": {
+      "command_execution": 3
+    },
+    "mcp_status": "unreported",
+    "api_key_source": "chatgpt",
+    "tools": []
+  },
+  "score": {
+    "answered": true,
+    "recall": 1.0,
+    "precision": 1.0,
+    "missing": [],
+    "extra": [],
+    "edit_applied": null,
+    "stale": [],
+    "success": true
+  },
+  "failure": null,
+  "hook": null
+}

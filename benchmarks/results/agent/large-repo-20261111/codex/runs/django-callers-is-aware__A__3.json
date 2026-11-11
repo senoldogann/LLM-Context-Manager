@@ -1,0 +1,52 @@
+{
+  "record_version": 3,
+  "run_id": "django-callers-is-aware__A__3",
+  "task_id": "django-callers-is-aware",
+  "repo": "django",
+  "category": "callers",
+  "arm": "A",
+  "rep": 3,
+  "model": "gpt-6-luna",
+  "effort": "high",
+  "embedding": "local",
+  "index_copy_s": null,
+  "index_build_s": null,
+  "wall_s": 34.15835237503052,
+  "transcript": {
+    "result_text": "```json\n{\"answer\":[\"django/views/decorators/http.py:condition\",\"django/db/models/fields/__init__.py:_to_naive\",\"django/db/models/fields/__init__.py:DateField.to_python\",\"django/forms/utils.py:to_current_timezone\",\"django/db/backends/base/operations.py:BaseDatabaseOperations.adapt_timefield_value\",\"django/db/backends/mysql/operations.py:DatabaseOperations.adapt_datetimefield_value\",\"django/db/backends/mysql/operations.py:DatabaseOperations.adapt_timefield_value\",\"django/db/backends/sqlite3/operations.py:DatabaseOperations.adapt_datetimefield_value\",\"django/db/backends/sqlite3/operations.py:DatabaseOperations.adapt_timefield_value\",\"django/db/backends/sqlite3/operations.py:DatabaseOperations.convert_datetimefield_value\",\"django/db/backends/oracle/operations.py:DatabaseOperations.adapt_datetimefield_value\",\"django/db/backends/oracle/operations.py:DatabaseOperations.adapt_timefield_value\",\"django/contrib/admin/filters.py:DateFieldListFilter.__init__\",\"django/contrib/admin/templatetags/admin_list.py:date_hierarchy\"]}\n```",
+    "subtype": "completed",
+    "is_error": false,
+    "num_turns": null,
+    "duration_ms": 34158,
+    "cost_usd": null,
+    "usage": {
+      "input_tokens": 12421,
+      "output_tokens": 1456,
+      "cache_creation_input_tokens": 0,
+      "cache_read_input_tokens": 54272
+    },
+    "tool_calls": {
+      "command_execution": 4
+    },
+    "mcp_status": "unreported",
+    "api_key_source": "chatgpt",
+    "tools": []
+  },
+  "score": {
+    "answered": true,
+    "recall": 0.7777777777777778,
+    "precision": 1.0,
+    "missing": [
+      "django/contrib/humanize/templatetags/humanize.py:string_for",
+      "django/core/serializers/json.py:default",
+      "django/utils/timesince.py:timesince",
+      "django/utils/timezone.py:make_aware"
+    ],
+    "extra": [],
+    "edit_applied": null,
+    "stale": [],
+    "success": false
+  },
+  "failure": null,
+  "hook": null
+}

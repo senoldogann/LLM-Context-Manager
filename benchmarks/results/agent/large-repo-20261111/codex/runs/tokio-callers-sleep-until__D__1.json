@@ -1,0 +1,47 @@
+{
+  "record_version": 3,
+  "run_id": "tokio-callers-sleep-until__D__1",
+  "task_id": "tokio-callers-sleep-until",
+  "repo": "tokio",
+  "category": "callers",
+  "arm": "D",
+  "rep": 1,
+  "model": "gpt-6-luna",
+  "effort": "high",
+  "embedding": "local",
+  "index_copy_s": 0.11916966713033617,
+  "index_build_s": 265.3463085840922,
+  "wall_s": 24.950958291999996,
+  "transcript": {
+    "result_text": "```json\n{\"answer\":[\"tokio-stream/src/stream_ext/throttle.rs:throttle\",\"tokio-stream/src/stream_ext/timeout.rs:Timeout.new\",\"tokio-test/src/io.rs:Mock.poll_read\",\"tokio-test/src/io.rs:Mock.poll_write\",\"tokio-test/src/stream_mock.rs:StreamMock.poll_next\",\"tokio-util/src/time/delay_queue.rs:DelayQueue.insert_at\",\"tokio-util/src/time/delay_queue.rs:DelayQueue.remove\",\"tokio-util/src/time/delay_queue.rs:DelayQueue.poll_idx\",\"tokio/src/time/interval.rs:internal_interval_at\",\"tokio/src/time/timeout.rs:timeout_at\"]}\n```",
+    "subtype": "completed",
+    "is_error": false,
+    "num_turns": null,
+    "duration_ms": 24951,
+    "cost_usd": null,
+    "usage": {
+      "input_tokens": 24187,
+      "output_tokens": 1034,
+      "cache_creation_input_tokens": 0,
+      "cache_read_input_tokens": 20736
+    },
+    "tool_calls": {
+      "mcp__context-manager__context": 2
+    },
+    "mcp_status": "unreported",
+    "api_key_source": "chatgpt",
+    "tools": []
+  },
+  "score": {
+    "answered": true,
+    "recall": 1.0,
+    "precision": 1.0,
+    "missing": [],
+    "extra": [],
+    "edit_applied": null,
+    "stale": [],
+    "success": true
+  },
+  "failure": null,
+  "hook": null
+}

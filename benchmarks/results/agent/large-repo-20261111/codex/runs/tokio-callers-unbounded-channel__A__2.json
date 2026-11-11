@@ -1,0 +1,47 @@
+{
+  "record_version": 3,
+  "run_id": "tokio-callers-unbounded-channel__A__2",
+  "task_id": "tokio-callers-unbounded-channel",
+  "repo": "tokio",
+  "category": "callers",
+  "arm": "A",
+  "rep": 2,
+  "model": "gpt-6-luna",
+  "effort": "high",
+  "embedding": "local",
+  "index_copy_s": null,
+  "index_build_s": null,
+  "wall_s": 25.507584958104417,
+  "transcript": {
+    "result_text": "`tokio-util` and `tokio-test` contain the direct calls.\n\n```json\n{\"answer\":[\"tokio-util/src/task/spawn_pinned.rs:LocalWorkerHandle::new_worker\",\"tokio-test/src/io.rs:Inner::new\"]}\n```",
+    "subtype": "completed",
+    "is_error": false,
+    "num_turns": null,
+    "duration_ms": 25508,
+    "cost_usd": null,
+    "usage": {
+      "input_tokens": 6689,
+      "output_tokens": 875,
+      "cache_creation_input_tokens": 0,
+      "cache_read_input_tokens": 51328
+    },
+    "tool_calls": {
+      "command_execution": 4
+    },
+    "mcp_status": "unreported",
+    "api_key_source": "chatgpt",
+    "tools": []
+  },
+  "score": {
+    "answered": true,
+    "recall": 1.0,
+    "precision": 1.0,
+    "missing": [],
+    "extra": [],
+    "edit_applied": null,
+    "stale": [],
+    "success": true
+  },
+  "failure": null,
+  "hook": null
+}

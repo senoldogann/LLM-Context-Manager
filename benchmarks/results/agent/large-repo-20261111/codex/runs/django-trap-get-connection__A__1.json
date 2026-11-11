@@ -1,0 +1,47 @@
+{
+  "record_version": 3,
+  "run_id": "django-trap-get-connection__A__1",
+  "task_id": "django-trap-get-connection",
+  "repo": "django",
+  "category": "trap",
+  "arm": "A",
+  "rep": 1,
+  "model": "gpt-6-luna",
+  "effort": "high",
+  "embedding": "local",
+  "index_copy_s": null,
+  "index_build_s": null,
+  "wall_s": 27.029676042031497,
+  "transcript": {
+    "result_text": "```json\n{\"answer\":[\"django/db/transaction.py:get_autocommit\",\"django/db/transaction.py:set_autocommit\",\"django/db/transaction.py:commit\",\"django/db/transaction.py:rollback\",\"django/db/transaction.py:savepoint\",\"django/db/transaction.py:savepoint_rollback\",\"django/db/transaction.py:savepoint_commit\",\"django/db/transaction.py:clean_savepoints\",\"django/db/transaction.py:get_rollback\",\"django/db/transaction.py:set_rollback\",\"django/db/transaction.py:mark_for_rollback_on_error\",\"django/db/transaction.py:on_commit\",\"django/db/transaction.py:Atomic.__enter__\",\"django/db/transaction.py:Atomic.__exit__\"]}\n```",
+    "subtype": "completed",
+    "is_error": false,
+    "num_turns": null,
+    "duration_ms": 27030,
+    "cost_usd": null,
+    "usage": {
+      "input_tokens": 13262,
+      "output_tokens": 1008,
+      "cache_creation_input_tokens": 0,
+      "cache_read_input_tokens": 47104
+    },
+    "tool_calls": {
+      "command_execution": 4
+    },
+    "mcp_status": "unreported",
+    "api_key_source": "chatgpt",
+    "tools": []
+  },
+  "score": {
+    "answered": true,
+    "recall": 1.0,
+    "precision": 1.0,
+    "missing": [],
+    "extra": [],
+    "edit_applied": null,
+    "stale": [],
+    "success": true
+  },
+  "failure": null,
+  "hook": null
+}
