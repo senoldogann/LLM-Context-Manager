@@ -14,8 +14,8 @@ Kaynak düz metin olarak taranır, hiçbir CCM paketi okunmaz:
 - ad çözülür: nitelikli çağrı (`X::ad(`) yalnız `X` tanımın `impl` tipi, tanım dosyasının
   yolundaki bir modül (`sync/mpsc/unbounded.rs` → `sync`, `mpsc`, `unbounded`; yeniden dışa
   aktarma için), `self`/`super`/`crate` ya da kapsayan `impl` tanımın sahibiyken `Self` ise;
-  çıplak çağrı (`ad(`) yalnız tanımın dosyasında ya da adı (veya modülünü `*` ile) `use` eden
-  dosyada sayılır;
+  çıplak çağrı (`ad(`) yalnız tanımın dosyasında ya da adı tanımın modül yolundan (veya
+  modülünü `*` ile) `use` eden dosyada sayılır;
 - çağrı, kapsayan en içteki `fn`'ye atanır (`impl` tipi ön ek olarak yazılır).
 
 `--select` görev adaylarını Python seçicisiyle aynı kurallarla ve sabit tohumla seçer: adı
@@ -204,12 +204,16 @@ def call_pattern(name: str) -> re.Pattern[str]:
     )
 
 
-def imports_name(text: str, name: str, owner: str) -> bool:
-    """Dosya adı ya da modülünü `*` ile `use` ediyor mu."""
+def imports_name(text: str, name: str, owner: str, modules: set[str]) -> bool:
+    """Dosya adı tanımın modül yolundan `use` ediyor mu (ya da modülünü `*` ile).
+
+    `use` ifadesi adı ve tanım yolundaki modüllerden birini birlikte anmalıdır: aynı adı
+    başka bir modülden alan dosya (`use crate::task::unconstrained`) sayılmaz.
+    """
     for statement in re.findall(r"\buse\s[^;]*;", text, re.DOTALL):
-        if re.search(rf"\b{re.escape(name)}\b", statement) or re.search(
-            rf"\b{re.escape(owner)}::\*", statement
-        ):
+        names_it = re.search(rf"\b{re.escape(name)}\b", statement) is not None
+        from_module = any(re.search(rf"\b{re.escape(part)}\b", statement) for part in modules)
+        if (names_it and from_module) or re.search(rf"\b{re.escape(owner)}::\*", statement):
             return True
     return False
 
@@ -246,7 +250,7 @@ def callers(root: Path, crates: list[str], definition: Definition) -> list[Site]
     for path in library_files(root, crates):
         relative = str(path.relative_to(root))
         bare = relative == definition.path or imports_name(
-            path.read_text(encoding="utf-8"), definition.name, definition.owner
+            path.read_text(encoding="utf-8"), definition.name, definition.owner, modules
         )
 
         sites.extend(

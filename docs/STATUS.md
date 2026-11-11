@@ -272,12 +272,12 @@ What the transcripts show:
 2. **Scorer: generic owners: done** (amendment 16). `path:Arc<Handle>.schedule` is now read as
    `schedule`; the stored answers were rescored read-only (`large-repo-20261111/RESCORE.md`).
    Two tuned-task runs change, both fail → pass; no other published run changes.
-3. **Claude Code after a hook answer.** In amendment 17 the hook answered a Grep in 19 of 39
-   Claude D runs. In 9 of them, Claude's next step was the same Grep, which the hook's message
-   invites ("Run the same Grep again if you still need the raw matches"). The answer was an
-   extra turn, not a replacement. The next D-only change: answer the repeated Grep with the raw
-   matches limited to the listed call sites, and drop the invitation. Measure it offline on
-   these transcripts first, then on new held-out tasks.
+3. **Claude Code after a hook answer (amendment 18), running.** The hook no longer invites a
+   repeated Grep. It answers a repeat with the call-site lines; offline, that covers all 11
+   repeats in the amendment-17 transcripts (`hook-repeat-replay-20261111/`). Thirteen new
+   Django and scikit-learn tasks, arms A and D, both agents. If Claude Code's interval
+   contains 1.00 again, STATUS records that the D-only route did not give Claude Code a
+   measurable saving, and work on Claude adoption stops.
 4. **Tokio cost for Codex.** `tokio-callers-globals` cost 2.13 times A and the trap 1.34 in
    amendment 17. Read those transcripts before changing anything.
 5. **Second held-out set (amendment 17): done** (`heldout17-20261111/`). Codex shows a saving

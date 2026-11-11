@@ -352,3 +352,63 @@ the final run is complete.
       - every failed run;
       - runs rejected by a usage limit, by arm and task;
       - the owner audit.
+18. 2026-11-11, written and committed before any run: **third large-repository held-out set,
+    after a D-only change to the hook for repeated Greps.** Amendment 17 found a saving for
+    Codex (D/A 0.72, 0.59–0.89) and no detectable difference for Claude Code with the hook in
+    D (0.94, 0.77–1.10). In 11 of the hook's 19 answers, Claude then ran a Grep for the same
+    symbol. The hook's message had invited that, and the hook let the repeat through.
+    - Change (D only): the hook's first answer no longer invites a repeat. A second Grep for
+      the same symbol in a session is answered with the raw matches at the listed call sites
+      (`path:line: text`) and a count of the other matching lines. A third always passes. An
+      offline replay on the amendment-17 transcripts (a tuned set, not held out) answers all
+      11 repeats that way (`results/agent/hook-repeat-replay-20261111/`). Arms A, B and C are
+      unchanged.
+    - Tasks: thirteen new held-out tasks, selected with the procedure of amendment 17 (seed
+      20261112). No CCM output for any of the targets was looked at.
+      - Excluded: every earlier task target, plus the names seen in amendment 17's
+        intermediate draws.
+      - Django: five callers tasks (`get_current_timezone`, `prefix_validation_error`,
+        `make_model_tuple`, `get_default_renderer`, `resolve_url`), one impact task
+        (`conditional_escape`, files) and one trap (`django.contrib.auth.load_backend`, not
+        `django.db.utils.load_backend`).
+      - scikit-learn: five callers tasks (`compute_sample_weight`, `softmax`,
+        `label_binarize`, `device`, `supported_float_dtypes`) and one impact task
+        (`check_non_negative`, files). Its trap pool was empty.
+      - Tokio: no task. With the corrected Rust scanner its pools were empty (see the
+        disclosure below).
+      - Rule set before the final draw: since Tokio gives no task, each Python repository
+        gives five callers tasks instead of four.
+      - Full commands and every draw: `results/agent/heldout18-20261111/SELECTION.md`.
+      - Disclosure: a hand check of the first Tokio draw (`coop::Budget::unconstrained`) found
+        a scanner bug. A bare call was accepted whenever the file imported the same name from
+        any module, here `task::unconstrained`. A bare call now needs a `use` path through the
+        definition's module. The amendment-17 Tokio gold is unchanged by the fix.
+    - Gold from `scripts/python_callers_gold.py`; the `softmax` and `device` text matches it
+      leaves out were read by hand (docstrings, comments; `array_device` is counted as an
+      alias). Questions keep the wording rules of amendment 17 and add that a function calling
+      itself counts as its own caller (`prefix_validation_error` does). Nested-function
+      aliases: `user_passes_test`/`decorator`/`_redirect_to_login`. Scorer of amendment 16.
+    - Arms A and D, three repetitions, both agents, settings as in amendment 17. Claude Code's D
+      is "D (context + hook)" with the changed hook. Codex's D has no hook, so its run is a
+      replication check of amendment 17 on new tasks.
+    - Primary outcome, per agent: the median task ratio D/A of input tokens (cache included)
+      over the thirteen tasks, with the fixed-seed bootstrap 95 % interval.
+      - **Saving shown** if the upper bound is below 1.00 and D's success count is at most two
+        runs below A's (of 39).
+      - **Cost shown** if the lower bound is above 1.00.
+      - Otherwise: no detectable difference.
+    - Power: amendment 17's Claude interval reached 0.16 above its median. With a similar
+      spread, a saving is shown only if Claude's median is about 0.84 or lower.
+    - Stopping rule: if Claude Code's interval contains 1.00 again, STATUS records that the
+      D-only route (context, hook, and repeat handling) gave no measurable saving for Claude
+      Code on two held-out sets, and work on Claude adoption stops. If it does not contain
+      1.00, the result is recorded as shown. Codex is reported either way.
+    - Reported alongside, descriptively:
+      - the ratio by category and by repository;
+      - the per-task pilot rule;
+      - hook decisions, by first answer and repeat answer;
+      - how often Claude repeated a Grep after a hook answer;
+      - CCM calls per run;
+      - every failed run;
+      - runs rejected by a usage limit;
+      - the owner audit.
