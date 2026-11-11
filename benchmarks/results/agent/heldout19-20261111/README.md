@@ -68,9 +68,13 @@ inside a function, so it said 5 files instead of 9. Codex trusted it.
 
 Because the impact line stops under the preregistered rule and the files line was wrong, the
 line was **removed** from the product after the run, before merging. The merged code keeps the
-other two changes (one line per call site, `Type::name` resolution). Those are correctness
-fixes, and this run shows no regression from them. The measured commit `5eba8f0` still
-contains the files line; this README describes that measurement.
+other two changes (one line per call site, `Type::name` resolution), which are correctness
+fixes.
+
+This run measured those two changes only together with the files line. It found no failure
+attributable to them in that combination. The run does not evaluate either change on its own,
+nor the product without the files line. The measured commit `5eba8f0` still contains the files
+line; this README describes that measurement.
 
 ## Failed runs
 
@@ -89,6 +93,7 @@ contains the files line; this README describes that measurement.
   callers questions.
   - Callers category 0.62 here.
   - In amendments 17 and 18 the whole set showed a saving: 0.72 and 0.60.
-- **"Which files" questions:** they remain no better than built-ins (0.94 here). A one-line file
-  list did not change that, and it introduced an error, so it was removed.
+- **"Which files" questions:** the run did not detect a saving. The interval, 0.94 (0.90–1.11),
+  includes both a saving and a cost. The one-line file list introduced an error and was
+  removed.
 - **A set dominated by impact tasks** gives no detectable overall difference.

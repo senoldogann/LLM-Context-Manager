@@ -8,8 +8,8 @@ Döküm deseni sonuç dizinine göre bir glob'dur (ör.
 `heldout17-20261111/codex/transcripts/tokio-*__D__*.jsonl`). Her depo bir kez graph-only
 indekslenir; her kayıtlı `context` sorgusu aynı argümanlarla MCP üzerinden sorulur. Her sorgu
 için şu satır yazılır: koşu, sorgu, paket uzunluğu, paket türü (`complete`, `not complete`,
-`not in index`, `candidates`, `other`), görünmeyen çağrı sayan "+N more" satırı var mı, bir
-çağrı satırı tekrar ediyor mu ve "Files with calls" satırındaki dosyalar.
+`not in index`, `candidates`, `tool error`, `other`), "+N more" satırı var mı, bir çağrı
+satırı tekrar ediyor mu ve "Files with calls" satırındaki dosyalar.
 """
 
 import json
@@ -147,17 +147,31 @@ def replay_repo(
             response = call(number, "tools/call", {"name": "context", "arguments": arguments})
             result = response.get("result")
             content = result.get("content") if isinstance(result, dict) else None
-            if not isinstance(content, list):
+            if not isinstance(result, dict) or not isinstance(content, list):
                 raise RuntimeError(f"{query.run}: unexpected response {response}")
             text = "".join(str(item.get("text", "")) for item in content if isinstance(item, dict))
-            replayed.append(measure(query, text))
+            measured = measure(query, text)
+            # Araç hatası (ör. birden çok tanıma uyan hedef) paket değildir; ayrı etiketlenir.
+            replayed.append(
+                Replayed(
+                    query=measured.query,
+                    chars=measured.chars,
+                    kind="tool error",
+                    more_lines=False,
+                    repeated_site=False,
+                    files=(),
+                )
+                if result.get("isError") is True
+                else measured
+            )
         process.kill()
     return replayed
 
 
 def main() -> None:
     """Dökümleri depo depo yeniden oynatır ve satır satır yazar."""
-    bin_dir, corpus, results = (Path(argument) for argument in sys.argv[1:4])
+    # Alt süreçler geçici çalışma kopyasında çalışır: göreli yollar şimdi mutlak yapılır.
+    bin_dir, corpus, results = (Path(argument).resolve() for argument in sys.argv[1:4])
     repo_of = {task.id: task.repo for task in KNOWN_TASKS}
     by_repo: dict[str, list[RecordedQuery]] = defaultdict(list)
     for transcript in sorted(results.glob(sys.argv[4])):
