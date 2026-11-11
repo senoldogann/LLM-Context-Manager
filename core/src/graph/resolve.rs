@@ -567,6 +567,29 @@ fn unique_python_definition(
     }
 }
 
+/// `paket.modül.ad` noktalı Python yolunun tanımları: modülün üst düzeyindeki ya da
+/// paketin (zincirle) yeniden dışa aktardığı tanım (`sklearn.utils.shuffle` →
+/// `sklearn/utils/_indexing.py` içindeki `shuffle`). Yol çözülmezse boştur.
+pub(crate) fn python_dotted_definitions(graph: &CodeGraph, dotted: &str) -> Vec<NodeIndex> {
+    let Some((module, symbol)) = dotted.rsplit_once('.') else {
+        return Vec::new();
+    };
+    let modules = PythonModules::new(graph);
+    let mut targets = symbol_in_module(graph, &modules, module, symbol, 0);
+    targets.sort();
+    targets.dedup();
+    targets
+}
+
+/// Noktalı modül yolunun dosya kimlikleri (`sklearn.utils` → `sklearn/utils/__init__.py`).
+pub(crate) fn python_module_files(graph: &CodeGraph, module: &str) -> Vec<String> {
+    PythonModules::new(graph)
+        .files(module)
+        .into_iter()
+        .map(str::to_string)
+        .collect()
+}
+
 /// Modülün üst düzeyindeki `symbol`; yoksa paketin yeniden dışa aktardığı tanım.
 fn symbol_in_module(
     graph: &CodeGraph,

@@ -444,6 +444,17 @@ impl CodeGraph {
         }
     }
 
+    /// Noktalı Python yolunun (`paket.modül.ad`) tanımları; yeniden dışa
+    /// aktarmalar zincirle izlenir.
+    pub fn python_dotted_definitions(&self, dotted: &str) -> Vec<NodeIndex> {
+        resolve::python_dotted_definitions(self, dotted)
+    }
+
+    /// Noktalı Python modül yolunun dosya kimlikleri.
+    pub fn python_module_files(&self, module: &str) -> Vec<String> {
+        resolve::python_module_files(self, module)
+    }
+
     /// Finds the node corresponding to a specific file path.
     pub fn find_file_node(&self, file_path: &str) -> Option<NodeIndex> {
         // O(n) tarama yerine dosya bazlı index kullanılır; bu fonksiyon
