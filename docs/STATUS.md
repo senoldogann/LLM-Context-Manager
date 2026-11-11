@@ -296,8 +296,11 @@ What the transcripts show:
    - **Removed:** the new files line. It left out module-level calls and broke
      `get_user_model` (D 0/3).
    - Under the stopping rule, work on "which files" questions stops.
-5. **Claude Code: separate arm E** (a hook on Bash `grep`/`rg`, or a skill). It needs its own
-   preregistration, a tuned replay and a held-out run, and leaves A to D unchanged.
+5. **Claude Code arm E (amendment 20), running.** Arm E is arm D with the hook also
+   answering single Bash `grep`/`rg` searches. A tuned replay predicts little effect: it would
+   answer 7 of 76 recorded Bash searches (`arm-e-replay-20261111/`). Thirteen new tasks, Claude
+   Code only, arms A, D and E. If E/A shows no saving, STATUS records that hook routes give
+   Claude Code no measurable saving, and Claude adoption work stops.
 6. **Second held-out set (amendment 17): done** (`heldout17-20261111/`). Codex shows a saving
    of 0.72 (0.59–0.89); Claude Code shows no detectable difference, 0.94 (0.77–1.10). The
    stopping rule (both intervals containing 1.00) was not met.

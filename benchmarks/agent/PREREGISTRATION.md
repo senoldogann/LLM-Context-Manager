@@ -467,3 +467,59 @@ the final run is complete.
       - every failed run;
       - runs rejected by a usage limit;
       - the owner audit.
+20. 2026-11-11, written and committed before any run: **arm E for Claude Code, a hook on Bash
+    `grep`/`rg` searches.** Amendment 18 ended Claude Code adoption through D-only changes:
+    after the Grep hook answered, Claude re-checked with Bash `grep -rn` every time. Arm E
+    tests the route proposed there as a separate arm. A, B, C and D are unchanged.
+    - Hypothesis: if the hook also answers Claude's Bash symbol searches, Claude Code uses
+      fewer input tokens than with built-ins alone.
+    - Arm E: arm D (`context` + `index_project` + the context note + the PreToolUse hook), with
+      the hook also matched on `Bash`.
+      - The hook answers a single search: an optional leading `cd`, `grep -r…` or `rg …`, and
+        only fixed-string `grep -v` filters. It uses the Grep hook's rules: the caller packet
+        first, then the call-site lines for a repeat.
+      - Anything else runs unchanged.
+      - E exists only for Claude Code in the preregistered profile.
+    - Prediction recorded before the run (tuned replay, `results/agent/arm-e-replay-20261111/`):
+      on the 78 amendment-17 and amendment-18 D transcripts, E's hook answers 7 of 76 recorded
+      Bash searches. Most re-checks are compound commands. A saving is therefore not expected.
+      The run measures it.
+    - Tasks: thirteen new held-out tasks with the amendment-17 procedure (seed 20261114). No CCM
+      output for any target was looked at.
+      - Django: `make_naive`, `number_format`, `get_version_tuple`, `strip_quotes`,
+        `validate_file_name` (callers); `is_naive` (files); `resolve_relation` from
+        `django/db/migrations/utils.py` (trap: the `fields/related.py` function of the same
+        name).
+      - scikit-learn: `check_X_y`, `check_scalar`, `pairwise_distances_chunked`,
+        `pairwise_kernels`, `has_fit_parameter` (callers); `randomized_svd` (files).
+      - Rule set before the final draw: callers and trap targets must have no module-level
+        call. A "which functions call X" question has no function to name for one, and
+        `path:<module>` would not score. The draw takes seven callers per Python repository and
+        skips such targets in draw order. In Django that skipped `deconstructible` (a decorator)
+        and `double_output` (module-level assignments).
+      - Every draw: `results/agent/heldout20-20261111/SELECTION.md`.
+    - Gold from `scripts/python_callers_gold.py`, with nested-function aliases
+      (`filesizeformat`/`filesize_number_format`, `__call__`/`f`). Scorer of amendment 16.
+    - Arms A, D and E, three repetitions, **Claude Code only** (`claude-opus-5-5`, effort high,
+      local embeddings). One commit and one release build, started through
+      `scripts/run_until_done.py`.
+    - Primary outcome: the median task ratio E/A of input tokens (cache included) over the
+      thirteen tasks, with the fixed-seed bootstrap 95 % interval.
+      - **Saving shown** if the upper bound is below 1.00 and E's success count is at most two
+        runs below A's (of 39).
+      - **Cost shown** if the lower bound is above 1.00.
+      - Otherwise: no detectable difference.
+    - Secondary, descriptive:
+      - E/D and D/A with intervals;
+      - hook decisions by tool (Grep or Bash) and answer kind;
+      - how often Claude searched again after a hook answer.
+    - Power: amendment 18's Claude spread (0.16 above the median) means a saving is shown only if
+      the median is about 0.84 or lower.
+    - Stopping rule: if the E/A interval does not show a saving, STATUS records that neither
+      arm D nor arm E, hook routes that leave Claude's own behaviour unchanged, gave Claude Code
+      a measurable saving. Work on Claude adoption then stops.
+    - Reported alongside:
+      - per-task ratios;
+      - every failed run;
+      - runs rejected by a usage limit;
+      - the owner audit.
