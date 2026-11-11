@@ -6,7 +6,9 @@
 //! doğal koşu). Hook kurulumla gelen bir ürün yapılandırmasıdır, doğal kullanım
 //! değildir. Karar kuralları bilerek dardır; aşağıdakilerden biri tutmazsa grep
 //! olduğu gibi çalışır:
-//! - Grep'te `-i`, `glob`, `type` yoktur; `path` boş ya da bir dizindir (tek dosya değil);
+//! - Grep'te `-i` ve `type` yoktur; `glob` ya yoktur ya da yalnız test, bench ve örnek
+//!   dizinlerini dışlar (`!**/tests/**`, `!**/{tests,benches,examples}/**`): paketin
+//!   kapsamı da test dışı dosyalardır. `path` boş ya da bir dizindir (tek dosya değil);
 //! - desen, `\b`/`\(`/`\s*\(` sarmalayıcıları soyulunca tek bir ad ya da
 //!   `alıcı.üye` ifadesidir ve bir tanım araması (`def ad`, `fn ad`) değildir;
 //! - indeks tazedir (bekleyen değişiklik yoktur);
@@ -69,12 +71,44 @@ pub(crate) fn parse_grep_call(input: &Value) -> Option<GrepCall> {
     })
 }
 
+/// Paketin kapsamı dışında kalan, glob'un dışlayabileceği dizinler.
+const NON_LIBRARY_DIRECTORIES: [&str; 6] =
+    ["tests", "test", "benches", "examples", "__tests__", "spec"];
+
+/// Yalnız test, bench ya da örnek dizinlerini dışlayan glob'un dizin adları
+/// (`!**/tests/**` → [`tests`], `!**/{tests,benches}/**` → [`tests`, `benches`]);
+/// başka her glob `None`dır.
+pub(crate) fn excluded_directories(glob: &str) -> Option<Vec<String>> {
+    let inner = glob.strip_prefix("!**/")?.strip_suffix("/**")?;
+    let names: Vec<&str> = match inner
+        .strip_prefix('{')
+        .and_then(|rest| rest.strip_suffix('}'))
+    {
+        Some(list) => list.split(',').map(str::trim).collect(),
+        None => vec![inner],
+    };
+    names
+        .iter()
+        .all(|name| NON_LIBRARY_DIRECTORIES.contains(name))
+        .then(|| names.iter().map(|name| (*name).to_string()).collect())
+}
+
+/// Grep'in glob'unun dışladığı dizinler; glob yoksa boş, kabul edilmeyen glob'da hata.
+fn grep_exclusions(call: &GrepCall) -> std::result::Result<Vec<String>, String> {
+    match call.glob.as_deref() {
+        None => Ok(Vec::new()),
+        Some(glob) => excluded_directories(glob)
+            .ok_or_else(|| "grep glob is not a test, bench or example exclusion".to_string()),
+    }
+}
+
 /// Desenden aranan sembol: sarmalayıcılar soyulur, tek ad ya da `alıcı.üye`
 /// kalmalıdır. Kabul edilmezse nedeni döner.
 pub(crate) fn grep_symbol(call: &GrepCall) -> std::result::Result<String, String> {
-    if call.case_insensitive || call.glob.is_some() || call.file_type.is_some() {
-        return Err("grep uses -i, glob or type".to_string());
+    if call.case_insensitive || call.file_type.is_some() {
+        return Err("grep uses -i or type".to_string());
     }
+    grep_exclusions(call)?;
     let mut pattern = call.pattern.trim().to_string();
     for wrapper in ["\\b", "\\s*\\(", "\\(", "(", "\\s*"] {
         pattern = pattern.trim_start_matches(wrapper).to_string();
@@ -202,12 +236,51 @@ pub(crate) fn compact_packet(packet: &str) -> std::result::Result<String, String
     Ok(output.join("\n"))
 }
 
+/// Yol, glob'un dışladığı dizinlerden birinde mi.
+fn in_excluded_directory(path: &str, excluded: &[String]) -> bool {
+    excluded.iter().any(|directory| {
+        path.starts_with(&format!("{directory}/")) || path.contains(&format!("/{directory}/"))
+    })
+}
+
+/// Kısa paketten glob'un dışladığı dizinlerdeki çağıranları atar (Grep onları da
+/// göstermezdi) ve kaç tanesinin atıldığını tek satırla söyler.
+pub(crate) fn without_excluded_callers(compact: &str, excluded: &[String]) -> String {
+    let mut dropped = 0;
+    let mut lines: Vec<&str> = Vec::new();
+    for line in compact.lines() {
+        let path = line
+            .strip_prefix("- ")
+            .and_then(|rest| rest.split_once(':'))
+            .map(|(path, _)| path);
+        match path {
+            Some(path) if in_excluded_directory(path, excluded) => dropped += 1,
+            _ => lines.push(line),
+        }
+    }
+    let mut text = lines.join("\n");
+    if dropped > 0 {
+        text.push_str(&format!(
+            "\n+ {dropped} callers in {} not listed (excluded by the Grep's glob)",
+            excluded.join(", ")
+        ));
+    }
+    text
+}
+
 /// `Function: ad · yol:a-b · ilişki; scope: K; …` satırından `yol:K` (kapsam yoksa ad).
+/// Kısa paket ilişki etiketini taşımaz; bu yüzden yalnız kanıtlanmış `calls` ilişkisi
+/// kabul edilir. `may call (receiver not resolved)` gibi bir satır (ör. thread-local
+/// `CONTEXT.try_with(..)`'in görev-yerel `try_with`'e bağlanması) hatadır: hook grep'i geçirir.
 fn caller_label(line: &str) -> std::result::Result<String, String> {
     let parts: Vec<&str> = line.split(" · ").collect();
     let [kind_name, location, details, ..] = parts.as_slice() else {
         return Err(format!("unexpected caller line {line:?}"));
     };
+    let relation = details.split("; ").next().unwrap_or(details).trim();
+    if relation != "calls" {
+        return Err(format!("caller relation is not a proven call: {relation}"));
+    }
     let name = kind_name
         .split_once(": ")
         .map_or(*kind_name, |(_, name)| name);
@@ -263,6 +336,7 @@ async fn grep_matches(
     engine: &Arc<ccm_core::engine::RetrievalEngine>,
     root: &Path,
     scope: &str,
+    excluded: &[String],
     symbol: &str,
 ) -> Result<Vec<(String, Vec<String>)>> {
     let files: Vec<String> = {
@@ -273,6 +347,8 @@ async fn grep_matches(
             .filter(|node| node.node_type == ccm_core::graph::NodeType::File)
             .map(|node| node.id.trim_start_matches("./").to_string())
             .filter(|path| scope.is_empty() || path.starts_with(scope))
+            // Glob'un dışladığı dizinlerdeki eşleşmeler Grep çıktısında yoktur.
+            .filter(|path| !in_excluded_directory(path, excluded))
             .collect()
     };
     let mut matches = Vec::new();
@@ -366,7 +442,12 @@ async fn decide(call: &GrepCall) -> Result<Decision> {
         Ok(compact) => compact,
         Err(reason) => return Ok(Decision::Pass(reason)),
     };
-    let matches = grep_matches(&loaded.engine, &call.cwd, &scope, &symbol).await?;
+    let excluded = match grep_exclusions(call) {
+        Ok(excluded) => excluded,
+        Err(reason) => return Ok(Decision::Pass(reason)),
+    };
+    let compact = without_excluded_callers(&compact, &excluded);
+    let matches = grep_matches(&loaded.engine, &call.cwd, &scope, &excluded, &symbol).await?;
     // Karşılaştırma modele gidecek metnin tamamıyla ve Grep çıktısının alt sınırıyla:
     // hook yalnız gerçekten daha az metin verdiğinde cevaplar.
     let grep_chars = estimated_grep_chars(&call.output_mode, &matches);
@@ -489,6 +570,40 @@ mod tests {
     }
 
     #[test]
+    fn only_test_bench_and_example_exclusion_globs_are_accepted() {
+        assert_eq!(
+            excluded_directories("!**/tests/**"),
+            Some(vec!["tests".to_string()])
+        );
+        assert_eq!(
+            excluded_directories("!**/{tests,benches,examples}/**"),
+            Some(vec![
+                "tests".to_string(),
+                "benches".to_string(),
+                "examples".to_string()
+            ])
+        );
+        assert_eq!(excluded_directories("*.py"), None);
+        assert_eq!(excluded_directories("!**/{tests,src}/**"), None);
+        assert_eq!(excluded_directories("{tokio,tokio-util}/src/**"), None);
+        let mut scoped = call("enter_runtime");
+        scoped.glob = Some("!**/{tests,benches,examples}/**".to_string());
+        assert_eq!(grep_symbol(&scoped), Ok("enter_runtime".to_string()));
+        scoped.glob = Some("*.py".to_string());
+        assert!(grep_symbol(&scoped).is_err());
+    }
+
+    #[test]
+    fn callers_in_excluded_directories_are_dropped_and_counted() {
+        let compact = "Function `unbounded_channel` · tokio/src/sync/mpsc/unbounded.rs:1-2 · 3 callers\nCheck: call list complete.\ncallers:\n- tokio-test/src/io.rs:Inner.new (188)\n- benches/sync_mpsc.rs:contention_unbounded (40)\n- tokio/src/x/examples/demo.rs:run (3)";
+        assert_eq!(
+            without_excluded_callers(compact, &["benches".to_string(), "examples".to_string()]),
+            "Function `unbounded_channel` · tokio/src/sync/mpsc/unbounded.rs:1-2 · 3 callers\nCheck: call list complete.\ncallers:\n- tokio-test/src/io.rs:Inner.new (188)\n+ 2 callers in benches, examples not listed (excluded by the Grep's glob)"
+        );
+        assert_eq!(without_excluded_callers(compact, &[]), compact);
+    }
+
+    #[test]
     fn grep_output_estimate_follows_the_output_mode() {
         let matches = vec![(
             "a.py".to_string(),
@@ -511,6 +626,14 @@ mod tests {
             "Function `capfirst` · django/utils/text.py:25-31 · 2 callers\nCheck: call list complete. A grep finds 3 call sites.\ncallers:\n- django/contrib/admin/options.py:ModelAdmin.history_view (2288)\n- django/contrib/admin/templatetags/admin_list.py:date_hierarchy (405, 408, +2)\n+ 3 files that import it (module-level uses there count as inside)"
         );
         assert!(compact_packet("Function `f` · a.py:1-2\nCheck: NOT complete.\ncallers:").is_err());
+        let unresolved = "Function `try_with` · tokio/src/task/task_local.rs:245-264 · 2 callers\nCheck: call list complete. A grep finds 2 call sites.\ncallers:\n- Method: with · tokio/src/task/task_local.rs:230-240 · calls; scope: LocalKey.with\n  234: self.try_with(f)\n- Function: budget · tokio/src/runtime/context.rs:138-140 · may call (receiver not resolved)\n  139: CONTEXT.try_with(|ctx| f(&ctx.budget))";
+        assert_eq!(
+            compact_packet(unresolved),
+            Err(
+                "caller relation is not a proven call: may call (receiver not resolved)"
+                    .to_string()
+            )
+        );
     }
 
     #[test]

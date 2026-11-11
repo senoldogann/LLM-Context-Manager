@@ -1,9 +1,13 @@
 """Kaydedilmiş Claude Code Grep çağrılarını CCM hook'undan geçirir (çevrimdışı, ajan yok).
 
 Kullanım:
-    uv run python scripts/hook_replay.py <ccm bin dizini> <korpus dizini> <sonuç dizini>
+    uv run python scripts/hook_replay.py <ccm bin dizini> <korpus dizini> <sonuç dizini> \
+        <döküm deseni>
 
 Sonuç dizini `<set>/claude/transcripts/<run>.jsonl` dökümlerini içerir (ör. `results/agent`).
+Döküm deseni hangi koşuların oynatılacağını seçer, sonuç dizinine göre bir glob'dur: örneğin
+`*/claude/transcripts/*__[ABFH]__1.jsonl` (pilotların ilk tekrarları) ya da
+`large-repo-20261111/claude/transcripts/*__D__*.jsonl`.
 Her depo için temiz bir çalışma kopyası graph-only indekslenir; her Grep, kaydedildiği desen,
 yol ve kiple `ccm-mcp hook claude-pre-tool-use`'a verilir. Çıktı: her çağrının kararı, hook'un
 modele vereceği metnin boyutu ve dökümdeki gerçek Grep sonucunun boyutu.
@@ -139,9 +143,10 @@ def replay_repo(
 def main() -> None:
     """Tüm dökümleri depo depo yeniden oynatır ve özetler."""
     bin_dir, corpus, results = (Path(argument) for argument in sys.argv[1:4])
+    pattern = sys.argv[4]
     repo_of = {task.id: task.repo for task in KNOWN_TASKS}
     by_repo: dict[str, list[RecordedGrep]] = collections.defaultdict(list)
-    for transcript in sorted(results.glob("*/claude/transcripts/*__[ABFH]__1.jsonl")):
+    for transcript in sorted(results.glob(pattern)):
         task = transcript.name.split("__")[0]
         by_repo[repo_of[task]].extend(recorded_greps(transcript))
     replayed = [
