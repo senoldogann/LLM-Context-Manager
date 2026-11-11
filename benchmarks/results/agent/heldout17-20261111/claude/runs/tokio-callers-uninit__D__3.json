@@ -1,0 +1,61 @@
+{
+  "record_version": 3,
+  "run_id": "tokio-callers-uninit__D__3",
+  "task_id": "tokio-callers-uninit",
+  "repo": "tokio",
+  "category": "callers",
+  "arm": "D",
+  "rep": 3,
+  "model": "claude-opus-5-5",
+  "effort": "high",
+  "embedding": "local",
+  "index_copy_s": 0.06476158299483359,
+  "index_build_s": 236.6647142090369,
+  "wall_s": 15.72515487484634,
+  "transcript": {
+    "result_text": "I found six functions in the library crates that call `ReadBuf::uninit` directly. The code index and a plain text search returned the same six call sites. A second search for other spellings, like `Self::uninit` or a renamed import, found nothing outside test code.\n\n- `tokio-util/src/udp/frame.rs:87`, in `UdpFramed::poll_next`.\n- `tokio-util/src/util/poll_buf.rs:63`, in `poll_read_buf`.\n- `tokio/src/io/read_buf.rs:83`, in `ReadBuf::take`.\n- `tokio/src/io/util/read_buf.rs:55`, in `poll`. This `poll` belongs to a different type also named `ReadBuf`: the future in `io/util`, not the buffer type.\n- `tokio/src/io/util/read_to_end.rs:86`, in `poll_read_to_end`. Line 85 next to it calls `MaybeUninit::uninit`, which doesn't count.\n- `tokio/src/io/util/vec_with_initialized.rs:87`, in `VecWithInitialized::get_read_buf`.\n\nThe other matches were either `MaybeUninit::uninit` or in `tokio/tests/io_read_buf.rs`, which is test code.\n\n```json\n{\"answer\": [\"tokio-util/src/udp/frame.rs:UdpFramed.poll_next\", \"tokio-util/src/util/poll_buf.rs:poll_read_buf\", \"tokio/src/io/read_buf.rs:ReadBuf.take\", \"tokio/src/io/util/read_buf.rs:ReadBuf.poll\", \"tokio/src/io/util/read_to_end.rs:poll_read_to_end\", \"tokio/src/io/util/vec_with_initialized.rs:VecWithInitialized.get_read_buf\"]}\n```",
+    "subtype": "success",
+    "is_error": false,
+    "api_error_status": null,
+    "num_turns": 4,
+    "duration_ms": 14739,
+    "cost_usd": 0.0754306,
+    "usage": {
+      "input_tokens": 6,
+      "output_tokens": 1220,
+      "cache_creation_input_tokens": 5776,
+      "cache_read_input_tokens": 23993
+    },
+    "tool_calls": {
+      "Grep": 2,
+      "mcp__context-manager__context": 1
+    },
+    "mcp_status": "connected",
+    "api_key_source": "none",
+    "tools": [
+      "Bash",
+      "Edit",
+      "Glob",
+      "Grep",
+      "Read",
+      "Write",
+      "mcp__context-manager__context",
+      "mcp__context-manager__index_project"
+    ]
+  },
+  "score": {
+    "answered": true,
+    "recall": 1.0,
+    "precision": 1.0,
+    "missing": [],
+    "extra": [],
+    "edit_applied": null,
+    "stale": [],
+    "success": true
+  },
+  "failure": null,
+  "hook": {
+    "deny": 0,
+    "pass_": 2
+  }
+}

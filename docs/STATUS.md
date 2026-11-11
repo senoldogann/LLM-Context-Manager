@@ -4,16 +4,19 @@ The current state of CCM and the next steps, for the owner and for any agent tha
 work. Keep it current: replace lines that stop being true instead of appending history (git log and
 `benchmarks/results/` are the history).
 
-Last updated: 2026-11-11. Where work stopped: **the preregistered large-repository experiment
-(amendment 15) is complete (`benchmarks/results/agent/large-repo-20261111/`, commit `01b2afa`,
-108 runs per agent).** On twelve held-out caller, trap and impact questions in Django, Tokio and
-scikit-learn, the current product (D) does not measurably change input tokens against built-ins
-(A): D/A 0.91 (0.59–1.45) for Codex with success A 28/36, D 29/36, and 0.95 (0.74–1.12) for
-Claude Code with 36/36 in both arms. The six tuned pilot tasks again show a saving (Codex 0.62,
-Claude 0.70), so the pilots' saving does not carry over to new tasks. The preregistered final run
-(`final-l3-20261110/`, `6d502c8`) found the same on Flask, Express and Serde: no saving for either
-agent, Codex B/A 1.78, C/A 2.09, D/A 1.12; Claude B/A 1.24, D/A 1.05. Claude Code calls CCM
-rarely (21 of 54 D runs in the large-repository set); Codex calls it in nearly every run.
+Last updated: 2026-11-11. Where work stopped: **the second preregistered large-repository
+held-out set (amendment 17) is complete (`benchmarks/results/agent/heldout17-20261111/`,
+commit `68cec67`, 78 runs per agent).** On thirteen new caller, trap and impact questions in
+Django, scikit-learn and Tokio:
+
+- **Codex:** the product (D) used fewer input tokens than built-ins (A), D/A 0.72
+  (0.59–0.89), with success D 38/39 against A 35/39. That is a saving shown under the
+  preregistered rule. It is in Django and scikit-learn; Tokio's three tasks cost more (1.34).
+- **Claude Code** with the Grep hook in D: 0.94 (0.77–1.10), no detectable difference;
+  success 39/39 against 38/39.
+- **Background:** amendment 15 (before the dotted-path fix and the hook fixes) found no
+  difference for either agent. The final L3 run on Flask, Express and Serde found no saving
+  either: Codex D/A 1.12, Claude 1.05.
 
 ## Goal
 
@@ -41,7 +44,7 @@ are parked. The owner's strategy notes are `docs/productization-plan.md`,
 | Freshness after an edit (L1) | first-read validation since `fb0ecd4`; a failed refresh now retries with backoff, `context` waits up to 10 s for a pending refresh | `mcp/tests/auto_refresh_test.rs` |
 | Claude Code Grep hook | opt-in `ccm-mcp hook claude-pre-tool-use` (PreToolUse). It answers a single-symbol Grep with a compact answer (target, completeness check, one line per caller) only when all of these hold: the index is fresh, every caller is a proven call, the check says the list is complete, and the answer is shorter than a lower bound of the grep output. Globs that only exclude test, bench or example directories are accepted. Otherwise the grep runs. Offline replay of the 70 Greps in the large-repository Claude D runs: 27 answered with 52 % less text, 15 of the 33 runs that never called CCM would have had their first Grep answered, and there were no wrong answers. Not installed by the npm launcher | `mcp/src/hook.rs`, `benchmarks/results/agent/claude-d-analysis-20261111/` |
 | Agent interface | default discovery `context + index_project` (1,134-byte `tools/list`, 266 o200k tokens, plus 65-token server instructions); legacy tools callable, discoverable with `CCM_MCP_LEGACY_TOOLS=1` | `mcp/src/server.rs` |
-| Agent experiment (L3) | preregistered final run complete (24 tasks × A/B/C + current product D × 3 repetitions × 2 agents, commit `6d502c8`); preregistered large-repository experiment complete (18 tasks × A/D × 3 × 2 agents, commit `01b2afa`); product pilots on 2026-11-09 and 2026-11-10 | "Agent pilots" below, `large-repo-20261111/README.md` |
+| Agent experiment (L3) | preregistered final run complete (24 tasks × A/B/C + current product D × 3 repetitions × 2 agents, commit `6d502c8`); preregistered large-repository experiment complete (18 tasks × A/D × 3 × 2 agents, commit `01b2afa`); second held-out set complete (13 tasks × A/D × 3 × 2 agents, commit `68cec67`; Codex saving shown, Claude no detectable difference); product pilots on 2026-11-09 and 2026-11-10 | "Agent pilots" below, `large-repo-20261111/README.md` |
 
 ## What `context` returns
 
@@ -269,32 +272,38 @@ What the transcripts show:
 2. **Scorer: generic owners: done** (amendment 16). `path:Arc<Handle>.schedule` is now read as
    `schedule`; the stored answers were rescored read-only (`large-repo-20261111/RESCORE.md`).
    Two tuned-task runs change, both fail → pass; no other published run changes.
-3. **Second held-out set (amendment 17), running.** Thirteen new large-repository tasks
-   (Django, scikit-learn, Tokio), arms A and D, both agents. D includes #26 and #28, and for
-   Claude Code also the Grep hook (the analysis is in `claude-d-analysis-20261111/`). If both
-   intervals contain 1.00 again, STATUS records that as the boundary result and this line of
-   work ends.
-4. **Large-repository experiment: done** (amendment 15, `large-repo-20261111/`): no detectable
+3. **Claude Code after a hook answer.** In amendment 17 the hook answered a Grep in 19 of 39
+   Claude D runs. In 9 of them, Claude's next step was the same Grep, which the hook's message
+   invites ("Run the same Grep again if you still need the raw matches"). The answer was an
+   extra turn, not a replacement. The next D-only change: answer the repeated Grep with the raw
+   matches limited to the listed call sites, and drop the invitation. Measure it offline on
+   these transcripts first, then on new held-out tasks.
+4. **Tokio cost for Codex.** `tokio-callers-globals` cost 2.13 times A and the trap 1.34 in
+   amendment 17. Read those transcripts before changing anything.
+5. **Second held-out set (amendment 17): done** (`heldout17-20261111/`). Codex shows a saving
+   of 0.72 (0.59–0.89); Claude Code shows no detectable difference, 0.94 (0.77–1.10). The
+   stopping rule (both intervals containing 1.00) was not met.
+6. **Large-repository experiment: done** (amendment 15, `large-repo-20261111/`): no detectable
    difference on held-out tasks for either agent.
-5. **Unknown names and macro bodies: done in #21 and #22.** Tokio `async_op` went from B/A 2.28 to
+7. **Unknown names and macro bodies: done in #21 and #22.** Tokio `async_op` went from B/A 2.28 to
    0.85 (Codex) and 1.02 to 0.50 (Claude); all 441 functions in Tokio's item-level macro bodies
    are now indexed.
-6. **Rust path targets and standard-library calls: done in #19.** Not yet shown to help: on the
+8. **Rust path targets and standard-library calls: done in #19.** Not yet shown to help: on the
    tuned Tokio trap Codex went from 1.36 to 1.29 and Claude B stayed above A.
-7. **Python method calls on other objects: done in #17.** Calls `x.name(` on objects that no import
+9. **Python method calls on other objects: done in #17.** Calls `x.name(` on objects that no import
    binds are listed under their own headline instead of making the check "NOT complete"; on the
    tuned `urlencode` trap Codex B/A went from 0.51 to 0.30 and Claude F from 1.10 to 0.66.
-8. **Small repositories: documented limit.** In the repeated Codex runs B costs more than A on
+10. **Small repositories: documented limit.** In the repeated Codex runs B costs more than A on
    Flask edits (1.69) and Serde trait implementors (1.77) in all three repetitions. The transcripts
    show why: A answers with one or two `rg` calls; B makes the same calls plus a CCM call (a
    natural-language query that missed on Serde, a confirmation after the edit on Flask), and each
    extra turn re-sends the whole context (about 15–20 k input tokens with cache). CCM can only save
    where its answer replaces at least one search turn, which on these repositories it rarely does.
-9. **Hook alternations: not pursued.** Of the 49 recorded greps the hook could not parse, 10 are one
+11. **Hook alternations: not pursued.** Of the 49 recorded greps the hook could not parse, 10 are one
    tuned task's `_find_error_handler|def handle_exception`; the rest are varied regexes (alias and
    import checks, receivers, look-arounds). Supporting them would fit one task, not a pattern.
-10. Release the fixes (npm launcher roots bug, refresh retry) as 0.5.1 after owner approval.
-11. The preregistered L3 final run: done (`final-l3-20261110/`).
+12. Release the fixes (npm launcher roots bug, refresh retry) as 0.5.1 after owner approval.
+13. The preregistered L3 final run: done (`final-l3-20261110/`).
 
 ## Running the L3 experiment
 

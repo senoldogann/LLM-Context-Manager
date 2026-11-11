@@ -1,0 +1,55 @@
+{
+  "record_version": 3,
+  "run_id": "django-impact-get-docs-version__A__1",
+  "task_id": "django-impact-get-docs-version",
+  "repo": "django",
+  "category": "files",
+  "arm": "A",
+  "rep": 1,
+  "model": "claude-opus-5-5",
+  "effort": "high",
+  "embedding": "local",
+  "index_copy_s": null,
+  "index_build_s": null,
+  "wall_s": 10.440227665938437,
+  "transcript": {
+    "result_text": "Ten files under `django/` call `get_docs_version()`. Each one imports it by its own name with `from django.utils.version import get_docs_version` and calls it directly.\n\nI also checked for other ways it could be reached and found none. Nothing imports it under another name, and nothing re-exports it. No module calls it as `version.get_docs_version`. Inside `django/utils/version.py`, the name appears only where the function is defined, so that file doesn't call it. The `{{ docs_version }}` placeholders in the project templates and `csrf_403.html` are template variables, not calls. No file in `django/test/` uses it.\n\n```json\n{\"answer\": [\"django/core/management/commands/optimizemigration.py\", \"django/core/management/commands/squashmigrations.py\", \"django/core/management/templates.py\", \"django/utils/deconstruct.py\", \"django/views/debug.py\", \"django/views/csrf.py\", \"django/db/backends/mysql/validation.py\", \"django/db/migrations/state.py\", \"django/db/migrations/serializer.py\", \"django/db/migrations/questioner.py\"]}\n```",
+    "subtype": "success",
+    "is_error": false,
+    "api_error_status": null,
+    "num_turns": 3,
+    "duration_ms": 9463,
+    "cost_usd": 0.061617,
+    "usage": {
+      "input_tokens": 6,
+      "output_tokens": 672,
+      "cache_creation_input_tokens": 5501,
+      "cache_read_input_tokens": 20725
+    },
+    "tool_calls": {
+      "Grep": 2
+    },
+    "mcp_status": "none",
+    "api_key_source": "none",
+    "tools": [
+      "Bash",
+      "Edit",
+      "Glob",
+      "Grep",
+      "Read",
+      "Write"
+    ]
+  },
+  "score": {
+    "answered": true,
+    "recall": 1.0,
+    "precision": 1.0,
+    "missing": [],
+    "extra": [],
+    "edit_applied": null,
+    "stale": [],
+    "success": true
+  },
+  "failure": null,
+  "hook": null
+}

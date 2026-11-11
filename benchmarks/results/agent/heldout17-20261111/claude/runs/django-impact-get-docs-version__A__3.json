@@ -1,0 +1,55 @@
+{
+  "record_version": 3,
+  "run_id": "django-impact-get-docs-version__A__3",
+  "task_id": "django-impact-get-docs-version",
+  "repo": "django",
+  "category": "files",
+  "arm": "A",
+  "rep": 3,
+  "model": "claude-opus-5-5",
+  "effort": "high",
+  "embedding": "local",
+  "index_copy_s": null,
+  "index_build_s": null,
+  "wall_s": 10.598234541947022,
+  "transcript": {
+    "result_text": "I found 11 files that call `get_docs_version()`. Each one imports it straight from `django.utils.version` under its own name.\n\nI also checked for indirect routes: aliased or module-qualified imports, star imports of `django.utils.version`, and re-exports. None exist in `django/`, so this list is complete. `django/utils/version.py` itself only defines the function and never calls it, so it isn't listed.\n\n```json\n{\"answer\": [\"django/views/debug.py\", \"django/views/csrf.py\", \"django/core/management/commands/optimizemigration.py\", \"django/core/management/commands/squashmigrations.py\", \"django/core/management/templates.py\", \"django/db/backends/mysql/validation.py\", \"django/db/migrations/state.py\", \"django/db/migrations/serializer.py\", \"django/db/migrations/questioner.py\", \"django/utils/deconstruct.py\"]}\n```",
+    "subtype": "success",
+    "is_error": false,
+    "api_error_status": null,
+    "num_turns": 3,
+    "duration_ms": 9779,
+    "cost_usd": 0.047388400000000004,
+    "usage": {
+      "input_tokens": 6,
+      "output_tokens": 675,
+      "cache_creation_input_tokens": 3715,
+      "cache_read_input_tokens": 20722
+    },
+    "tool_calls": {
+      "Grep": 2
+    },
+    "mcp_status": "none",
+    "api_key_source": "none",
+    "tools": [
+      "Bash",
+      "Edit",
+      "Glob",
+      "Grep",
+      "Read",
+      "Write"
+    ]
+  },
+  "score": {
+    "answered": true,
+    "recall": 1.0,
+    "precision": 1.0,
+    "missing": [],
+    "extra": [],
+    "edit_applied": null,
+    "stale": [],
+    "success": true
+  },
+  "failure": null,
+  "hook": null
+}

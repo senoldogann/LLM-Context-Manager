@@ -1,0 +1,60 @@
+{
+  "record_version": 3,
+  "run_id": "sklearn-impact-check-scoring__D__3",
+  "task_id": "sklearn-impact-check-scoring",
+  "repo": "scikit-learn",
+  "category": "files",
+  "arm": "D",
+  "rep": 3,
+  "model": "claude-opus-5-5",
+  "effort": "high",
+  "embedding": "local",
+  "index_copy_s": 0.1784548331052065,
+  "index_build_s": 578.0081130419858,
+  "wall_s": 13.94849191699177,
+  "transcript": {
+    "result_text": "I found 8 non-test files in `sklearn/` that call `check_scoring` directly. The code index listed them as callers, and I confirmed each one with a raw text search for the name across `sklearn/`, excluding tests:\n\n- `sklearn/model_selection/_validation.py`: 5 calls, in `cross_validate`, `cross_val_score`, `permutation_test_score`, `learning_curve` and `validation_curve`.\n- `sklearn/model_selection/_classification_threshold.py`: 1 call, in `TunedThresholdClassifierCV._get_curve_scorer`.\n- `sklearn/model_selection/_search.py`: 1 call, in `BaseSearchCV._get_scorers`.\n- `sklearn/inspection/_permutation_importance.py`: 1 call, in `permutation_importance`.\n- `sklearn/feature_selection/_rfe.py`: 1 call, in `RFECV.fit`.\n- `sklearn/ensemble/_hist_gradient_boosting/gradient_boosting.py`: 1 call, in `BaseHistGradientBoosting.fit`.\n- `sklearn/linear_model/_ridge.py`: 2 calls, in `_RidgeGCV._get_scorer` and `_BaseRidgeCV._get_scorer`.\n- `sklearn/metrics/_scorer.py`: 2 calls inside `_check_multimetric_scoring`, in the same file where the function is defined.\n\nMost of these files get the function through the re-export in `sklearn.metrics`. `sklearn/metrics/__init__.py` only imports and re-exports it without calling it, so it's not on the list. No file imports it under another name.\n\n```json\n{\"answer\": [\"sklearn/model_selection/_validation.py\", \"sklearn/model_selection/_classification_threshold.py\", \"sklearn/model_selection/_search.py\", \"sklearn/inspection/_permutation_importance.py\", \"sklearn/feature_selection/_rfe.py\", \"sklearn/ensemble/_hist_gradient_boosting/gradient_boosting.py\", \"sklearn/linear_model/_ridge.py\", \"sklearn/metrics/_scorer.py\"]}\n```",
+    "subtype": "success",
+    "is_error": false,
+    "api_error_status": null,
+    "num_turns": 3,
+    "duration_ms": 13024,
+    "cost_usd": 0.06843180000000001,
+    "usage": {
+      "input_tokens": 6,
+      "output_tokens": 1234,
+      "cache_creation_input_tokens": 4914,
+      "cache_read_input_tokens": 22079
+    },
+    "tool_calls": {
+      "Grep": 2
+    },
+    "mcp_status": "connected",
+    "api_key_source": "none",
+    "tools": [
+      "Bash",
+      "Edit",
+      "Glob",
+      "Grep",
+      "Read",
+      "Write",
+      "mcp__context-manager__context",
+      "mcp__context-manager__index_project"
+    ]
+  },
+  "score": {
+    "answered": true,
+    "recall": 1.0,
+    "precision": 1.0,
+    "missing": [],
+    "extra": [],
+    "edit_applied": null,
+    "stale": [],
+    "success": true
+  },
+  "failure": null,
+  "hook": {
+    "deny": 1,
+    "pass_": 1
+  }
+}

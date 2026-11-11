@@ -1,0 +1,61 @@
+{
+  "record_version": 3,
+  "run_id": "sklearn-impact-check-scoring__D__1",
+  "task_id": "sklearn-impact-check-scoring",
+  "repo": "scikit-learn",
+  "category": "files",
+  "arm": "D",
+  "rep": 1,
+  "model": "claude-opus-5-5",
+  "effort": "high",
+  "embedding": "local",
+  "index_copy_s": 0.24495887500233948,
+  "index_build_s": 578.0081130419858,
+  "wall_s": 14.60312508395873,
+  "transcript": {
+    "result_text": "Eight non-test files in `sklearn/` call `check_scoring` directly. I searched for every mention of `check_scoring` outside test files. It is never imported under another name. The only re-export is `sklearn/metrics/__init__.py`, which imports and lists the function but never calls it, so it is not included.\n\n- `sklearn/metrics/_scorer.py`: `_check_multimetric_scoring` calls it (lines 567 and 582).\n- `sklearn/linear_model/_ridge.py`: `_RidgeGCV._get_scorer` and `_BaseRidgeCV._get_scorer` call it.\n- `sklearn/feature_selection/_rfe.py`: `RFECV.fit` calls it.\n- `sklearn/model_selection/_validation.py`: `cross_validate`, `cross_val_score`, `permutation_test_score`, `learning_curve` and `validation_curve` call it.\n- `sklearn/model_selection/_classification_threshold.py`: `TunedThresholdClassifierCV._get_curve_scorer` calls it.\n- `sklearn/model_selection/_search.py`: `BaseSearchCV._get_scorers` calls it.\n- `sklearn/inspection/_permutation_importance.py`: `permutation_importance` calls it.\n- `sklearn/ensemble/_hist_gradient_boosting/gradient_boosting.py`: `BaseHistGradientBoosting.fit` calls it.\n\n```json\n{\"answer\": [\"sklearn/metrics/_scorer.py\", \"sklearn/linear_model/_ridge.py\", \"sklearn/feature_selection/_rfe.py\", \"sklearn/model_selection/_validation.py\", \"sklearn/model_selection/_classification_threshold.py\", \"sklearn/model_selection/_search.py\", \"sklearn/inspection/_permutation_importance.py\", \"sklearn/ensemble/_hist_gradient_boosting/gradient_boosting.py\"]}\n```",
+    "subtype": "success",
+    "is_error": false,
+    "api_error_status": null,
+    "num_turns": 4,
+    "duration_ms": 12124,
+    "cost_usd": 0.0888282,
+    "usage": {
+      "input_tokens": 6,
+      "output_tokens": 1192,
+      "cache_creation_input_tokens": 7502,
+      "cache_read_input_tokens": 24741
+    },
+    "tool_calls": {
+      "Grep": 2,
+      "mcp__context-manager__context": 1
+    },
+    "mcp_status": "connected",
+    "api_key_source": "none",
+    "tools": [
+      "Bash",
+      "Edit",
+      "Glob",
+      "Grep",
+      "Read",
+      "Write",
+      "mcp__context-manager__context",
+      "mcp__context-manager__index_project"
+    ]
+  },
+  "score": {
+    "answered": true,
+    "recall": 1.0,
+    "precision": 1.0,
+    "missing": [],
+    "extra": [],
+    "edit_applied": null,
+    "stale": [],
+    "success": true
+  },
+  "failure": null,
+  "hook": {
+    "deny": 1,
+    "pass_": 1
+  }
+}

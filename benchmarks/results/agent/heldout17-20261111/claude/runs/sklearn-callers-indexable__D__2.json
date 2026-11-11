@@ -1,0 +1,61 @@
+{
+  "record_version": 3,
+  "run_id": "sklearn-callers-indexable__D__2",
+  "task_id": "sklearn-callers-indexable",
+  "repo": "scikit-learn",
+  "category": "callers",
+  "arm": "D",
+  "rep": 2,
+  "model": "claude-opus-5-5",
+  "effort": "high",
+  "embedding": "local",
+  "index_copy_s": 0.3373128748498857,
+  "index_build_s": 578.0081130419858,
+  "wall_s": 12.309694832889363,
+  "transcript": {
+    "result_text": "I found 14 functions and methods in `sklearn/` (outside tests) that call `indexable` directly. The code index lists 14 call sites, one in each of these 14 functions, and says this matches a plain text search of all non-test files. I also searched for the function being imported under another name and found none.\n\n- **`sklearn/calibration.py`:** `CalibratedClassifierCV.fit` (line 324) and `_SigmoidCalibration.fit` (line 905).\n- **`sklearn/model_selection/_classification_threshold.py`:** `BaseThresholdClassifier.fit` (line 143).\n- **`sklearn/model_selection/_search.py`:** `BaseSearchCV.fit` (line 923).\n- **`sklearn/model_selection/_split.py`:** `BaseCrossValidator.split` (line 145), `_BaseKFold.split` (line 406), `TimeSeriesSplit._split` (line 1236), `BaseShuffleSplit.split` (line 1842) and `train_test_split` (line 2782).\n- **`sklearn/model_selection/_validation.py`:** `cross_validate` (line 351), `cross_val_predict` (line 1210), `permutation_test_score` (line 1649), `learning_curve` (line 1906) and `validation_curve` (line 2284).\n\n```json\n{\"answer\": [\"sklearn/calibration.py:CalibratedClassifierCV.fit\", \"sklearn/calibration.py:_SigmoidCalibration.fit\", \"sklearn/model_selection/_classification_threshold.py:BaseThresholdClassifier.fit\", \"sklearn/model_selection/_search.py:BaseSearchCV.fit\", \"sklearn/model_selection/_split.py:BaseCrossValidator.split\", \"sklearn/model_selection/_split.py:_BaseKFold.split\", \"sklearn/model_selection/_split.py:TimeSeriesSplit._split\", \"sklearn/model_selection/_split.py:BaseShuffleSplit.split\", \"sklearn/model_selection/_split.py:train_test_split\", \"sklearn/model_selection/_validation.py:cross_validate\", \"sklearn/model_selection/_validation.py:cross_val_predict\", \"sklearn/model_selection/_validation.py:permutation_test_score\", \"sklearn/model_selection/_validation.py:learning_curve\", \"sklearn/model_selection/_validation.py:validation_curve\"]}\n```",
+    "subtype": "success",
+    "is_error": false,
+    "api_error_status": null,
+    "num_turns": 3,
+    "duration_ms": 11534,
+    "cost_usd": 0.06399500000000001,
+    "usage": {
+      "input_tokens": 6,
+      "output_tokens": 1099,
+      "cache_creation_input_tokens": 4671,
+      "cache_read_input_tokens": 23115
+    },
+    "tool_calls": {
+      "Grep": 1,
+      "mcp__context-manager__context": 1
+    },
+    "mcp_status": "connected",
+    "api_key_source": "none",
+    "tools": [
+      "Bash",
+      "Edit",
+      "Glob",
+      "Grep",
+      "Read",
+      "Write",
+      "mcp__context-manager__context",
+      "mcp__context-manager__index_project"
+    ]
+  },
+  "score": {
+    "answered": true,
+    "recall": 1.0,
+    "precision": 1.0,
+    "missing": [],
+    "extra": [],
+    "edit_applied": null,
+    "stale": [],
+    "success": true
+  },
+  "failure": null,
+  "hook": {
+    "deny": 0,
+    "pass_": 1
+  }
+}

@@ -1,0 +1,48 @@
+{
+  "record_version": 3,
+  "run_id": "sklearn-callers-empirical-covariance__D__1",
+  "task_id": "sklearn-callers-empirical-covariance",
+  "repo": "scikit-learn",
+  "category": "callers",
+  "arm": "D",
+  "rep": 1,
+  "model": "gpt-6-luna",
+  "effort": "high",
+  "embedding": "local",
+  "index_copy_s": 0.19666458293795586,
+  "index_build_s": 578.0081130419858,
+  "wall_s": 17.42116012517363,
+  "transcript": {
+    "result_text": "```json\n{\"answer\":[\"sklearn/covariance/_empirical_covariance.py:EmpiricalCovariance.fit\",\"sklearn/covariance/_empirical_covariance.py:EmpiricalCovariance.score\",\"sklearn/covariance/_graph_lasso.py:GraphicalLasso.fit\",\"sklearn/covariance/_graph_lasso.py:graphical_lasso_path\",\"sklearn/covariance/_graph_lasso.py:GraphicalLassoCV.fit\",\"sklearn/covariance/_shrunk_covariance.py:_ledoit_wolf\",\"sklearn/covariance/_shrunk_covariance.py:_oas\",\"sklearn/covariance/_shrunk_covariance.py:ShrunkCovariance.fit\",\"sklearn/discriminant_analysis.py:_cov\"]}\n```",
+    "subtype": "completed",
+    "is_error": false,
+    "api_error_status": null,
+    "num_turns": null,
+    "duration_ms": 17421,
+    "cost_usd": null,
+    "usage": {
+      "input_tokens": 5319,
+      "output_tokens": 663,
+      "cache_creation_input_tokens": 0,
+      "cache_read_input_tokens": 28800
+    },
+    "tool_calls": {
+      "mcp__context-manager__context": 1
+    },
+    "mcp_status": "unreported",
+    "api_key_source": "chatgpt",
+    "tools": []
+  },
+  "score": {
+    "answered": true,
+    "recall": 1.0,
+    "precision": 1.0,
+    "missing": [],
+    "extra": [],
+    "edit_applied": null,
+    "stale": [],
+    "success": true
+  },
+  "failure": null,
+  "hook": null
+}

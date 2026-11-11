@@ -1,0 +1,56 @@
+{
+  "record_version": 3,
+  "run_id": "django-callers-log-response__A__3",
+  "task_id": "django-callers-log-response",
+  "repo": "django",
+  "category": "callers",
+  "arm": "A",
+  "rep": 3,
+  "model": "claude-opus-5-5",
+  "effort": "high",
+  "embedding": "local",
+  "index_copy_s": null,
+  "index_build_s": null,
+  "wall_s": 16.407131416955963,
+  "transcript": {
+    "result_text": "I found five functions in `django/` that call `log_response` directly. All of them import it by its own name with `from django.utils.log import log_response`. No alias or module re-export is used.\n\n- **`django/views/decorators/http.py`**: `require_http_methods` calls it from both the async and the sync `inner` closures inside `decorator`. It is listed under the outermost named function.\n- **`django/utils/cache.py`**: `_precondition_failed`.\n- **`django/core/handlers/base.py`**: `BaseHandler.get_response`.\n- **`django/core/handlers/exception.py`**: `response_for_exception`, which has four call sites.\n- **`django/middleware/csrf.py`**: `CsrfViewMiddleware._reject`.\n\nI left out `BaseHandler.get_response_async` in `django/core/handlers/base.py`. It doesn't call `log_response` itself; it passes it to `sync_to_async(log_response, thread_sensitive=False)(...)` as a value, which your rules exclude.\n\n```json\n{\"answer\": [\"django/views/decorators/http.py:require_http_methods\", \"django/utils/cache.py:_precondition_failed\", \"django/core/handlers/base.py:BaseHandler.get_response\", \"django/core/handlers/exception.py:response_for_exception\", \"django/middleware/csrf.py:CsrfViewMiddleware._reject\"]}\n```",
+    "subtype": "success",
+    "is_error": false,
+    "api_error_status": null,
+    "num_turns": 5,
+    "duration_ms": 15597,
+    "cost_usd": 0.0703318,
+    "usage": {
+      "input_tokens": 10,
+      "output_tokens": 1189,
+      "cache_creation_input_tokens": 4830,
+      "cache_read_input_tokens": 39359
+    },
+    "tool_calls": {
+      "Bash": 1,
+      "Grep": 3
+    },
+    "mcp_status": "none",
+    "api_key_source": "none",
+    "tools": [
+      "Bash",
+      "Edit",
+      "Glob",
+      "Grep",
+      "Read",
+      "Write"
+    ]
+  },
+  "score": {
+    "answered": true,
+    "recall": 1.0,
+    "precision": 1.0,
+    "missing": [],
+    "extra": [],
+    "edit_applied": null,
+    "stale": [],
+    "success": true
+  },
+  "failure": null,
+  "hook": null
+}

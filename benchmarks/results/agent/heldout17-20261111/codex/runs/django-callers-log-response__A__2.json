@@ -1,0 +1,50 @@
+{
+  "record_version": 3,
+  "run_id": "django-callers-log-response__A__2",
+  "task_id": "django-callers-log-response",
+  "repo": "django",
+  "category": "callers",
+  "arm": "A",
+  "rep": 2,
+  "model": "gpt-6-luna",
+  "effort": "high",
+  "embedding": "local",
+  "index_copy_s": null,
+  "index_build_s": null,
+  "wall_s": 18.432828707853332,
+  "transcript": {
+    "result_text": "```json\n{\"answer\":[\"django/middleware/csrf.py:CsrfViewMiddleware._reject\",\"django/core/handlers/base.py:BaseHandler.get_response\",\"django/core/handlers/base.py:BaseHandler.get_response_async\",\"django/core/handlers/exception.py:response_for_exception\",\"django/views/decorators/http.py:require_http_methods\",\"django/utils/cache.py:_precondition_failed\"]}\n```",
+    "subtype": "completed",
+    "is_error": false,
+    "api_error_status": null,
+    "num_turns": null,
+    "duration_ms": 18433,
+    "cost_usd": null,
+    "usage": {
+      "input_tokens": 13927,
+      "output_tokens": 675,
+      "cache_creation_input_tokens": 0,
+      "cache_read_input_tokens": 32640
+    },
+    "tool_calls": {
+      "command_execution": 3
+    },
+    "mcp_status": "unreported",
+    "api_key_source": "chatgpt",
+    "tools": []
+  },
+  "score": {
+    "answered": true,
+    "recall": 1.0,
+    "precision": 0.8333333333333334,
+    "missing": [],
+    "extra": [
+      "django/core/handlers/base.py:get_response_async"
+    ],
+    "edit_applied": null,
+    "stale": [],
+    "success": true
+  },
+  "failure": null,
+  "hook": null
+}
