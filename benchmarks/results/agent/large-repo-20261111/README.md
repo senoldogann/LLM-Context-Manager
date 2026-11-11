@@ -91,7 +91,7 @@ Eighteen runs failed: ten in A, eight in D. Every record is kept in `codex/runs/
 | `sklearn-trap-shuffle` D#2, D#3 | the eight callers in `sklearn/datasets/` that import `shuffle` under another name (see product finding) |
 | `tokio-callers-sleep-until` A#3 | eight callers in `tokio-test`, `tokio-util` and `time/` |
 | `tokio-callers-with-scheduler` A#2 | `context.rs:defer` |
-| `tokio-callers-with-scheduler` D#3 | `current_thread::schedule` and `unhandled_panic`; named `Arc` as the function |
+| `tokio-callers-with-scheduler` D#3 | none in substance: scorer parsing (see note) |
 | `tokio-impact-enter-runtime` A#2 | `multi_thread/mod.rs` (wrote the path with a space in it) |
 
 Definition notes, golds unchanged:
@@ -103,6 +103,13 @@ Definition notes, golds unchanged:
   counts every call of the function, including `get_config()` after `from .._config import
   get_config` and the `_get_config` alias. Codex read the wording as the qualified spelling
   `sklearn.get_config(` and answered `_config.py` or nothing.
+
+Scorer note, records unchanged: `tokio-callers-with-scheduler` D#3 answered
+`current_thread/mod.rs:Arc<Handle>.schedule` and `…Arc<Handle>.unhandled_panic`, which are
+correct (`impl Schedule for Arc<Handle>`). The scorer strips nothing from a generic owner and
+reads `Arc` as the function name, so it counts both as missing and `Arc` as extra. The same
+answer fails Claude's `tokio-callers-with-scheduler` A#2. This is a tuned task, so the primary
+result is unaffected; fixing the parser is a separate change.
 
 ### Product finding: dotted Python paths
 
@@ -123,7 +130,75 @@ measured here.
 
 ## Claude Code
 
-Pending: see "Run log" below.
+All 108 runs recorded (see the run log for the limit stop).
+
+### Held-out tasks (primary)
+
+| Task | A tokens | D tokens | D/A | A ok | D ok | D runs calling CCM | Pilot rule |
+|---|---:|---:|---:|---:|---:|---:|---|
+| `django-callers-is-aware` | 36,731 | 26,660 | 0.73 | 3/3 | 3/3 | 3/3 | – |
+| `django-callers-make-hashable` | 29,262 | 39,795 | 1.36 | 3/3 | 3/3 | 0/3 | – |
+| `django-trap-get-connection` | 27,684 | 32,106 | 1.16 | 3/3 | 3/3 | 0/3 | – |
+| `django-impact-get-resolver` | 18,816 | 18,124 | 0.96 | 3/3 | 3/3 | 2/3 | saving |
+| `sklearn-callers-check-cv` | 27,452 | 20,769 | 0.76 | 3/3 | 3/3 | 3/3 | saving |
+| `sklearn-callers-gen-batches` | 38,789 | 34,351 | 0.89 | 3/3 | 3/3 | 2/3 | – |
+| `sklearn-trap-shuffle` | 68,388 | 78,369 | 1.15 | 3/3 | 3/3 | 0/3 | – |
+| `sklearn-impact-get-config` | 19,543 | 18,430 | 0.94 | 3/3 | 3/3 | 1/3 | – |
+| `tokio-callers-new-unnamed` | 46,739 | 25,381 | 0.54 | 3/3 | 3/3 | 1/3 | saving |
+| `tokio-callers-unbounded-channel` | 26,636 | 28,997 | 1.09 | 3/3 | 3/3 | 1/3 | – |
+| `tokio-trap-try-with` | 41,909 | 28,831 | 0.69 | 3/3 | 3/3 | 0/3 | saving |
+| `tokio-impact-enter-runtime` | 15,507 | 16,554 | 1.07 | 3/3 | 3/3 | 0/3 | – |
+
+- D/A median: **0.95 (0.74–1.12, 12 tasks)**
+- Success: A 36/36 (90 %–100 %), D 36/36 (90 %–100 %)
+- D runs that called CCM: 13/36
+- Pilot rule met on 4 of 12 tasks
+- By category: callers 0.82 (0.63–1.22, 6 tasks); impact 0.96 (0.94–1.07, 3); trap 1.15
+  (0.69–1.16, 3)
+- By repository: Django 1.06 (0.73–1.36); scikit-learn 0.91 (0.76–1.15); Tokio 0.88
+  (0.54–1.09); 4 tasks each
+
+**Decision (amendment 15): no detectable difference.** The interval contains 1.00 on both sides.
+
+### Tuned tasks (not part of the primary result)
+
+| Task | A tokens | D tokens | D/A | A ok | D ok | D runs calling CCM | Pilot rule |
+|---|---:|---:|---:|---:|---:|---:|---|
+| `django-callers-iri-to-uri` | 35,369 | 18,656 | 0.53 | 3/3 | 3/3 | 3/3 | saving |
+| `django-callers-constant-time-compare` | 35,615 | 37,106 | 1.04 | 3/3 | 3/3 | 0/3 | – |
+| `django-trap-urlencode` | 49,914 | 40,870 | 0.82 | 3/3 | 3/3 | 0/3 | saving |
+| `tokio-callers-sleep-until` | 44,502 | 31,491 | 0.71 | 3/3 | 3/3 | 0/3 | saving |
+| `tokio-callers-async-op` | 42,890 | 28,963 | 0.68 | 3/3 | 3/3 | 2/3 | saving |
+| `tokio-callers-with-scheduler` | 41,007 | 28,535 | 0.70 | 2/3 | 3/3 | 3/3 | saving |
+
+- D/A median: 0.70 (0.60–0.93, 6 tasks)
+- Success: A 17/18 (74 %–99 %), D 18/18 (82 %–100 %)
+- Pilot rule met on 5 of 6 tasks
+
+Over all 18 tasks D/A was 0.85 (0.71–1.05) for input tokens, 1.02 (0.92–1.07) for cost and
+0.82 (0.73–0.93) for wall time; median wall time D 14.9 s, A 18.2 s. Claude called CCM in 21 of
+54 D runs. Where it did not, the D tokens differ from A's by the agent's own path and by the
+two tool definitions.
+
+### Claude failures
+
+One run failed: `tokio-callers-with-scheduler` A#2, the scorer parsing case in the note above.
+
+### Owner audit
+
+`scripts/owner_audit.py` flags three passing Claude runs of the tuned task
+`django-trap-urlencode` (A#2, A#3, D#3). They name `BaseModelAdmin.get_preserved_filters`; the
+method is defined on `ModelAdmin`.
+
+## What this shows
+
+On twelve held-out caller, trap and impact questions in three large repositories, the current
+product does not measurably change input tokens for either agent: D/A 0.91 (0.59–1.45) for
+Codex and 0.95 (0.74–1.12) for Claude Code, with success equal or within one run. The tuned
+pilot tasks again show a saving for both agents (0.62 and 0.70), so the pilots' result does not
+carry over to new tasks. The spread is large per task: D saves on some caller tasks
+(`django-callers-is-aware`, `tokio-callers-new-unnamed`) and costs more on others. For Codex,
+part of the cost comes from the dotted-path finding above.
 
 ## Run log
 
@@ -140,5 +215,11 @@ Pending: see "Run log" below.
   (`sklearn-impact-get-config` D#3) exited after its `init` event with no result. They are agent
   non-runs, not answers, and were moved unchanged to `claude-quota-rejected/attempt-1/`, where
   they remain. The fix (the harness now stops on status 429) is a later commit and was not used
-  for any run here. The missing 14 runs are run after the limit resets, from a separate checkout
-  at `01b2afa` with the same binaries and command.
+  for any run here.
+- 2026-11-11 01:10Z: a first resume from a separate checkout at `01b2afa` (same binaries and
+  command) met the same limit; its 14 rejected runs are in `claude-quota-rejected/attempt-2/`.
+- 2026-11-11, after the owner supplied a new Claude Code OAuth token for an account with quota
+  left: the same resume recorded the 14 missing runs, all from the `01b2afa` checkout with the
+  same binaries, agent version and command (the harness verified `settings.json` unchanged).
+  These 14 runs ran under a different subscription token from the other 94; model, effort and
+  agent version are the same.

@@ -1,0 +1,55 @@
+{
+  "record_version": 3,
+  "run_id": "django-callers-is-aware__A__2",
+  "task_id": "django-callers-is-aware",
+  "repo": "django",
+  "category": "callers",
+  "arm": "A",
+  "rep": 2,
+  "model": "claude-opus-5-5",
+  "effort": "high",
+  "embedding": "local",
+  "index_copy_s": null,
+  "index_build_s": null,
+  "wall_s": 28.94018558296375,
+  "transcript": {
+    "result_text": "I found 18 functions and methods in `django/` that call `is_aware`. I searched for every occurrence of `is_aware` and checked which function or class each call sits in.\n\nNotes on the less obvious entries:\n- **Both import styles count.** Most files call `timezone.is_aware(...)`. `core/serializers/json.py`, `utils/timesince.py` and `contrib/humanize/templatetags/humanize.py` import the name directly and call `is_aware(...)`.\n- **Calls inside nested functions** are listed under the outermost named function, as you asked:\n  - `views/decorators/http.py` → `condition` (the call is inside `decorator._pre_process_request`).\n  - `contrib/admin/templatetags/admin_list.py` → `date_hierarchy` (the call is inside `link`).\n- **`django/db/models/fields/__init__.py` line 1477** is in `DateField.to_python`, not `DateTimeField`.\n- **In `utils/timezone.py`**, the definition of `is_aware` itself isn't counted, but `make_aware` in the same file calls it, so it's included.\n\n```json\n{\"answer\": [\"django/db/models/fields/__init__.py:_to_naive\", \"django/db/models/fields/__init__.py:DateField.to_python\", \"django/db/backends/mysql/operations.py:DatabaseOperations.adapt_datetimefield_value\", \"django/db/backends/mysql/operations.py:DatabaseOperations.adapt_timefield_value\", \"django/db/backends/base/operations.py:BaseDatabaseOperations.adapt_timefield_value\", \"django/db/backends/sqlite3/operations.py:DatabaseOperations.adapt_datetimefield_value\", \"django/db/backends/sqlite3/operations.py:DatabaseOperations.adapt_timefield_value\", \"django/db/backends/sqlite3/operations.py:DatabaseOperations.convert_datetimefield_value\", \"django/core/serializers/json.py:DjangoJSONEncoder.default\", \"django/db/backends/oracle/operations.py:DatabaseOperations.adapt_datetimefield_value\", \"django/db/backends/oracle/operations.py:DatabaseOperations.adapt_timefield_value\", \"django/views/decorators/http.py:condition\", \"django/forms/utils.py:to_current_timezone\", \"django/contrib/admin/filters.py:DateFieldListFilter.__init__\", \"django/utils/timezone.py:make_aware\", \"django/utils/timesince.py:timesince\", \"django/contrib/admin/templatetags/admin_list.py:date_hierarchy\", \"django/contrib/humanize/templatetags/humanize.py:NaturalTimeFormatter.string_for\"]}\n```",
+    "subtype": "success",
+    "is_error": false,
+    "num_turns": 5,
+    "duration_ms": 27814,
+    "cost_usd": 0.10353100000000001,
+    "usage": {
+      "input_tokens": 10,
+      "output_tokens": 2078,
+      "cache_creation_input_tokens": 6676,
+      "cache_read_input_tokens": 42615
+    },
+    "tool_calls": {
+      "Bash": 3,
+      "Grep": 1
+    },
+    "mcp_status": "none",
+    "api_key_source": "none",
+    "tools": [
+      "Bash",
+      "Edit",
+      "Glob",
+      "Grep",
+      "Read",
+      "Write"
+    ]
+  },
+  "score": {
+    "answered": true,
+    "recall": 1.0,
+    "precision": 1.0,
+    "missing": [],
+    "extra": [],
+    "edit_applied": null,
+    "stale": [],
+    "success": true
+  },
+  "failure": null,
+  "hook": null
+}

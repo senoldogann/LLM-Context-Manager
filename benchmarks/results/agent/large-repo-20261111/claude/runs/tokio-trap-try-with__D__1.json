@@ -1,0 +1,57 @@
+{
+  "record_version": 3,
+  "run_id": "tokio-trap-try-with__D__1",
+  "task_id": "tokio-trap-try-with",
+  "repo": "tokio",
+  "category": "trap",
+  "arm": "D",
+  "rep": 1,
+  "model": "claude-opus-5-5",
+  "effort": "high",
+  "embedding": "local",
+  "index_copy_s": 0.1418259171769023,
+  "index_build_s": 265.3463085840922,
+  "wall_s": 12.261017499957234,
+  "transcript": {
+    "result_text": "Only one library function calls the task-local `LocalKey::try_with` directly: `LocalKey::with` in `tokio/src/task/task_local.rs`. At line 234 it does `match self.try_with(f)` and panics if that returns an error.\n\nI searched every `try_with` call in the five library crates, leaving out tests, benches and examples. None of the other calls count, because each one is made on a standard-library `thread_local!` key:\n- **Inside `task_local.rs`:** `scope_inner` (line 209) and `try_with` itself (line 254) both call `self.inner.try_with`. `inner` is a std thread-local key.\n- **In the runtime:** the calls in `runtime/context.rs`, `runtime/context/blocking.rs` and `runtime/context/current.rs` are on `CONTEXT`. The one in `runtime/park.rs` is on `CURRENT_PARKER`, and the one in `task/local.rs` is on `CURRENT`. All three are thread locals.\n- **Other crates:** `tokio-util`, `tokio-stream`, `tokio-test` and `tokio-macros` have no `try_with` calls.\n\n```json\n{\"answer\": [\"tokio/src/task/task_local.rs:LocalKey.with\"]}\n```",
+    "subtype": "success",
+    "is_error": false,
+    "num_turns": 3,
+    "duration_ms": 11347,
+    "cost_usd": 0.0668202,
+    "usage": {
+      "input_tokens": 6,
+      "output_tokens": 992,
+      "cache_creation_input_tokens": 5306,
+      "cache_read_input_tokens": 22541
+    },
+    "tool_calls": {
+      "Grep": 1,
+      "Read": 1
+    },
+    "mcp_status": "connected",
+    "api_key_source": "none",
+    "tools": [
+      "Bash",
+      "Edit",
+      "Glob",
+      "Grep",
+      "Read",
+      "Write",
+      "mcp__context-manager__context",
+      "mcp__context-manager__index_project"
+    ]
+  },
+  "score": {
+    "answered": true,
+    "recall": 1.0,
+    "precision": 1.0,
+    "missing": [],
+    "extra": [],
+    "edit_applied": null,
+    "stale": [],
+    "success": true
+  },
+  "failure": null,
+  "hook": null
+}

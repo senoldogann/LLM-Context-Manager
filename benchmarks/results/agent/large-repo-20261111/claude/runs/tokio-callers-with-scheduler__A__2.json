@@ -1,0 +1,60 @@
+{
+  "record_version": 3,
+  "run_id": "tokio-callers-with-scheduler__A__2",
+  "task_id": "tokio-callers-with-scheduler",
+  "repo": "tokio",
+  "category": "callers",
+  "arm": "A",
+  "rep": 2,
+  "model": "claude-opus-5-5",
+  "effort": "high",
+  "embedding": "local",
+  "index_copy_s": null,
+  "index_build_s": null,
+  "wall_s": 18.62579116690904,
+  "transcript": {
+    "result_text": "Nine functions or methods in the library crates call `with_scheduler` directly. I found them by searching the workspace for every call site and reading the code around each one to find the function it sits in. All the calls are in the `tokio` crate.\n\n- **`tokio/src/runtime/context.rs`:** `defer`, which is in the same file as `with_scheduler` and calls it without the `context::` prefix.\n- **`tokio/src/runtime/time/entry.rs`:** `generate_shard_id`.\n- **`tokio/src/runtime/task/trace/mod.rs`:** `trace_leaf`.\n- **`tokio/src/runtime/scheduler/multi_thread/worker.rs`:** `with_current`.\n- **`tokio/src/runtime/scheduler/multi_thread_alt/worker.rs`:** `with_current`, a separate function with the same name.\n- **`tokio/src/runtime/scheduler/current_thread/mod.rs`:**\n  - `Handle.dump`\n  - `schedule` and `unhandled_panic`, both in `impl Schedule for Arc<Handle>`, so I've named them `Arc<Handle>.schedule` and `Arc<Handle>.unhandled_panic`.\n\nOne other match in `current_thread/mod.rs` (line 671) is only a comment, so I left it out.\n\n```json\n{\"answer\": [\"tokio/src/runtime/context.rs:defer\", \"tokio/src/runtime/time/entry.rs:generate_shard_id\", \"tokio/src/runtime/task/trace/mod.rs:trace_leaf\", \"tokio/src/runtime/scheduler/multi_thread/worker.rs:with_current\", \"tokio/src/runtime/scheduler/multi_thread_alt/worker.rs:with_current\", \"tokio/src/runtime/scheduler/current_thread/mod.rs:Handle.dump\", \"tokio/src/runtime/scheduler/current_thread/mod.rs:Arc<Handle>.schedule\", \"tokio/src/runtime/scheduler/current_thread/mod.rs:Arc<Handle>.unhandled_panic\"]}\n```",
+    "subtype": "success",
+    "is_error": false,
+    "num_turns": 4,
+    "duration_ms": 17985,
+    "cost_usd": 0.08207360000000001,
+    "usage": {
+      "input_tokens": 8,
+      "output_tokens": 1280,
+      "cache_creation_input_tokens": 6270,
+      "cache_read_input_tokens": 31408
+    },
+    "tool_calls": {
+      "Bash": 2,
+      "Grep": 1
+    },
+    "mcp_status": "none",
+    "api_key_source": "none",
+    "tools": [
+      "Bash",
+      "Edit",
+      "Glob",
+      "Grep",
+      "Read",
+      "Write"
+    ]
+  },
+  "score": {
+    "answered": true,
+    "recall": 0.75,
+    "precision": 0.8571428571428571,
+    "missing": [
+      "tokio/src/runtime/scheduler/current_thread/mod.rs:schedule",
+      "tokio/src/runtime/scheduler/current_thread/mod.rs:unhandled_panic"
+    ],
+    "extra": [
+      "tokio/src/runtime/scheduler/current_thread/mod.rs:Arc"
+    ],
+    "edit_applied": null,
+    "stale": [],
+    "success": false
+  },
+  "failure": null,
+  "hook": null
+}

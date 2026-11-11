@@ -1,0 +1,55 @@
+{
+  "record_version": 3,
+  "run_id": "tokio-callers-async-op__A__1",
+  "task_id": "tokio-callers-async-op",
+  "repo": "tokio",
+  "category": "callers",
+  "arm": "A",
+  "rep": 1,
+  "model": "claude-opus-5-5",
+  "effort": "high",
+  "embedding": "local",
+  "index_copy_s": null,
+  "index_build_s": null,
+  "wall_s": 17.138780541950837,
+  "transcript": {
+    "result_text": "I found 13 methods that call `trace::async_op` directly. To find them, I searched the whole workspace for `async_op` and kept only real calls to the function. Matches that were only span names or target strings like `\"runtime.resource.async_op\"` were dropped, and so were the integration tests under `tokio/tests`, since those aren't library code. All 13 calls are in the `tokio` crate:\n\n- **`tokio/src/time/interval.rs`**: `Interval::tick`\n- **`tokio/src/sync/mutex.rs`**: `Mutex::lock` and `Mutex::lock_owned`\n- **`tokio/src/sync/rwlock.rs`**: `RwLock::read`, `RwLock::read_owned`, `RwLock::write` and `RwLock::write_owned`\n- **`tokio/src/sync/barrier.rs`**: `Barrier::wait`\n- **`tokio/src/sync/semaphore.rs`**: `Semaphore::acquire`, `Semaphore::acquire_many`, `Semaphore::acquire_owned` and `Semaphore::acquire_many_owned`\n- **`tokio/src/sync/oneshot.rs`**: `Sender::closed`\n\n`Sleep::new_timeout`, `Sleep::reset`, `Acquire::new` and the oneshot receiver code create spans with the same name, but they call `tracing::trace_span!` themselves rather than `async_op`, so they aren't listed.\n\n```json\n{\"answer\": [\"tokio/src/time/interval.rs:Interval.tick\", \"tokio/src/sync/mutex.rs:Mutex.lock\", \"tokio/src/sync/mutex.rs:Mutex.lock_owned\", \"tokio/src/sync/rwlock.rs:RwLock.read\", \"tokio/src/sync/rwlock.rs:RwLock.read_owned\", \"tokio/src/sync/rwlock.rs:RwLock.write\", \"tokio/src/sync/rwlock.rs:RwLock.write_owned\", \"tokio/src/sync/barrier.rs:Barrier.wait\", \"tokio/src/sync/semaphore.rs:Semaphore.acquire\", \"tokio/src/sync/semaphore.rs:Semaphore.acquire_many\", \"tokio/src/sync/semaphore.rs:Semaphore.acquire_owned\", \"tokio/src/sync/semaphore.rs:Semaphore.acquire_many_owned\", \"tokio/src/sync/oneshot.rs:Sender.closed\"]}\n```",
+    "subtype": "success",
+    "is_error": false,
+    "num_turns": 4,
+    "duration_ms": 16332,
+    "cost_usd": 0.097236,
+    "usage": {
+      "input_tokens": 8,
+      "output_tokens": 1527,
+      "cache_creation_input_tokens": 7524,
+      "cache_read_input_tokens": 32360
+    },
+    "tool_calls": {
+      "Bash": 2,
+      "Grep": 1
+    },
+    "mcp_status": "none",
+    "api_key_source": "none",
+    "tools": [
+      "Bash",
+      "Edit",
+      "Glob",
+      "Grep",
+      "Read",
+      "Write"
+    ]
+  },
+  "score": {
+    "answered": true,
+    "recall": 1.0,
+    "precision": 1.0,
+    "missing": [],
+    "extra": [],
+    "edit_applied": null,
+    "stale": [],
+    "success": true
+  },
+  "failure": null,
+  "hook": null
+}

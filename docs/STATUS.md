@@ -4,16 +4,16 @@ The current state of CCM and the next steps, for the owner and for any agent tha
 work. Keep it current: replace lines that stop being true instead of appending history (git log and
 `benchmarks/results/` are the history).
 
-Last updated: 2026-11-10. Where work stopped: **the preregistered final L3 run is complete
-(`benchmarks/results/agent/final-l3-20261110/`, commit `6d502c8`, 288 runs per agent).** On the
-preregistered tasks (Flask, Express, Serde) CCM lowers neither token use nor raises success for
-either agent. Claude Code practically never calls it (0 of 72 runs in B and C, 2 of 72 in the
-current product D) and pays only the tool-definition cost: input tokens B/A 1.24 (1.15–1.28),
-D/A 1.05 (0.91–1.06), success 100 % in every arm. Codex calls it in nearly every run and pays
-more: B/A 1.78 (1.68–2.09), C/A 2.09 (1.85–2.65), D/A 1.12 (1.06–1.30), with success A 92 %,
-B 90 %, C 82 %, D 85 % (overlapping intervals). The product pilots found the saving on caller
-questions in large repositories (Django, Tokio), which the preregistered set does not contain;
-that result rests on one to three repetitions per task and is not tested by the final run.
+Last updated: 2026-11-11. Where work stopped: **the preregistered large-repository experiment
+(amendment 15) is complete (`benchmarks/results/agent/large-repo-20261111/`, commit `01b2afa`,
+108 runs per agent).** On twelve held-out caller, trap and impact questions in Django, Tokio and
+scikit-learn, the current product (D) does not measurably change input tokens against built-ins
+(A): D/A 0.91 (0.59–1.45) for Codex with success A 28/36, D 29/36, and 0.95 (0.74–1.12) for
+Claude Code with 36/36 in both arms. The six tuned pilot tasks again show a saving (Codex 0.62,
+Claude 0.70), so the pilots' saving does not carry over to new tasks. The preregistered final run
+(`final-l3-20261110/`, `6d502c8`) found the same on Flask, Express and Serde: no saving for either
+agent, Codex B/A 1.78, C/A 2.09, D/A 1.12; Claude B/A 1.24, D/A 1.05. Claude Code calls CCM
+rarely (21 of 54 D runs in the large-repository set); Codex calls it in nearly every run.
 
 ## Goal
 
@@ -41,7 +41,7 @@ are parked. The owner's strategy notes are `docs/productization-plan.md`,
 | Freshness after an edit (L1) | first-read validation since `fb0ecd4`; a failed refresh now retries with backoff, `context` waits up to 10 s for a pending refresh | `mcp/tests/auto_refresh_test.rs` |
 | Claude Code Grep hook | opt-in `ccm-mcp hook claude-pre-tool-use` (PreToolUse); answers a single-symbol Grep with a compact answer (target, completeness check, one line per caller) only when the index is fresh, the check says the list is complete and the whole answer is shorter than a lower bound of the grep output in the requested mode; otherwise the grep runs. Offline replay of 119 recorded Claude greps: 16 answered, 35 % less text on those. Not installed by the npm launcher | `mcp/src/hook.rs`, `benchmarks/results/agent/hook-replay-20261110/` |
 | Agent interface | default discovery `context + index_project` (1,134-byte `tools/list`, 266 o200k tokens, plus 65-token server instructions); legacy tools callable, discoverable with `CCM_MCP_LEGACY_TOOLS=1` | `mcp/src/server.rs` |
-| Agent experiment (L3) | preregistered final run complete (24 tasks × A/B/C + current product D × 3 repetitions × 2 agents, commit `6d502c8`); product pilots on 2026-11-09 and 2026-11-10 | "Agent pilots" below |
+| Agent experiment (L3) | preregistered final run complete (24 tasks × A/B/C + current product D × 3 repetitions × 2 agents, commit `6d502c8`); preregistered large-repository experiment complete (18 tasks × A/D × 3 × 2 agents, commit `01b2afa`); product pilots on 2026-11-09 and 2026-11-10 | "Agent pilots" below, `large-repo-20261111/README.md` |
 
 ## What `context` returns
 
@@ -263,30 +263,35 @@ What the transcripts show:
 
 ## Next steps, in order
 
-1. **Large-repository experiment** (preregistration amendment 15, written before its run): twelve
-   held-out caller, trap and impact tasks on Django, Tokio and scikit-learn, plus six tuned
-   tasks reported apart; arms A and D, three repetitions, both agents. Its primary outcome is the
-   held-out D/A input-token ratio with a decision rule fixed in the amendment: a measured saving,
-   a measured cost, or no detectable difference, with the boundary by category and repository.
-2. **Unknown names and macro bodies: done in #21 and #22.** Tokio `async_op` went from B/A 2.28 to
+1. **Dotted Python paths.** In 10 of 36 scikit-learn D runs Codex first asked `context` for the
+   public import path (`sklearn.utils.shuffle`, `sklearn.get_config`); CCM answered "not in the
+   index" and fell back to a text search that misses alias imports, which caused both of
+   `sklearn-trap-shuffle`'s D failures. Resolve `package.module.name` through `__init__.py`
+   re-exports to the defining symbol, then measure it on new held-out tasks.
+2. **Scorer: generic owners.** `path:Arc<Handle>.schedule` is parsed as the name `Arc`, which
+   failed one correct run per agent on the tuned `tokio-callers-with-scheduler`. Fix the parser
+   and rescore with `scripts/rescore.py` under a preregistration amendment.
+3. **Large-repository experiment: done** (amendment 15, `large-repo-20261111/`): no detectable
+   difference on held-out tasks for either agent.
+4. **Unknown names and macro bodies: done in #21 and #22.** Tokio `async_op` went from B/A 2.28 to
    0.85 (Codex) and 1.02 to 0.50 (Claude); all 441 functions in Tokio's item-level macro bodies
    are now indexed.
-3. **Rust path targets and standard-library calls: done in #19.** Not yet shown to help: on the
+5. **Rust path targets and standard-library calls: done in #19.** Not yet shown to help: on the
    tuned Tokio trap Codex went from 1.36 to 1.29 and Claude B stayed above A.
-4. **Python method calls on other objects: done in #17.** Calls `x.name(` on objects that no import
+6. **Python method calls on other objects: done in #17.** Calls `x.name(` on objects that no import
    binds are listed under their own headline instead of making the check "NOT complete"; on the
    tuned `urlencode` trap Codex B/A went from 0.51 to 0.30 and Claude F from 1.10 to 0.66.
-5. **Small repositories: documented limit.** In the repeated Codex runs B costs more than A on
+7. **Small repositories: documented limit.** In the repeated Codex runs B costs more than A on
    Flask edits (1.69) and Serde trait implementors (1.77) in all three repetitions. The transcripts
    show why: A answers with one or two `rg` calls; B makes the same calls plus a CCM call (a
    natural-language query that missed on Serde, a confirmation after the edit on Flask), and each
    extra turn re-sends the whole context (about 15–20 k input tokens with cache). CCM can only save
    where its answer replaces at least one search turn, which on these repositories it rarely does.
-6. **Hook alternations: not pursued.** Of the 49 recorded greps the hook could not parse, 10 are one
+8. **Hook alternations: not pursued.** Of the 49 recorded greps the hook could not parse, 10 are one
    tuned task's `_find_error_handler|def handle_exception`; the rest are varied regexes (alias and
    import checks, receivers, look-arounds). Supporting them would fit one task, not a pattern.
-7. Release the fixes (npm launcher roots bug, refresh retry) as 0.5.1 after owner approval.
-8. The preregistered L3 final run: done (`final-l3-20261110/`).
+9. Release the fixes (npm launcher roots bug, refresh retry) as 0.5.1 after owner approval.
+10. The preregistered L3 final run: done (`final-l3-20261110/`).
 
 ## Running the L3 experiment
 
@@ -328,6 +333,12 @@ large repository's index cache before the run. Exit codes are listed in `run --h
 4–7). A measured run refuses to start with uncommitted changes under `benchmarks/agent`, and one
 out-dir accepts one harness process at a time. For the preregistered final run omit `--profile`,
 use `--tasks all --repetitions 3` and a new out-dir.
+
+Subscription limits: run long sets as `uv run python scripts/run_until_done.py <max attempts> --
+<agent run arguments>`. On a limit stop the harness writes the reset time to
+`<out-dir>/quota-stop.json`; the script waits until then and reruns the same command, which skips
+recorded runs. Before reporting, check that no transcript carries `"status":"rejected"` or HTTP
+429 (the `01b2afa` harness did not stop on them; see `large-repo-20261111/README.md`).
 
 ## Verifying changes
 

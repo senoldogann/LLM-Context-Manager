@@ -1,0 +1,55 @@
+{
+  "record_version": 3,
+  "run_id": "tokio-callers-new-unnamed__A__3",
+  "task_id": "tokio-callers-new-unnamed",
+  "repo": "tokio",
+  "category": "callers",
+  "arm": "A",
+  "rep": 3,
+  "model": "claude-opus-5-5",
+  "effort": "high",
+  "embedding": "local",
+  "index_copy_s": null,
+  "index_build_s": null,
+  "wall_s": 27.206073957961053,
+  "transcript": {
+    "result_text": "I found 12 functions and methods that call `SpawnMeta::new_unnamed` directly, all in the `tokio` crate. `tokio-util`, `tokio-stream`, `tokio-test` and `tokio-macros` never call it. I searched the whole workspace for `new_unnamed` and checked which function contains each match. Apart from the definition in `tokio/src/util/trace.rs`, every match is in the list below.\n\n**`tokio/src/runtime/blocking/pool.rs`**\n- `Spawner.spawn_blocking` (lines 308, 315)\n- `Spawner.spawn_mandatory_blocking` (lines 346, 353), which only exists when the `fs` feature is enabled\n\n**`tokio/src/runtime/local_runtime/runtime.rs`**\n- `LocalRuntime.spawn_local` (line 153)\n- `LocalRuntime.block_on` (line 220)\n\n**`tokio/src/runtime/handle.rs`**\n- `Handle.spawn` (lines 195, 197)\n- `Handle.block_on` (lines 303, 305)\n\n**`tokio/src/runtime/runtime.rs`**\n- `Runtime.spawn` (lines 250, 253)\n- `Runtime.block_on` (lines 340, 342)\n\n**`tokio/src/task/spawn.rs`**\n- free function `spawn` (lines 173, 175)\n\n**`tokio/src/task/local.rs`**\n- free function `spawn_local` (lines 375, 377)\n- `LocalSet.spawn_local` (lines 571, 573)\n\nMost of these call it twice: once when the future or closure is large enough to be boxed, and once when it isn't.\n\n```json\n{\"answer\": [\"tokio/src/runtime/blocking/pool.rs:Spawner.spawn_blocking\", \"tokio/src/runtime/blocking/pool.rs:Spawner.spawn_mandatory_blocking\", \"tokio/src/runtime/local_runtime/runtime.rs:LocalRuntime.spawn_local\", \"tokio/src/runtime/local_runtime/runtime.rs:LocalRuntime.block_on\", \"tokio/src/runtime/handle.rs:Handle.spawn\", \"tokio/src/runtime/handle.rs:Handle.block_on\", \"tokio/src/runtime/runtime.rs:Runtime.spawn\", \"tokio/src/runtime/runtime.rs:Runtime.block_on\", \"tokio/src/task/spawn.rs:spawn\", \"tokio/src/task/local.rs:spawn_local\", \"tokio/src/task/local.rs:LocalSet.spawn_local\"]}\n```",
+    "subtype": "success",
+    "is_error": false,
+    "num_turns": 6,
+    "duration_ms": 26198,
+    "cost_usd": 0.1297462,
+    "usage": {
+      "input_tokens": 12,
+      "output_tokens": 2390,
+      "cache_creation_input_tokens": 8825,
+      "cache_read_input_tokens": 56491
+    },
+    "tool_calls": {
+      "Bash": 4,
+      "Grep": 1
+    },
+    "mcp_status": "none",
+    "api_key_source": "none",
+    "tools": [
+      "Bash",
+      "Edit",
+      "Glob",
+      "Grep",
+      "Read",
+      "Write"
+    ]
+  },
+  "score": {
+    "answered": true,
+    "recall": 1.0,
+    "precision": 1.0,
+    "missing": [],
+    "extra": [],
+    "edit_applied": null,
+    "stale": [],
+    "success": true
+  },
+  "failure": null,
+  "hook": null
+}

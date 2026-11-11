@@ -1,0 +1,57 @@
+{
+  "record_version": 3,
+  "run_id": "django-callers-make-hashable__D__3",
+  "task_id": "django-callers-make-hashable",
+  "repo": "django",
+  "category": "callers",
+  "arm": "D",
+  "rep": 3,
+  "model": "claude-opus-5-5",
+  "effort": "high",
+  "embedding": "local",
+  "index_copy_s": 1.0279457920696586,
+  "index_build_s": 1562.7380535420962,
+  "wall_s": 20.539884750032797,
+  "transcript": {
+    "result_text": "I found 16 functions and methods in `django/` that call `make_hashable` directly. I searched for every use of the name and matched each call to the function or method it sits in.\n\n- **`django/core/exceptions.py`:** `ValidationError.__hash__` (two calls).\n- **`django/db/models/sql/compiler.py`:** `SQLCompiler.get_group_by` and `SQLCompiler.get_order_by`.\n- **`django/db/models/base.py`:** `Model._get_FIELD_display` (two calls).\n- **`django/db/models/query_utils.py`:** `Q.identity`.\n- **`django/utils/tree.py`:** `Node.__hash__`.\n- **`django/db/models/fields/reverse_related.py`:** `ForeignObjectRel.identity` and `ManyToManyRel.identity`.\n- **`django/db/models/lookups.py`:** `Lookup.__hash__`.\n- **`django/db/models/expressions.py`:** `Expression.identity`.\n- **`django/forms/models.py`:** `BaseModelFormSet.validate_unique`. The call is inside a generator expression in that method.\n- **`django/contrib/admin/utils.py`:** the module-level function `display_for_field` (two calls).\n- **`django/utils/hashable.py`:** `make_hashable` calls itself recursively. I've included it because that is a direct call, but drop it if you only want other callers.\n\n```json\n{\"answer\": [\"django/core/exceptions.py:ValidationError.__hash__\", \"django/db/models/sql/compiler.py:SQLCompiler.get_group_by\", \"django/db/models/sql/compiler.py:SQLCompiler.get_order_by\", \"django/db/models/base.py:Model._get_FIELD_display\", \"django/db/models/query_utils.py:Q.identity\", \"django/utils/tree.py:Node.__hash__\", \"django/db/models/fields/reverse_related.py:ForeignObjectRel.identity\", \"django/db/models/fields/reverse_related.py:ManyToManyRel.identity\", \"django/db/models/lookups.py:Lookup.__hash__\", \"django/db/models/expressions.py:Expression.identity\", \"django/forms/models.py:BaseModelFormSet.validate_unique\", \"django/contrib/admin/utils.py:display_for_field\", \"django/utils/hashable.py:make_hashable\"]}\n```",
+    "subtype": "success",
+    "is_error": false,
+    "num_turns": 5,
+    "duration_ms": 18352,
+    "cost_usd": 0.11059740000000001,
+    "usage": {
+      "input_tokens": 10,
+      "output_tokens": 1763,
+      "cache_creation_input_tokens": 8276,
+      "cache_read_input_tokens": 45447
+    },
+    "tool_calls": {
+      "Bash": 3,
+      "Grep": 1
+    },
+    "mcp_status": "connected",
+    "api_key_source": "none",
+    "tools": [
+      "Bash",
+      "Edit",
+      "Glob",
+      "Grep",
+      "Read",
+      "Write",
+      "mcp__context-manager__context",
+      "mcp__context-manager__index_project"
+    ]
+  },
+  "score": {
+    "answered": true,
+    "recall": 1.0,
+    "precision": 1.0,
+    "missing": [],
+    "extra": [],
+    "edit_applied": null,
+    "stale": [],
+    "success": true
+  },
+  "failure": null,
+  "hook": null
+}

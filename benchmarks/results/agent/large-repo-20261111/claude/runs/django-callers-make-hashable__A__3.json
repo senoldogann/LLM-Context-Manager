@@ -1,0 +1,55 @@
+{
+  "record_version": 3,
+  "run_id": "django-callers-make-hashable__A__3",
+  "task_id": "django-callers-make-hashable",
+  "repo": "django",
+  "category": "callers",
+  "arm": "A",
+  "rep": 3,
+  "model": "claude-opus-5-5",
+  "effort": "high",
+  "embedding": "local",
+  "index_copy_s": null,
+  "index_build_s": null,
+  "wall_s": 23.449881749926135,
+  "transcript": {
+    "result_text": "I searched `django/` for `make_hashable` and used a Python AST pass to find the function or method that contains each call. Fifteen functions call it directly, in 10 files:\n\n- `django/core/exceptions.py`: `ValidationError.__hash__` (lines 232 and 236)\n- `django/utils/tree.py`: `Node.__hash__` (line 85)\n- `django/forms/models.py`: `BaseModelFormSet.validate_unique` (line 840)\n- `django/db/models/sql/compiler.py`: `SQLCompiler.get_group_by` (line 191) and `SQLCompiler.get_order_by` (line 513)\n- `django/db/models/base.py`: `Model._get_FIELD_display` (lines 1286 and 1289)\n- `django/db/models/query_utils.py`: `Q.identity` (line 164)\n- `django/db/models/fields/reverse_related.py`: `ForeignObjectRel.identity` (line 148) and `ManyToManyRel.identity` (line 398)\n- `django/db/models/lookups.py`: `Lookup.__hash__` (line 167)\n- `django/db/models/expressions.py`: `Expression.identity` (line 528)\n- `django/contrib/admin/utils.py`: `display_for_field` (lines 437 and 438)\n- `django/utils/hashable.py`: `make_hashable` calls itself at line 13. At line 23 it is also passed to `map()`, which isn't a direct call.\n\nI listed `make_hashable` itself because of that recursive call at line 13; leave it out if self-calls shouldn't count.\n\n```json\n{\"answer\": [\"django/core/exceptions.py:ValidationError.__hash__\", \"django/utils/tree.py:Node.__hash__\", \"django/forms/models.py:BaseModelFormSet.validate_unique\", \"django/db/models/sql/compiler.py:SQLCompiler.get_group_by\", \"django/db/models/sql/compiler.py:SQLCompiler.get_order_by\", \"django/db/models/base.py:Model._get_FIELD_display\", \"django/db/models/query_utils.py:Q.identity\", \"django/db/models/fields/reverse_related.py:ForeignObjectRel.identity\", \"django/db/models/fields/reverse_related.py:ManyToManyRel.identity\", \"django/db/models/lookups.py:Lookup.__hash__\", \"django/db/models/expressions.py:Expression.identity\", \"django/contrib/admin/utils.py:display_for_field\", \"django/utils/hashable.py:make_hashable\"]}\n```",
+    "subtype": "success",
+    "is_error": false,
+    "num_turns": 3,
+    "duration_ms": 21285,
+    "cost_usd": 0.0697812,
+    "usage": {
+      "input_tokens": 6,
+      "output_tokens": 1536,
+      "cache_creation_input_tokens": 4359,
+      "cache_read_input_tokens": 20826
+    },
+    "tool_calls": {
+      "Bash": 1,
+      "Grep": 1
+    },
+    "mcp_status": "none",
+    "api_key_source": "none",
+    "tools": [
+      "Bash",
+      "Edit",
+      "Glob",
+      "Grep",
+      "Read",
+      "Write"
+    ]
+  },
+  "score": {
+    "answered": true,
+    "recall": 1.0,
+    "precision": 1.0,
+    "missing": [],
+    "extra": [],
+    "edit_applied": null,
+    "stale": [],
+    "success": true
+  },
+  "failure": null,
+  "hook": null
+}

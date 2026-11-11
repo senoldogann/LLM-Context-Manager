@@ -1,0 +1,55 @@
+{
+  "record_version": 3,
+  "run_id": "tokio-callers-new-unnamed__A__2",
+  "task_id": "tokio-callers-new-unnamed",
+  "repo": "tokio",
+  "category": "callers",
+  "arm": "A",
+  "rep": 2,
+  "model": "claude-opus-5-5",
+  "effort": "high",
+  "embedding": "local",
+  "index_copy_s": null,
+  "index_build_s": null,
+  "wall_s": 18.57497241604142,
+  "transcript": {
+    "result_text": "Eleven functions and methods call `SpawnMeta::new_unnamed` directly, all in the `tokio` crate. I found them by searching the whole workspace and checking which function and `impl` block encloses each call. None of the other crates (`tokio-util`, `tokio-stream`, `tokio-test`, `tokio-macros`) call it.\n\n**Free functions:**\n- `tokio/src/task/spawn.rs`: `spawn`\n- `tokio/src/task/local.rs`: `spawn_local`\n\n**Methods:**\n- `tokio/src/task/local.rs`: `LocalSet.spawn_local`\n- `tokio/src/runtime/handle.rs`: `Handle.spawn`, `Handle.block_on`\n- `tokio/src/runtime/runtime.rs`: `Runtime.spawn`, `Runtime.block_on`\n- `tokio/src/runtime/local_runtime/runtime.rs`: `LocalRuntime.spawn_local`, `LocalRuntime.block_on`\n- `tokio/src/runtime/blocking/pool.rs`: `Spawner.spawn_blocking`, `Spawner.spawn_mandatory_blocking`\n\n```json\n{\"answer\": [\"tokio/src/task/spawn.rs:spawn\", \"tokio/src/task/local.rs:spawn_local\", \"tokio/src/task/local.rs:LocalSet.spawn_local\", \"tokio/src/runtime/handle.rs:Handle.spawn\", \"tokio/src/runtime/handle.rs:Handle.block_on\", \"tokio/src/runtime/local_runtime/runtime.rs:LocalRuntime.spawn_local\", \"tokio/src/runtime/local_runtime/runtime.rs:LocalRuntime.block_on\", \"tokio/src/runtime/blocking/pool.rs:Spawner.spawn_blocking\", \"tokio/src/runtime/blocking/pool.rs:Spawner.spawn_mandatory_blocking\", \"tokio/src/runtime/runtime.rs:Runtime.spawn\", \"tokio/src/runtime/runtime.rs:Runtime.block_on\"]}\n```",
+    "subtype": "success",
+    "is_error": false,
+    "num_turns": 4,
+    "duration_ms": 18012,
+    "cost_usd": 0.0890614,
+    "usage": {
+      "input_tokens": 8,
+      "output_tokens": 1790,
+      "cache_creation_input_tokens": 5869,
+      "cache_read_input_tokens": 31387
+    },
+    "tool_calls": {
+      "Bash": 2,
+      "Grep": 1
+    },
+    "mcp_status": "none",
+    "api_key_source": "none",
+    "tools": [
+      "Bash",
+      "Edit",
+      "Glob",
+      "Grep",
+      "Read",
+      "Write"
+    ]
+  },
+  "score": {
+    "answered": true,
+    "recall": 1.0,
+    "precision": 1.0,
+    "missing": [],
+    "extra": [],
+    "edit_applied": null,
+    "stale": [],
+    "success": true
+  },
+  "failure": null,
+  "hook": null
+}

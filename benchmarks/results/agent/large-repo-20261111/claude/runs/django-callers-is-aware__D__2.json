@@ -1,0 +1,57 @@
+{
+  "record_version": 3,
+  "run_id": "django-callers-is-aware__D__2",
+  "task_id": "django-callers-is-aware",
+  "repo": "django",
+  "category": "callers",
+  "arm": "D",
+  "rep": 2,
+  "model": "claude-opus-5-5",
+  "effort": "high",
+  "embedding": "local",
+  "index_copy_s": 0.6156037501059473,
+  "index_build_s": 1562.7380535420962,
+  "wall_s": 21.4144269998651,
+  "transcript": {
+    "result_text": "18 functions and methods in `django/` (excluding tests) call `is_aware` directly. I found them with a code-index lookup and checked the list against a plain text search of `django/`. Both found the same 19 call sites.\n\nTwo of these needed a closer look:\n- **`condition`:** the call is inside the nested function `condition.decorator._pre_process_request` (`django/views/decorators/http.py:112`), so it's listed under the outermost named function, `condition`.\n- **`DateField.to_python`:** the method at `django/db/models/fields/__init__.py:1473` belongs to `DateField`, not `DateTimeField`.\n\nThe definition of `is_aware` and its listing in `__all__` (`django/utils/timezone.py`) aren't calls, so they're left out. Calls that never name the function, such as via `getattr`, wouldn't be found by either search.\n\n```json\n{\"answer\": [\"django/contrib/admin/filters.py:DateFieldListFilter.__init__\", \"django/contrib/admin/templatetags/admin_list.py:date_hierarchy\", \"django/contrib/humanize/templatetags/humanize.py:NaturalTimeFormatter.string_for\", \"django/core/serializers/json.py:DjangoJSONEncoder.default\", \"django/db/backends/base/operations.py:BaseDatabaseOperations.adapt_timefield_value\", \"django/db/backends/mysql/operations.py:DatabaseOperations.adapt_datetimefield_value\", \"django/db/backends/mysql/operations.py:DatabaseOperations.adapt_timefield_value\", \"django/db/backends/oracle/operations.py:DatabaseOperations.adapt_datetimefield_value\", \"django/db/backends/oracle/operations.py:DatabaseOperations.adapt_timefield_value\", \"django/db/backends/sqlite3/operations.py:DatabaseOperations.adapt_datetimefield_value\", \"django/db/backends/sqlite3/operations.py:DatabaseOperations.adapt_timefield_value\", \"django/db/backends/sqlite3/operations.py:DatabaseOperations.convert_datetimefield_value\", \"django/db/models/fields/__init__.py:_to_naive\", \"django/db/models/fields/__init__.py:DateField.to_python\", \"django/forms/utils.py:to_current_timezone\", \"django/utils/timesince.py:timesince\", \"django/utils/timezone.py:make_aware\", \"django/views/decorators/http.py:condition\"]}\n```",
+    "subtype": "success",
+    "is_error": false,
+    "num_turns": 5,
+    "duration_ms": 20245,
+    "cost_usd": 0.0956354,
+    "usage": {
+      "input_tokens": 8,
+      "output_tokens": 1707,
+      "cache_creation_input_tokens": 6792,
+      "cache_read_input_tokens": 35637
+    },
+    "tool_calls": {
+      "Grep": 3,
+      "mcp__context-manager__context": 1
+    },
+    "mcp_status": "connected",
+    "api_key_source": "none",
+    "tools": [
+      "Bash",
+      "Edit",
+      "Glob",
+      "Grep",
+      "Read",
+      "Write",
+      "mcp__context-manager__context",
+      "mcp__context-manager__index_project"
+    ]
+  },
+  "score": {
+    "answered": true,
+    "recall": 1.0,
+    "precision": 1.0,
+    "missing": [],
+    "extra": [],
+    "edit_applied": null,
+    "stale": [],
+    "success": true
+  },
+  "failure": null,
+  "hook": null
+}

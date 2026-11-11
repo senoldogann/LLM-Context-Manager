@@ -1,0 +1,55 @@
+{
+  "record_version": 3,
+  "run_id": "tokio-callers-unbounded-channel__A__2",
+  "task_id": "tokio-callers-unbounded-channel",
+  "repo": "tokio",
+  "category": "callers",
+  "arm": "A",
+  "rep": 2,
+  "model": "claude-opus-5-5",
+  "effort": "high",
+  "embedding": "local",
+  "index_copy_s": null,
+  "index_build_s": null,
+  "wall_s": 11.049192790873349,
+  "transcript": {
+    "result_text": "I searched the library crates for `unbounded_channel`, leaving out `tests/`, `benches/` and `examples/` directories. Only two functions call it directly in real code:\n\n1. `tokio-test/src/io.rs:188`: `Inner::new` calls `mpsc::unbounded_channel()`.\n2. `tokio-util/src/task/spawn_pinned.rs:372`: `LocalWorkerHandle::new_worker` calls `unbounded_channel()`, which is imported from `tokio::sync::mpsc`.\n\nThe other matches don't count as calls:\n- `tokio/src/sync/mpsc/unbounded.rs` holds the function's own definition, plus calls that only appear inside doc-comment examples.\n- `tokio/src/sync/mpsc/mod.rs` only re-exports it.\n- `tokio/src/task/mod.rs` and `tokio/src/task/local.rs` only use it in doc-comment examples.\n- `tokio-stream` and `tokio-macros` don't mention it at all.\n\n```json\n{\"answer\": [\"tokio-test/src/io.rs:Inner.new\", \"tokio-util/src/task/spawn_pinned.rs:LocalWorkerHandle.new_worker\"]}\n```",
+    "subtype": "success",
+    "is_error": false,
+    "num_turns": 3,
+    "duration_ms": 10186,
+    "cost_usd": 0.06152239999999999,
+    "usage": {
+      "input_tokens": 6,
+      "output_tokens": 883,
+      "cache_creation_input_tokens": 4945,
+      "cache_read_input_tokens": 21392
+    },
+    "tool_calls": {
+      "Bash": 1,
+      "Grep": 1
+    },
+    "mcp_status": "none",
+    "api_key_source": "none",
+    "tools": [
+      "Bash",
+      "Edit",
+      "Glob",
+      "Grep",
+      "Read",
+      "Write"
+    ]
+  },
+  "score": {
+    "answered": true,
+    "recall": 1.0,
+    "precision": 1.0,
+    "missing": [],
+    "extra": [],
+    "edit_applied": null,
+    "stale": [],
+    "success": true
+  },
+  "failure": null,
+  "hook": null
+}

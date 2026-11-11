@@ -1,0 +1,55 @@
+{
+  "record_version": 3,
+  "run_id": "tokio-callers-with-scheduler__A__3",
+  "task_id": "tokio-callers-with-scheduler",
+  "repo": "tokio",
+  "category": "callers",
+  "arm": "A",
+  "rep": 3,
+  "model": "claude-opus-5-5",
+  "effort": "high",
+  "embedding": "local",
+  "index_copy_s": null,
+  "index_build_s": null,
+  "wall_s": 21.192485166015103,
+  "transcript": {
+    "result_text": "I searched the workspace for `with_scheduler` and checked which function each call sits in. Nine functions call it directly:\n\n- `tokio/src/runtime/context.rs:168`: `defer`, the free function in the same file as `with_scheduler`.\n- `tokio/src/runtime/time/entry.rs:662`: `generate_shard_id`.\n- `tokio/src/runtime/task/trace/mod.rs:194`: `trace_leaf`.\n- `tokio/src/runtime/scheduler/multi_thread/worker.rs:1255`: `with_current`, a free function.\n- `tokio/src/runtime/scheduler/multi_thread_alt/worker.rs:1600`: `with_current`, a free function.\n- `tokio/src/runtime/scheduler/current_thread/mod.rs:510`: `Handle.dump`.\n- `tokio/src/runtime/scheduler/current_thread/mod.rs:632`: `schedule`, in `impl Schedule for Arc<Handle>`.\n- `tokio/src/runtime/scheduler/current_thread/mod.rs:674`: `unhandled_panic`, in the same impl.\n\n```json\n{\"answer\": [\"tokio/src/runtime/context.rs:defer\", \"tokio/src/runtime/time/entry.rs:generate_shard_id\", \"tokio/src/runtime/task/trace/mod.rs:trace_leaf\", \"tokio/src/runtime/scheduler/multi_thread/worker.rs:with_current\", \"tokio/src/runtime/scheduler/multi_thread_alt/worker.rs:with_current\", \"tokio/src/runtime/scheduler/current_thread/mod.rs:Handle.dump\", \"tokio/src/runtime/scheduler/current_thread/mod.rs:schedule\", \"tokio/src/runtime/scheduler/current_thread/mod.rs:unhandled_panic\"]}\n```",
+    "subtype": "success",
+    "is_error": false,
+    "num_turns": 5,
+    "duration_ms": 20219,
+    "cost_usd": 0.0903124,
+    "usage": {
+      "input_tokens": 10,
+      "output_tokens": 1413,
+      "cache_creation_input_tokens": 6701,
+      "cache_read_input_tokens": 42022
+    },
+    "tool_calls": {
+      "Bash": 1,
+      "Grep": 3
+    },
+    "mcp_status": "none",
+    "api_key_source": "none",
+    "tools": [
+      "Bash",
+      "Edit",
+      "Glob",
+      "Grep",
+      "Read",
+      "Write"
+    ]
+  },
+  "score": {
+    "answered": true,
+    "recall": 1.0,
+    "precision": 1.0,
+    "missing": [],
+    "extra": [],
+    "edit_applied": null,
+    "stale": [],
+    "success": true
+  },
+  "failure": null,
+  "hook": null
+}

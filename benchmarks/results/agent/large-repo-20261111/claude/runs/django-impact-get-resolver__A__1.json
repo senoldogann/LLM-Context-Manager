@@ -1,0 +1,54 @@
+{
+  "record_version": 3,
+  "run_id": "django-impact-get-resolver__A__1",
+  "task_id": "django-impact-get-resolver",
+  "repo": "django",
+  "category": "files",
+  "arm": "A",
+  "rep": 1,
+  "model": "claude-opus-5-5",
+  "effort": "high",
+  "embedding": "local",
+  "index_copy_s": null,
+  "index_build_s": null,
+  "wall_s": 11.52956658299081,
+  "transcript": {
+    "result_text": "Eight files under `django/` call `get_resolver`. I found them by searching for every occurrence of `get_resolver` in `django/` and keeping only actual calls; there are no test files under `django/`.\n\n- `django/conf/urls/i18n.py:31`: `get_resolver(urlconf).url_patterns`\n- `django/contrib/admindocs/views.py:146, 170`\n- `django/utils/autoreload.py:337`: imported inside a function at line 332, then called\n- `django/core/handlers/base.py:309, 311`\n- `django/core/handlers/exception.py:69, 74, 86, 103, 135, 141`\n- `django/core/checks/urls.py:15, 43, 129`: imported locally inside each check function\n- `django/urls/base.py:24, 30`: in `resolve()` and `reverse()`. This file imports it straight from `.resolvers`.\n\nThe other seven files import it through the `django.urls` re-export, but it's the same function from `django.urls.resolvers`.\n\nTwo files mention `get_resolver` but don't call it, so I left them out:\n- `django/urls/__init__.py` only imports and re-exports it.\n- `django/urls/resolvers.py:108` is where it's defined, and nothing in that file calls it.\n\n```json\n{\"answer\": [\"django/conf/urls/i18n.py\", \"django/contrib/admindocs/views.py\", \"django/utils/autoreload.py\", \"django/core/handlers/base.py\", \"django/core/handlers/exception.py\", \"django/core/checks/urls.py\", \"django/urls/base.py\"]}\n```",
+    "subtype": "success",
+    "is_error": false,
+    "num_turns": 2,
+    "duration_ms": 10691,
+    "cost_usd": 0.0480484,
+    "usage": {
+      "input_tokens": 4,
+      "output_tokens": 858,
+      "cache_creation_input_tokens": 3551,
+      "cache_read_input_tokens": 12322
+    },
+    "tool_calls": {
+      "Grep": 1
+    },
+    "mcp_status": "none",
+    "api_key_source": "none",
+    "tools": [
+      "Bash",
+      "Edit",
+      "Glob",
+      "Grep",
+      "Read",
+      "Write"
+    ]
+  },
+  "score": {
+    "answered": true,
+    "recall": 1.0,
+    "precision": 1.0,
+    "missing": [],
+    "extra": [],
+    "edit_applied": null,
+    "stale": [],
+    "success": true
+  },
+  "failure": null,
+  "hook": null
+}
