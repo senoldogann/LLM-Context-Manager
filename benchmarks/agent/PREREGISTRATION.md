@@ -263,3 +263,15 @@ the final run is complete.
     - Boundary analysis, descriptive: the same ratio by category (callers, trap, impact) and by
       repository, and per task the rule used in the pilots (D's mean below A's and every D run
       below A's mean). The owner audit is reported alongside.
+16. 2026-11-11, after the large-repository run (amendment 15), written before any rescoring:
+    **scorer correction for generic owners.** The scorer cut an answer's name at the first `<`,
+    so `tokio/src/runtime/scheduler/current_thread/mod.rs:Arc<Handle>.schedule`, a correct
+    method of `impl Schedule for Arc<Handle>`, was read as the name `Arc`. Balanced `<...>`
+    groups are now removed before the name is taken (`Arc<Handle>.schedule` → `schedule`;
+    `ContentDeserializer<'de, E>` stays `ContentDeserializer`); an unbalanced `<` keeps the old
+    cut. Recorded runs are not changed. `scripts/rescore_report.py` rescores the stored answers
+    read-only and the result is published as a separate table next to the recorded one. Every
+    published result set was checked; only two runs change, both of the tuned task
+    `tokio-callers-with-scheduler` in `large-repo-20261111/` (Claude A#2, Codex D#3, fail →
+    pass). The primary outcome of amendment 15 is input tokens and is unaffected; its success
+    condition holds before and after. Later runs are scored with the corrected scorer.

@@ -57,11 +57,29 @@ def answer_entries(text: str) -> tuple[str, ...] | None:
     return strings if len(strings) == len(entries) else None
 
 
-def symbol_name(text: str) -> str:
-    """`Flask.run()`, `Container::from_ast`, `ContentDeserializer<'de, E>` gibi
-    yazımların son adı.
+def without_generics(text: str) -> str:
+    """Dengeli `<...>` gruplarını atar: `Arc<Handle>.schedule` → `Arc.schedule`.
+
+    Kapanmayan `<` varsa metin olduğu gibi döner; ad sonra ilk `<`'de kesilir.
     """
-    head = NAME_END.split(text.replace("::", ".").strip(), maxsplit=1)[0]
+    kept: list[str] = []
+    depth = 0
+    for character in text:
+        if character == "<":
+            depth += 1
+        elif character == ">" and depth > 0:
+            depth -= 1
+        elif depth == 0:
+            kept.append(character)
+    return "".join(kept) if depth == 0 else text
+
+
+def symbol_name(text: str) -> str:
+    """`Flask.run()`, `Container::from_ast`, `ContentDeserializer<'de, E>`,
+    `Arc<Handle>.schedule` gibi yazımların son adı (amendment 16: generic argümanları
+    sahibin parçasıdır, ad değildir).
+    """
+    head = NAME_END.split(without_generics(text.replace("::", ".").strip()), maxsplit=1)[0]
     parts = [part for part in NAME_SEPARATOR.split(head) if part]
     return parts[-1] if parts else ""
 

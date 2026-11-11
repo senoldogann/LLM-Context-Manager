@@ -104,7 +104,7 @@ Definition notes, golds unchanged:
   get_config` and the `_get_config` alias. Codex read the wording as the qualified spelling
   `sklearn.get_config(` and answered `_config.py` or nothing.
 
-Scorer note, records unchanged: `tokio-callers-with-scheduler` D#3 answered
+Scorer note, records unchanged (corrected by amendment 16; rescored table in `RESCORE.md`): `tokio-callers-with-scheduler` D#3 answered
 `current_thread/mod.rs:Arc<Handle>.schedule` and `…Arc<Handle>.unhandled_panic`, which are
 correct (`impl Schedule for Arc<Handle>`). The scorer strips nothing from a generic owner and
 reads `Arc` as the function name, so it counts both as missing and `Arc` as extra. The same
