@@ -76,6 +76,11 @@ attributable to them in that combination. The run does not evaluate either chang
 nor the product without the files line. The measured commit `5eba8f0` still contains the files
 line; this README describes that measurement.
 
+Two further `context` fixes were made after the run in response to review, and they are not
+measured here:
+- the list of candidates for an ambiguous name is capped by `max_tokens`;
+- `Type::name` also matches inline modules and keeps all candidates when no owner matches.
+
 ## Failed runs
 
 | Run | What was missing |
