@@ -91,6 +91,28 @@ fn fixture_files() -> Vec<(String, String)> {
     files.iter_mut().find(|(path, _)| path == "lib/request.js").expect("request fixture").1.push_str(
         "\ndefineGetter(req, 'ip', function ip() {\n  return this.app.get('trust proxy fn');\n});\n\ndefineGetter(req, 'ips', function ips() {\n  return this.app.get('trust proxy fn');\n});\n\ndefineGetter(req, 'subdomains', function subdomains() {\n  return this.app.get('subdomain offset');\n});\n\nreq.other = function other() {\n  return 1;\n};\n"
     );
+    // scikit-learn düzeni: `sklearn.utils` paketi `shuffle`'ı `_indexing`'den yeniden
+    // dışa aktarır, `datasets` modülleri onu başka adla import eder.
+    for (path, content) in [
+        ("sklearn/__init__.py", ""),
+        ("sklearn/utils/__init__.py", "from ._indexing import shuffle\n"),
+        ("sklearn/utils/_indexing.py", "def shuffle(*arrays):\n    return arrays\n"),
+        ("sklearn/datasets/__init__.py", ""),
+        (
+            "sklearn/datasets/_samples_generator.py",
+            "from ..utils import shuffle as util_shuffle\n\n\ndef make_blobs():\n    return util_shuffle([1])\n",
+        ),
+        (
+            "sklearn/datasets/_rcv1.py",
+            "from ..utils import shuffle as shuffle_\n\n\ndef fetch_rcv1():\n    return shuffle_([2])\n",
+        ),
+        (
+            "sklearn/linear_model/_sgd.py",
+            "from ..utils import shuffle\n\n\ndef fit():\n    return shuffle([3])\n",
+        ),
+    ] {
+        files.push((path.into(), content.into()));
+    }
     // Çok baytlı gövde: bütçe karakterle ölçülmeli, bayt değil.
     files.push((
         "app/cjk.py".into(),
@@ -669,6 +691,44 @@ fn context_routes_plain_qualified_symbol_and_path_without_caller_prose() {
     assert!(text.contains("2 callers"), "{text}");
     assert!(
         text.contains("with_serialize_bound · serde_derive/src/ser.rs"),
+        "{text}"
+    );
+}
+
+#[test]
+fn context_resolves_dotted_python_paths_through_reexports() {
+    let mut server = Server::start();
+    // Tanımın kendi yolu: noktalı sorgular bununla aynı paketi vermeli.
+    let (expected, is_error) =
+        server.call("context", json!({"query": "sklearn/utils/_indexing.py:1"}));
+    assert!(!is_error, "{expected}");
+    assert!(
+        expected.contains("Function `shuffle` · sklearn/utils/_indexing.py"),
+        "{expected}"
+    );
+    for file in ["_samples_generator.py", "_rcv1.py", "_sgd.py"] {
+        assert!(expected.contains(file), "{file} missing: {expected}");
+    }
+    // Codex'in sklearn-trap-shuffle D#2 ve D#3 sorgusu ve import biçimi: önceden
+    // "`shuffle` is not in the index" ile takma adları görmeyen metin aramasına düşüyordu.
+    for query in [
+        "sklearn.utils.shuffle",
+        "from sklearn.utils import shuffle",
+        "Who calls `sklearn.utils.shuffle`?",
+    ] {
+        let (text, is_error) = server.call("context", json!({"query": query}));
+        assert!(!is_error, "{query}: {text}");
+        assert!(!text.contains("is not in the index"), "{query}: {text}");
+        assert_eq!(text, expected, "{query}");
+    }
+    let (text, is_error) = server.call(
+        "context",
+        json!({"query": "import sklearn.utils._indexing as indexing"}),
+    );
+    assert!(!is_error, "{text}");
+    assert!(
+        text.starts_with("File · sklearn/utils/_indexing.py")
+            || text.contains("\nFile · sklearn/utils/_indexing.py"),
         "{text}"
     );
 }

@@ -1296,6 +1296,121 @@ struct ScopedSymbolHint {
     /// olmadan da projede tek tanıma çözülürse hedef olabilir. Düz İngilizce
     /// sözcükler (`get`, `run`) hiçbir zaman kapsamsız hedef olmaz.
     code_like: bool,
+    /// Noktalı Python yolu (`sklearn.utils.shuffle`): tanım dosyalarında yoksa
+    /// paketlerin yeniden dışa aktarmaları üzerinden çözülür.
+    dotted: Option<String>,
+}
+
+/// Sorgudaki Python import bildirimlerinin hedefleri.
+#[derive(Debug, PartialEq, Eq)]
+struct PythonImportPaths {
+    /// `from a.b import c, d as e` → `a.b.c`, `a.b.d`.
+    symbols: Vec<String>,
+    /// `import a.b` ya da `import a.b as x` → `a.b`.
+    modules: Vec<String>,
+}
+
+/// Noktalı modül yolu mu (`a`, `a.b`); göreli yol (`.a`, `..a`) değildir.
+fn dotted_module(text: &str) -> bool {
+    !text.is_empty() && text.split('.').all(identifier_part)
+}
+
+/// Sorgudaki `from M import a, b as c` ve `import M [as x]` bildirimleri. Göreli
+/// import'lar dosya bağlamı olmadan çözülemediği için atlanır. Düz yazıdaki
+/// "import X" yanlışlıkla modül sayılmasın diye `import` biçimi ya noktalı ya da
+/// `as` ile sürer.
+fn python_import_paths(query: &str) -> PythonImportPaths {
+    let tokens = import_tokens(query);
+    let mut paths = PythonImportPaths {
+        symbols: Vec::new(),
+        modules: Vec::new(),
+    };
+    let mut index = 0;
+    while index < tokens.len() {
+        let module = tokens.get(index + 1).copied().unwrap_or("");
+        if tokens[index] == "from"
+            && dotted_module(module)
+            && tokens.get(index + 2) == Some(&"import")
+        {
+            let (names, next) = imported_names(&tokens, index + 3);
+            paths
+                .symbols
+                .extend(names.iter().map(|name| format!("{module}.{name}")));
+            index = next;
+            continue;
+        }
+        if tokens[index] == "import"
+            && dotted_module(module)
+            && (module.contains('.') || tokens.get(index + 2) == Some(&"as"))
+        {
+            paths.modules.push(module.to_string());
+            index += 2;
+            continue;
+        }
+        index += 1;
+    }
+    paths
+}
+
+/// Sorgunun import ayrıştırması için sözcükleri: `,`, `(`, `)`, `;` ve satır sonu
+/// kendi başına sözcüktür (bildirim sınırları korunur); backtick ve boşluk atılır.
+fn import_tokens(query: &str) -> Vec<&str> {
+    let mut tokens = Vec::new();
+    let mut start: Option<usize> = None;
+    for (position, character) in query.char_indices() {
+        let separator = matches!(character, ',' | '(' | ')' | ';' | '\n');
+        if separator || character.is_whitespace() || character == '`' {
+            if let Some(begin) = start.take() {
+                tokens.push(&query[begin..position]);
+            }
+            if separator {
+                tokens.push(&query[position..position + character.len_utf8()]);
+            }
+        } else if start.is_none() {
+            start = Some(position);
+        }
+    }
+    if let Some(begin) = start {
+        tokens.push(&query[begin..]);
+    }
+    tokens
+}
+
+/// `import`'tan sonraki adlar ve bildirimin bittiği sözcük: adlar virgülle ayrılır
+/// (`as` takma adı atlanır); parantez içinde satır sonu bildirimi bitirmez. Virgülsüz
+/// ilk sözcükte durulur: "from a import c shuffle callers" yalnız `c` verir.
+fn imported_names<'q>(tokens: &[&'q str], start: usize) -> (Vec<&'q str>, usize) {
+    let mut index = start;
+    let parenthesized = tokens.get(index) == Some(&"(");
+    if parenthesized {
+        index += 1;
+    }
+    let mut names = Vec::new();
+    loop {
+        while parenthesized && tokens.get(index) == Some(&"\n") {
+            index += 1;
+        }
+        let Some(name) = tokens
+            .get(index)
+            .copied()
+            .filter(|name| identifier_part(name) && !matches!(*name, "import" | "from" | "as"))
+        else {
+            break;
+        };
+        names.push(name);
+        index += 1;
+        if tokens.get(index) == Some(&"as") {
+            index += 2;
+        }
+        while parenthesized && tokens.get(index) == Some(&"\n") {
+            index += 1;
+        }
+        if tokens.get(index) != Some(&",") {
+            break;
+        }
+        index += 1;
+    }
+    (names, index)
 }
 
 /// Ad kod gibi mi yazılmış: alt çizgi ya da iç büyük harf.
@@ -1353,6 +1468,7 @@ fn scoped_symbol_hints(query: &str) -> Vec<ScopedSymbolHint> {
                 scope: None,
                 definition_files: files,
                 code_like: false,
+                dotted: Some(part.to_string()),
             });
             continue;
         }
@@ -1374,7 +1490,19 @@ fn scoped_symbol_hints(query: &str) -> Vec<ScopedSymbolHint> {
             scope: scope.clone(),
             definition_files: definition_file.iter().cloned().collect(),
             code_like: part.contains("::") || backticked.contains(part) || code_like_name(symbol),
+            dotted: None,
         });
+    }
+    for dotted in python_import_paths(query).symbols {
+        if let Some((symbol, files)) = python_module_hint(&dotted) {
+            hints.push(ScopedSymbolHint {
+                symbol,
+                scope: None,
+                definition_files: files,
+                code_like: false,
+                dotted: Some(dotted),
+            });
+        }
     }
     hints
 }
@@ -1393,7 +1521,8 @@ enum ScopedTargets {
 
 async fn scoped_symbol_targets(engine: &Arc<RetrievalEngine>, query: &str) -> ScopedTargets {
     let hints = scoped_symbol_hints(query);
-    if hints.is_empty() {
+    let imported_modules = python_import_paths(query).modules;
+    if hints.is_empty() && imported_modules.is_empty() {
         return ScopedTargets::None;
     }
     let graph = engine.graph.read().await;
@@ -1433,9 +1562,29 @@ async fn scoped_symbol_targets(engine: &Arc<RetrievalEngine>, query: &str) -> Sc
                 }
             })
             .collect();
+        // Ad modül dosyasında tanımlı değilse paketin yeniden dışa aktardığı tanım
+        // (`sklearn.utils.shuffle` → `sklearn/utils/_indexing.py`).
+        let matches = match (&hint.dotted, matches.is_empty()) {
+            (Some(dotted), true) => graph
+                .python_dotted_definitions(dotted)
+                .into_iter()
+                .filter(|idx| callables.contains(idx))
+                .collect(),
+            _ => matches,
+        };
         if let [only] = matches.as_slice() {
             if !resolved.contains(only) {
                 resolved.push(*only);
+            }
+        }
+    }
+    // `import a.b as x`: hedef modül dosyasıdır.
+    for module in &imported_modules {
+        if let [file] = graph.python_module_files(module).as_slice() {
+            if let Some(idx) = graph.find_file_node(file) {
+                if !resolved.contains(&idx) {
+                    resolved.push(idx);
+                }
             }
         }
     }
@@ -3458,6 +3607,33 @@ pub async fn diff_context(engine: &Arc<RetrievalEngine>, args: &Value) -> Result
 
 #[cfg(test)]
 mod tests {
+
+    #[test]
+    fn python_import_paths_reads_from_and_dotted_import_statements() {
+        let paths = super::python_import_paths(
+            "from sklearn.utils import shuffle, gen_batches as batches; import sklearn.base as base",
+        );
+        assert_eq!(
+            paths.symbols,
+            vec!["sklearn.utils.shuffle", "sklearn.utils.gen_batches"]
+        );
+        assert_eq!(paths.modules, vec!["sklearn.base"]);
+        // Bildirimden sonraki düz yazı import edilen ad sayılmaz; parantezli çok
+        // satırlı import ise sürer.
+        let trailing = super::python_import_paths("from a.b import c\nshuffle callers");
+        assert_eq!(trailing.symbols, vec!["a.b.c"]);
+        let spaced = super::python_import_paths("from a.b import c shuffle callers");
+        assert_eq!(spaced.symbols, vec!["a.b.c"]);
+        let multiline = super::python_import_paths("from a.b import (\n    c,\n    d as e,\n)");
+        assert_eq!(multiline.symbols, vec!["a.b.c", "a.b.d"]);
+        // Göreli import ve düz yazıdaki "import X" hedef değildir.
+        let prose =
+            super::python_import_paths("from ..utils import shuffle; files that import shuffle");
+        assert!(
+            prose.symbols.is_empty() && prose.modules.is_empty(),
+            "{prose:?}"
+        );
+    }
     #[test]
     fn body_head_keeps_short_bodies_and_counts_hidden_lines() {
         assert_eq!(super::body_head("a\nb", 3), ("a\nb".to_string(), 0));
