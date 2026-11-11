@@ -285,11 +285,16 @@ What the transcripts show:
    `context` itself rarely. Further work would have to change how Claude Code treats a tool
    answer (for example a Claude Code skill or plugin, or a hook on Bash `grep`). That needs a
    new preregistration and is not D-only.
-4. **Tokio cost for Codex.** `tokio-callers-globals` cost 2.13 times A and the trap 1.34 in
-   amendment 17. Read those transcripts before changing anything.
-5. **Codex on "which files call X".** The impact tasks cost Codex more in both sets:
-   `conditional_escape` 1.70, `check_non_negative` 1.30, and 0.88–0.99 in amendment 17. Read
-   those transcripts before changing anything.
+4. **Codex extra turns on Tokio and "which files" (amendment 19), running.** Root causes from
+   the transcripts (`codex-context-replay-20261111/`):
+   - a call-site line was repeated, with a phantom "+N more";
+   - `Type::name` was answered "not in the index";
+   - "which files" questions got only a function-level packet.
+   All three are fixed in `context`. Twelve new Django and scikit-learn tasks (seven of them
+   impact tasks), Codex only, arms A and D. If the impact subset shows no saving, STATUS
+   records that and this line stops.
+5. **Claude Code: separate arm E** (a hook on Bash `grep`/`rg`, or a skill). It needs its own
+   preregistration, a tuned replay and a held-out run, and leaves A to D unchanged.
 6. **Second held-out set (amendment 17): done** (`heldout17-20261111/`). Codex shows a saving
    of 0.72 (0.59–0.89); Claude Code shows no detectable difference, 0.94 (0.77–1.10). The
    stopping rule (both intervals containing 1.00) was not met.

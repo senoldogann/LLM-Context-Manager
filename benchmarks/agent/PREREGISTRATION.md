@@ -412,3 +412,58 @@ the final run is complete.
       - every failed run;
       - runs rejected by a usage limit;
       - the owner audit.
+19. 2026-11-11, written and committed before any run: **fourth held-out set, Codex, after
+    `context` fixes for its extra turns.** In amendments 17 and 18 Codex's D saved tokens
+    overall, but three task kinds cost more, and the transcripts show the causes
+    (`results/agent/codex-context-replay-20261111/`):
+    - a caller entry repeated a call-site line and showed a phantom "+N more" when a local
+      variable shared the target's name (`tokio-callers-globals`, 2.13);
+    - `Type::name` was answered "not in the index" when two definitions share the name (the
+      Tokio trap, 1.34);
+    - "which files call X" got a function-level packet, and Codex re-derived the files with
+      `rg` (1.30–1.70).
+    - Change (in `context`, so arm D only; A, B and C unchanged):
+      - each call-site line is listed once;
+      - `Type::name` is resolved by the enclosing type or file module, and ambiguous names get
+        the candidate list;
+      - a complete packet adds `Files with calls (N): …`.
+      - A replay of the 38 recorded Codex queries of those runs (tuned, not held out) shows 0
+        repeated lines, 0 "not in the index" and a files line equal to the gold in 15 of 15
+        impact queries.
+    - Tasks: twelve new held-out tasks with the amendment-17 procedure (seed 20261113;
+      `scripts/select_heldout.py` now takes the number of impact tasks). No CCM output for any
+      target was looked at.
+      - Django: two callers tasks (`flatten_fieldsets`, `call_command`), three impact tasks
+        (`get_user_model`, `safe_join`, `get_current_site`) and one trap (`select_template`,
+        not the engines' `select_template` methods).
+      - scikit-learn: two callers tasks (`compute_class_weight`, `as_float_array`) and four
+        impact tasks (`get_scorer_names`, `svd_flip`, `pairwise_distances`,
+        `accuracy_score`). Its trap pool was empty.
+      - Tokio: no task, because its pools are empty under the task rules (amendment 18). The
+        Rust part of the fix is supported only by the e2e test and the tuned replay.
+      - Commands and pools: `results/agent/heldout19-20261111/SELECTION.md`.
+      - The amendment-17 and amendment-18 commands are rewritten with an impact count of 1,
+        which reproduces their selections.
+    - Arms A and D, three repetitions, **Codex only** (`gpt-6-luna`, effort high, local
+      embeddings), one commit and one release build, started through
+      `scripts/run_until_done.py`. Claude Code is not run: its D route ended under amendment
+      18's stopping rule. Its next step is a separate arm with its own preregistration.
+    - Primary outcome: Codex's median task ratio D/A of input tokens (cache included) over the
+      twelve tasks, with the fixed-seed bootstrap 95 % interval, and the decision rule of
+      amendment 17 (saving, cost or no detectable difference; success at most two runs below
+      A, of 36).
+    - Secondary outcome, preregistered: the same ratio over the seven impact tasks.
+      - **Impact saving shown** if its upper bound is below 1.00.
+      - **Impact cost shown** if its lower bound is above 1.00.
+      - Otherwise: no detectable difference.
+    - Stopping rule: if the impact interval does not show a saving, STATUS records that the
+      files line did not turn "which files" questions into a saving for Codex, and that line of
+      work stops.
+    - Reported alongside:
+      - per-task ratios;
+      - whether Codex ran `rg` or `grep` after `context` in impact D runs (amendments 17 and
+        18: 7 of 12);
+      - CCM calls per run;
+      - every failed run;
+      - runs rejected by a usage limit;
+      - the owner audit.

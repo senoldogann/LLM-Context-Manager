@@ -2,7 +2,7 @@
 
 Kullanım (`benchmarks/` içinde):
     PYTHONPATH=. uv run python scripts/select_heldout.py <depo kökü> <paket> <tohum> \
-        <çağıran görevi sayısı> <dışlanan>
+        <çağıran görevi sayısı> <etki görevi sayısı> <dışlanan>
 
 Yalnız kaynak taranır (`scripts/python_callers_gold.py`'nin `ast` kuralları); hiçbir CCM paketi
 okunmaz. Adaylar üst düzey, alt çizgiyle başlamayan, en az 6 harfli fonksiyonlardır; sayım test
@@ -10,7 +10,8 @@ dışı dosyalardadır. Dışlanan adlar (virgülle) önceki görevlerin hedefle
 
 - çağıran görevi: adı pakette tek tanımlı, metin olarak 4–60 kez çağrılan (ön eleme), 6–20
   çağrı yeri, 3–6 dosya; komut satırında verilen sayıda.
-- etki görevi (hangi dosyalar çağırıyor): aynı koşul, en az 7 dosya; bir tane.
+- etki görevi (hangi dosyalar çağırıyor): aynı koşul, en az 7 dosya; komut satırında verilen
+  sayıda.
 - tuzak: seçilen tanımın 4–20 çağrı yeri ve en az 3 dosyası var ve aynı ad başka bir şeyi de
   adlandırır: (a) pakette ikinci bir üst düzey tanım (en az bir çağrı yeriyle), (b) bir sınıfın
   metodu, adın çağrılarının en az ikisi seçilen fonksiyona gitmeden, ya da (c) paket dışından
@@ -122,7 +123,9 @@ def candidate(root: Path, modules: list[ParsedModule], module: str, name: str) -
     return Candidate(module, name, len(sites), len({site.path for site in sites}))
 
 
-def select(root: Path, package: str, seed: int, callers_count: int, excluded: set[str]) -> None:
+def select(
+    root: Path, package: str, seed: int, callers_count: int, impact_count: int, excluded: set[str]
+) -> None:
     """Havuzları kurar, seçer ve yazar."""
     modules = parse_package(root, package)
     defined = top_level_functions(modules)
@@ -173,7 +176,7 @@ def select(root: Path, package: str, seed: int, callers_count: int, excluded: se
     generator = random.Random(seed)
     for label, pool, count in (
         ("callers", callers, callers_count),
-        ("impact", impact, 1),
+        ("impact", impact, impact_count),
         ("trap", traps, 1),
     ):
         picked = generator.sample(pool, count) if len(pool) >= count else []
@@ -185,9 +188,9 @@ def select(root: Path, package: str, seed: int, callers_count: int, excluded: se
 def main() -> None:
     """Komut satırı."""
     root, package, seed = Path(sys.argv[1]), sys.argv[2], int(sys.argv[3])
-    callers_count = int(sys.argv[4])
-    excluded = set(sys.argv[5].split(",")) if len(sys.argv) > 5 else set()
-    select(root, package, seed, callers_count, excluded)
+    callers_count, impact_count = int(sys.argv[4]), int(sys.argv[5])
+    excluded = set(sys.argv[6].split(",")) if len(sys.argv) > 6 else set()
+    select(root, package, seed, callers_count, impact_count, excluded)
 
 
 if __name__ == "__main__":
