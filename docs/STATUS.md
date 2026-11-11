@@ -268,9 +268,9 @@ What the transcripts show:
    index" and fell back to a text search that misses alias imports, which caused both of
    `sklearn-trap-shuffle`'s D failures. Resolve `package.module.name` through `__init__.py`
    re-exports to the defining symbol, then measure it on new held-out tasks.
-2. **Scorer: generic owners.** `path:Arc<Handle>.schedule` is parsed as the name `Arc`, which
-   failed one correct run per agent on the tuned `tokio-callers-with-scheduler`. Fix the parser
-   and rescore with `scripts/rescore.py` under a preregistration amendment.
+2. **Scorer: generic owners: done** (amendment 16). `path:Arc<Handle>.schedule` is now read as
+   `schedule`; the stored answers were rescored read-only (`large-repo-20261111/RESCORE.md`).
+   Two tuned-task runs change, both fail → pass; no other published run changes.
 3. **Large-repository experiment: done** (amendment 15, `large-repo-20261111/`): no detectable
    difference on held-out tasks for either agent.
 4. **Unknown names and macro bodies: done in #21 and #22.** Tokio `async_op` went from B/A 2.28 to
