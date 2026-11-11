@@ -1,0 +1,44 @@
+{
+  "schema_version": 1,
+  "harness_revision": "68cec6775c73487281b5ef62b282f10e6687e4f8",
+  "preregistration": "benchmarks/agent/PREREGISTRATION.md",
+  "settings": {
+    "model": "claude-opus-5-5",
+    "effort": "high",
+    "embedding": "local",
+    "auth": "subscription",
+    "profile": "preregistered",
+    "agent": "claude",
+    "max_budget_usd": 2.0,
+    "timeout_s": 1800,
+    "repetitions": 3,
+    "arms": [
+      "A",
+      "D"
+    ],
+    "tasks": [
+      "django-callers-log-response",
+      "django-callers-get-default-timezone",
+      "django-callers-get-text-list",
+      "django-impact-get-docs-version",
+      "django-trap-resolve",
+      "sklearn-callers-indexable",
+      "sklearn-callers-empirical-covariance",
+      "sklearn-callers-gen-even-slices",
+      "sklearn-impact-check-scoring",
+      "sklearn-trap-normalize",
+      "tokio-callers-uninit",
+      "tokio-callers-globals",
+      "tokio-trap-new-with-interest-and-handle"
+    ]
+  },
+  "environment": {
+    "agent_version": "2.1.319 (Claude Code)",
+    "agent_login": "environment",
+    "ccm_version": "ccm-cli 0.5.0",
+    "ccm_commit": "68cec6775c73487281b5ef62b282f10e6687e4f8",
+    "ccm_dirty": false,
+    "ccm_cli_sha256": "8630a4d2f446cb7d18670d8738c18b55f901f04724bcc56965a52ae3c511dd28",
+    "ccm_mcp_sha256": "e2918f8f71921172dfce7286bd402d01ee343ac239a1ffba95c0934d69c62f2c"
+  }
+}

@@ -1,0 +1,62 @@
+{
+  "record_version": 3,
+  "run_id": "tokio-callers-globals__D__1",
+  "task_id": "tokio-callers-globals",
+  "repo": "tokio",
+  "category": "callers",
+  "arm": "D",
+  "rep": 1,
+  "model": "claude-opus-5-5",
+  "effort": "high",
+  "embedding": "local",
+  "index_copy_s": 0.17005216679535806,
+  "index_build_s": 236.6647142090369,
+  "wall_s": 11.235269875032827,
+  "transcript": {
+    "result_text": "Six functions call `globals()` directly. Both the code index and a plain text search found the same six call sites, and none of them are in `tokio-util`, `tokio-stream`, `tokio-test` or `tokio-macros`.\n\n**Runtime signal driver (Unix)** — `tokio/src/runtime/signal/mod.rs`\n- `Driver.new` (line 67) gets the receiver's file descriptor through `globals().receiver.as_raw_fd()`.\n- `Driver.process` (line 126) calls `globals().broadcast()`.\n\n**Unix signals** — `tokio/src/signal/unix.rs`\n- `signal_enable` (line 268) does `let globals = globals();`.\n- `signal_with_handle` (line 411) calls `globals().register_listener(...)`.\n\n**Windows signals** — `tokio/src/signal/windows/sys.rs`\n- `new` (line 32), a free function, calls `globals().register_listener(...)`.\n- `handler` (line 110) does `let globals = globals();`.\n\nThree other places only use the name `globals` without calling the function, so I left them out. They are `action` in `tokio/src/signal/unix.rs` at lines 242–247, where `globals` is just a parameter name.\n\n```json\n{\"answer\": [\"tokio/src/runtime/signal/mod.rs:Driver.new\", \"tokio/src/runtime/signal/mod.rs:Driver.process\", \"tokio/src/signal/unix.rs:signal_enable\", \"tokio/src/signal/unix.rs:signal_with_handle\", \"tokio/src/signal/windows/sys.rs:new\", \"tokio/src/signal/windows/sys.rs:handler\"]}\n```",
+    "subtype": "success",
+    "is_error": false,
+    "api_error_status": null,
+    "num_turns": 4,
+    "duration_ms": 10322,
+    "cost_usd": 0.06552179999999999,
+    "usage": {
+      "input_tokens": 6,
+      "output_tokens": 929,
+      "cache_creation_input_tokens": 5288,
+      "cache_read_input_tokens": 23069
+    },
+    "tool_calls": {
+      "Grep": 1,
+      "Read": 1,
+      "mcp__context-manager__context": 1
+    },
+    "mcp_status": "connected",
+    "api_key_source": "none",
+    "tools": [
+      "Bash",
+      "Edit",
+      "Glob",
+      "Grep",
+      "Read",
+      "Write",
+      "mcp__context-manager__context",
+      "mcp__context-manager__index_project"
+    ]
+  },
+  "score": {
+    "answered": true,
+    "recall": 1.0,
+    "precision": 1.0,
+    "missing": [],
+    "extra": [],
+    "edit_applied": null,
+    "stale": [],
+    "success": true
+  },
+  "failure": null,
+  "hook": {
+    "deny": 0,
+    "pass_": 1
+  }
+}

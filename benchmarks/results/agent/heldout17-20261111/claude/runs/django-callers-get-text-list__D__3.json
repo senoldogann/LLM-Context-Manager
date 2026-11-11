@@ -1,0 +1,60 @@
+{
+  "record_version": 3,
+  "run_id": "django-callers-get-text-list__D__3",
+  "task_id": "django-callers-get-text-list",
+  "repo": "django",
+  "category": "callers",
+  "arm": "D",
+  "rep": 3,
+  "model": "claude-opus-5-5",
+  "effort": "high",
+  "embedding": "local",
+  "index_copy_s": 0.6643635421060026,
+  "index_build_s": 1140.598946291022,
+  "wall_s": 11.83334566699341,
+  "transcript": {
+    "result_text": "Six functions call `get_text_list` directly. I searched `django/` for the name. Every call comes from a plain `from django.utils.text import get_text_list`. Nothing imports it under another name or re-exports it, and nothing passes it around without calling it. Outside these six calls, the name only appears in the docstring examples in `django/utils/text.py`.\n\n- `django/contrib/admin/models.py:191`: `LogEntry.get_change_message`\n- `django/contrib/admin/options.py:2478`: the call is in `hand_clean_DELETE`, a method of the `DeleteProtectedModelForm` class defined inside `InlineModelAdmin.get_formset`, so I list the outer method.\n- `django/core/management/commands/makemessages.py:386`: `Command.handle`\n- `django/db/models/base.py:1571`: `Model.unique_error_message`\n- `django/forms/models.py:908`: `BaseModelFormSet.get_unique_error_message`\n- `django/template/base.py:570`: `Parser.invalid_block_tag`\n\n```json\n{\"answer\": [\"django/contrib/admin/models.py:LogEntry.get_change_message\", \"django/contrib/admin/options.py:InlineModelAdmin.get_formset\", \"django/core/management/commands/makemessages.py:Command.handle\", \"django/db/models/base.py:Model.unique_error_message\", \"django/forms/models.py:BaseModelFormSet.get_unique_error_message\", \"django/template/base.py:Parser.invalid_block_tag\"]}\n```",
+    "subtype": "success",
+    "is_error": false,
+    "api_error_status": null,
+    "num_turns": 3,
+    "duration_ms": 10746,
+    "cost_usd": 0.0542942,
+    "usage": {
+      "input_tokens": 6,
+      "output_tokens": 854,
+      "cache_creation_input_tokens": 4100,
+      "cache_read_input_tokens": 21951
+    },
+    "tool_calls": {
+      "Grep": 2
+    },
+    "mcp_status": "connected",
+    "api_key_source": "none",
+    "tools": [
+      "Bash",
+      "Edit",
+      "Glob",
+      "Grep",
+      "Read",
+      "Write",
+      "mcp__context-manager__context",
+      "mcp__context-manager__index_project"
+    ]
+  },
+  "score": {
+    "answered": true,
+    "recall": 1.0,
+    "precision": 1.0,
+    "missing": [],
+    "extra": [],
+    "edit_applied": null,
+    "stale": [],
+    "success": true
+  },
+  "failure": null,
+  "hook": {
+    "deny": 1,
+    "pass_": 1
+  }
+}

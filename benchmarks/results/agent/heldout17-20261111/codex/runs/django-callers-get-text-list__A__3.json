@@ -1,0 +1,48 @@
+{
+  "record_version": 3,
+  "run_id": "django-callers-get-text-list__A__3",
+  "task_id": "django-callers-get-text-list",
+  "repo": "django",
+  "category": "callers",
+  "arm": "A",
+  "rep": 3,
+  "model": "gpt-6-luna",
+  "effort": "high",
+  "embedding": "local",
+  "index_copy_s": null,
+  "index_build_s": null,
+  "wall_s": 33.7825404999312,
+  "transcript": {
+    "result_text": "I found six calling methods.\n\n```json\n{\"answer\":[\"django/template/base.py:Parser.invalid_block_tag\",\"django/core/management/commands/makemessages.py:Command.handle\",\"django/forms/models.py:BaseModelFormSet.get_unique_error_message\",\"django/db/models/base.py:Model.unique_error_message\",\"django/contrib/admin/models.py:LogEntry.get_change_message\",\"django/contrib/admin/options.py:InlineModelAdmin.get_formset\"]}\n```",
+    "subtype": "completed",
+    "is_error": false,
+    "api_error_status": null,
+    "num_turns": null,
+    "duration_ms": 33783,
+    "cost_usd": null,
+    "usage": {
+      "input_tokens": 14144,
+      "output_tokens": 1473,
+      "cache_creation_input_tokens": 0,
+      "cache_read_input_tokens": 61696
+    },
+    "tool_calls": {
+      "command_execution": 5
+    },
+    "mcp_status": "unreported",
+    "api_key_source": "chatgpt",
+    "tools": []
+  },
+  "score": {
+    "answered": true,
+    "recall": 1.0,
+    "precision": 1.0,
+    "missing": [],
+    "extra": [],
+    "edit_applied": null,
+    "stale": [],
+    "success": true
+  },
+  "failure": null,
+  "hook": null
+}

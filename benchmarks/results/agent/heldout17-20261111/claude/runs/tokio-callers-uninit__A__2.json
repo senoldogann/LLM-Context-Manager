@@ -1,0 +1,56 @@
+{
+  "record_version": 3,
+  "run_id": "tokio-callers-uninit__A__2",
+  "task_id": "tokio-callers-uninit",
+  "repo": "tokio",
+  "category": "callers",
+  "arm": "A",
+  "rep": 2,
+  "model": "claude-opus-5-5",
+  "effort": "high",
+  "embedding": "local",
+  "index_copy_s": null,
+  "index_build_s": null,
+  "wall_s": 17.734371084021404,
+  "transcript": {
+    "result_text": "I found six functions in the library crates that call `ReadBuf::uninit` directly. I searched every non-test, non-bench, non-example source file for `uninit(` and also looked for indirect forms like `Self::uninit` or an aliased `ReadBuf` import; there were none. All other matches are `MaybeUninit::uninit`, which doesn't count.\n\n- **`tokio/src/io/read_buf.rs:83`**: `ReadBuf::take`, the method on `ReadBuf` itself.\n- **`tokio/src/io/util/vec_with_initialized.rs:87`**: `VecWithInitialized::get_read_buf`.\n- **`tokio/src/io/util/read_buf.rs:55`**: the `poll` method of the `ReadBuf` future. This is a different type from `io::ReadBuf` that happens to share the name; it brings `crate::io::ReadBuf` into scope inside `poll`.\n- **`tokio/src/io/util/read_to_end.rs:86`**: the free function `poll_read_to_end`.\n- **`tokio-util/src/udp/frame.rs:87`**: `UdpFramed::poll_next`, its `Stream` implementation.\n- **`tokio-util/src/util/poll_buf.rs:63`**: the free function `poll_read_buf`.\n\n```json\n{\"answer\": [\"tokio/src/io/read_buf.rs:ReadBuf.take\", \"tokio/src/io/util/vec_with_initialized.rs:VecWithInitialized.get_read_buf\", \"tokio/src/io/util/read_buf.rs:ReadBuf.poll\", \"tokio/src/io/util/read_to_end.rs:poll_read_to_end\", \"tokio-util/src/udp/frame.rs:UdpFramed.poll_next\", \"tokio-util/src/util/poll_buf.rs:poll_read_buf\"]}\n```",
+    "subtype": "success",
+    "is_error": false,
+    "api_error_status": null,
+    "num_turns": 5,
+    "duration_ms": 16996,
+    "cost_usd": 0.09843940000000001,
+    "usage": {
+      "input_tokens": 8,
+      "output_tokens": 1541,
+      "cache_creation_input_tokens": 7614,
+      "cache_read_input_tokens": 33377
+    },
+    "tool_calls": {
+      "Bash": 2,
+      "Grep": 2
+    },
+    "mcp_status": "none",
+    "api_key_source": "none",
+    "tools": [
+      "Bash",
+      "Edit",
+      "Glob",
+      "Grep",
+      "Read",
+      "Write"
+    ]
+  },
+  "score": {
+    "answered": true,
+    "recall": 1.0,
+    "precision": 1.0,
+    "missing": [],
+    "extra": [],
+    "edit_applied": null,
+    "stale": [],
+    "success": true
+  },
+  "failure": null,
+  "hook": null
+}

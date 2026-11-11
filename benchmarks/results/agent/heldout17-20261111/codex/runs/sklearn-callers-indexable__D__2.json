@@ -1,0 +1,48 @@
+{
+  "record_version": 3,
+  "run_id": "sklearn-callers-indexable__D__2",
+  "task_id": "sklearn-callers-indexable",
+  "repo": "scikit-learn",
+  "category": "callers",
+  "arm": "D",
+  "rep": 2,
+  "model": "gpt-6-luna",
+  "effort": "high",
+  "embedding": "local",
+  "index_copy_s": 0.19860308291390538,
+  "index_build_s": 578.0081130419858,
+  "wall_s": 22.61716333287768,
+  "transcript": {
+    "result_text": "```json\n{\"answer\":[\"sklearn/calibration.py:CalibratedClassifierCV.fit\",\"sklearn/calibration.py:_SigmoidCalibration.fit\",\"sklearn/model_selection/_classification_threshold.py:BaseThresholdClassifier.fit\",\"sklearn/model_selection/_search.py:BaseSearchCV.fit\",\"sklearn/model_selection/_split.py:BaseCrossValidator.split\",\"sklearn/model_selection/_split.py:_BaseKFold.split\",\"sklearn/model_selection/_split.py:TimeSeriesSplit._split\",\"sklearn/model_selection/_split.py:BaseShuffleSplit.split\",\"sklearn/model_selection/_split.py:train_test_split\",\"sklearn/model_selection/_validation.py:cross_validate\",\"sklearn/model_selection/_validation.py:cross_val_predict\",\"sklearn/model_selection/_validation.py:permutation_test_score\",\"sklearn/model_selection/_validation.py:learning_curve\",\"sklearn/model_selection/_validation.py:validation_curve\"]}\n```",
+    "subtype": "completed",
+    "is_error": false,
+    "api_error_status": null,
+    "num_turns": null,
+    "duration_ms": 22617,
+    "cost_usd": null,
+    "usage": {
+      "input_tokens": 28365,
+      "output_tokens": 845,
+      "cache_creation_input_tokens": 0,
+      "cache_read_input_tokens": 18560
+    },
+    "tool_calls": {
+      "mcp__context-manager__context": 2
+    },
+    "mcp_status": "unreported",
+    "api_key_source": "chatgpt",
+    "tools": []
+  },
+  "score": {
+    "answered": true,
+    "recall": 1.0,
+    "precision": 1.0,
+    "missing": [],
+    "extra": [],
+    "edit_applied": null,
+    "stale": [],
+    "success": true
+  },
+  "failure": null,
+  "hook": null
+}

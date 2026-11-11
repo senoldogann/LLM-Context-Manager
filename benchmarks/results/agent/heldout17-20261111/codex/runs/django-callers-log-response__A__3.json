@@ -1,0 +1,48 @@
+{
+  "record_version": 3,
+  "run_id": "django-callers-log-response__A__3",
+  "task_id": "django-callers-log-response",
+  "repo": "django",
+  "category": "callers",
+  "arm": "A",
+  "rep": 3,
+  "model": "gpt-6-luna",
+  "effort": "high",
+  "embedding": "local",
+  "index_copy_s": null,
+  "index_build_s": null,
+  "wall_s": 28.51287216693163,
+  "transcript": {
+    "result_text": "There are five calling functions or methods. The `sync_to_async(log_response)(...)` expression passes `log_response` as a value, so it does not count as a direct call.\n\n```json\n{\"answer\":[\"django/core/handlers/base.py:BaseHandler.get_response\",\"django/core/handlers/exception.py:response_for_exception\",\"django/middleware/csrf.py:CsrfViewMiddleware._reject\",\"django/views/decorators/http.py:require_http_methods\",\"django/utils/cache.py:_precondition_failed\"]}\n```",
+    "subtype": "completed",
+    "is_error": false,
+    "api_error_status": null,
+    "num_turns": null,
+    "duration_ms": 28513,
+    "cost_usd": null,
+    "usage": {
+      "input_tokens": 20578,
+      "output_tokens": 1099,
+      "cache_creation_input_tokens": 0,
+      "cache_read_input_tokens": 40832
+    },
+    "tool_calls": {
+      "command_execution": 4
+    },
+    "mcp_status": "unreported",
+    "api_key_source": "chatgpt",
+    "tools": []
+  },
+  "score": {
+    "answered": true,
+    "recall": 1.0,
+    "precision": 1.0,
+    "missing": [],
+    "extra": [],
+    "edit_applied": null,
+    "stale": [],
+    "success": true
+  },
+  "failure": null,
+  "hook": null
+}

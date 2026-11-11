@@ -1,0 +1,56 @@
+{
+  "record_version": 3,
+  "run_id": "sklearn-callers-empirical-covariance__A__3",
+  "task_id": "sklearn-callers-empirical-covariance",
+  "repo": "scikit-learn",
+  "category": "callers",
+  "arm": "A",
+  "rep": 3,
+  "model": "claude-opus-5-5",
+  "effort": "high",
+  "embedding": "local",
+  "index_copy_s": null,
+  "index_build_s": null,
+  "wall_s": 14.844934874912724,
+  "transcript": {
+    "result_text": "I found 10 functions and methods that call `empirical_covariance` directly. I searched every non-test file under `sklearn/` for the name and checked which function or method contains each call. Matches inside docstring examples are not counted as calls.\n\n| File | Caller |\n|---|---|\n| `sklearn/discriminant_analysis.py` | `_cov` (calls it twice, imported via the `sklearn.covariance` re-export) |\n| `sklearn/covariance/_shrunk_covariance.py` | `_ledoit_wolf`, `_oas`, `ShrunkCovariance.fit` |\n| `sklearn/covariance/_empirical_covariance.py` | `EmpiricalCovariance.fit`, `EmpiricalCovariance.score` |\n| `sklearn/covariance/_graph_lasso.py` | `graphical_lasso_path` (a module-level function, called twice), `GraphicalLasso.fit`, `GraphicalLassoCV.fit` |\n\n**Excluded:** in `sklearn/covariance/_robust_covariance.py` the function only appears as a value. It is the default for `cov_computation_method` in several functions, and line 710 stores it as `_nonrobust_covariance = staticmethod(empirical_covariance)`. Later calls through those parameter or attribute names don't count under your rules.\n\n```json\n{\"answer\": [\"sklearn/discriminant_analysis.py:_cov\", \"sklearn/covariance/_shrunk_covariance.py:_ledoit_wolf\", \"sklearn/covariance/_shrunk_covariance.py:_oas\", \"sklearn/covariance/_shrunk_covariance.py:ShrunkCovariance.fit\", \"sklearn/covariance/_empirical_covariance.py:EmpiricalCovariance.fit\", \"sklearn/covariance/_empirical_covariance.py:EmpiricalCovariance.score\", \"sklearn/covariance/_graph_lasso.py:GraphicalLasso.fit\", \"sklearn/covariance/_graph_lasso.py:graphical_lasso_path\", \"sklearn/covariance/_graph_lasso.py:GraphicalLassoCV.fit\"]}\n```",
+    "subtype": "success",
+    "is_error": false,
+    "api_error_status": null,
+    "num_turns": 3,
+    "duration_ms": 14026,
+    "cost_usd": 0.0766324,
+    "usage": {
+      "input_tokens": 6,
+      "output_tokens": 1386,
+      "cache_creation_input_tokens": 5567,
+      "cache_read_input_tokens": 21762
+    },
+    "tool_calls": {
+      "Bash": 1,
+      "Grep": 1
+    },
+    "mcp_status": "none",
+    "api_key_source": "none",
+    "tools": [
+      "Bash",
+      "Edit",
+      "Glob",
+      "Grep",
+      "Read",
+      "Write"
+    ]
+  },
+  "score": {
+    "answered": true,
+    "recall": 1.0,
+    "precision": 1.0,
+    "missing": [],
+    "extra": [],
+    "edit_applied": null,
+    "stale": [],
+    "success": true
+  },
+  "failure": null,
+  "hook": null
+}

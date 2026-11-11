@@ -1,0 +1,56 @@
+{
+  "record_version": 3,
+  "run_id": "tokio-callers-uninit__A__1",
+  "task_id": "tokio-callers-uninit",
+  "repo": "tokio",
+  "category": "callers",
+  "arm": "A",
+  "rep": 1,
+  "model": "claude-opus-5-5",
+  "effort": "high",
+  "embedding": "local",
+  "index_copy_s": null,
+  "index_build_s": null,
+  "wall_s": 19.033225999912247,
+  "transcript": {
+    "result_text": "Six functions in the library crates call `ReadBuf::uninit` directly. I found them by searching the five crates for `uninit(` calls, leaving out tests, benches and examples and ignoring the `MaybeUninit::uninit()` matches. Then I read each call site to find the function around it.\n\n| File | Line | Enclosing function | Notes |\n|---|---|---|---|\n| `tokio/src/io/read_buf.rs` | 83 | `ReadBuf::take` | Calls its own constructor as `ReadBuf::uninit(&mut self.unfilled_mut()[..max])` |\n| `tokio/src/io/util/read_buf.rs` | 55 | `poll` | In `impl Future for ReadBuf<'_, R, B>`. This is the `ReadBuf` future type in `io::util`, not `io::ReadBuf`; it brings `io::ReadBuf` in with a local `use`. |\n| `tokio/src/io/util/read_to_end.rs` | 86 | `poll_read_to_end` | Free function; wraps a 32-byte stack buffer for the small-read path |\n| `tokio/src/io/util/vec_with_initialized.rs` | 87 | `VecWithInitialized::get_read_buf` | |\n| `tokio-util/src/util/poll_buf.rs` | 63 | `poll_read_buf` | Free function |\n| `tokio-util/src/udp/frame.rs` | 87 | `UdpFramed::poll_next` | In `impl Stream for UdpFramed` |\n\nThe only other match is the definition itself at `tokio/src/io/read_buf.rs:46`. None of these calls are platform-specific, and `tokio-stream`, `tokio-test` and `tokio-macros` contain no calls.\n\n```json\n{\"answer\": [\"tokio/src/io/read_buf.rs:ReadBuf.take\", \"tokio/src/io/util/read_buf.rs:ReadBuf.poll\", \"tokio/src/io/util/read_to_end.rs:poll_read_to_end\", \"tokio/src/io/util/vec_with_initialized.rs:VecWithInitialized.get_read_buf\", \"tokio-util/src/util/poll_buf.rs:poll_read_buf\", \"tokio-util/src/udp/frame.rs:UdpFramed.poll_next\"]}\n```",
+    "subtype": "success",
+    "is_error": false,
+    "api_error_status": null,
+    "num_turns": 4,
+    "duration_ms": 17316,
+    "cost_usd": 0.097014,
+    "usage": {
+      "input_tokens": 8,
+      "output_tokens": 1547,
+      "cache_creation_input_tokens": 7480,
+      "cache_read_input_tokens": 31010
+    },
+    "tool_calls": {
+      "Bash": 1,
+      "Grep": 2
+    },
+    "mcp_status": "none",
+    "api_key_source": "none",
+    "tools": [
+      "Bash",
+      "Edit",
+      "Glob",
+      "Grep",
+      "Read",
+      "Write"
+    ]
+  },
+  "score": {
+    "answered": true,
+    "recall": 1.0,
+    "precision": 1.0,
+    "missing": [],
+    "extra": [],
+    "edit_applied": null,
+    "stale": [],
+    "success": true
+  },
+  "failure": null,
+  "hook": null
+}

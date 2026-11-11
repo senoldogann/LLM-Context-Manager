@@ -1,0 +1,48 @@
+{
+  "record_version": 3,
+  "run_id": "django-impact-get-docs-version__A__3",
+  "task_id": "django-impact-get-docs-version",
+  "repo": "django",
+  "category": "files",
+  "arm": "A",
+  "rep": 3,
+  "model": "gpt-6-luna",
+  "effort": "high",
+  "embedding": "local",
+  "index_copy_s": null,
+  "index_build_s": null,
+  "wall_s": 14.246090333908796,
+  "transcript": {
+    "result_text": "```json\n{\"answer\":[\"django/views/debug.py\",\"django/views/csrf.py\",\"django/core/management/commands/squashmigrations.py\",\"django/core/management/commands/optimizemigration.py\",\"django/core/management/templates.py\",\"django/utils/deconstruct.py\",\"django/db/backends/mysql/validation.py\",\"django/db/migrations/state.py\",\"django/db/migrations/serializer.py\",\"django/db/migrations/questioner.py\"]}\n```",
+    "subtype": "completed",
+    "is_error": false,
+    "api_error_status": null,
+    "num_turns": null,
+    "duration_ms": 14246,
+    "cost_usd": null,
+    "usage": {
+      "input_tokens": 14451,
+      "output_tokens": 487,
+      "cache_creation_input_tokens": 0,
+      "cache_read_input_tokens": 17664
+    },
+    "tool_calls": {
+      "command_execution": 2
+    },
+    "mcp_status": "unreported",
+    "api_key_source": "chatgpt",
+    "tools": []
+  },
+  "score": {
+    "answered": true,
+    "recall": 1.0,
+    "precision": 1.0,
+    "missing": [],
+    "extra": [],
+    "edit_applied": null,
+    "stale": [],
+    "success": true
+  },
+  "failure": null,
+  "hook": null
+}

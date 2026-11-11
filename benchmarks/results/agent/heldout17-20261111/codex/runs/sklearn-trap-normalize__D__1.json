@@ -1,0 +1,49 @@
+{
+  "record_version": 3,
+  "run_id": "sklearn-trap-normalize__D__1",
+  "task_id": "sklearn-trap-normalize",
+  "repo": "scikit-learn",
+  "category": "trap",
+  "arm": "D",
+  "rep": 1,
+  "model": "gpt-6-luna",
+  "effort": "high",
+  "embedding": "local",
+  "index_copy_s": 0.339810541132465,
+  "index_build_s": 578.0081130419858,
+  "wall_s": 25.28047191700898,
+  "transcript": {
+    "result_text": "```json\n{\"answer\":[\"sklearn/datasets/_twenty_newsgroups.py:fetch_20newsgroups_vectorized\",\"sklearn/feature_extraction/text.py:HashingVectorizer.transform\",\"sklearn/feature_extraction/text.py:TfidfTransformer.transform\",\"sklearn/impute/_iterative.py:IterativeImputer._get_abs_corr_mat\",\"sklearn/metrics/pairwise.py:paired_cosine_distances\",\"sklearn/metrics/pairwise.py:cosine_similarity\",\"sklearn/preprocessing/_data.py:Normalizer.transform\"]}\n```",
+    "subtype": "completed",
+    "is_error": false,
+    "api_error_status": null,
+    "num_turns": null,
+    "duration_ms": 25280,
+    "cost_usd": null,
+    "usage": {
+      "input_tokens": 19473,
+      "output_tokens": 1013,
+      "cache_creation_input_tokens": 0,
+      "cache_read_input_tokens": 48640
+    },
+    "tool_calls": {
+      "command_execution": 2,
+      "mcp__context-manager__context": 1
+    },
+    "mcp_status": "unreported",
+    "api_key_source": "chatgpt",
+    "tools": []
+  },
+  "score": {
+    "answered": true,
+    "recall": 1.0,
+    "precision": 1.0,
+    "missing": [],
+    "extra": [],
+    "edit_applied": null,
+    "stale": [],
+    "success": true
+  },
+  "failure": null,
+  "hook": null
+}

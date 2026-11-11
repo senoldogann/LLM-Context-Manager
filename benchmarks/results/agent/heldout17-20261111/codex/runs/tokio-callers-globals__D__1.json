@@ -1,0 +1,49 @@
+{
+  "record_version": 3,
+  "run_id": "tokio-callers-globals__D__1",
+  "task_id": "tokio-callers-globals",
+  "repo": "tokio",
+  "category": "callers",
+  "arm": "D",
+  "rep": 1,
+  "model": "gpt-6-luna",
+  "effort": "high",
+  "embedding": "local",
+  "index_copy_s": 0.12103595794178545,
+  "index_build_s": 236.6647142090369,
+  "wall_s": 38.93831150000915,
+  "transcript": {
+    "result_text": "The complete call-site check found six direct callers, all in `tokio`:\n\n```json\n{\"answer\":[\"tokio/src/runtime/signal/mod.rs:Driver.new\",\"tokio/src/runtime/signal/mod.rs:Driver.process\",\"tokio/src/signal/unix.rs:signal_enable\",\"tokio/src/signal/unix.rs:signal_with_handle\",\"tokio/src/signal/windows/sys.rs:new\",\"tokio/src/signal/windows/sys.rs:handler\"]}\n```",
+    "subtype": "completed",
+    "is_error": false,
+    "api_error_status": null,
+    "num_turns": null,
+    "duration_ms": 38938,
+    "cost_usd": null,
+    "usage": {
+      "input_tokens": 13179,
+      "output_tokens": 1661,
+      "cache_creation_input_tokens": 0,
+      "cache_read_input_tokens": 73088
+    },
+    "tool_calls": {
+      "command_execution": 1,
+      "mcp__context-manager__context": 7
+    },
+    "mcp_status": "unreported",
+    "api_key_source": "chatgpt",
+    "tools": []
+  },
+  "score": {
+    "answered": true,
+    "recall": 1.0,
+    "precision": 1.0,
+    "missing": [],
+    "extra": [],
+    "edit_applied": null,
+    "stale": [],
+    "success": true
+  },
+  "failure": null,
+  "hook": null
+}

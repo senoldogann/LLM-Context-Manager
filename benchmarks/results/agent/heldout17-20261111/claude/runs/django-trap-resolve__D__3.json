@@ -1,0 +1,61 @@
+{
+  "record_version": 3,
+  "run_id": "django-trap-resolve__D__3",
+  "task_id": "django-trap-resolve",
+  "repo": "django",
+  "category": "trap",
+  "arm": "D",
+  "rep": 3,
+  "model": "claude-opus-5-5",
+  "effort": "high",
+  "embedding": "local",
+  "index_copy_s": 0.5406850841827691,
+  "index_build_s": 1140.598946291022,
+  "wall_s": 17.592087582917884,
+  "transcript": {
+    "result_text": "I found eight functions and methods in `django/` that call `django.urls.base.resolve`. To find them, I searched every whole-word `resolve` in `django/` and dropped the ones that aren't this function: `Variable`/`FilterExpression.resolve`, `Path.resolve`, the `resolve` methods on `URLResolver`/`URLPattern`, the in-memory storage node's `resolve`, and comments.\n\n| Caller | Call site | How it reaches `resolve` |\n|---|---|---|\n| `get_caller` | `django/views/debug.py:102` | `from django.urls import resolve` |\n| `is_valid_path` | `django/urls/base.py:155` | same module |\n| `translate_url` | `django/urls/base.py:169` | same module |\n| `Client.request` | `django/test/client.py:1103` | inside a `lambda`, imported from `django.urls` |\n| `AsyncClient.request` | `django/test/client.py:1460` | inside a `lambda`, imported from `django.urls` |\n| `add_preserved_filters` | `django/contrib/admin/templatetags/admin_urls.py:39` | imported from `django.urls` |\n| `AdminSite.catch_all_view` | `django/contrib/admin/sites.py:454` | imported from `django.urls` |\n| `get_resolver(urlconf).resolve(path)` | `django/urls/base.py:24` | not a caller: this is `resolve` itself, calling the resolver's method |\n\nSo the real list is the first seven rows. No module imports it under another name, and `django/urls/__init__.py` only re-exports it without calling it.\n\n```json\n{\"answer\": [\"django/views/debug.py:get_caller\", \"django/urls/base.py:is_valid_path\", \"django/urls/base.py:translate_url\", \"django/test/client.py:Client.request\", \"django/test/client.py:AsyncClient.request\", \"django/contrib/admin/templatetags/admin_urls.py:add_preserved_filters\", \"django/contrib/admin/sites.py:AdminSite.catch_all_view\"]}\n```",
+    "subtype": "success",
+    "is_error": false,
+    "api_error_status": null,
+    "num_turns": 5,
+    "duration_ms": 16642,
+    "cost_usd": 0.1278706,
+    "usage": {
+      "input_tokens": 8,
+      "output_tokens": 1486,
+      "cache_creation_input_tokens": 11184,
+      "cache_read_input_tokens": 43233
+    },
+    "tool_calls": {
+      "Bash": 2,
+      "Grep": 2
+    },
+    "mcp_status": "connected",
+    "api_key_source": "none",
+    "tools": [
+      "Bash",
+      "Edit",
+      "Glob",
+      "Grep",
+      "Read",
+      "Write",
+      "mcp__context-manager__context",
+      "mcp__context-manager__index_project"
+    ]
+  },
+  "score": {
+    "answered": true,
+    "recall": 1.0,
+    "precision": 1.0,
+    "missing": [],
+    "extra": [],
+    "edit_applied": null,
+    "stale": [],
+    "success": true
+  },
+  "failure": null,
+  "hook": {
+    "deny": 0,
+    "pass_": 2
+  }
+}

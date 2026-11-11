@@ -1,0 +1,49 @@
+{
+  "record_version": 3,
+  "run_id": "tokio-callers-globals__D__2",
+  "task_id": "tokio-callers-globals",
+  "repo": "tokio",
+  "category": "callers",
+  "arm": "D",
+  "rep": 2,
+  "model": "gpt-6-luna",
+  "effort": "high",
+  "embedding": "local",
+  "index_copy_s": 0.13313979096710682,
+  "index_build_s": 236.6647142090369,
+  "wall_s": 32.035704458132386,
+  "transcript": {
+    "result_text": "Found six direct callers across the library sources:\n\n```json\n{\"answer\":[\"tokio/src/runtime/signal/mod.rs:Driver.new\",\"tokio/src/runtime/signal/mod.rs:Driver.process\",\"tokio/src/signal/unix.rs:signal_enable\",\"tokio/src/signal/unix.rs:signal_with_handle\",\"tokio/src/signal/windows/sys.rs:new\",\"tokio/src/signal/windows/sys.rs:handler\"]}\n```",
+    "subtype": "completed",
+    "is_error": false,
+    "api_error_status": null,
+    "num_turns": null,
+    "duration_ms": 32036,
+    "cost_usd": null,
+    "usage": {
+      "input_tokens": 33288,
+      "output_tokens": 1354,
+      "cache_creation_input_tokens": 0,
+      "cache_read_input_tokens": 47488
+    },
+    "tool_calls": {
+      "command_execution": 2,
+      "mcp__context-manager__context": 5
+    },
+    "mcp_status": "unreported",
+    "api_key_source": "chatgpt",
+    "tools": []
+  },
+  "score": {
+    "answered": true,
+    "recall": 1.0,
+    "precision": 1.0,
+    "missing": [],
+    "extra": [],
+    "edit_applied": null,
+    "stale": [],
+    "success": true
+  },
+  "failure": null,
+  "hook": null
+}

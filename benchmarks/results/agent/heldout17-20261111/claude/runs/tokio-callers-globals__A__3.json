@@ -1,0 +1,56 @@
+{
+  "record_version": 3,
+  "run_id": "tokio-callers-globals__A__3",
+  "task_id": "tokio-callers-globals",
+  "repo": "tokio",
+  "category": "callers",
+  "arm": "A",
+  "rep": 3,
+  "model": "claude-opus-5-5",
+  "effort": "high",
+  "embedding": "local",
+  "index_copy_s": null,
+  "index_build_s": null,
+  "wall_s": 17.726076625054702,
+  "transcript": {
+    "result_text": "Six functions call `globals()` directly. I searched the whole repository for the name: the only call sites are in three files under `tokio/src`, and no other crate in the workspace references it.\n\n**`tokio/src/runtime/signal/mod.rs`**\n- `Driver::new` (line 67) reads `globals().receiver`.\n- `Driver::process` (line 126) calls `globals().broadcast()`.\n\n**`tokio/src/signal/unix.rs`**\n- `signal_enable` (line 268) binds `let globals = globals();`. The handler closure it registers passes that value to `action`.\n- `signal_with_handle` (line 411) calls `globals().register_listener(...)`.\n\n**`tokio/src/signal/windows/sys.rs`**\n- `new` (line 32) calls `globals().register_listener(...)`.\n- `handler` (line 110) binds `let globals = globals();`.\n\nUnix `action` is not on the list: it gets `globals` as a parameter and never calls the function. `registry.rs` itself only defines `globals()`; its test module doesn't call it.\n\n```json\n{\"answer\": [\"tokio/src/runtime/signal/mod.rs:Driver.new\", \"tokio/src/runtime/signal/mod.rs:Driver.process\", \"tokio/src/signal/unix.rs:signal_enable\", \"tokio/src/signal/unix.rs:signal_with_handle\", \"tokio/src/signal/windows/sys.rs:new\", \"tokio/src/signal/windows/sys.rs:handler\"]}\n```",
+    "subtype": "success",
+    "is_error": false,
+    "api_error_status": null,
+    "num_turns": 5,
+    "duration_ms": 16895,
+    "cost_usd": 0.0829658,
+    "usage": {
+      "input_tokens": 10,
+      "output_tokens": 1337,
+      "cache_creation_input_tokens": 6033,
+      "cache_read_input_tokens": 39609
+    },
+    "tool_calls": {
+      "Bash": 2,
+      "Grep": 2
+    },
+    "mcp_status": "none",
+    "api_key_source": "none",
+    "tools": [
+      "Bash",
+      "Edit",
+      "Glob",
+      "Grep",
+      "Read",
+      "Write"
+    ]
+  },
+  "score": {
+    "answered": true,
+    "recall": 1.0,
+    "precision": 1.0,
+    "missing": [],
+    "extra": [],
+    "edit_applied": null,
+    "stale": [],
+    "success": true
+  },
+  "failure": null,
+  "hook": null
+}

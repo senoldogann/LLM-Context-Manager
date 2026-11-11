@@ -1,0 +1,60 @@
+{
+  "record_version": 3,
+  "run_id": "sklearn-callers-indexable__D__3",
+  "task_id": "sklearn-callers-indexable",
+  "repo": "scikit-learn",
+  "category": "callers",
+  "arm": "D",
+  "rep": 3,
+  "model": "claude-opus-5-5",
+  "effort": "high",
+  "embedding": "local",
+  "index_copy_s": 0.20058958302251995,
+  "index_build_s": 578.0081130419858,
+  "wall_s": 14.971527165966108,
+  "transcript": {
+    "result_text": "I found 14 functions and methods that call `indexable` directly. I first got this list from the code index, then checked it with a raw search of every non-test file under `sklearn/`. Each call is a plain `indexable(...)` call, imported either from `sklearn.utils.validation` or through its re-export in `sklearn/utils/__init__.py`. The search turned up no aliased imports and no calls through module attributes. The other matches were docstrings, comments, the helper `_make_indexable`, or the re-export lines themselves.\n\n| File | Caller | Line |\n|---|---|---|\n| `sklearn/calibration.py` | `CalibratedClassifierCV.fit` | 324 |\n| `sklearn/calibration.py` | `_SigmoidCalibration.fit` | 905 |\n| `sklearn/model_selection/_classification_threshold.py` | `BaseThresholdClassifier.fit` | 143 |\n| `sklearn/model_selection/_search.py` | `BaseSearchCV.fit` | 923 |\n| `sklearn/model_selection/_split.py` | `BaseCrossValidator.split` | 145 |\n| `sklearn/model_selection/_split.py` | `_BaseKFold.split` | 406 |\n| `sklearn/model_selection/_split.py` | `TimeSeriesSplit._split` | 1236 |\n| `sklearn/model_selection/_split.py` | `BaseShuffleSplit.split` | 1842 |\n| `sklearn/model_selection/_split.py` | `train_test_split` | 2782 |\n| `sklearn/model_selection/_validation.py` | `cross_validate` | 351 |\n| `sklearn/model_selection/_validation.py` | `cross_val_predict` | 1210 |\n| `sklearn/model_selection/_validation.py` | `permutation_test_score` | 1649 |\n| `sklearn/model_selection/_validation.py` | `learning_curve` | 1906 |\n| `sklearn/model_selection/_validation.py` | `validation_curve` | 2284 |\n\n```json\n{\"answer\": [\n\"sklearn/calibration.py:CalibratedClassifierCV.fit\",\n\"sklearn/calibration.py:_SigmoidCalibration.fit\",\n\"sklearn/model_selection/_classification_threshold.py:BaseThresholdClassifier.fit\",\n\"sklearn/model_selection/_search.py:BaseSearchCV.fit\",\n\"sklearn/model_selection/_split.py:BaseCrossValidator.split\",\n\"sklearn/model_selection/_split.py:_BaseKFold.split\",\n\"sklearn/model_selection/_split.py:TimeSeriesSplit._split\",\n\"sklearn/model_selection/_split.py:BaseShuffleSplit.split\",\n\"sklearn/model_selection/_split.py:train_test_split\",\n\"sklearn/model_selection/_validation.py:cross_validate\",\n\"sklearn/model_selection/_validation.py:cross_val_predict\",\n\"sklearn/model_selection/_validation.py:permutation_test_score\",\n\"sklearn/model_selection/_validation.py:learning_curve\",\n\"sklearn/model_selection/_validation.py:validation_curve\"\n]}\n```",
+    "subtype": "success",
+    "is_error": false,
+    "api_error_status": null,
+    "num_turns": 3,
+    "duration_ms": 14079,
+    "cost_usd": 0.0755558,
+    "usage": {
+      "input_tokens": 6,
+      "output_tokens": 1421,
+      "cache_creation_input_tokens": 5334,
+      "cache_read_input_tokens": 22199
+    },
+    "tool_calls": {
+      "Grep": 2
+    },
+    "mcp_status": "connected",
+    "api_key_source": "none",
+    "tools": [
+      "Bash",
+      "Edit",
+      "Glob",
+      "Grep",
+      "Read",
+      "Write",
+      "mcp__context-manager__context",
+      "mcp__context-manager__index_project"
+    ]
+  },
+  "score": {
+    "answered": true,
+    "recall": 1.0,
+    "precision": 1.0,
+    "missing": [],
+    "extra": [],
+    "edit_applied": null,
+    "stale": [],
+    "success": true
+  },
+  "failure": null,
+  "hook": {
+    "deny": 1,
+    "pass_": 1
+  }
+}

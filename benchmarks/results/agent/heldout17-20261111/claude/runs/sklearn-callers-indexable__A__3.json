@@ -1,0 +1,56 @@
+{
+  "record_version": 3,
+  "run_id": "sklearn-callers-indexable__A__3",
+  "task_id": "sklearn-callers-indexable",
+  "repo": "scikit-learn",
+  "category": "callers",
+  "arm": "A",
+  "rep": 3,
+  "model": "claude-opus-5-5",
+  "effort": "high",
+  "embedding": "local",
+  "index_copy_s": null,
+  "index_build_s": null,
+  "wall_s": 23.499705250142142,
+  "transcript": {
+    "result_text": "I found 14 direct calls to `indexable` in non-test code under `sklearn/`, spread across 14 different functions and methods. All of them call it by its own name. Some import it from `sklearn.utils.validation` and others through the `sklearn.utils` re-export. I searched for aliased imports (`indexable as …`) and module-qualified calls (`validation.indexable`, `utils.indexable`) and found none.\n\n| File | Calling function or method |\n|---|---|\n| `sklearn/calibration.py` | `CalibratedClassifierCV.fit`, `_SigmoidCalibration.fit` |\n| `sklearn/model_selection/_split.py` | `BaseCrossValidator.split`, `_BaseKFold.split`, `TimeSeriesSplit._split`, `BaseShuffleSplit.split`, `train_test_split` |\n| `sklearn/model_selection/_validation.py` | `cross_validate`, `cross_val_predict`, `permutation_test_score`, `learning_curve`, `validation_curve` |\n| `sklearn/model_selection/_classification_threshold.py` | `BaseThresholdClassifier.fit` |\n| `sklearn/model_selection/_search.py` | `BaseSearchCV.fit` |\n\n```json\n{\"answer\": [\n\"sklearn/calibration.py:CalibratedClassifierCV.fit\",\n\"sklearn/calibration.py:_SigmoidCalibration.fit\",\n\"sklearn/model_selection/_split.py:BaseCrossValidator.split\",\n\"sklearn/model_selection/_split.py:_BaseKFold.split\",\n\"sklearn/model_selection/_split.py:TimeSeriesSplit._split\",\n\"sklearn/model_selection/_split.py:BaseShuffleSplit.split\",\n\"sklearn/model_selection/_split.py:train_test_split\",\n\"sklearn/model_selection/_validation.py:cross_validate\",\n\"sklearn/model_selection/_validation.py:cross_val_predict\",\n\"sklearn/model_selection/_validation.py:permutation_test_score\",\n\"sklearn/model_selection/_validation.py:learning_curve\",\n\"sklearn/model_selection/_validation.py:validation_curve\",\n\"sklearn/model_selection/_classification_threshold.py:BaseThresholdClassifier.fit\",\n\"sklearn/model_selection/_search.py:BaseSearchCV.fit\"\n]}\n```",
+    "subtype": "success",
+    "is_error": false,
+    "api_error_status": null,
+    "num_turns": 6,
+    "duration_ms": 22717,
+    "cost_usd": 0.107126,
+    "usage": {
+      "input_tokens": 12,
+      "output_tokens": 1959,
+      "cache_creation_input_tokens": 7078,
+      "cache_read_input_tokens": 56370
+    },
+    "tool_calls": {
+      "Bash": 2,
+      "Grep": 3
+    },
+    "mcp_status": "none",
+    "api_key_source": "none",
+    "tools": [
+      "Bash",
+      "Edit",
+      "Glob",
+      "Grep",
+      "Read",
+      "Write"
+    ]
+  },
+  "score": {
+    "answered": true,
+    "recall": 1.0,
+    "precision": 1.0,
+    "missing": [],
+    "extra": [],
+    "edit_applied": null,
+    "stale": [],
+    "success": true
+  },
+  "failure": null,
+  "hook": null
+}

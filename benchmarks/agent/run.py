@@ -1116,8 +1116,17 @@ def clear_attempt(paths: RunPaths) -> None:
         path.unlink(missing_ok=True)
 
 
+def uses_grep_hook(agent: AgentName, arm: Arm) -> bool:
+    """Kolda Claude Code'un Grep hook'u kurulu mu: H ve (amendment 17'den beri) D, yalnız Claude.
+
+    D, ürünün Claude Code için önerilen kurulumudur (`context` + `index_project` + hook); Codex'te
+    hook mekanizması olmadığından D değişmez. A, B ve C'de hook yoktur.
+    """
+    return agent == "claude" and arm in ("D", "H")
+
+
 def hook_settings(settings: Settings, server_env: dict[str, str], hook_log: Path) -> str:
-    """H kolunun Claude Code ayarı: Grep için PreToolUse hook'u (`--settings` dosyası)."""
+    """H ve D kollarının Claude Code ayarı: Grep için PreToolUse hook'u (`--settings` dosyası)."""
     environment = {**server_env, "CCM_HOOK_LOG": str(hook_log)}
     assignments = " ".join(f"{key}={shlex.quote(value)}" for key, value in environment.items())
     command = (
@@ -1183,7 +1192,7 @@ def agent_invocation(
         hooks_path: Path | None = None
         if server_env is not None:
             write_private(config_path, json.dumps(mcp_config(settings, server_env), indent=2))
-            if arm == "H":
+            if uses_grep_hook(settings.agent, arm):
                 hooks_path = work / "hooks.json"
                 write_private(hooks_path, hook_settings(settings, server_env, hook_log))
         return claude_command(settings, task, arm, config_path, hooks_path), claude_env(
@@ -1360,7 +1369,7 @@ def run_one(settings: Settings, task: Task, arm: Arm, rep: int, secrets: Secrets
     # Hook günlüğü okunamazsa koşu yine kaydedilir; hata `failure` alanına eklenir.
     hook: HookCounts | None = None
     hook_failure: str | None = None
-    if arm == "H":
+    if uses_grep_hook(settings.agent, arm):
         try:
             hook = hook_counts(paths.hook_log)
         except (TranscriptError, json.JSONDecodeError, UnicodeError, OSError) as error:

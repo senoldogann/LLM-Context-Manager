@@ -1,0 +1,61 @@
+{
+  "record_version": 3,
+  "run_id": "django-trap-resolve__D__2",
+  "task_id": "django-trap-resolve",
+  "repo": "django",
+  "category": "trap",
+  "arm": "D",
+  "rep": 2,
+  "model": "claude-opus-5-5",
+  "effort": "high",
+  "embedding": "local",
+  "index_copy_s": 0.5827220000792295,
+  "index_build_s": 1140.598946291022,
+  "wall_s": 16.359933082945645,
+  "transcript": {
+    "result_text": "Seven functions or methods in `django/` call `django.urls.base.resolve` directly. I found them by searching for every import of `resolve`, including the re-export from `django/urls/__init__.py` and multi-line or aliased imports, then checked which function each call sits in.\n\n- `django/urls/base.py`: `is_valid_path` (line 155) and `translate_url` (line 169) call it inside the same module.\n- `django/test/client.py`: `Client.request` (line 1103) and `AsyncClient.request` (line 1460). Both calls are inside a `lambda`, so the enclosing method is listed.\n- `django/views/debug.py`: `get_caller` (line 102).\n- `django/contrib/admin/templatetags/admin_urls.py`: `add_preserved_filters` (line 39).\n- `django/contrib/admin/sites.py`: `AdminSite.catch_all_view` (line 454).\n\nEvery other `.resolve(...)` match in `django/` is a call to a different method, such as the URL resolver's, template variables' or `pathlib.Path`'s, so I left them out.\n\n```json\n{\"answer\": [\"django/urls/base.py:is_valid_path\", \"django/urls/base.py:translate_url\", \"django/test/client.py:Client.request\", \"django/test/client.py:AsyncClient.request\", \"django/views/debug.py:get_caller\", \"django/contrib/admin/templatetags/admin_urls.py:add_preserved_filters\", \"django/contrib/admin/sites.py:AdminSite.catch_all_view\"]}\n```",
+    "subtype": "success",
+    "is_error": false,
+    "api_error_status": null,
+    "num_turns": 4,
+    "duration_ms": 13988,
+    "cost_usd": 0.0911332,
+    "usage": {
+      "input_tokens": 8,
+      "output_tokens": 1203,
+      "cache_creation_input_tokens": 7462,
+      "cache_read_input_tokens": 36726
+    },
+    "tool_calls": {
+      "Bash": 1,
+      "Grep": 2
+    },
+    "mcp_status": "connected",
+    "api_key_source": "none",
+    "tools": [
+      "Bash",
+      "Edit",
+      "Glob",
+      "Grep",
+      "Read",
+      "Write",
+      "mcp__context-manager__context",
+      "mcp__context-manager__index_project"
+    ]
+  },
+  "score": {
+    "answered": true,
+    "recall": 1.0,
+    "precision": 1.0,
+    "missing": [],
+    "extra": [],
+    "edit_applied": null,
+    "stale": [],
+    "success": true
+  },
+  "failure": null,
+  "hook": {
+    "deny": 0,
+    "pass_": 2
+  }
+}

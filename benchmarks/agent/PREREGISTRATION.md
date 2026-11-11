@@ -275,3 +275,80 @@ the final run is complete.
     `tokio-callers-with-scheduler` in `large-repo-20261111/` (Claude A#2, Codex D#3, fail →
     pass). The primary outcome of amendment 15 is input tokens and is unaffected; its success
     condition holds before and after. Later runs are scored with the corrected scorer.
+17. 2026-11-11, written and committed before any run: **second large-repository held-out set,
+    after D-only product fixes.** Amendment 15 found no detectable difference for either agent
+    (Codex D/A 0.91, 0.59–1.45; Claude Code 0.95, 0.74–1.12). Three product changes for arm D
+    followed, each from a failure seen in those runs: dotted Python import paths resolve
+    through re-exports (#26); the Grep hook accepts globs that only exclude test, bench or
+    example directories, and answers only call lists made of proven calls (#28); and D for
+    Claude Code now includes that hook (see below). This set tests the result again on tasks
+    nobody has run.
+    - Tasks: thirteen new held-out tasks. Every target differs from all earlier task targets.
+      They were selected from source scans only, and no CCM packet for any of them was looked
+      at.
+      - Django and scikit-learn: `scripts/select_heldout.py`, seed 20261111, three callers
+        tasks, one impact task (which files call) and one name-collision trap per repository.
+      - Tokio: `scripts/rust_callers_gold.py --select`, seed 20261111, with path-form calls of
+        functions that take no `self`. Its impact pool was empty, so Tokio gives two callers
+        tasks and one trap.
+      - Selected: Django `log_response`, `get_default_timezone`, `get_text_list`,
+        `get_docs_version` (files), `django.urls.resolve` (trap: `URLResolver.resolve` and
+        other `resolve` methods); scikit-learn `indexable`, `empirical_covariance`,
+        `gen_even_slices`, `check_scoring` (files), `normalize` (trap: `unicodedata.normalize`);
+        Tokio `ReadBuf::uninit` (`MaybeUninit::uninit` does not count), `signal::registry::
+        globals`, `Registration::new_with_interest_and_handle` (trap: the
+        `PollEvented` method of the same name).
+      - Full commands, excluded names, pool sizes and the intermediate draws are in
+        `results/agent/heldout17-20261111/SELECTION.md`.
+      - Disclosure: the selection rules were revised during selection, before any run.
+        - The scikit-learn trap pool was empty, which added the method and external-library
+          collision rules.
+        - Tokio's impact pool was empty, which added a third callers task per Python
+          repository.
+        - Hand checks of the Tokio gold added `cfg(all(test, …))` modules and
+          `Self::` resolution to the Rust scanner.
+        - Intermediate draws were seen.
+    - Gold: Python from `scripts/python_callers_gold.py`. Rust from `scripts/rust_callers_gold.py`,
+      with every call site of the three Tokio tasks read by hand; the scanner also reproduces
+      the gold of three amendment-15 Tokio tasks (`new_unnamed`, `unbounded_channel`, `async_op`).
+      Questions name the defining file and say that calls through aliases and re-exports count,
+      because Codex read "`sklearn.get_config` directly" in amendment 15 as a spelling. They
+      also say that passing the function as a value does not count, and they state the test-file
+      rule; for Django that includes the fact that the `django/test/` package counts. A call inside
+      a nested function is accepted under either function's name (`log_response` in
+      `require_http_methods`/`decorator`/`inner`; `get_text_list` in
+      `get_formset`/`hand_clean_DELETE`). An independent red-team review checked ten of the
+      targets against the source before this commit and found no missing or wrong caller. The
+      nested-name aliases and the question clarifications come from that review. Answers are
+      scored with the scorer of amendment 16.
+    - Arms: A (built-ins, unchanged) and D, the product at this amendment's commit: `context` +
+      `index_project` with the context note and, for Claude Code only, the PreToolUse Grep hook
+      (`ccm-mcp hook claude-pre-tool-use`). Codex has no hook mechanism in the harness, so its D
+      differs from amendment 15 only by the product fixes. Claude Code's D is therefore labelled
+      "D (context + hook)" in the report. A saving there cannot be split between the hook and the
+      other fixes, and the two agents' D arms are not compared with each other. A hookless D for
+      Claude Code is not run, to save quota. B and C are not run; their definitions are
+      unchanged. Three repetitions, Claude Code (`claude-opus-5-5`) and Codex (`gpt-6-luna`),
+      effort high, local embeddings, one commit and one release build for the whole run, started
+      through `scripts/run_until_done.py`; runs rejected by a usage limit are not records.
+    - Primary outcome, per agent, on the thirteen tasks: median task ratio D/A of input tokens
+      (cache included) with the fixed-seed bootstrap 95 % interval.
+      - **Saving shown** if the upper bound is below 1.00 and D's success count is at most two
+        runs below A's (of 39).
+      - **Cost shown** if the lower bound is above 1.00.
+      - Otherwise: no detectable difference.
+    - Power, from amendment 15's task spread: the interval reached 0.54 above the median for
+      Codex and 0.17 for Claude Code. With a similar spread, the upper bound falls below 1.00
+      only if the median is about 0.45 or lower for Codex and about 0.80 or lower for Claude
+      Code. A "no detectable difference" result therefore means that a saving of that size is
+      not shown. It does not show that there is no effect.
+    - Stopping rule set by the owner: if both agents' intervals contain 1.00 again, that is
+      recorded in `docs/STATUS.md` as the boundary result of this line of work, and it ends.
+    - Reported alongside, descriptively:
+      - the same ratio by category and by repository;
+      - the per-task pilot rule;
+      - hook decisions in Claude's D runs;
+      - CCM calls per run;
+      - every failed run;
+      - runs rejected by a usage limit, by arm and task;
+      - the owner audit.
