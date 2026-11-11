@@ -1320,10 +1320,7 @@ fn dotted_module(text: &str) -> bool {
 /// "import X" yanlışlıkla modül sayılmasın diye `import` biçimi ya noktalı ya da
 /// `as` ile sürer.
 fn python_import_paths(query: &str) -> PythonImportPaths {
-    let tokens: Vec<&str> = query
-        .split(|ch: char| ch.is_whitespace() || matches!(ch, ',' | '(' | ')' | '`' | ';'))
-        .filter(|token| !token.is_empty())
-        .collect();
+    let tokens = import_tokens(query);
     let mut paths = PythonImportPaths {
         symbols: Vec::new(),
         modules: Vec::new(),
@@ -1335,17 +1332,11 @@ fn python_import_paths(query: &str) -> PythonImportPaths {
             && dotted_module(module)
             && tokens.get(index + 2) == Some(&"import")
         {
-            index += 3;
-            while let Some(name) = tokens
-                .get(index)
-                .filter(|name| identifier_part(name) && !matches!(**name, "import" | "from" | "as"))
-            {
-                paths.symbols.push(format!("{module}.{name}"));
-                index += 1;
-                if tokens.get(index) == Some(&"as") {
-                    index += 2;
-                }
-            }
+            let (names, next) = imported_names(&tokens, index + 3);
+            paths
+                .symbols
+                .extend(names.iter().map(|name| format!("{module}.{name}")));
+            index = next;
             continue;
         }
         if tokens[index] == "import"
@@ -1359,6 +1350,67 @@ fn python_import_paths(query: &str) -> PythonImportPaths {
         index += 1;
     }
     paths
+}
+
+/// Sorgunun import ayrıştırması için sözcükleri: `,`, `(`, `)`, `;` ve satır sonu
+/// kendi başına sözcüktür (bildirim sınırları korunur); backtick ve boşluk atılır.
+fn import_tokens(query: &str) -> Vec<&str> {
+    let mut tokens = Vec::new();
+    let mut start: Option<usize> = None;
+    for (position, character) in query.char_indices() {
+        let separator = matches!(character, ',' | '(' | ')' | ';' | '\n');
+        if separator || character.is_whitespace() || character == '`' {
+            if let Some(begin) = start.take() {
+                tokens.push(&query[begin..position]);
+            }
+            if separator {
+                tokens.push(&query[position..position + character.len_utf8()]);
+            }
+        } else if start.is_none() {
+            start = Some(position);
+        }
+    }
+    if let Some(begin) = start {
+        tokens.push(&query[begin..]);
+    }
+    tokens
+}
+
+/// `import`'tan sonraki adlar ve bildirimin bittiği sözcük: adlar virgülle ayrılır
+/// (`as` takma adı atlanır); parantez içinde satır sonu bildirimi bitirmez. Virgülsüz
+/// ilk sözcükte durulur: "from a import c shuffle callers" yalnız `c` verir.
+fn imported_names<'q>(tokens: &[&'q str], start: usize) -> (Vec<&'q str>, usize) {
+    let mut index = start;
+    let parenthesized = tokens.get(index) == Some(&"(");
+    if parenthesized {
+        index += 1;
+    }
+    let mut names = Vec::new();
+    loop {
+        while parenthesized && tokens.get(index) == Some(&"\n") {
+            index += 1;
+        }
+        let Some(name) = tokens
+            .get(index)
+            .copied()
+            .filter(|name| identifier_part(name) && !matches!(*name, "import" | "from" | "as"))
+        else {
+            break;
+        };
+        names.push(name);
+        index += 1;
+        if tokens.get(index) == Some(&"as") {
+            index += 2;
+        }
+        while parenthesized && tokens.get(index) == Some(&"\n") {
+            index += 1;
+        }
+        if tokens.get(index) != Some(&",") {
+            break;
+        }
+        index += 1;
+    }
+    (names, index)
 }
 
 /// Ad kod gibi mi yazılmış: alt çizgi ya da iç büyük harf.
@@ -3566,6 +3618,14 @@ mod tests {
             vec!["sklearn.utils.shuffle", "sklearn.utils.gen_batches"]
         );
         assert_eq!(paths.modules, vec!["sklearn.base"]);
+        // Bildirimden sonraki düz yazı import edilen ad sayılmaz; parantezli çok
+        // satırlı import ise sürer.
+        let trailing = super::python_import_paths("from a.b import c\nshuffle callers");
+        assert_eq!(trailing.symbols, vec!["a.b.c"]);
+        let spaced = super::python_import_paths("from a.b import c shuffle callers");
+        assert_eq!(spaced.symbols, vec!["a.b.c"]);
+        let multiline = super::python_import_paths("from a.b import (\n    c,\n    d as e,\n)");
+        assert_eq!(multiline.symbols, vec!["a.b.c", "a.b.d"]);
         // Göreli import ve düz yazıdaki "import X" hedef değildir.
         let prose =
             super::python_import_paths("from ..utils import shuffle; files that import shuffle");
