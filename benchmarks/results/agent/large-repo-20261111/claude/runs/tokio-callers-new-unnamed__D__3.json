@@ -1,0 +1,57 @@
+{
+  "record_version": 3,
+  "run_id": "tokio-callers-new-unnamed__D__3",
+  "task_id": "tokio-callers-new-unnamed",
+  "repo": "tokio",
+  "category": "callers",
+  "arm": "D",
+  "rep": 3,
+  "model": "claude-opus-5-5",
+  "effort": "high",
+  "embedding": "local",
+  "index_copy_s": 0.14641712489537895,
+  "index_build_s": 265.3463085840922,
+  "wall_s": 16.191596790915355,
+  "transcript": {
+    "result_text": "I searched every use of `new_unnamed` in the workspace. All 20 call sites are in the `tokio` crate, spread across 11 functions; none of the other crates call it. Each call site was matched to the function that contains it:\n\n- **`LocalRuntime`** (`tokio/src/runtime/local_runtime/runtime.rs`): `spawn_local` (line 153) and `block_on` (line 220).\n- **`Spawner`** (`tokio/src/runtime/blocking/pool.rs`): `spawn_blocking` (lines 308 and 315) and `spawn_mandatory_blocking` (lines 346 and 353). The second one sits inside a `cfg` macro block within `impl Spawner`.\n- **`Handle`** (`tokio/src/runtime/handle.rs`): `spawn` (lines 195 and 197) and `block_on` (lines 303 and 305).\n- **`Runtime`** (`tokio/src/runtime/runtime.rs`): `spawn` (lines 250 and 253) and `block_on` (lines 340 and 342).\n- **Free function `spawn`** (`tokio/src/task/spawn.rs`, lines 173 and 175).\n- **Free function `spawn_local`** (`tokio/src/task/local.rs`, lines 375 and 377).\n- **`LocalSet`** (`tokio/src/task/local.rs`): `spawn_local` (lines 571 and 573).\n\nThe remaining match is the definition itself at `tokio/src/util/trace.rs:27`.\n\n```json\n{\"answer\": [\"tokio/src/runtime/local_runtime/runtime.rs:LocalRuntime.spawn_local\", \"tokio/src/runtime/local_runtime/runtime.rs:LocalRuntime.block_on\", \"tokio/src/runtime/blocking/pool.rs:Spawner.spawn_blocking\", \"tokio/src/runtime/blocking/pool.rs:Spawner.spawn_mandatory_blocking\", \"tokio/src/runtime/handle.rs:Handle.spawn\", \"tokio/src/runtime/handle.rs:Handle.block_on\", \"tokio/src/runtime/runtime.rs:Runtime.spawn\", \"tokio/src/runtime/runtime.rs:Runtime.block_on\", \"tokio/src/task/spawn.rs:spawn\", \"tokio/src/task/local.rs:spawn_local\", \"tokio/src/task/local.rs:LocalSet.spawn_local\"]}\n```",
+    "subtype": "success",
+    "is_error": false,
+    "num_turns": 3,
+    "duration_ms": 15019,
+    "cost_usd": 0.0873246,
+    "usage": {
+      "input_tokens": 6,
+      "output_tokens": 1471,
+      "cache_creation_input_tokens": 6671,
+      "cache_read_input_tokens": 22563
+    },
+    "tool_calls": {
+      "Bash": 1,
+      "Grep": 1
+    },
+    "mcp_status": "connected",
+    "api_key_source": "none",
+    "tools": [
+      "Bash",
+      "Edit",
+      "Glob",
+      "Grep",
+      "Read",
+      "Write",
+      "mcp__context-manager__context",
+      "mcp__context-manager__index_project"
+    ]
+  },
+  "score": {
+    "answered": true,
+    "recall": 1.0,
+    "precision": 1.0,
+    "missing": [],
+    "extra": [],
+    "edit_applied": null,
+    "stale": [],
+    "success": true
+  },
+  "failure": null,
+  "hook": null
+}

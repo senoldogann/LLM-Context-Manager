@@ -1,0 +1,47 @@
+{
+  "record_version": 3,
+  "run_id": "django-callers-make-hashable__A__2",
+  "task_id": "django-callers-make-hashable",
+  "repo": "django",
+  "category": "callers",
+  "arm": "A",
+  "rep": 2,
+  "model": "gpt-6-luna",
+  "effort": "high",
+  "embedding": "local",
+  "index_copy_s": null,
+  "index_build_s": null,
+  "wall_s": 33.28700325009413,
+  "transcript": {
+    "result_text": "```json\n{\"answer\":[\"django/core/exceptions.py:ValidationError.__hash__\",\"django/db/models/sql/compiler.py:SQLCompiler.get_group_by\",\"django/db/models/sql/compiler.py:SQLCompiler.get_order_by\",\"django/db/models/base.py:Model._get_FIELD_display\",\"django/db/models/query_utils.py:Q.identity\",\"django/db/models/fields/reverse_related.py:ForeignObjectRel.identity\",\"django/db/models/fields/reverse_related.py:ManyToManyRel.identity\",\"django/db/models/lookups.py:Lookup.__hash__\",\"django/db/models/expressions.py:Expression.identity\",\"django/forms/models.py:BaseModelFormSet.validate_unique\",\"django/contrib/admin/utils.py:display_for_field\",\"django/utils/tree.py:Node.__hash__\",\"django/utils/hashable.py:make_hashable\"]}\n```",
+    "subtype": "completed",
+    "is_error": false,
+    "num_turns": null,
+    "duration_ms": 33287,
+    "cost_usd": null,
+    "usage": {
+      "input_tokens": 16672,
+      "output_tokens": 1407,
+      "cache_creation_input_tokens": 0,
+      "cache_read_input_tokens": 82944
+    },
+    "tool_calls": {
+      "command_execution": 5
+    },
+    "mcp_status": "unreported",
+    "api_key_source": "chatgpt",
+    "tools": []
+  },
+  "score": {
+    "answered": true,
+    "recall": 1.0,
+    "precision": 1.0,
+    "missing": [],
+    "extra": [],
+    "edit_applied": null,
+    "stale": [],
+    "success": true
+  },
+  "failure": null,
+  "hook": null
+}

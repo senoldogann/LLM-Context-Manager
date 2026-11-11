@@ -1,0 +1,47 @@
+{
+  "record_version": 3,
+  "run_id": "django-callers-iri-to-uri__A__2",
+  "task_id": "django-callers-iri-to-uri",
+  "repo": "django",
+  "category": "callers",
+  "arm": "A",
+  "rep": 2,
+  "model": "gpt-6-luna",
+  "effort": "high",
+  "embedding": "local",
+  "index_copy_s": null,
+  "index_build_s": null,
+  "wall_s": 22.37140449997969,
+  "transcript": {
+    "result_text": "Direct calls appear in these functions and methods:\n\n```json\n{\"answer\":[\"django/templatetags/static.py:PrefixNode.handle_simple\",\"django/http/response.py:HttpResponseRedirectBase.__init__\",\"django/http/request.py:HttpRequest._get_full_path\",\"django/http/request.py:HttpRequest.build_absolute_uri\",\"django/template/defaultfilters.py:iriencode\",\"django/utils/feedgenerator.py:SyndicationFeed.__init__\",\"django/utils/feedgenerator.py:SyndicationFeed.add_item\",\"django/utils/feedgenerator.py:Enclosure.__init__\",\"django/contrib/flatpages/models.py:FlatPage.get_absolute_url\",\"django/contrib/syndication/views.py:add_domain\"]}\n```",
+    "subtype": "completed",
+    "is_error": false,
+    "num_turns": null,
+    "duration_ms": 22371,
+    "cost_usd": null,
+    "usage": {
+      "input_tokens": 9381,
+      "output_tokens": 815,
+      "cache_creation_input_tokens": 0,
+      "cache_read_input_tokens": 40832
+    },
+    "tool_calls": {
+      "command_execution": 3
+    },
+    "mcp_status": "unreported",
+    "api_key_source": "chatgpt",
+    "tools": []
+  },
+  "score": {
+    "answered": true,
+    "recall": 1.0,
+    "precision": 1.0,
+    "missing": [],
+    "extra": [],
+    "edit_applied": null,
+    "stale": [],
+    "success": true
+  },
+  "failure": null,
+  "hook": null
+}

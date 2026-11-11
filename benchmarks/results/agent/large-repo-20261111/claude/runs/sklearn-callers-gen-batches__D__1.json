@@ -1,0 +1,56 @@
+{
+  "record_version": 3,
+  "run_id": "sklearn-callers-gen-batches__D__1",
+  "task_id": "sklearn-callers-gen-batches",
+  "repo": "scikit-learn",
+  "category": "callers",
+  "arm": "D",
+  "rep": 1,
+  "model": "claude-opus-5-5",
+  "effort": "high",
+  "embedding": "local",
+  "index_copy_s": 0.2406625000294298,
+  "index_build_s": 898.3562989169732,
+  "wall_s": 17.339171458035707,
+  "transcript": {
+    "result_text": "The index lists 12 functions and methods in `sklearn/` that call `gen_batches`, with 13 call sites in total. `_euclidean_distances_upcast` calls it twice. The index's completeness check grepped every non-test file and found no call sites outside these 12. Matches in test files, strings and docstrings were left out. Calls made without the name appearing in source, such as through `getattr`, wouldn't show up this way.\n\n| File | Caller |\n|---|---|\n| `sklearn/cluster/_mean_shift.py:102` | `estimate_bandwidth` |\n| `sklearn/cluster/_optics.py:435` | `_compute_core_distances_` |\n| `sklearn/decomposition/_dict_learning.py:2225` | `MiniBatchDictionaryLearning.fit` |\n| `sklearn/decomposition/_incremental_pca.py:241` | `IncrementalPCA.fit` |\n| `sklearn/decomposition/_incremental_pca.py:408` | `IncrementalPCA.transform` |\n| `sklearn/decomposition/_lda.py:614` | `LatentDirichletAllocation.partial_fit` |\n| `sklearn/decomposition/_lda.py:662` | `LatentDirichletAllocation.fit` |\n| `sklearn/decomposition/_nmf.py:2319` | `MiniBatchNMF._fit_transform` |\n| `sklearn/ensemble/_iforest.py:475` | `IsolationForest._compute_chunked_score_samples` |\n| `sklearn/metrics/pairwise.py:592, 601` | `_euclidean_distances_upcast` |\n| `sklearn/metrics/pairwise.py:2161` | `pairwise_distances_chunked` |\n| `sklearn/neural_network/_multilayer_perceptron.py:624` | `BaseMultilayerPerceptron._fit_stochastic` |\n\n```json\n{\"answer\": [\"sklearn/cluster/_mean_shift.py:estimate_bandwidth\", \"sklearn/cluster/_optics.py:_compute_core_distances_\", \"sklearn/decomposition/_dict_learning.py:MiniBatchDictionaryLearning.fit\", \"sklearn/decomposition/_incremental_pca.py:IncrementalPCA.fit\", \"sklearn/decomposition/_incremental_pca.py:IncrementalPCA.transform\", \"sklearn/decomposition/_lda.py:LatentDirichletAllocation.partial_fit\", \"sklearn/decomposition/_lda.py:LatentDirichletAllocation.fit\", \"sklearn/decomposition/_nmf.py:MiniBatchNMF._fit_transform\", \"sklearn/ensemble/_iforest.py:IsolationForest._compute_chunked_score_samples\", \"sklearn/metrics/pairwise.py:_euclidean_distances_upcast\", \"sklearn/metrics/pairwise.py:pairwise_distances_chunked\", \"sklearn/neural_network/_multilayer_perceptron.py:BaseMultilayerPerceptron._fit_stochastic\"]}\n```",
+    "subtype": "success",
+    "is_error": false,
+    "num_turns": 3,
+    "duration_ms": 16329,
+    "cost_usd": 0.08071980000000001,
+    "usage": {
+      "input_tokens": 6,
+      "output_tokens": 1375,
+      "cache_creation_input_tokens": 6089,
+      "cache_read_input_tokens": 22419
+    },
+    "tool_calls": {
+      "mcp__context-manager__context": 2
+    },
+    "mcp_status": "connected",
+    "api_key_source": "none",
+    "tools": [
+      "Bash",
+      "Edit",
+      "Glob",
+      "Grep",
+      "Read",
+      "Write",
+      "mcp__context-manager__context",
+      "mcp__context-manager__index_project"
+    ]
+  },
+  "score": {
+    "answered": true,
+    "recall": 1.0,
+    "precision": 1.0,
+    "missing": [],
+    "extra": [],
+    "edit_applied": null,
+    "stale": [],
+    "success": true
+  },
+  "failure": null,
+  "hook": null
+}

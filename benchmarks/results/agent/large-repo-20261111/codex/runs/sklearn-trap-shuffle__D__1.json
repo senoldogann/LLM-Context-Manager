@@ -1,0 +1,48 @@
+{
+  "record_version": 3,
+  "run_id": "sklearn-trap-shuffle__D__1",
+  "task_id": "sklearn-trap-shuffle",
+  "repo": "scikit-learn",
+  "category": "trap",
+  "arm": "D",
+  "rep": 1,
+  "model": "gpt-6-luna",
+  "effort": "high",
+  "embedding": "local",
+  "index_copy_s": 0.2482318750116974,
+  "index_build_s": 898.3562989169732,
+  "wall_s": 30.03667249996215,
+  "transcript": {
+    "result_text": "```json\n{\"answer\":[\"sklearn/datasets/_kddcup99.py:fetch_kddcup99\",\"sklearn/datasets/_rcv1.py:fetch_rcv1\",\"sklearn/datasets/_samples_generator.py:make_classification\",\"sklearn/datasets/_samples_generator.py:make_regression\",\"sklearn/datasets/_samples_generator.py:make_circles\",\"sklearn/datasets/_samples_generator.py:make_moons\",\"sklearn/datasets/_samples_generator.py:make_blobs\",\"sklearn/datasets/_samples_generator.py:make_gaussian_quantiles\",\"sklearn/neural_network/_multilayer_perceptron.py:BaseMultilayerPerceptron._fit_stochastic\",\"sklearn/utils/estimator_checks.py:check_sample_weights_invariance\",\"sklearn/utils/estimator_checks.py:check_clustering\",\"sklearn/utils/estimator_checks.py:check_classifiers_train\",\"sklearn/utils/estimator_checks.py:check_outliers_train\",\"sklearn/utils/estimator_checks.py:check_classifiers_classes\",\"sklearn/utils/estimator_checks.py:check_outliers_fit_predict\"]}\n```",
+    "subtype": "completed",
+    "is_error": false,
+    "num_turns": null,
+    "duration_ms": 30037,
+    "cost_usd": null,
+    "usage": {
+      "input_tokens": 18567,
+      "output_tokens": 1081,
+      "cache_creation_input_tokens": 0,
+      "cache_read_input_tokens": 60288
+    },
+    "tool_calls": {
+      "command_execution": 3,
+      "mcp__context-manager__context": 1
+    },
+    "mcp_status": "unreported",
+    "api_key_source": "chatgpt",
+    "tools": []
+  },
+  "score": {
+    "answered": true,
+    "recall": 1.0,
+    "precision": 1.0,
+    "missing": [],
+    "extra": [],
+    "edit_applied": null,
+    "stale": [],
+    "success": true
+  },
+  "failure": null,
+  "hook": null
+}

@@ -1,0 +1,56 @@
+{
+  "record_version": 3,
+  "run_id": "tokio-callers-sleep-until__A__3",
+  "task_id": "tokio-callers-sleep-until",
+  "repo": "tokio",
+  "category": "callers",
+  "arm": "A",
+  "rep": 3,
+  "model": "gpt-6-luna",
+  "effort": "high",
+  "embedding": "local",
+  "index_copy_s": null,
+  "index_build_s": null,
+  "wall_s": 16.44457362499088,
+  "transcript": {
+    "result_text": "The calls in library code are in `Timeout::new` and `throttle`.\n\n```json\n{\"answer\":[\"tokio-stream/src/stream_ext/timeout.rs:Timeout.new\",\"tokio-stream/src/stream_ext/throttle.rs:throttle\"]}\n```",
+    "subtype": "completed",
+    "is_error": false,
+    "num_turns": null,
+    "duration_ms": 16445,
+    "cost_usd": null,
+    "usage": {
+      "input_tokens": 4396,
+      "output_tokens": 619,
+      "cache_creation_input_tokens": 0,
+      "cache_read_input_tokens": 27904
+    },
+    "tool_calls": {
+      "command_execution": 2
+    },
+    "mcp_status": "unreported",
+    "api_key_source": "chatgpt",
+    "tools": []
+  },
+  "score": {
+    "answered": true,
+    "recall": 0.2,
+    "precision": 1.0,
+    "missing": [
+      "tokio-test/src/stream_mock.rs:poll_next",
+      "tokio-test/src/io.rs:poll_read",
+      "tokio-test/src/io.rs:poll_write",
+      "tokio-util/src/time/delay_queue.rs:insert_at",
+      "tokio-util/src/time/delay_queue.rs:remove",
+      "tokio-util/src/time/delay_queue.rs:poll_idx",
+      "tokio/src/time/interval.rs:internal_interval_at",
+      "tokio/src/time/timeout.rs:timeout_at"
+    ],
+    "extra": [],
+    "edit_applied": null,
+    "stale": [],
+    "success": false
+  },
+  "failure": null,
+  "hook": null
+}

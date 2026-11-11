@@ -234,3 +234,32 @@ the final run is complete.
     report also gives the same outcomes separately for the six never-run tasks and the eighteen
     pilot tasks. Answers keep the preregistered scorer; the owner audit
     (`scripts/owner_audit.py`) is reported alongside without changing scores.
+15. 2026-11-11, written before the run: **large-repository experiment.** The final run (amendment
+    14) found no saving on Flask, Express and Serde; the product pilots found one on caller
+    questions in large repositories, but on tuned tasks with one to three repetitions. This
+    experiment tests that result. It is separate from the final run, whose A/B/C definitions are
+    unchanged.
+    - Repositories: Django 5.1 (Python, about 155 k non-test lines), Tokio 1.41.1 (Rust, about
+      112 k) and, new in the corpus, scikit-learn 1.5.2 (Python, about 186 k).
+    - Held-out tasks, chosen from source scans only, with no CCM packet looked at, gold from
+      `scripts/python_callers_gold.py` (Python `ast`, relative imports and re-exports resolved,
+      test files excluded) and from `rg` plus reading each enclosing function (Rust): per
+      repository two caller tasks, one name-collision trap and one impact task (which files call
+      a function). Django `is_aware`, `make_hashable`, `get_connection` (transaction, not mail),
+      `get_resolver` (files); scikit-learn `check_cv`, `gen_batches`, `shuffle` (not NumPy's),
+      `get_config` (files); Tokio `SpawnMeta::new_unnamed`, `unbounded_channel`, task-local
+      `try_with` (not thread-local), `enter_runtime` (files). Twelve tasks.
+    - Tuned tasks, reported apart and not part of the primary result: `django-callers-iri-to-uri`,
+      `django-callers-constant-time-compare`, `django-trap-urlencode`,
+      `tokio-callers-sleep-until`, `tokio-callers-async-op`, `tokio-callers-with-scheduler`.
+    - Arms: A (built-ins) and D (current product as in amendment 14). Three repetitions, Claude
+      Code (`claude-opus-5-5`) and Codex (`gpt-6-luna`), effort high, local embeddings, one
+      commit and one release build for the whole run.
+    - Primary outcome, per agent, on the twelve held-out tasks: median task ratio D/A of input
+      tokens (cache included) with the fixed-seed bootstrap 95 % interval. **Saving shown** if the
+      interval's upper bound is below 1.00 and D's success count is at most two runs below A's
+      (of 36); **cost shown** if the lower bound is above 1.00; otherwise no detectable
+      difference.
+    - Boundary analysis, descriptive: the same ratio by category (callers, trap, impact) and by
+      repository, and per task the rule used in the pilots (D's mean below A's and every D run
+      below A's mean). The owner audit is reported alongside.

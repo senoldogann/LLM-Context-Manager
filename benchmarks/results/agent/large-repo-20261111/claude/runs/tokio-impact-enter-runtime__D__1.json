@@ -1,0 +1,56 @@
+{
+  "record_version": 3,
+  "run_id": "tokio-impact-enter-runtime__D__1",
+  "task_id": "tokio-impact-enter-runtime",
+  "repo": "tokio",
+  "category": "files",
+  "arm": "D",
+  "rep": 1,
+  "model": "claude-opus-5-5",
+  "effort": "high",
+  "embedding": "local",
+  "index_copy_s": 0.13597049983218312,
+  "index_build_s": 265.3463085840922,
+  "wall_s": 9.096707875141874,
+  "transcript": {
+    "result_text": "Six files call `enter_runtime` directly. I found them with a text search of the whole repository. Every match is inside the `tokio` crate. None of the other four crates mention the name at all.\n\n- `tokio/src/runtime/handle.rs:326`\n- `tokio/src/runtime/scheduler/multi_thread/mod.rs:86`\n- `tokio/src/runtime/scheduler/multi_thread/worker.rs:498`\n- `tokio/src/runtime/scheduler/multi_thread_alt/mod.rs:74`\n- `tokio/src/runtime/scheduler/multi_thread_alt/worker.rs:500`\n- `tokio/src/runtime/scheduler/current_thread/mod.rs:184`\n\nI left out `tokio/src/runtime/context.rs`, because it only re-exports the function (`pub(crate) use runtime::{EnterRuntime, enter_runtime};`) and doesn't call it. I also left out `tokio/src/runtime/context/runtime.rs`, which is where the function is defined. No file imports it under a different name: the re-export is the only `use` line that mentions it.\n\n```json\n{\"answer\": [\"tokio/src/runtime/handle.rs\", \"tokio/src/runtime/scheduler/multi_thread/mod.rs\", \"tokio/src/runtime/scheduler/multi_thread/worker.rs\", \"tokio/src/runtime/scheduler/multi_thread_alt/mod.rs\", \"tokio/src/runtime/scheduler/multi_thread_alt/worker.rs\", \"tokio/src/runtime/scheduler/current_thread/mod.rs\"]}\n```",
+    "subtype": "success",
+    "is_error": false,
+    "num_turns": 2,
+    "duration_ms": 8364,
+    "cost_usd": 0.0443296,
+    "usage": {
+      "input_tokens": 4,
+      "output_tokens": 767,
+      "cache_creation_input_tokens": 3290,
+      "cache_read_input_tokens": 13268
+    },
+    "tool_calls": {
+      "Grep": 1
+    },
+    "mcp_status": "connected",
+    "api_key_source": "none",
+    "tools": [
+      "Bash",
+      "Edit",
+      "Glob",
+      "Grep",
+      "Read",
+      "Write",
+      "mcp__context-manager__context",
+      "mcp__context-manager__index_project"
+    ]
+  },
+  "score": {
+    "answered": true,
+    "recall": 1.0,
+    "precision": 1.0,
+    "missing": [],
+    "extra": [],
+    "edit_applied": null,
+    "stale": [],
+    "success": true
+  },
+  "failure": null,
+  "hook": null
+}

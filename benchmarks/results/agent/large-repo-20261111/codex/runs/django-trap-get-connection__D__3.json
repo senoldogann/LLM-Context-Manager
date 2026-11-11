@@ -1,0 +1,47 @@
+{
+  "record_version": 3,
+  "run_id": "django-trap-get-connection__D__3",
+  "task_id": "django-trap-get-connection",
+  "repo": "django",
+  "category": "trap",
+  "arm": "D",
+  "rep": 3,
+  "model": "gpt-6-luna",
+  "effort": "high",
+  "embedding": "local",
+  "index_copy_s": 0.49395633302628994,
+  "index_build_s": 1562.7380535420962,
+  "wall_s": 19.47847408312373,
+  "transcript": {
+    "result_text": "Found 14 functions and methods in `django/db/transaction.py`.\n\n```json\n{\"answer\":[\"django/db/transaction.py:get_autocommit\",\"django/db/transaction.py:set_autocommit\",\"django/db/transaction.py:commit\",\"django/db/transaction.py:rollback\",\"django/db/transaction.py:savepoint\",\"django/db/transaction.py:savepoint_rollback\",\"django/db/transaction.py:savepoint_commit\",\"django/db/transaction.py:clean_savepoints\",\"django/db/transaction.py:get_rollback\",\"django/db/transaction.py:set_rollback\",\"django/db/transaction.py:mark_for_rollback_on_error\",\"django/db/transaction.py:on_commit\",\"django/db/transaction.py:Atomic.__enter__\",\"django/db/transaction.py:Atomic.__exit__\"]}\n```",
+    "subtype": "completed",
+    "is_error": false,
+    "num_turns": null,
+    "duration_ms": 19478,
+    "cost_usd": null,
+    "usage": {
+      "input_tokens": 15138,
+      "output_tokens": 783,
+      "cache_creation_input_tokens": 0,
+      "cache_read_input_tokens": 17792
+    },
+    "tool_calls": {
+      "mcp__context-manager__context": 1
+    },
+    "mcp_status": "unreported",
+    "api_key_source": "chatgpt",
+    "tools": []
+  },
+  "score": {
+    "answered": true,
+    "recall": 1.0,
+    "precision": 1.0,
+    "missing": [],
+    "extra": [],
+    "edit_applied": null,
+    "stale": [],
+    "success": true
+  },
+  "failure": null,
+  "hook": null
+}

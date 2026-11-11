@@ -1,0 +1,47 @@
+{
+  "record_version": 3,
+  "run_id": "sklearn-callers-check-cv__D__3",
+  "task_id": "sklearn-callers-check-cv",
+  "repo": "scikit-learn",
+  "category": "callers",
+  "arm": "D",
+  "rep": 3,
+  "model": "gpt-6-luna",
+  "effort": "high",
+  "embedding": "local",
+  "index_copy_s": 0.619777041953057,
+  "index_build_s": 898.3562989169732,
+  "wall_s": 34.989703125087544,
+  "transcript": {
+    "result_text": "```json\n{\"answer\":[\"sklearn/model_selection/_classification_threshold.py:_fit\",\"sklearn/model_selection/_validation.py:cross_val_predict\",\"sklearn/model_selection/_validation.py:cross_validate\",\"sklearn/calibration.py:fit\",\"sklearn/covariance/_graph_lasso.py:fit\",\"sklearn/ensemble/_stacking.py:fit\",\"sklearn/feature_selection/_rfe.py:fit\",\"sklearn/feature_selection/_sequential.py:fit\",\"sklearn/linear_model/_coordinate_descent.py:fit\",\"sklearn/linear_model/_least_angle.py:fit\",\"sklearn/linear_model/_logistic.py:fit\",\"sklearn/linear_model/_omp.py:fit\",\"sklearn/model_selection/_search.py:fit\",\"sklearn/model_selection/_search_successive_halving.py:fit\",\"sklearn/covariance/_graph_lasso.py:get_metadata_routing\",\"sklearn/linear_model/_coordinate_descent.py:get_metadata_routing\",\"sklearn/linear_model/_least_angle.py:get_metadata_routing\",\"sklearn/model_selection/_validation.py:learning_curve\",\"sklearn/model_selection/_validation.py:permutation_test_score\",\"sklearn/model_selection/_validation.py:validation_curve\"]}\n```",
+    "subtype": "completed",
+    "is_error": false,
+    "num_turns": null,
+    "duration_ms": 34990,
+    "cost_usd": null,
+    "usage": {
+      "input_tokens": 17568,
+      "output_tokens": 1479,
+      "cache_creation_input_tokens": 0,
+      "cache_read_input_tokens": 38144
+    },
+    "tool_calls": {
+      "mcp__context-manager__context": 16
+    },
+    "mcp_status": "unreported",
+    "api_key_source": "chatgpt",
+    "tools": []
+  },
+  "score": {
+    "answered": true,
+    "recall": 1.0,
+    "precision": 1.0,
+    "missing": [],
+    "extra": [],
+    "edit_applied": null,
+    "stale": [],
+    "success": true
+  },
+  "failure": null,
+  "hook": null
+}

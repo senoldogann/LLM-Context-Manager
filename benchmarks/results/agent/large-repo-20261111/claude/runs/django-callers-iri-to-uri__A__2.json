@@ -1,0 +1,55 @@
+{
+  "record_version": 3,
+  "run_id": "django-callers-iri-to-uri__A__2",
+  "task_id": "django-callers-iri-to-uri",
+  "repo": "django",
+  "category": "callers",
+  "arm": "A",
+  "rep": 2,
+  "model": "claude-opus-5-5",
+  "effort": "high",
+  "embedding": "local",
+  "index_copy_s": null,
+  "index_build_s": null,
+  "wall_s": 15.718152792192996,
+  "transcript": {
+    "result_text": "I searched `django/` for every use of `iri_to_uri` and found 10 functions and methods that call it directly:\n\n- `django/templatetags/static.py`: `PrefixNode.handle_simple` (line 48)\n- `django/template/defaultfilters.py`: `iriencode` (line 226)\n- `django/http/response.py`: `HttpResponseRedirectBase.__init__` (line 618)\n- `django/http/request.py`: `HttpRequest._get_full_path` (line 174) and `HttpRequest.build_absolute_uri` (line 241)\n- `django/contrib/flatpages/models.py`: `FlatPage.get_absolute_url` (line 49)\n- `django/utils/feedgenerator.py`: `SyndicationFeed.__init__` (lines 86, 91, 94), `SyndicationFeed.add_item` (lines 134, 138) and `Enclosure.__init__` (line 222)\n- `django/contrib/syndication/views.py`: `add_domain` (line 21)\n\nThe function itself is defined in `django/utils/encoding.py`. The only other place it's named is a docstring in `django/utils/http.py`, which isn't a call.\n\n```json\n{\"answer\": [\"django/templatetags/static.py:PrefixNode.handle_simple\", \"django/template/defaultfilters.py:iriencode\", \"django/http/response.py:HttpResponseRedirectBase.__init__\", \"django/http/request.py:HttpRequest._get_full_path\", \"django/http/request.py:HttpRequest.build_absolute_uri\", \"django/contrib/flatpages/models.py:FlatPage.get_absolute_url\", \"django/utils/feedgenerator.py:SyndicationFeed.__init__\", \"django/utils/feedgenerator.py:SyndicationFeed.add_item\", \"django/utils/feedgenerator.py:Enclosure.__init__\", \"django/contrib/syndication/views.py:add_domain\"]}\n```",
+    "subtype": "success",
+    "is_error": false,
+    "num_turns": 4,
+    "duration_ms": 14901,
+    "cost_usd": 0.0788162,
+    "usage": {
+      "input_tokens": 8,
+      "output_tokens": 1441,
+      "cache_creation_input_tokens": 5489,
+      "cache_read_input_tokens": 30261
+    },
+    "tool_calls": {
+      "Bash": 2,
+      "Grep": 1
+    },
+    "mcp_status": "none",
+    "api_key_source": "none",
+    "tools": [
+      "Bash",
+      "Edit",
+      "Glob",
+      "Grep",
+      "Read",
+      "Write"
+    ]
+  },
+  "score": {
+    "answered": true,
+    "recall": 1.0,
+    "precision": 1.0,
+    "missing": [],
+    "extra": [],
+    "edit_applied": null,
+    "stale": [],
+    "success": true
+  },
+  "failure": null,
+  "hook": null
+}

@@ -1,0 +1,48 @@
+{
+  "record_version": 3,
+  "run_id": "django-callers-is-aware__D__3",
+  "task_id": "django-callers-is-aware",
+  "repo": "django",
+  "category": "callers",
+  "arm": "D",
+  "rep": 3,
+  "model": "gpt-6-luna",
+  "effort": "high",
+  "embedding": "local",
+  "index_copy_s": 0.7228820000309497,
+  "index_build_s": 1562.7380535420962,
+  "wall_s": 47.20179908303544,
+  "transcript": {
+    "result_text": "```json\n{\"answer\":[\"django/contrib/admin/filters.py:DateFieldListFilter.__init__\",\"django/contrib/admin/templatetags/admin_list.py:date_hierarchy\",\"django/contrib/humanize/templatetags/humanize.py:NaturalTimeFormatter.string_for\",\"django/core/serializers/json.py:DjangoJSONEncoder.default\",\"django/db/backends/base/operations.py:BaseDatabaseOperations.adapt_timefield_value\",\"django/db/backends/mysql/operations.py:DatabaseOperations.adapt_datetimefield_value\",\"django/db/backends/mysql/operations.py:DatabaseOperations.adapt_timefield_value\",\"django/db/backends/oracle/operations.py:DatabaseOperations.adapt_datetimefield_value\",\"django/db/backends/oracle/operations.py:DatabaseOperations.adapt_timefield_value\",\"django/db/backends/sqlite3/operations.py:DatabaseOperations.adapt_datetimefield_value\",\"django/db/backends/sqlite3/operations.py:DatabaseOperations.adapt_timefield_value\",\"django/db/backends/sqlite3/operations.py:DatabaseOperations.convert_datetimefield_value\",\"django/db/models/fields/__init__.py:_to_naive\",\"django/db/models/fields/__init__.py:DateField.to_python\",\"django/forms/utils.py:to_current_timezone\",\"django/utils/timesince.py:timesince\",\"django/utils/timezone.py:make_aware\",\"django/views/decorators/http.py:condition\"]}  \n```",
+    "subtype": "completed",
+    "is_error": false,
+    "num_turns": null,
+    "duration_ms": 47202,
+    "cost_usd": null,
+    "usage": {
+      "input_tokens": 20693,
+      "output_tokens": 1789,
+      "cache_creation_input_tokens": 0,
+      "cache_read_input_tokens": 40448
+    },
+    "tool_calls": {
+      "command_execution": 1,
+      "mcp__context-manager__context": 2
+    },
+    "mcp_status": "unreported",
+    "api_key_source": "chatgpt",
+    "tools": []
+  },
+  "score": {
+    "answered": true,
+    "recall": 1.0,
+    "precision": 1.0,
+    "missing": [],
+    "extra": [],
+    "edit_applied": null,
+    "stale": [],
+    "success": true
+  },
+  "failure": null,
+  "hook": null
+}

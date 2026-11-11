@@ -1,0 +1,60 @@
+{
+  "record_version": 3,
+  "run_id": "sklearn-impact-get-config__D__2",
+  "task_id": "sklearn-impact-get-config",
+  "repo": "scikit-learn",
+  "category": "files",
+  "arm": "D",
+  "rep": 2,
+  "model": "gpt-6-luna",
+  "effort": "high",
+  "embedding": "local",
+  "index_copy_s": 0.22138920798897743,
+  "index_build_s": 898.3562989169732,
+  "wall_s": 27.677600250113755,
+  "transcript": {
+    "result_text": "No executable direct calls to `sklearn.get_config` appear in `sklearn/`; the matches there are in documentation and comments.\n\n```json\n{\"answer\": []}\n```",
+    "subtype": "completed",
+    "is_error": false,
+    "num_turns": null,
+    "duration_ms": 27678,
+    "cost_usd": null,
+    "usage": {
+      "input_tokens": 9476,
+      "output_tokens": 1057,
+      "cache_creation_input_tokens": 0,
+      "cache_read_input_tokens": 47872
+    },
+    "tool_calls": {
+      "command_execution": 2,
+      "mcp__context-manager__context": 1
+    },
+    "mcp_status": "unreported",
+    "api_key_source": "chatgpt",
+    "tools": []
+  },
+  "score": {
+    "answered": true,
+    "recall": 0.0,
+    "precision": 0.0,
+    "missing": [
+      "sklearn/_config.py",
+      "sklearn/base.py",
+      "sklearn/metrics/_pairwise_distances_reduction/_dispatcher.py",
+      "sklearn/utils/_array_api.py",
+      "sklearn/utils/_chunking.py",
+      "sklearn/utils/_metadata_requests.py",
+      "sklearn/utils/_param_validation.py",
+      "sklearn/utils/_pprint.py",
+      "sklearn/utils/_set_output.py",
+      "sklearn/utils/parallel.py",
+      "sklearn/utils/validation.py"
+    ],
+    "extra": [],
+    "edit_applied": null,
+    "stale": [],
+    "success": false
+  },
+  "failure": null,
+  "hook": null
+}

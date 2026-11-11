@@ -1,0 +1,49 @@
+{
+  "record_version": 3,
+  "run_id": "django-callers-make-hashable__A__1",
+  "task_id": "django-callers-make-hashable",
+  "repo": "django",
+  "category": "callers",
+  "arm": "A",
+  "rep": 1,
+  "model": "gpt-6-luna",
+  "effort": "high",
+  "embedding": "local",
+  "index_copy_s": null,
+  "index_build_s": null,
+  "wall_s": 34.63517845887691,
+  "transcript": {
+    "result_text": "The direct callers are:\n\n```json\n{\"answer\":[\"django/forms/models.py:BaseModelFormSet.validate_unique\",\"django/core/exceptions.py:ValidationError.__hash__\",\"django/utils/tree.py:Node.__hash__\",\"django/contrib/admin/utils.py:display_for_field\",\"django/db/models/expressions.py:Expression.identity\",\"django/db/models/lookups.py:Lookup.__hash__\",\"django/db/models/query_utils.py:Q.identity\",\"django/db/models/base.py:Model._get_FIELD_display\",\"django/db/models/fields/reverse_related.py:ForeignObjectRel.identity\",\"django/db/models/fields/reverse_related.py:ManyToManyRel.identity\",\"django/db/models/sql/compiler.py:SQLCompiler.get_group_by\",\"django/db/models/sql/compiler.py:SQLCompiler.get_order_by\"]}\n```",
+    "subtype": "completed",
+    "is_error": false,
+    "num_turns": null,
+    "duration_ms": 34635,
+    "cost_usd": null,
+    "usage": {
+      "input_tokens": 24284,
+      "output_tokens": 1463,
+      "cache_creation_input_tokens": 0,
+      "cache_read_input_tokens": 31616
+    },
+    "tool_calls": {
+      "command_execution": 4
+    },
+    "mcp_status": "unreported",
+    "api_key_source": "chatgpt",
+    "tools": []
+  },
+  "score": {
+    "answered": true,
+    "recall": 0.9166666666666666,
+    "precision": 1.0,
+    "missing": [
+      "django/utils/hashable.py:make_hashable"
+    ],
+    "extra": [],
+    "edit_applied": null,
+    "stale": [],
+    "success": false
+  },
+  "failure": null,
+  "hook": null
+}

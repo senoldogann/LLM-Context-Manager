@@ -1,0 +1,47 @@
+{
+  "record_version": 3,
+  "run_id": "sklearn-callers-gen-batches__D__1",
+  "task_id": "sklearn-callers-gen-batches",
+  "repo": "scikit-learn",
+  "category": "callers",
+  "arm": "D",
+  "rep": 1,
+  "model": "gpt-6-luna",
+  "effort": "high",
+  "embedding": "local",
+  "index_copy_s": 0.2451164999511093,
+  "index_build_s": 898.3562989169732,
+  "wall_s": 23.809283917071298,
+  "transcript": {
+    "result_text": "```json\n{\"answer\":[\"sklearn/cluster/_mean_shift.py:estimate_bandwidth\",\"sklearn/cluster/_optics.py:_compute_core_distances_\",\"sklearn/decomposition/_dict_learning.py:fit\",\"sklearn/decomposition/_incremental_pca.py:fit\",\"sklearn/decomposition/_incremental_pca.py:transform\",\"sklearn/decomposition/_lda.py:fit\",\"sklearn/decomposition/_lda.py:partial_fit\",\"sklearn/decomposition/_nmf.py:MiniBatchNMF._fit_transform\",\"sklearn/ensemble/_iforest.py:_compute_chunked_score_samples\",\"sklearn/metrics/pairwise.py:_euclidean_distances_upcast\",\"sklearn/metrics/pairwise.py:pairwise_distances_chunked\",\"sklearn/neural_network/_multilayer_perceptron.py:_fit_stochastic\"]}\n```",
+    "subtype": "completed",
+    "is_error": false,
+    "num_turns": null,
+    "duration_ms": 23809,
+    "cost_usd": null,
+    "usage": {
+      "input_tokens": 11039,
+      "output_tokens": 953,
+      "cache_creation_input_tokens": 0,
+      "cache_read_input_tokens": 39936
+    },
+    "tool_calls": {
+      "mcp__context-manager__context": 7
+    },
+    "mcp_status": "unreported",
+    "api_key_source": "chatgpt",
+    "tools": []
+  },
+  "score": {
+    "answered": true,
+    "recall": 1.0,
+    "precision": 1.0,
+    "missing": [],
+    "extra": [],
+    "edit_applied": null,
+    "stale": [],
+    "success": true
+  },
+  "failure": null,
+  "hook": null
+}

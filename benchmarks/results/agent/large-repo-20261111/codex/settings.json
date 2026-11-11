@@ -1,0 +1,49 @@
+{
+  "schema_version": 1,
+  "harness_revision": "01b2afa37e5843e9407f383f1a5eb9d9c489df8e",
+  "preregistration": "benchmarks/agent/PREREGISTRATION.md",
+  "settings": {
+    "model": "gpt-6-luna",
+    "effort": "high",
+    "embedding": "local",
+    "auth": "subscription",
+    "profile": "preregistered",
+    "agent": "codex",
+    "max_budget_usd": 2.0,
+    "timeout_s": 1800,
+    "repetitions": 3,
+    "arms": [
+      "A",
+      "D"
+    ],
+    "tasks": [
+      "django-callers-iri-to-uri",
+      "django-callers-constant-time-compare",
+      "django-trap-urlencode",
+      "tokio-callers-sleep-until",
+      "tokio-callers-async-op",
+      "tokio-callers-with-scheduler",
+      "django-callers-is-aware",
+      "django-callers-make-hashable",
+      "django-trap-get-connection",
+      "django-impact-get-resolver",
+      "sklearn-callers-check-cv",
+      "sklearn-callers-gen-batches",
+      "sklearn-trap-shuffle",
+      "sklearn-impact-get-config",
+      "tokio-callers-new-unnamed",
+      "tokio-callers-unbounded-channel",
+      "tokio-trap-try-with",
+      "tokio-impact-enter-runtime"
+    ]
+  },
+  "environment": {
+    "agent_version": "codex-cli 0.167.0",
+    "agent_login": "Logged in using ChatGPT",
+    "ccm_version": "ccm-cli 0.5.0",
+    "ccm_commit": "01b2afa37e5843e9407f383f1a5eb9d9c489df8e",
+    "ccm_dirty": false,
+    "ccm_cli_sha256": "5ea5c4bd122b12e3ba3265777c326526ae8de39f954c50dc15d91a81bce715a1",
+    "ccm_mcp_sha256": "601fc2c0bae700eeaa9f7360081e83c44ccf3fec4c07a697848ebdb974acd577"
+  }
+}

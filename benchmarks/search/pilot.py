@@ -35,6 +35,7 @@ from agent.run import (
     AuthError,
     QuotaError,
     RunError,
+    codex_quota_reset,
     codex_transcript,
     hit_auth_failure,
     hit_quota,
@@ -231,7 +232,10 @@ def run_one(config: PilotConfig, task: Task, arm: PilotArm, rep: int) -> PilotRe
         if hit_auth_failure(transcript):
             raise AuthError(f"{name}: {transcript.result_text[:300]}")
         if hit_quota(transcript):
-            raise QuotaError(f"{name}: {transcript.result_text[:300]}")
+            raise QuotaError(
+                f"{name}: {transcript.result_text[:300]}",
+                codex_quota_reset(transcript.result_text),
+            )
         if result.failure is not None:
             failure = f"codex failure: {result.failure}"
         contents = (

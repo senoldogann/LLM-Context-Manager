@@ -1,0 +1,56 @@
+{
+  "record_version": 3,
+  "run_id": "sklearn-impact-get-config__A__3",
+  "task_id": "sklearn-impact-get-config",
+  "repo": "scikit-learn",
+  "category": "files",
+  "arm": "A",
+  "rep": 3,
+  "model": "claude-opus-5-5",
+  "effort": "high",
+  "embedding": "local",
+  "index_copy_s": null,
+  "index_build_s": null,
+  "wall_s": 13.898390249814838,
+  "transcript": {
+    "result_text": "Twelve files in `sklearn/` call `get_config()`, tests excluded. I found them by searching for every use of `get_config` (including the `_get_config` alias) and keeping only actual calls.\n\n**Files that call it:**\n- `sklearn/base.py` (lines 680, 698, 1458)\n- `sklearn/utils/validation.py`: imported as `_get_config`, called at line 100\n- `sklearn/utils/_param_validation.py`\n- `sklearn/utils/parallel.py`\n- `sklearn/utils/_metadata_requests.py`\n- `sklearn/utils/_set_output.py`\n- `sklearn/utils/_pprint.py`\n- `sklearn/utils/_array_api.py`\n- `sklearn/utils/_chunking.py`\n- `sklearn/metrics/_pairwise_distances_reduction/_dispatcher.py`\n- `sklearn/metrics/_pairwise_distances_reduction/_base.pyx.tp`: a Cython template, not a `.py` file\n- `sklearn/_config.py`: this is where `get_config` is defined, and its own `config_context` calls it at line 356. Leave it out if you only want other files.\n\n**Files that mention it but don't call it:**\n- `sklearn/__init__.py` only imports it and re-exports it.\n- `sklearn/cluster/_optics.py`, `sklearn/metrics/pairwise.py` and `sklearn/ensemble/_iforest.py` only mention it in docstrings or comments.\n\n```json\n{\"answer\": [\"sklearn/_config.py\", \"sklearn/base.py\", \"sklearn/utils/validation.py\", \"sklearn/utils/_param_validation.py\", \"sklearn/utils/parallel.py\", \"sklearn/utils/_metadata_requests.py\", \"sklearn/utils/_set_output.py\", \"sklearn/utils/_pprint.py\", \"sklearn/utils/_array_api.py\", \"sklearn/utils/_chunking.py\", \"sklearn/metrics/_pairwise_distances_reduction/_dispatcher.py\", \"sklearn/metrics/_pairwise_distances_reduction/_base.pyx.tp\"]}\n```",
+    "subtype": "success",
+    "is_error": false,
+    "num_turns": 2,
+    "duration_ms": 12944,
+    "cost_usd": 0.060471800000000006,
+    "usage": {
+      "input_tokens": 4,
+      "output_tokens": 1281,
+      "cache_creation_input_tokens": 4046,
+      "cache_read_input_tokens": 12339
+    },
+    "tool_calls": {
+      "Grep": 1
+    },
+    "mcp_status": "none",
+    "api_key_source": "none",
+    "tools": [
+      "Bash",
+      "Edit",
+      "Glob",
+      "Grep",
+      "Read",
+      "Write"
+    ]
+  },
+  "score": {
+    "answered": true,
+    "recall": 1.0,
+    "precision": 0.9166666666666666,
+    "missing": [],
+    "extra": [
+      "sklearn/metrics/_pairwise_distances_reduction/_base.pyx.tp"
+    ],
+    "edit_applied": null,
+    "stale": [],
+    "success": true
+  },
+  "failure": null,
+  "hook": null
+}

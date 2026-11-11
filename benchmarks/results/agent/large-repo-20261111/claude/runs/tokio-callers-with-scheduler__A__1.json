@@ -1,0 +1,55 @@
+{
+  "record_version": 3,
+  "run_id": "tokio-callers-with-scheduler__A__1",
+  "task_id": "tokio-callers-with-scheduler",
+  "repo": "tokio",
+  "category": "callers",
+  "arm": "A",
+  "rep": 1,
+  "model": "claude-opus-5-5",
+  "effort": "high",
+  "embedding": "local",
+  "index_copy_s": null,
+  "index_build_s": null,
+  "wall_s": 16.922433166997507,
+  "transcript": {
+    "result_text": "I found nine functions in tokio's library code that call `with_scheduler` directly. I searched the workspace for the name and checked which function contains each call. Every call is in `tokio/src/runtime/`:\n\n- `context.rs:168`: `defer`\n- `task/trace/mod.rs:194`: `trace_leaf`, a free function\n- `time/entry.rs:662`: `generate_shard_id`\n- `scheduler/multi_thread/worker.rs:1255`: `with_current`\n- `scheduler/multi_thread_alt/worker.rs:1600`: `with_current`\n- `scheduler/current_thread/mod.rs:510`: `Handle.dump`\n- `scheduler/current_thread/mod.rs:632`: `schedule`, in `impl Schedule for Arc<Handle>`\n- `scheduler/current_thread/mod.rs:674`: `unhandled_panic`, in the same impl\n\n```json\n{\"answer\": [\"tokio/src/runtime/context.rs:defer\", \"tokio/src/runtime/task/trace/mod.rs:trace_leaf\", \"tokio/src/runtime/time/entry.rs:generate_shard_id\", \"tokio/src/runtime/scheduler/multi_thread/worker.rs:with_current\", \"tokio/src/runtime/scheduler/multi_thread_alt/worker.rs:with_current\", \"tokio/src/runtime/scheduler/current_thread/mod.rs:Handle.dump\", \"tokio/src/runtime/scheduler/current_thread/mod.rs:schedule\", \"tokio/src/runtime/scheduler/current_thread/mod.rs:unhandled_panic\"]}\n```",
+    "subtype": "success",
+    "is_error": false,
+    "num_turns": 4,
+    "duration_ms": 16095,
+    "cost_usd": 0.0755224,
+    "usage": {
+      "input_tokens": 8,
+      "output_tokens": 1161,
+      "cache_creation_input_tokens": 5763,
+      "cache_read_input_tokens": 30832
+    },
+    "tool_calls": {
+      "Bash": 2,
+      "Grep": 1
+    },
+    "mcp_status": "none",
+    "api_key_source": "none",
+    "tools": [
+      "Bash",
+      "Edit",
+      "Glob",
+      "Grep",
+      "Read",
+      "Write"
+    ]
+  },
+  "score": {
+    "answered": true,
+    "recall": 1.0,
+    "precision": 1.0,
+    "missing": [],
+    "extra": [],
+    "edit_applied": null,
+    "stale": [],
+    "success": true
+  },
+  "failure": null,
+  "hook": null
+}

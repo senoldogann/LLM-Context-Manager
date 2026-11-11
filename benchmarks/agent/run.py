@@ -14,6 +14,7 @@ import fcntl
 import hashlib
 import json
 import os
+import re
 import shlex
 import shutil
 import signal
@@ -21,6 +22,7 @@ import subprocess
 import tempfile
 import time
 from dataclasses import asdict, dataclass
+from datetime import datetime
 from pathlib import Path
 from typing import Literal
 
@@ -49,6 +51,14 @@ CODEX_FORBIDDEN_ITEMS = ("web_search", "image_generation", "collab_tool_call")
 AUTH_SOURCE: dict[Auth, str] = {"subscription": "none", "api-key": "ANTHROPIC_API_KEY"}
 # Sınır ya da aşırı yük hatası ajanın başarısızlığı değildir: koşu kaydedilmez, ölçüm durur.
 QUOTA_MARKERS = ("usage limit", "rate limit", "rate_limit", "limit reached", "overloaded")
+# Claude Code sınır hatasını sonuç olayında HTTP durumuyla da bildirir; metin değişebilir
+# ("You've hit your weekly limit" hiçbir işaretle eşleşmez), durum kodu değişmez.
+QUOTA_HTTP_STATUS = 429
+# Codex sınır mesajındaki yerel saatle sıfırlanma: "try again at Nov 20th, 2026 1:54 AM".
+CODEX_RETRY_AT = re.compile(
+    r"try again at (?P<month>[A-Z][a-z]{2}) (?P<day>\d{1,2})(?:st|nd|rd|th), (?P<year>\d{4}) "
+    r"(?P<clock>\d{1,2}:\d{2} [AP]M)"
+)
 # Kimlik doğrulama hatası da (geçersiz ya da iptal edilmiş jeton) ajanın başarısızlığı değildir.
 AUTH_MARKERS = (
     "failed to authenticate",
@@ -143,7 +153,14 @@ class TranscriptError(RunError):
 
 
 class QuotaError(RuntimeError):
-    """Abonelik ya da hız sınırı: koşu kaydedilmez; sınır sıfırlanınca aynı komut sürdürür."""
+    """Abonelik ya da hız sınırı: koşu kaydedilmez; sınır sıfırlanınca aynı komut sürdürür.
+
+    `resets_at`, ajanın bildirdiği sıfırlanma anıdır (Unix saniyesi); bildirmediyse None.
+    """
+
+    def __init__(self, message: str, resets_at: float | None) -> None:
+        super().__init__(message)
+        self.resets_at = resets_at
 
 
 class AuthError(RuntimeError):
@@ -211,6 +228,8 @@ class Transcript:
     result_text: str
     subtype: str
     is_error: bool
+    # Claude Code'un API hatası HTTP durumu (`api_error_status`); hata yoksa ve Codex'te None.
+    api_error_status: int | None
     # Codex `exec` tur sayısı ve dolar maliyeti bildirmez: o ajanda ikisi de None'dır.
     num_turns: int | None
     duration_ms: int
@@ -458,7 +477,37 @@ def verify_isolation(transcript: Transcript, profile: ProductProfile, arm: Arm, 
 def hit_quota(transcript: Transcript) -> bool:
     """Sonuç bir kullanım ya da hız sınırı veya aşırı yük hatası mı."""
     text = transcript.result_text.lower()
-    return transcript.is_error and any(marker in text for marker in QUOTA_MARKERS)
+    return transcript.is_error and (
+        transcript.api_error_status == QUOTA_HTTP_STATUS
+        or any(marker in text for marker in QUOTA_MARKERS)
+    )
+
+
+def claude_rejection(lines: list[str]) -> float | None:
+    """Claude dökümünde reddedilmiş sınır olayının sıfırlanma anı; olay yoksa None.
+
+    Claude Code sınırdaki isteği `rate_limit_event` ile `status: rejected` olarak bildirir;
+    bazen ardından sonuç olayı gelmez, bu yüzden sonuç olayından önce bakılır.
+    """
+    for number, line in enumerate(lines, 1):
+        if '"rate_limit_event"' not in line:
+            continue
+        event = as_object(json_line(line, number), f"transcript line {number}", TranscriptError)
+        info = as_object(event.get("rate_limit_info"), "rate_limit_info", TranscriptError)
+        if info.get("status") == "rejected":
+            return float(as_int(info.get("resetsAt"), "rate_limit_info.resetsAt", TranscriptError))
+    return None
+
+
+def codex_quota_reset(text: str) -> float | None:
+    """Codex sınır mesajındaki "try again at …" anı (yerel saat); yoksa None."""
+    match = CODEX_RETRY_AT.search(text)
+    if match is None:
+        return None
+    moment = datetime.strptime(
+        f"{match['month']} {match['day']} {match['year']} {match['clock']}", "%b %d %Y %I:%M %p"
+    )
+    return moment.timestamp()
 
 
 def hit_auth_failure(transcript: Transcript) -> bool:
@@ -974,10 +1023,14 @@ def transcript_from(
     """Sonuç olayını ölçülere çevirir; eksik alan biçim hatasıdır."""
     usage = as_object(result.get("usage"), "result.usage", TranscriptError)
     text = result.get("result")
+    status = result.get("api_error_status")
     return Transcript(
         result_text="" if text is None else as_str(text, "result.result", TranscriptError),
         subtype=as_str(result.get("subtype"), "result.subtype", TranscriptError),
         is_error=as_bool(result.get("is_error"), "result.is_error", TranscriptError),
+        api_error_status=(
+            None if status is None else as_int(status, "result.api_error_status", TranscriptError)
+        ),
         num_turns=as_int(result.get("num_turns"), "result.num_turns", TranscriptError),
         duration_ms=as_int(result.get("duration_ms"), "result.duration_ms", TranscriptError),
         cost_usd=as_float(result.get("total_cost_usd"), "result.total_cost_usd", TranscriptError),
@@ -1174,6 +1227,7 @@ def codex_transcript(result: codex.CodexResult, wall_s: float) -> Transcript:
         result_text=result.result_text if result.failure is None else result.failure,
         subtype="completed" if result.failure is None else "failed",
         is_error=result.failure is not None,
+        api_error_status=None,
         num_turns=None,
         duration_ms=round(wall_s * 1000),
         cost_usd=None,
@@ -1268,11 +1322,19 @@ def run_one(settings: Settings, task: Task, arm: Arm, rep: int, secrets: Secrets
                 f"{name}: the {settings.agent} agent exited before its "
                 f"{START_EVENTS[settings.agent]} event; stderr: {stderr_tail(paths.stderr)}"
             )
+        rejected_until = claude_rejection(lines) if settings.agent == "claude" else None
+        if rejected_until is not None:
+            raise QuotaError(
+                f"{name}: Claude Code rejected the request at its limit", rejected_until
+            )
         transcript = read_transcript(settings, arm, lines, wall_s)
         if hit_auth_failure(transcript):
             raise AuthError(f"{name}: {transcript.result_text[:300]}")
         if hit_quota(transcript):
-            raise QuotaError(f"{name}: {transcript.result_text[:300]}")
+            raise QuotaError(
+                f"{name}: {transcript.result_text[:300]}",
+                codex_quota_reset(transcript.result_text) if settings.agent == "codex" else None,
+            )
         if transcript.is_error:
             failure = f"{settings.agent} result error ({transcript.subtype})"
         if settings.agent == "claude" and arm != "A" and transcript.mcp_status != "connected":

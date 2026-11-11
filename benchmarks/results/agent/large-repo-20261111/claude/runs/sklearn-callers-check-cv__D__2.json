@@ -1,0 +1,57 @@
+{
+  "record_version": 3,
+  "run_id": "sklearn-callers-check-cv__D__2",
+  "task_id": "sklearn-callers-check-cv",
+  "repo": "scikit-learn",
+  "category": "callers",
+  "arm": "D",
+  "rep": 2,
+  "model": "claude-opus-5-5",
+  "effort": "high",
+  "embedding": "local",
+  "index_copy_s": 0.2015716671012342,
+  "index_build_s": 898.3562989169732,
+  "wall_s": 14.260680249892175,
+  "transcript": {
+    "result_text": "I found 20 functions and methods in `sklearn/` (excluding tests) that call `check_cv` directly. Two independent checks found the same list: the code index's caller list, which it reported as complete, and a grep for `check_cv` in all non-test files. Grep matches that are only imports, `__all__` entries, docstring examples or the definition itself in `sklearn/model_selection/_split.py` are not counted.\n\n- **`sklearn/model_selection/_validation.py`:** five module-level functions call it: `cross_validate`, `cross_val_predict`, `permutation_test_score`, `learning_curve` and `validation_curve`.\n- **`get_metadata_routing` methods:** three classes call it here as well as in `fit`. They are `GraphicalLassoCV`, `LinearModelCV` and `LarsCV`.\n- **Not `fit`:** `TunedThresholdClassifierCV` calls it from its private `_fit` method.\n- **Everything else:** the remaining calls are in `fit` methods.\n\n```json\n{\"answer\": [\"sklearn/calibration.py:CalibratedClassifierCV.fit\", \"sklearn/covariance/_graph_lasso.py:GraphicalLassoCV.fit\", \"sklearn/covariance/_graph_lasso.py:GraphicalLassoCV.get_metadata_routing\", \"sklearn/ensemble/_stacking.py:_BaseStacking.fit\", \"sklearn/feature_selection/_rfe.py:RFECV.fit\", \"sklearn/feature_selection/_sequential.py:SequentialFeatureSelector.fit\", \"sklearn/linear_model/_coordinate_descent.py:LinearModelCV.fit\", \"sklearn/linear_model/_coordinate_descent.py:LinearModelCV.get_metadata_routing\", \"sklearn/linear_model/_least_angle.py:LarsCV.fit\", \"sklearn/linear_model/_least_angle.py:LarsCV.get_metadata_routing\", \"sklearn/linear_model/_logistic.py:LogisticRegressionCV.fit\", \"sklearn/linear_model/_omp.py:OrthogonalMatchingPursuitCV.fit\", \"sklearn/model_selection/_classification_threshold.py:TunedThresholdClassifierCV._fit\", \"sklearn/model_selection/_search.py:BaseSearchCV.fit\", \"sklearn/model_selection/_search_successive_halving.py:BaseSuccessiveHalving.fit\", \"sklearn/model_selection/_validation.py:cross_validate\", \"sklearn/model_selection/_validation.py:cross_val_predict\", \"sklearn/model_selection/_validation.py:permutation_test_score\", \"sklearn/model_selection/_validation.py:learning_curve\", \"sklearn/model_selection/_validation.py:validation_curve\"]}\n```",
+    "subtype": "success",
+    "is_error": false,
+    "num_turns": 3,
+    "duration_ms": 13455,
+    "cost_usd": 0.0872638,
+    "usage": {
+      "input_tokens": 4,
+      "output_tokens": 1226,
+      "cache_creation_input_tokens": 7509,
+      "cache_read_input_tokens": 13279
+    },
+    "tool_calls": {
+      "Grep": 1,
+      "mcp__context-manager__context": 1
+    },
+    "mcp_status": "connected",
+    "api_key_source": "none",
+    "tools": [
+      "Bash",
+      "Edit",
+      "Glob",
+      "Grep",
+      "Read",
+      "Write",
+      "mcp__context-manager__context",
+      "mcp__context-manager__index_project"
+    ]
+  },
+  "score": {
+    "answered": true,
+    "recall": 1.0,
+    "precision": 1.0,
+    "missing": [],
+    "extra": [],
+    "edit_applied": null,
+    "stale": [],
+    "success": true
+  },
+  "failure": null,
+  "hook": null
+}

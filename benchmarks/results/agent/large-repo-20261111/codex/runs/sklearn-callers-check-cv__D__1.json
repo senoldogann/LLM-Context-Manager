@@ -1,0 +1,48 @@
+{
+  "record_version": 3,
+  "run_id": "sklearn-callers-check-cv__D__1",
+  "task_id": "sklearn-callers-check-cv",
+  "repo": "scikit-learn",
+  "category": "callers",
+  "arm": "D",
+  "rep": 1,
+  "model": "gpt-6-luna",
+  "effort": "high",
+  "embedding": "local",
+  "index_copy_s": 0.336249333107844,
+  "index_build_s": 898.3562989169732,
+  "wall_s": 52.65621495805681,
+  "transcript": {
+    "result_text": "```json\n{\"answer\":[\"sklearn/model_selection/_classification_threshold.py:TunedThresholdClassifierCV._fit\",\"sklearn/model_selection/_validation.py:cross_val_predict\",\"sklearn/model_selection/_validation.py:cross_validate\",\"sklearn/model_selection/_validation.py:learning_curve\",\"sklearn/model_selection/_validation.py:permutation_test_score\",\"sklearn/model_selection/_validation.py:validation_curve\",\"sklearn/calibration.py:CalibratedClassifierCV.fit\",\"sklearn/covariance/_graph_lasso.py:GraphicalLassoCV.fit\",\"sklearn/covariance/_graph_lasso.py:GraphicalLassoCV.get_metadata_routing\",\"sklearn/ensemble/_stacking.py:_BaseStacking.fit\",\"sklearn/feature_selection/_rfe.py:RFECV.fit\",\"sklearn/feature_selection/_sequential.py:SequentialFeatureSelector.fit\",\"sklearn/linear_model/_coordinate_descent.py:LinearModelCV.fit\",\"sklearn/linear_model/_coordinate_descent.py:LinearModelCV.get_metadata_routing\",\"sklearn/linear_model/_least_angle.py:LarsCV.fit\",\"sklearn/linear_model/_least_angle.py:LarsCV.get_metadata_routing\",\"sklearn/linear_model/_logistic.py:LogisticRegressionCV.fit\",\"sklearn/linear_model/_omp.py:OrthogonalMatchingPursuitCV.fit\",\"sklearn/model_selection/_search.py:BaseSearchCV.fit\",\"sklearn/model_selection/_search_successive_halving.py:BaseSuccessiveHalving.fit\"]}\n```",
+    "subtype": "completed",
+    "is_error": false,
+    "num_turns": null,
+    "duration_ms": 52656,
+    "cost_usd": null,
+    "usage": {
+      "input_tokens": 17124,
+      "output_tokens": 2462,
+      "cache_creation_input_tokens": 0,
+      "cache_read_input_tokens": 84992
+    },
+    "tool_calls": {
+      "command_execution": 2,
+      "mcp__context-manager__context": 16
+    },
+    "mcp_status": "unreported",
+    "api_key_source": "chatgpt",
+    "tools": []
+  },
+  "score": {
+    "answered": true,
+    "recall": 1.0,
+    "precision": 1.0,
+    "missing": [],
+    "extra": [],
+    "edit_applied": null,
+    "stale": [],
+    "success": true
+  },
+  "failure": null,
+  "hook": null
+}

@@ -9,6 +9,7 @@ import os
 import signal
 import subprocess
 import sys
+import time
 from collections.abc import Iterator
 from contextlib import contextmanager
 from pathlib import Path
@@ -51,6 +52,8 @@ SETUP_SCHEMA_VERSION = 1
 # `run` çıkış kodları; `--help` metni ve README ile aynı tutulur.
 EXIT_BUDGET = 3
 EXIT_QUOTA = 4
+# Kota duruşunda sonuç dizinine yazılan dosya (bkz. `write_quota_stop`).
+QUOTA_STOP_FILE = "quota-stop.json"
 EXIT_ISOLATION = 5
 EXIT_AUTH = 6
 EXIT_SETUP = 7
@@ -60,6 +63,7 @@ exit codes:
   0    every planned run has a record
   {EXIT_BUDGET}    stopped before a run that could push the total over --max-total-usd
   {EXIT_QUOTA}    usage or rate limit; rerun the same command after it resets
+       (scripts/run_until_done.py waits for the reset in quota-stop.json and reruns it)
   {EXIT_ISOLATION}    isolation check failed; no record written
   {EXIT_AUTH}    authentication failed; no record written
   {EXIT_SETUP}    setup or infrastructure failure (workspace, index cache, credentials, agent
@@ -112,6 +116,22 @@ def exclusive_out_dir(out_dir: Path) -> Iterator[None]:
                 "another --out-dir"
             ) from error
         yield
+
+
+def write_quota_stop(out_dir: Path, name: str, error: QuotaError) -> None:
+    """Kota duruşunu `quota-stop.json`'a yazar: hangi koşu, ne zaman sıfırlanacağı.
+
+    `scripts/run_until_done.py` bu dosyadan sıfırlanma anını okuyup aynı komutu sürdürür.
+    """
+    stop: dict[str, JsonValue] = {
+        "run": name,
+        "resets_at": error.resets_at,
+        "message": str(error),
+    }
+    write_atomic(out_dir / QUOTA_STOP_FILE, json.dumps(stop, indent=2, ensure_ascii=False))
+    if error.resets_at is not None:
+        reset = time.strftime("%Y-%m-%d %H:%M %Z", time.localtime(error.resets_at))
+        print(f"the limit resets at {reset}", flush=True)
 
 
 def repository_root() -> Path:
@@ -439,6 +459,7 @@ def run_missing(
                     record = run_one(settings, task, arm, repetition, secrets)
                 except QuotaError as error:
                     print(f"stopping at {name}: usage or rate limit ({error}).", flush=True)
+                    write_quota_stop(settings.out_dir, name, error)
                     print("Rerun the same command after the limit resets.", flush=True)
                     return EXIT_QUOTA
                 except IsolationError as error:

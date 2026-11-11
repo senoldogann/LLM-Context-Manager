@@ -1,0 +1,50 @@
+{
+  "record_version": 3,
+  "run_id": "sklearn-impact-get-config__D__1",
+  "task_id": "sklearn-impact-get-config",
+  "repo": "scikit-learn",
+  "category": "files",
+  "arm": "D",
+  "rep": 1,
+  "model": "gpt-6-luna",
+  "effort": "high",
+  "embedding": "local",
+  "index_copy_s": 0.251885375007987,
+  "index_build_s": 898.3562989169732,
+  "wall_s": 23.731442499905825,
+  "transcript": {
+    "result_text": "```json\n{\"answer\":[\"sklearn/_config.py\",\"sklearn/base.py\",\"sklearn/metrics/_pairwise_distances_reduction/_dispatcher.py\",\"sklearn/utils/_array_api.py\",\"sklearn/utils/_chunking.py\",\"sklearn/utils/_metadata_requests.py\",\"sklearn/utils/_param_validation.py\",\"sklearn/utils/_pprint.py\",\"sklearn/utils/_set_output.py\",\"sklearn/utils/parallel.py\"]}\n```",
+    "subtype": "completed",
+    "is_error": false,
+    "num_turns": null,
+    "duration_ms": 23731,
+    "cost_usd": null,
+    "usage": {
+      "input_tokens": 14840,
+      "output_tokens": 907,
+      "cache_creation_input_tokens": 0,
+      "cache_read_input_tokens": 46592
+    },
+    "tool_calls": {
+      "command_execution": 1,
+      "mcp__context-manager__context": 2
+    },
+    "mcp_status": "unreported",
+    "api_key_source": "chatgpt",
+    "tools": []
+  },
+  "score": {
+    "answered": true,
+    "recall": 0.9090909090909091,
+    "precision": 1.0,
+    "missing": [
+      "sklearn/utils/validation.py"
+    ],
+    "extra": [],
+    "edit_applied": null,
+    "stale": [],
+    "success": false
+  },
+  "failure": null,
+  "hook": null
+}

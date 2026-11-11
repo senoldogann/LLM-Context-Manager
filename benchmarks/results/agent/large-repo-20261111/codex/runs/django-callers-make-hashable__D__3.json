@@ -1,0 +1,47 @@
+{
+  "record_version": 3,
+  "run_id": "django-callers-make-hashable__D__3",
+  "task_id": "django-callers-make-hashable",
+  "repo": "django",
+  "category": "callers",
+  "arm": "D",
+  "rep": 3,
+  "model": "gpt-6-luna",
+  "effort": "high",
+  "embedding": "local",
+  "index_copy_s": 1.1986413330305368,
+  "index_build_s": 1562.7380535420962,
+  "wall_s": 22.065091874916106,
+  "transcript": {
+    "result_text": "The index found 12 non-test callers and two recursive call sites inside `make_hashable` itself. Including that function, the list is:\n\n```json\n{\"answer\":[\"django/contrib/admin/utils.py:display_for_field\",\"django/core/exceptions.py:ValidationError.__hash__\",\"django/db/models/base.py:Model._get_FIELD_display\",\"django/db/models/expressions.py:Expression.identity\",\"django/db/models/fields/reverse_related.py:ForeignObjectRel.identity\",\"django/db/models/fields/reverse_related.py:ManyToManyRel.identity\",\"django/db/models/lookups.py:Lookup.__hash__\",\"django/db/models/query_utils.py:Q.identity\",\"django/db/models/sql/compiler.py:SQLCompiler.get_group_by\",\"django/db/models/sql/compiler.py:SQLCompiler.get_order_by\",\"django/forms/models.py:BaseModelFormSet.validate_unique\",\"django/utils/tree.py:Node.__hash__\",\"django/utils/hashable.py:make_hashable\"]}\n```",
+    "subtype": "completed",
+    "is_error": false,
+    "num_turns": null,
+    "duration_ms": 22065,
+    "cost_usd": null,
+    "usage": {
+      "input_tokens": 4532,
+      "output_tokens": 753,
+      "cache_creation_input_tokens": 0,
+      "cache_read_input_tokens": 28544
+    },
+    "tool_calls": {
+      "mcp__context-manager__context": 1
+    },
+    "mcp_status": "unreported",
+    "api_key_source": "chatgpt",
+    "tools": []
+  },
+  "score": {
+    "answered": true,
+    "recall": 1.0,
+    "precision": 1.0,
+    "missing": [],
+    "extra": [],
+    "edit_applied": null,
+    "stale": [],
+    "success": true
+  },
+  "failure": null,
+  "hook": null
+}

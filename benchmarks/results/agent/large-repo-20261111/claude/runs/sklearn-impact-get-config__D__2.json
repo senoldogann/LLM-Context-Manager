@@ -1,0 +1,58 @@
+{
+  "record_version": 3,
+  "run_id": "sklearn-impact-get-config__D__2",
+  "task_id": "sklearn-impact-get-config",
+  "repo": "scikit-learn",
+  "category": "files",
+  "arm": "D",
+  "rep": 2,
+  "model": "claude-opus-5-5",
+  "effort": "high",
+  "embedding": "local",
+  "index_copy_s": 0.22273649997077882,
+  "index_build_s": 898.3562989169732,
+  "wall_s": 14.30575070809573,
+  "transcript": {
+    "result_text": "I searched `sklearn/` for `get_config`, leaving out `tests/` directories and `test_*.py` files. These 12 files call it:\n\n| File | How it is imported | Call site(s) |\n|---|---|---|\n| `sklearn/base.py` | `from ._config import get_config` | lines 680, 698, 1458 |\n| `sklearn/utils/validation.py` | `from .. import get_config as _get_config` | line 100 |\n| `sklearn/utils/_param_validation.py` | `from .._config import get_config` | line 184 |\n| `sklearn/utils/parallel.py` | `from .._config import get_config` | line 69 |\n| `sklearn/utils/_array_api.py` | `from .._config import get_config` | line 523 |\n| `sklearn/utils/_chunking.py` | `from .._config import get_config` | line 163 |\n| `sklearn/utils/_metadata_requests.py` | `from .. import get_config` | line 130 |\n| `sklearn/utils/_set_output.py` | `from .._config import get_config` | line 254 |\n| `sklearn/utils/_pprint.py` | `from .._config import get_config` | line 182 |\n| `sklearn/metrics/_pairwise_distances_reduction/_dispatcher.py` | `from ... import get_config` | line 134 |\n| `sklearn/metrics/_pairwise_distances_reduction/_base.pyx.tp` | `from sklearn import get_config` | lines 142, 173 |\n| `sklearn/_config.py` | defines `get_config` | line 356, inside `config_context` |\n\nTwo entries are borderline, and I included both:\n- `_base.pyx.tp` is a Cython template, not a `.py` file.\n- `_config.py` is where `get_config` is defined, but it also calls the function itself.\n\nI left these out:\n- `sklearn/__init__.py` only imports `get_config` and lists it in `__all__` so it can be used as `sklearn.get_config`. It never calls it.\n- `cluster/_optics.py`, `ensemble/_iforest.py` and `metrics/pairwise.py` mention `sklearn.get_config()` only in docstrings or comments.\n\n```json\n{\"answer\": [\"sklearn/base.py\", \"sklearn/utils/validation.py\", \"sklearn/utils/_param_validation.py\", \"sklearn/utils/parallel.py\", \"sklearn/utils/_array_api.py\", \"sklearn/utils/_chunking.py\", \"sklearn/utils/_metadata_requests.py\", \"sklearn/utils/_set_output.py\", \"sklearn/utils/_pprint.py\", \"sklearn/metrics/_pairwise_distances_reduction/_dispatcher.py\", \"sklearn/metrics/_pairwise_distances_reduction/_base.pyx.tp\", \"sklearn/_config.py\"]}\n```",
+    "subtype": "success",
+    "is_error": false,
+    "num_turns": 2,
+    "duration_ms": 13273,
+    "cost_usd": 0.0659204,
+    "usage": {
+      "input_tokens": 4,
+      "output_tokens": 1470,
+      "cache_creation_input_tokens": 4233,
+      "cache_read_input_tokens": 13202
+    },
+    "tool_calls": {
+      "Grep": 1
+    },
+    "mcp_status": "connected",
+    "api_key_source": "none",
+    "tools": [
+      "Bash",
+      "Edit",
+      "Glob",
+      "Grep",
+      "Read",
+      "Write",
+      "mcp__context-manager__context",
+      "mcp__context-manager__index_project"
+    ]
+  },
+  "score": {
+    "answered": true,
+    "recall": 1.0,
+    "precision": 0.9166666666666666,
+    "missing": [],
+    "extra": [
+      "sklearn/metrics/_pairwise_distances_reduction/_base.pyx.tp"
+    ],
+    "edit_applied": null,
+    "stale": [],
+    "success": true
+  },
+  "failure": null,
+  "hook": null
+}

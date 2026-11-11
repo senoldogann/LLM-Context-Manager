@@ -1,0 +1,19 @@
+{
+  "record_version": 3,
+  "run_id": "sklearn-impact-get-config__D__3",
+  "task_id": "sklearn-impact-get-config",
+  "repo": "scikit-learn",
+  "category": "files",
+  "arm": "D",
+  "rep": 3,
+  "model": "claude-opus-5-5",
+  "effort": "high",
+  "embedding": "local",
+  "index_copy_s": 0.1429620000999421,
+  "index_build_s": 898.3562989169732,
+  "wall_s": 1.2096841670572758,
+  "transcript": null,
+  "score": null,
+  "failure": "the transcript has no result event",
+  "hook": null
+}

@@ -1,0 +1,54 @@
+{
+  "record_version": 3,
+  "run_id": "tokio-trap-try-with__A__1",
+  "task_id": "tokio-trap-try-with",
+  "repo": "tokio",
+  "category": "trap",
+  "arm": "A",
+  "rep": 1,
+  "model": "claude-opus-5-5",
+  "effort": "high",
+  "embedding": "local",
+  "index_copy_s": null,
+  "index_build_s": null,
+  "wall_s": 18.01444941596128,
+  "transcript": {
+    "result_text": "Only one function calls tokio's task-local `try_with` directly: the `with` method of `LocalKey`, at `tokio/src/task/task_local.rs:234`, which runs `match self.try_with(f)`. Here `self` is the task-local `LocalKey`.\n\nI searched for `try_with` in every library crate's `src` directory, skipping tests, benches and examples. None of the other calls count:\n\n- **Inside tokio's `LocalKey` itself** (lines 209 and 254 of `task_local.rs`, in `scope_inner` and `try_with`): these call `self.inner.try_with(...)`. `inner` is a standard-library thread-local key, not the task-local one.\n- **`CONTEXT.try_with`** in `runtime/context.rs`, `runtime/context/current.rs` and `runtime/context/blocking.rs`: `CONTEXT` is a thread local declared with `tokio_thread_local!`.\n- **`CURRENT_PARKER.try_with`** in `runtime/park.rs` and **`CURRENT.try_with`** in `task/local.rs`: both are also `tokio_thread_local!` thread locals.\n- **`try_with_current`** in `runtime/task/trace/mod.rs` and **`try_with_interest`** in `io/async_fd.rs`: these are different methods whose names happen to start with `try_with`.\n- **`tokio-util`, `tokio-stream`, `tokio-test` and `tokio-macros`**: none of them call `try_with` in their library code.\n- **`task_local!`**: it isn't used outside doc comments in library source, so there are no other task-local keys that could be called.\n\n```json\n{\"answer\": [\"tokio/src/task/task_local.rs:LocalKey.with\"]}\n```",
+    "subtype": "success",
+    "is_error": false,
+    "num_turns": 4,
+    "duration_ms": 17366,
+    "cost_usd": 0.1073546,
+    "usage": {
+      "input_tokens": 8,
+      "output_tokens": 1320,
+      "cache_creation_input_tokens": 9231,
+      "cache_read_input_tokens": 35373
+    },
+    "tool_calls": {
+      "Grep": 3
+    },
+    "mcp_status": "none",
+    "api_key_source": "none",
+    "tools": [
+      "Bash",
+      "Edit",
+      "Glob",
+      "Grep",
+      "Read",
+      "Write"
+    ]
+  },
+  "score": {
+    "answered": true,
+    "recall": 1.0,
+    "precision": 1.0,
+    "missing": [],
+    "extra": [],
+    "edit_applied": null,
+    "stale": [],
+    "success": true
+  },
+  "failure": null,
+  "hook": null
+}
