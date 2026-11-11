@@ -1,0 +1,61 @@
+{
+  "record_version": 3,
+  "run_id": "sklearn-impact-randomized-svd__D__1",
+  "task_id": "sklearn-impact-randomized-svd",
+  "repo": "scikit-learn",
+  "category": "files",
+  "arm": "D",
+  "rep": 1,
+  "model": "claude-opus-5-5",
+  "effort": "high",
+  "embedding": "local",
+  "index_copy_s": 0.2803868749178946,
+  "index_build_s": 1014.4864400420338,
+  "wall_s": 17.408063916955143,
+  "transcript": {
+    "result_text": "I found seven files outside the test directories that call `randomized_svd`. I searched `sklearn/` for every mention of the name, which would also catch calls through another import name or a re-export.\n\n- `sklearn/cluster/_bicluster.py:147`, in `BaseSpectral._svd`\n- `sklearn/decomposition/_dict_learning.py:2020`, in `MiniBatchDictionaryLearning._initialize_dict`\n- `sklearn/decomposition/_factor_analysis.py:270`, in the `my_svd` helper inside `FactorAnalysis.fit`\n- `sklearn/decomposition/_nmf.py:321`, in `_initialize_nmf`\n- `sklearn/decomposition/_pca.py:764`, in `PCA._fit_truncated`\n- `sklearn/decomposition/_truncated_svd.py:246`, in `TruncatedSVD.fit_transform`\n- `sklearn/utils/extmath.py:686`, in `_randomized_eigsh`, in the same file where the function is defined\n\n`sklearn/decomposition/__init__.py` imports `randomized_svd` and re-exports it, but never calls it, so I left it out. No file in the search calls it through that re-export or under a different name. The only other match in `extmath.py` is a usage example in its docstring, not a real call.\n\n```json\n{\"answer\": [\"sklearn/cluster/_bicluster.py\", \"sklearn/decomposition/_dict_learning.py\", \"sklearn/decomposition/_factor_analysis.py\", \"sklearn/decomposition/_nmf.py\", \"sklearn/decomposition/_pca.py\", \"sklearn/decomposition/_truncated_svd.py\", \"sklearn/utils/extmath.py\"]}\n```",
+    "subtype": "success",
+    "is_error": false,
+    "api_error_status": null,
+    "num_turns": 4,
+    "duration_ms": 16022,
+    "cost_usd": 0.07199860000000001,
+    "usage": {
+      "input_tokens": 8,
+      "output_tokens": 1187,
+      "cache_creation_input_tokens": 5259,
+      "cache_read_input_tokens": 30773
+    },
+    "tool_calls": {
+      "Bash": 2,
+      "Grep": 1
+    },
+    "mcp_status": "connected",
+    "api_key_source": "none",
+    "tools": [
+      "Bash",
+      "Edit",
+      "Glob",
+      "Grep",
+      "Read",
+      "Write",
+      "mcp__context-manager__context",
+      "mcp__context-manager__index_project"
+    ]
+  },
+  "score": {
+    "answered": true,
+    "recall": 1.0,
+    "precision": 1.0,
+    "missing": [],
+    "extra": [],
+    "edit_applied": null,
+    "stale": [],
+    "success": true
+  },
+  "failure": null,
+  "hook": {
+    "deny": 1,
+    "pass_": 0
+  }
+}

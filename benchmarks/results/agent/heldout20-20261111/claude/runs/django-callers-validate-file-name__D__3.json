@@ -1,0 +1,61 @@
+{
+  "record_version": 3,
+  "run_id": "django-callers-validate-file-name__D__3",
+  "task_id": "django-callers-validate-file-name",
+  "repo": "django",
+  "category": "callers",
+  "arm": "D",
+  "rep": 3,
+  "model": "claude-opus-5-5",
+  "effort": "high",
+  "embedding": "local",
+  "index_copy_s": 0.5858984170481563,
+  "index_build_s": 3239.4935852501076,
+  "wall_s": 12.76906287507154,
+  "transcript": {
+    "result_text": "I found four functions that call `validate_file_name` directly. Each file imports it under its own name with `from django.core.files.utils import validate_file_name`. I searched `django/` for aliased imports and module-level imports of `django.core.files.utils` and found no other way it is called.\n\n- `django/core/files/storage/base.py`: `Storage.save` calls it on lines 41, 46 and 51, and `Storage.get_available_name` calls it on line 86.\n- `django/core/files/uploadedfile.py`: `UploadedFile._set_name` calls it on line 63.\n- `django/db/models/fields/files.py`: `FileField.generate_filename` calls it on line 357.\n\n```json\n{\"answer\": [\"django/core/files/storage/base.py:Storage.save\", \"django/core/files/storage/base.py:Storage.get_available_name\", \"django/core/files/uploadedfile.py:UploadedFile._set_name\", \"django/db/models/fields/files.py:FileField.generate_filename\"]}\n```",
+    "subtype": "success",
+    "is_error": false,
+    "api_error_status": null,
+    "num_turns": 3,
+    "duration_ms": 11770,
+    "cost_usd": 0.047694799999999996,
+    "usage": {
+      "input_tokens": 6,
+      "output_tokens": 576,
+      "cache_creation_input_tokens": 3971,
+      "cache_read_input_tokens": 21914
+    },
+    "tool_calls": {
+      "Bash": 1,
+      "Grep": 1
+    },
+    "mcp_status": "connected",
+    "api_key_source": "none",
+    "tools": [
+      "Bash",
+      "Edit",
+      "Glob",
+      "Grep",
+      "Read",
+      "Write",
+      "mcp__context-manager__context",
+      "mcp__context-manager__index_project"
+    ]
+  },
+  "score": {
+    "answered": true,
+    "recall": 1.0,
+    "precision": 1.0,
+    "missing": [],
+    "extra": [],
+    "edit_applied": null,
+    "stale": [],
+    "success": true
+  },
+  "failure": null,
+  "hook": {
+    "deny": 1,
+    "pass_": 0
+  }
+}

@@ -1,0 +1,62 @@
+{
+  "record_version": 3,
+  "run_id": "sklearn-callers-pairwise-distances-chunked__D__1",
+  "task_id": "sklearn-callers-pairwise-distances-chunked",
+  "repo": "scikit-learn",
+  "category": "callers",
+  "arm": "D",
+  "rep": 1,
+  "model": "claude-opus-5-5",
+  "effort": "high",
+  "embedding": "local",
+  "index_copy_s": 0.34452087501995265,
+  "index_build_s": 1014.4864400420338,
+  "wall_s": 19.839277874911204,
+  "transcript": {
+    "result_text": "Six functions and methods in `sklearn/` call `pairwise_distances_chunked` directly. I checked the code index against a plain text search over all non-test files. Neither found any import under a different name. Every call goes through the `sklearn.metrics` re-export or a direct import from `pairwise.py`.\n\n| Caller | Call site |\n|---|---|\n| `KNNImputer.transform` | `sklearn/impute/_knn.py:359` |\n| `silhouette_samples` | `sklearn/metrics/cluster/_unsupervised.py:305` |\n| `pairwise_distances_argmin_min` | `sklearn/metrics/pairwise.py:818` |\n| `pairwise_distances_argmin` | `sklearn/metrics/pairwise.py:960` |\n| `KNeighborsMixin.kneighbors` | `sklearn/neighbors/_base.py:887` |\n| `RadiusNeighborsMixin.radius_neighbors` | `sklearn/neighbors/_base.py:1225` |\n\nThe other places the name appears don't count as calls. They are imports, the `__all__` list in `sklearn/metrics/__init__.py`, docstrings and doctest examples, and comments (including two in `neighbors/_base.py` at lines 713 and 1048).\n\n```json\n{\"answer\": [\"sklearn/impute/_knn.py:KNNImputer.transform\", \"sklearn/metrics/cluster/_unsupervised.py:silhouette_samples\", \"sklearn/metrics/pairwise.py:pairwise_distances_argmin_min\", \"sklearn/metrics/pairwise.py:pairwise_distances_argmin\", \"sklearn/neighbors/_base.py:KNeighborsMixin.kneighbors\", \"sklearn/neighbors/_base.py:RadiusNeighborsMixin.radius_neighbors\"]}\n```",
+    "subtype": "success",
+    "is_error": false,
+    "api_error_status": null,
+    "num_turns": 5,
+    "duration_ms": 18853,
+    "cost_usd": 0.094965,
+    "usage": {
+      "input_tokens": 8,
+      "output_tokens": 1367,
+      "cache_creation_input_tokens": 7545,
+      "cache_read_input_tokens": 36165
+    },
+    "tool_calls": {
+      "Bash": 2,
+      "Grep": 1,
+      "mcp__context-manager__context": 1
+    },
+    "mcp_status": "connected",
+    "api_key_source": "none",
+    "tools": [
+      "Bash",
+      "Edit",
+      "Glob",
+      "Grep",
+      "Read",
+      "Write",
+      "mcp__context-manager__context",
+      "mcp__context-manager__index_project"
+    ]
+  },
+  "score": {
+    "answered": true,
+    "recall": 1.0,
+    "precision": 1.0,
+    "missing": [],
+    "extra": [],
+    "edit_applied": null,
+    "stale": [],
+    "success": true
+  },
+  "failure": null,
+  "hook": {
+    "deny": 1,
+    "pass_": 0
+  }
+}

@@ -1,0 +1,61 @@
+{
+  "record_version": 3,
+  "run_id": "sklearn-callers-check-scalar__D__2",
+  "task_id": "sklearn-callers-check-scalar",
+  "repo": "scikit-learn",
+  "category": "callers",
+  "arm": "D",
+  "rep": 2,
+  "model": "claude-opus-5-5",
+  "effort": "high",
+  "embedding": "local",
+  "index_copy_s": 0.37110100011341274,
+  "index_build_s": 1014.4864400420338,
+  "wall_s": 13.297665667021647,
+  "transcript": {
+    "result_text": "`check_scalar` is called directly by 7 functions and methods in non-test `.py` files under `sklearn/`. I combined the index's caller list with a grep, and both agree.\n\n**Called directly:**\n- `sklearn/_loss/loss.py`: `PinballLoss.__init__` (line 611) and `HuberLoss.__init__` (line 678), imported through the `sklearn.utils` re-export\n- `sklearn/cluster/_bicluster.py`: `SpectralBiclustering._check_parameters` (lines 533 and 540), also through `sklearn.utils`\n- `sklearn/covariance/_graph_lasso.py`: `GraphicalLassoCV.fit` (line 981)\n- `sklearn/feature_selection/_from_model.py`: `SelectFromModel._check_max_features` (line 324)\n- `sklearn/linear_model/_ridge.py`: `_ridge_regression` (line 693)\n\n**Left out because they only pass it as a value:** `_BaseRidgeCV.fit` in `_ridge.py` and `LinearModelCV.fit` in `_coordinate_descent.py`. Both wrap it in `functools.partial(check_scalar, ...)` and then call the resulting `check_scalar_alpha` object, not `check_scalar` itself.\n\n**Also left out:** three Cython template files in `sklearn/metrics/_pairwise_distances_reduction/` call it inside their class constructors: `_base.pyx.tp` line 144, `_argkmin.pyx.tp` line 115, and `_radius_neighbors.pyx.tp` line 136. They aren't Python source files, so I didn't count them. Add them if you want Cython code included.\n\n```json\n{\"answer\": [\"sklearn/_loss/loss.py:PinballLoss.__init__\", \"sklearn/_loss/loss.py:HuberLoss.__init__\", \"sklearn/cluster/_bicluster.py:SpectralBiclustering._check_parameters\", \"sklearn/covariance/_graph_lasso.py:GraphicalLassoCV.fit\", \"sklearn/feature_selection/_from_model.py:SelectFromModel._check_max_features\", \"sklearn/linear_model/_ridge.py:_ridge_regression\"]}\n```",
+    "subtype": "success",
+    "is_error": false,
+    "api_error_status": null,
+    "num_turns": 3,
+    "duration_ms": 11913,
+    "cost_usd": 0.0730924,
+    "usage": {
+      "input_tokens": 4,
+      "output_tokens": 1187,
+      "cache_creation_input_tokens": 5833,
+      "cache_read_input_tokens": 13362
+    },
+    "tool_calls": {
+      "Grep": 1,
+      "mcp__context-manager__context": 1
+    },
+    "mcp_status": "connected",
+    "api_key_source": "none",
+    "tools": [
+      "Bash",
+      "Edit",
+      "Glob",
+      "Grep",
+      "Read",
+      "Write",
+      "mcp__context-manager__context",
+      "mcp__context-manager__index_project"
+    ]
+  },
+  "score": {
+    "answered": true,
+    "recall": 1.0,
+    "precision": 1.0,
+    "missing": [],
+    "extra": [],
+    "edit_applied": null,
+    "stale": [],
+    "success": true
+  },
+  "failure": null,
+  "hook": {
+    "deny": 0,
+    "pass_": 1
+  }
+}

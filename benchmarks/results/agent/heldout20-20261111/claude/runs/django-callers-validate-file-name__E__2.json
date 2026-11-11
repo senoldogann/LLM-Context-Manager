@@ -1,0 +1,61 @@
+{
+  "record_version": 3,
+  "run_id": "django-callers-validate-file-name__E__2",
+  "task_id": "django-callers-validate-file-name",
+  "repo": "django",
+  "category": "callers",
+  "arm": "E",
+  "rep": 2,
+  "model": "claude-opus-5-5",
+  "effort": "high",
+  "embedding": "local",
+  "index_copy_s": 0.6294401250779629,
+  "index_build_s": 3239.4935852501076,
+  "wall_s": 11.191973624983802,
+  "transcript": {
+    "result_text": "Four functions in `django/` call `validate_file_name` directly. I confirmed this with a text search: every use of the name is either its definition in `django/core/files/utils.py`, an import, or a call inside one of these functions. No file imports it under another name or reaches it through a re-exporting module.\n\n- `django/core/files/storage/base.py`: `Storage.save` calls it three times (lines 41, 46 and 51), and `Storage.get_available_name` calls it at line 86.\n- `django/core/files/uploadedfile.py`: `UploadedFile._set_name` calls it at line 63.\n- `django/db/models/fields/files.py`: `FileField.generate_filename` calls it at line 357.\n\n```json\n{\"answer\": [\"django/core/files/storage/base.py:Storage.save\", \"django/core/files/storage/base.py:Storage.get_available_name\", \"django/core/files/uploadedfile.py:UploadedFile._set_name\", \"django/db/models/fields/files.py:FileField.generate_filename\"]}\n```",
+    "subtype": "success",
+    "is_error": false,
+    "api_error_status": null,
+    "num_turns": 3,
+    "duration_ms": 10194,
+    "cost_usd": 0.0487304,
+    "usage": {
+      "input_tokens": 6,
+      "output_tokens": 682,
+      "cache_creation_input_tokens": 3835,
+      "cache_read_input_tokens": 21932
+    },
+    "tool_calls": {
+      "Bash": 1,
+      "Grep": 1
+    },
+    "mcp_status": "connected",
+    "api_key_source": "none",
+    "tools": [
+      "Bash",
+      "Edit",
+      "Glob",
+      "Grep",
+      "Read",
+      "Write",
+      "mcp__context-manager__context",
+      "mcp__context-manager__index_project"
+    ]
+  },
+  "score": {
+    "answered": true,
+    "recall": 1.0,
+    "precision": 1.0,
+    "missing": [],
+    "extra": [],
+    "edit_applied": null,
+    "stale": [],
+    "success": true
+  },
+  "failure": null,
+  "hook": {
+    "deny": 1,
+    "pass_": 1
+  }
+}

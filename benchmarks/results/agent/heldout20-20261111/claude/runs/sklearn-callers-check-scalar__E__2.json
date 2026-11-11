@@ -1,0 +1,62 @@
+{
+  "record_version": 3,
+  "run_id": "sklearn-callers-check-scalar__E__2",
+  "task_id": "sklearn-callers-check-scalar",
+  "repo": "scikit-learn",
+  "category": "callers",
+  "arm": "E",
+  "rep": 2,
+  "model": "claude-opus-5-5",
+  "effort": "high",
+  "embedding": "local",
+  "index_copy_s": 0.2525679999962449,
+  "index_build_s": 1014.4864400420338,
+  "wall_s": 16.465835249982774,
+  "transcript": {
+    "result_text": "Six functions and methods in Python source call `check_scalar` directly. I listed each one from its call site.\n\n- **`sklearn/_loss/loss.py`**: `PinballLoss.__init__` (line 611) and `HuberLoss.__init__` (line 678). Both import it through the `sklearn.utils` re-export.\n- **`sklearn/cluster/_bicluster.py`**: `SpectralBiclustering._check_parameters` calls it at lines 533 and 540, also through the `sklearn.utils` re-export.\n- **`sklearn/covariance/_graph_lasso.py`**: `GraphicalLassoCV.fit` (line 981).\n- **`sklearn/feature_selection/_from_model.py`**: `SelectFromModel._check_max_features` (line 324).\n- **`sklearn/linear_model/_ridge.py`**: `_ridge_regression` (line 693).\n\n**Left out because they pass it as a value:** `LinearModelCV.fit` in `_coordinate_descent.py` and `_BaseRidgeCV.fit` in `_ridge.py` hand `check_scalar` to `functools.partial` and then call that wrapper, not `check_scalar` itself.\n\n**Left out because they aren't Python source:** three Cython template files in `sklearn/metrics/_pairwise_distances_reduction/` also call it, each from an `__init__` method:\n- `_base.pyx.tp:144`, in `BaseDistancesReduction{{name_suffix}}.__init__`\n- `_argkmin.pyx.tp:115`, in the `ArgKmin` class's `__init__`\n- `_radius_neighbors.pyx.tp:136`, in `RadiusNeighbors{{name_suffix}}.__init__`\n\nTheir class names are only filled in when the templates are generated, so I didn't include them in the answer below. If you want these counted, add those three `__init__` methods.\n\n```json\n{\"answer\": [\"sklearn/_loss/loss.py:PinballLoss.__init__\", \"sklearn/_loss/loss.py:HuberLoss.__init__\", \"sklearn/cluster/_bicluster.py:SpectralBiclustering._check_parameters\", \"sklearn/covariance/_graph_lasso.py:GraphicalLassoCV.fit\", \"sklearn/feature_selection/_from_model.py:SelectFromModel._check_max_features\", \"sklearn/linear_model/_ridge.py:_ridge_regression\"]}\n```",
+    "subtype": "success",
+    "is_error": false,
+    "api_error_status": null,
+    "num_turns": 4,
+    "duration_ms": 15564,
+    "cost_usd": 0.0890524,
+    "usage": {
+      "input_tokens": 6,
+      "output_tokens": 1516,
+      "cache_creation_input_tokens": 6727,
+      "cache_read_input_tokens": 24462
+    },
+    "tool_calls": {
+      "Bash": 1,
+      "Grep": 1,
+      "mcp__context-manager__context": 1
+    },
+    "mcp_status": "connected",
+    "api_key_source": "none",
+    "tools": [
+      "Bash",
+      "Edit",
+      "Glob",
+      "Grep",
+      "Read",
+      "Write",
+      "mcp__context-manager__context",
+      "mcp__context-manager__index_project"
+    ]
+  },
+  "score": {
+    "answered": true,
+    "recall": 1.0,
+    "precision": 1.0,
+    "missing": [],
+    "extra": [],
+    "edit_applied": null,
+    "stale": [],
+    "success": true
+  },
+  "failure": null,
+  "hook": {
+    "deny": 0,
+    "pass_": 2
+  }
+}

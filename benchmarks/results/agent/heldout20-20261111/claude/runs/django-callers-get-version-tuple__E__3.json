@@ -1,0 +1,61 @@
+{
+  "record_version": 3,
+  "run_id": "django-callers-get-version-tuple__E__3",
+  "task_id": "django-callers-get-version-tuple",
+  "repo": "django",
+  "category": "callers",
+  "arm": "E",
+  "rep": 3,
+  "model": "claude-opus-5-5",
+  "effort": "high",
+  "embedding": "local",
+  "index_copy_s": 0.5257453750818968,
+  "index_build_s": 3239.4935852501076,
+  "wall_s": 18.874591334024444,
+  "transcript": {
+    "result_text": "I found six functions and methods in `django/` that call `get_version_tuple` directly:\n\n- `django/contrib/gis/db/backends/postgis/operations.py:363`, in `PostGISOperations.postgis_version_tuple`\n- `django/contrib/gis/db/backends/spatialite/operations.py:199`, in `SpatiaLiteOperations.spatialite_version_tuple`\n- `django/contrib/gis/geos/libgeos.py:175`, in `geos_version_tuple`\n- `django/db/backends/oracle/base.py:351`, in `DatabaseWrapper.oracledb_version`\n- `django/db/backends/postgresql/base.py:34`, in `psycopg_version`\n- `django/utils/autoreload.py:632`, in `WatchmanReloader.check_availability`\n\nThe code index gave this list, and I checked it with a grep of `django/`. All six files import the function by its own name. No file imports it under another name, uses it through the module (`version.get_version_tuple`), or re-exports it. `get_version_tuple` doesn't call itself, and nothing else in `django/utils/version.py` calls it.\n\n```json\n{\"answer\": [\"django/contrib/gis/db/backends/postgis/operations.py:PostGISOperations.postgis_version_tuple\", \"django/contrib/gis/db/backends/spatialite/operations.py:SpatiaLiteOperations.spatialite_version_tuple\", \"django/contrib/gis/geos/libgeos.py:geos_version_tuple\", \"django/db/backends/oracle/base.py:DatabaseWrapper.oracledb_version\", \"django/db/backends/postgresql/base.py:psycopg_version\", \"django/utils/autoreload.py:WatchmanReloader.check_availability\"]}\n```",
+    "subtype": "success",
+    "is_error": false,
+    "api_error_status": null,
+    "num_turns": 5,
+    "duration_ms": 17743,
+    "cost_usd": 0.0715546,
+    "usage": {
+      "input_tokens": 10,
+      "output_tokens": 1197,
+      "cache_creation_input_tokens": 4922,
+      "cache_read_input_tokens": 40993
+    },
+    "tool_calls": {
+      "Bash": 3,
+      "Grep": 1
+    },
+    "mcp_status": "connected",
+    "api_key_source": "none",
+    "tools": [
+      "Bash",
+      "Edit",
+      "Glob",
+      "Grep",
+      "Read",
+      "Write",
+      "mcp__context-manager__context",
+      "mcp__context-manager__index_project"
+    ]
+  },
+  "score": {
+    "answered": true,
+    "recall": 1.0,
+    "precision": 1.0,
+    "missing": [],
+    "extra": [],
+    "edit_applied": null,
+    "stale": [],
+    "success": true
+  },
+  "failure": null,
+  "hook": {
+    "deny": 1,
+    "pass_": 3
+  }
+}

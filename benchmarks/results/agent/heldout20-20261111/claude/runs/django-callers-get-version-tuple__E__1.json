@@ -1,0 +1,61 @@
+{
+  "record_version": 3,
+  "run_id": "django-callers-get-version-tuple__E__1",
+  "task_id": "django-callers-get-version-tuple",
+  "repo": "django",
+  "category": "callers",
+  "arm": "E",
+  "rep": 1,
+  "model": "claude-opus-5-5",
+  "effort": "high",
+  "embedding": "local",
+  "index_copy_s": 0.6238879580050707,
+  "index_build_s": 3239.4935852501076,
+  "wall_s": 14.499921540962532,
+  "transcript": {
+    "result_text": "Six functions or methods call `get_version_tuple` directly. I checked with a text search of `django/` for the name and for imports from `django.utils.version`, and it matched the code index exactly. Every call uses the plain name, and none of the imports rename it with `as`.\n\n- `django/contrib/gis/db/backends/postgis/operations.py:363` — `PostGISOperations.postgis_version_tuple`\n- `django/contrib/gis/db/backends/spatialite/operations.py:199` — `SpatiaLiteOperations.spatialite_version_tuple`\n- `django/contrib/gis/geos/libgeos.py:175` — `geos_version_tuple`\n- `django/db/backends/oracle/base.py:351` — `DatabaseWrapper.oracledb_version`\n- `django/db/backends/postgresql/base.py:34` — `psycopg_version`\n- `django/utils/autoreload.py:632` — `WatchmanReloader.check_availability`\n\n```json\n{\"answer\": [\"django/contrib/gis/db/backends/postgis/operations.py:PostGISOperations.postgis_version_tuple\", \"django/contrib/gis/db/backends/spatialite/operations.py:SpatiaLiteOperations.spatialite_version_tuple\", \"django/contrib/gis/geos/libgeos.py:geos_version_tuple\", \"django/db/backends/oracle/base.py:DatabaseWrapper.oracledb_version\", \"django/db/backends/postgresql/base.py:psycopg_version\", \"django/utils/autoreload.py:WatchmanReloader.check_availability\"]}\n```",
+    "subtype": "success",
+    "is_error": false,
+    "api_error_status": null,
+    "num_turns": 4,
+    "duration_ms": 13068,
+    "cost_usd": 0.0653804,
+    "usage": {
+      "input_tokens": 8,
+      "output_tokens": 1003,
+      "cache_creation_input_tokens": 4888,
+      "cache_read_input_tokens": 30922
+    },
+    "tool_calls": {
+      "Bash": 2,
+      "Grep": 1
+    },
+    "mcp_status": "connected",
+    "api_key_source": "none",
+    "tools": [
+      "Bash",
+      "Edit",
+      "Glob",
+      "Grep",
+      "Read",
+      "Write",
+      "mcp__context-manager__context",
+      "mcp__context-manager__index_project"
+    ]
+  },
+  "score": {
+    "answered": true,
+    "recall": 1.0,
+    "precision": 1.0,
+    "missing": [],
+    "extra": [],
+    "edit_applied": null,
+    "stale": [],
+    "success": true
+  },
+  "failure": null,
+  "hook": {
+    "deny": 1,
+    "pass_": 2
+  }
+}

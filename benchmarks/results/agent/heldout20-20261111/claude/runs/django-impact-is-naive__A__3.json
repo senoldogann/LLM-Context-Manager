@@ -1,0 +1,55 @@
+{
+  "record_version": 3,
+  "run_id": "django-impact-is-naive__A__3",
+  "task_id": "django-impact-is-naive",
+  "repo": "django",
+  "category": "files",
+  "arm": "A",
+  "rep": 3,
+  "model": "claude-opus-5-5",
+  "effort": "high",
+  "embedding": "local",
+  "index_copy_s": null,
+  "index_build_s": null,
+  "wall_s": 13.17127729114145,
+  "transcript": {
+    "result_text": "Eight files call `is_naive` directly. I searched `django/` for every use of `is_naive` and checked how each file imports it:\n\n- **Through the `timezone` module:** `django/templatetags/tz.py`, `django/forms/utils.py`, `django/db/models/fields/__init__.py`, `django/http/response.py` and `django/contrib/sitemaps/views.py` each do `from django.utils import timezone` and call `timezone.is_naive(...)`.\n- **Imported by name:** `django/contrib/syndication/views.py` imports `is_naive` from `django.utils.timezone` and calls it. `django/utils/dateformat.py` also imports it by name and calls it; I didn't open that import line, but it is listed alongside the other timezone helpers.\n- **Same file:** `django/utils/timezone.py` calls `is_naive` itself, at lines 158, 182 and 253.\n\nThe search turned up no other names it's imported under, no other modules that re-export it, and no places where it's only passed as a value.\n\n```json\n{\"answer\": [\"django/templatetags/tz.py\", \"django/forms/utils.py\", \"django/db/models/fields/__init__.py\", \"django/contrib/syndication/views.py\", \"django/utils/timezone.py\", \"django/utils/dateformat.py\", \"django/http/response.py\", \"django/contrib/sitemaps/views.py\"]}\n```",
+    "subtype": "success",
+    "is_error": false,
+    "api_error_status": null,
+    "num_turns": 3,
+    "duration_ms": 12219,
+    "cost_usd": 0.0546044,
+    "usage": {
+      "input_tokens": 6,
+      "output_tokens": 970,
+      "cache_creation_input_tokens": 3886,
+      "cache_read_input_tokens": 20462
+    },
+    "tool_calls": {
+      "Grep": 2
+    },
+    "mcp_status": "none",
+    "api_key_source": "none",
+    "tools": [
+      "Bash",
+      "Edit",
+      "Glob",
+      "Grep",
+      "Read",
+      "Write"
+    ]
+  },
+  "score": {
+    "answered": true,
+    "recall": 1.0,
+    "precision": 1.0,
+    "missing": [],
+    "extra": [],
+    "edit_applied": null,
+    "stale": [],
+    "success": true
+  },
+  "failure": null,
+  "hook": null
+}

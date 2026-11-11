@@ -1,0 +1,56 @@
+{
+  "record_version": 3,
+  "run_id": "sklearn-callers-pairwise-distances-chunked__A__3",
+  "task_id": "sklearn-callers-pairwise-distances-chunked",
+  "repo": "scikit-learn",
+  "category": "callers",
+  "arm": "A",
+  "rep": 3,
+  "model": "claude-opus-5-5",
+  "effort": "high",
+  "embedding": "local",
+  "index_copy_s": null,
+  "index_build_s": null,
+  "wall_s": 15.736007540952414,
+  "transcript": {
+    "result_text": "I found six calls to `pairwise_distances_chunked` outside the test files, each in a different function or method:\n\n- **`sklearn/neighbors/_base.py`** imports it from `..metrics`, which re-exports it:\n  - `KNeighborsMixin.kneighbors` calls it at line 887.\n  - `RadiusNeighborsMixin.radius_neighbors` calls it at line 1225.\n- **`sklearn/impute/_knn.py`** also imports it from `..metrics`. `KNNImputer.transform` calls it at line 359. The call is in `transform` itself, not in the nested `process_chunk` function.\n- **`sklearn/metrics/pairwise.py`**, where it is defined:\n  - `pairwise_distances_argmin_min` calls it at line 818.\n  - `pairwise_distances_argmin` calls it at line 960.\n- **`sklearn/metrics/cluster/_unsupervised.py`** imports it from `..pairwise`. `silhouette_samples` calls it at line 305.\n\nThe function doesn't call itself. Its other mentions are imports, the `__all__` re-export, docstrings, comments and doctest examples, so none of them count.\n\n```json\n{\"answer\": [\"sklearn/neighbors/_base.py:KNeighborsMixin.kneighbors\", \"sklearn/neighbors/_base.py:RadiusNeighborsMixin.radius_neighbors\", \"sklearn/impute/_knn.py:KNNImputer.transform\", \"sklearn/metrics/pairwise.py:pairwise_distances_argmin_min\", \"sklearn/metrics/pairwise.py:pairwise_distances_argmin\", \"sklearn/metrics/cluster/_unsupervised.py:silhouette_samples\"]}\n```",
+    "subtype": "success",
+    "is_error": false,
+    "api_error_status": null,
+    "num_turns": 4,
+    "duration_ms": 14946,
+    "cost_usd": 0.0732842,
+    "usage": {
+      "input_tokens": 8,
+      "output_tokens": 1221,
+      "cache_creation_input_tokens": 5327,
+      "cache_read_input_tokens": 31081
+    },
+    "tool_calls": {
+      "Bash": 2,
+      "Grep": 1
+    },
+    "mcp_status": "none",
+    "api_key_source": "none",
+    "tools": [
+      "Bash",
+      "Edit",
+      "Glob",
+      "Grep",
+      "Read",
+      "Write"
+    ]
+  },
+  "score": {
+    "answered": true,
+    "recall": 1.0,
+    "precision": 1.0,
+    "missing": [],
+    "extra": [],
+    "edit_applied": null,
+    "stale": [],
+    "success": true
+  },
+  "failure": null,
+  "hook": null
+}

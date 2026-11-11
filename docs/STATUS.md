@@ -4,9 +4,10 @@ The current state of CCM and the next steps, for the owner and for any agent tha
 work. Keep it current: replace lines that stop being true instead of appending history (git log and
 `benchmarks/results/` are the history).
 
-Last updated: 2026-11-11. Where work stopped: **four preregistered large-repository held-out
-sets are complete.** The latest is amendment 19 (`benchmarks/results/agent/heldout19-20261111/`,
-commit `5eba8f0`, Codex only, 72 runs). Arm E for Claude Code is the next step.
+Last updated: 2026-11-11. Where work stopped: **five preregistered large-repository held-out
+sets are complete, and work on Claude Code adoption has stopped under its preregistered rule.**
+The latest is amendment 20 (`benchmarks/results/agent/heldout20-20261111/`, commit `403f36c`,
+Claude Code only, arms A, D and E, 117 runs).
 
 - **Codex:** the product (D) lowers input tokens against built-ins (A) on held-out callers
   and trap questions.
@@ -15,15 +16,19 @@ commit `5eba8f0`, Codex only, 72 runs). Arm E for Claude Code is the next step.
   - In a third set, amendment 19, seven of the twelve tasks were "which files call X". The
     overall result was 0.91 (0.68–1.02), with callers 0.62 and impact 0.94 (0.90–1.11).
   - "Which files" questions remain no better than built-ins.
-- **Claude Code, boundary result:** D-only changes (`context`, the PreToolUse Grep hook, the
-  hook's handling of repeated Greps) gave no measurable saving on two held-out sets: 0.94
-  (0.77–1.10) and 1.06 (0.87–1.38).
-  - Claude calls `context` itself in about one run in six.
-  - When the hook answers its Grep, it re-checks the answer with its own text search. In
-    amendment 17 that was the same Grep; once the hook stopped inviting it, it was a Bash
-    `grep -rn` in all 17 cases.
-  - Under amendment 18's stopping rule, work on Claude adoption through D-only changes has
-    ended.
+- **Claude Code, boundary result (amendments 17, 18, 20):** neither D-only changes nor hook
+  routes gave Claude Code a measurable saving.
+  - Arm D (`context`, the PreToolUse Grep hook, repeat handling) gave 0.94 (0.77–1.10), 1.06
+    (0.87–1.38) and 1.02 (0.94–1.06).
+  - Arm E (D plus a hook on single Bash `grep`/`rg` searches) gave E/A 1.13 (1.07–1.16): a
+    cost, with 14 % more turns.
+  - After a hook answer, Claude re-checks with Bash in nearly every case. When that re-check is
+    answered too, it often searches again. Most re-checks are compound commands a hook cannot
+    answer.
+  - Claude Code shows a hook's answer to the model as `PreToolUse:… hook error: …`. That may
+    invite the re-check, but it was not tested.
+  - Under amendment 20's stopping rule, work on Claude adoption has stopped. A further attempt
+    would need to change how Claude Code itself treats tool answers, and a new preregistration.
 - **Earlier results:** amendment 15 (before the dotted-path fix) found no difference for
   either agent. The final L3 run on small repositories (Flask, Express, Serde) found no saving
   for either agent: Codex D/A 1.12, Claude 1.05.
@@ -52,9 +57,9 @@ are parked. The owner's strategy notes are `docs/productization-plan.md`,
 | Rust | resolved through modules, `use` paths, workspace crates and impl blocks | `benchmarks/README.md`, "Rust edges (M3)" |
 | Other languages | matched by name and labelled `calls (inferred …)` or `may call`; JS/TS members defined by assignment get receiver-aware evidence | `core/tests/lexical_labels_test.rs`, `mcp/tests/token_budget_e2e_test.rs` |
 | Freshness after an edit (L1) | first-read validation since `fb0ecd4`; a failed refresh now retries with backoff, `context` waits up to 10 s for a pending refresh | `mcp/tests/auto_refresh_test.rs` |
-| Claude Code Grep hook | opt-in `ccm-mcp hook claude-pre-tool-use` (PreToolUse). It answers a single-symbol Grep with a compact answer (target, completeness check, one line per caller) only when all of these hold: the index is fresh, every caller is a proven call, the check says the list is complete, and the answer is shorter than a lower bound of the grep output. Globs that only exclude test, bench or example directories are accepted. Otherwise the grep runs. Offline replay of the 70 Greps in the large-repository Claude D runs: 27 answered with 52 % less text, 15 of the 33 runs that never called CCM would have had their first Grep answered, and there were no wrong answers. Not installed by the npm launcher | `mcp/src/hook.rs`, `benchmarks/results/agent/claude-d-analysis-20261111/` |
+| Claude Code Grep hook | opt-in `ccm-mcp hook claude-pre-tool-use` (PreToolUse). It answers a single-symbol Grep with a compact answer (target, completeness check, one line per caller) only when all of these hold: the index is fresh, every caller is a proven call, the check says the list is complete, and the answer is shorter than a lower bound of the grep output. Globs that only exclude test, bench or example directories are accepted. Otherwise the grep runs. Offline replay of the 70 Greps in the large-repository Claude D runs: 27 answered with 52 % less text, 15 of the 33 runs that never called CCM would have had their first Grep answered, and there were no wrong answers. In arm E (amendment 20, measurement only) it also answers single Bash `grep`/`rg` searches; that cost Claude tokens (E/A 1.13). Not installed by the npm launcher | `mcp/src/hook.rs`, `benchmarks/results/agent/claude-d-analysis-20261111/`, `heldout20-20261111/` |
 | Agent interface | default discovery `context + index_project` (1,134-byte `tools/list`, 266 o200k tokens, plus 65-token server instructions); legacy tools callable, discoverable with `CCM_MCP_LEGACY_TOOLS=1` | `mcp/src/server.rs` |
-| Agent experiment (L3) | preregistered final run complete (24 tasks × A/B/C + current product D × 3 repetitions × 2 agents, commit `6d502c8`); preregistered large-repository experiment complete (18 tasks × A/D × 3 × 2 agents, commit `01b2afa`); second held-out set complete (13 tasks × A/D × 3 × 2 agents, commit `68cec67`; Codex saving shown, Claude no detectable difference); third held-out set complete (13 tasks, commit `ad29ffc`; Codex saving replicated, Claude no detectable difference, stopping rule met); product pilots on 2026-11-09 and 2026-11-10 | "Agent pilots" below, `large-repo-20261111/README.md` |
+| Agent experiment (L3) | preregistered final run complete (24 tasks × A/B/C + current product D × 3 repetitions × 2 agents, commit `6d502c8`); preregistered large-repository experiment complete (18 tasks × A/D × 3 × 2 agents, commit `01b2afa`); second held-out set complete (13 tasks × A/D × 3 × 2 agents, commit `68cec67`; Codex saving shown, Claude no detectable difference); third held-out set complete (13 tasks, commit `ad29ffc`; Codex saving replicated, Claude no detectable difference, stopping rule met); fourth (Codex, `5eba8f0`) and fifth (Claude arm E, `403f36c`; E/A cost shown, Claude adoption stopped) held-out sets complete; product pilots on 2026-11-09 and 2026-11-10 | "Agent pilots" below, `large-repo-20261111/README.md` |
 
 ## What `context` returns
 
@@ -296,11 +301,11 @@ What the transcripts show:
    - **Removed:** the new files line. It left out module-level calls and broke
      `get_user_model` (D 0/3).
    - Under the stopping rule, work on "which files" questions stops.
-5. **Claude Code arm E (amendment 20), running.** Arm E is arm D with the hook also
-   answering single Bash `grep`/`rg` searches. A tuned replay predicts little effect: it would
-   answer 7 of 76 recorded Bash searches (`arm-e-replay-20261111/`). Thirteen new tasks, Claude
-   Code only, arms A, D and E. If E/A shows no saving, STATUS records that hook routes give
-   Claude Code no measurable saving, and Claude adoption work stops.
+5. **Claude Code arm E (amendment 20): done, stopped** (`heldout20-20261111/`).
+   - E/A was 1.13 (1.07–1.16), a cost shown; D/A was 1.02 (0.94–1.06); success 39/39 in every
+     arm.
+   - The stopping rule applies: Claude Code adoption work ends.
+   - The tuned replay had predicted this (`arm-e-replay-20261111/`).
 6. **Second held-out set (amendment 17): done** (`heldout17-20261111/`). Codex shows a saving
    of 0.72 (0.59–0.89); Claude Code shows no detectable difference, 0.94 (0.77–1.10). The
    stopping rule (both intervals containing 1.00) was not met.

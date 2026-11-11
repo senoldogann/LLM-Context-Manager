@@ -1,0 +1,61 @@
+{
+  "record_version": 3,
+  "run_id": "sklearn-callers-has-fit-parameter__D__3",
+  "task_id": "sklearn-callers-has-fit-parameter",
+  "repo": "scikit-learn",
+  "category": "callers",
+  "arm": "D",
+  "rep": 3,
+  "model": "claude-opus-5-5",
+  "effort": "high",
+  "embedding": "local",
+  "index_copy_s": 0.2567857909016311,
+  "index_build_s": 1014.4864400420338,
+  "wall_s": 23.354837166145444,
+  "transcript": {
+    "result_text": "Eight functions or methods outside the test files call `has_fit_parameter` directly. I found them with a grep over `sklearn/` (10 call sites) and checked which function or method contains each call. Every call uses the plain name imported from `sklearn/utils/validation.py`. No file uses another name for it or gets it through a re-export.\n\n- `sklearn/ensemble/_bagging.py`: `_parallel_build_estimators` (lines 109 and 118)\n- `sklearn/ensemble/_weight_boosting.py`: `AdaBoostClassifier._validate_estimator` (line 544)\n- `sklearn/linear_model/_coordinate_descent.py`: `LinearModelCV.fit` (lines 1739 and 1751)\n- `sklearn/linear_model/_ransac.py`: `RANSACRegressor.fit` (line 430)\n- `sklearn/multioutput.py`: `_MultiOutputEstimator.partial_fit` (line 179)\n- `sklearn/multioutput.py`: `_MultiOutputEstimator.fit` (line 266)\n- `sklearn/utils/estimator_checks.py`: `_yield_checks` (line 98)\n- `sklearn/utils/estimator_checks.py`: `check_classifiers_one_label_sample_weights` (line 2344)\n\nThe call in the docstring example at `sklearn/utils/validation.py:1465` is not code that runs, so I left it out.\n\n```json\n{\"answer\": [\"sklearn/ensemble/_bagging.py:_parallel_build_estimators\", \"sklearn/ensemble/_weight_boosting.py:AdaBoostClassifier._validate_estimator\", \"sklearn/linear_model/_coordinate_descent.py:LinearModelCV.fit\", \"sklearn/linear_model/_ransac.py:RANSACRegressor.fit\", \"sklearn/multioutput.py:_MultiOutputEstimator.partial_fit\", \"sklearn/multioutput.py:_MultiOutputEstimator.fit\", \"sklearn/utils/estimator_checks.py:_yield_checks\", \"sklearn/utils/estimator_checks.py:check_classifiers_one_label_sample_weights\"]}\n```",
+    "subtype": "success",
+    "is_error": false,
+    "api_error_status": null,
+    "num_turns": 6,
+    "duration_ms": 22106,
+    "cost_usd": 0.0935334,
+    "usage": {
+      "input_tokens": 12,
+      "output_tokens": 1867,
+      "cache_creation_input_tokens": 5726,
+      "cache_read_input_tokens": 51687
+    },
+    "tool_calls": {
+      "Bash": 4,
+      "Grep": 1
+    },
+    "mcp_status": "connected",
+    "api_key_source": "none",
+    "tools": [
+      "Bash",
+      "Edit",
+      "Glob",
+      "Grep",
+      "Read",
+      "Write",
+      "mcp__context-manager__context",
+      "mcp__context-manager__index_project"
+    ]
+  },
+  "score": {
+    "answered": true,
+    "recall": 1.0,
+    "precision": 1.0,
+    "missing": [],
+    "extra": [],
+    "edit_applied": null,
+    "stale": [],
+    "success": true
+  },
+  "failure": null,
+  "hook": {
+    "deny": 1,
+    "pass_": 0
+  }
+}

@@ -1,0 +1,61 @@
+{
+  "record_version": 3,
+  "run_id": "sklearn-callers-check-x-y__D__1",
+  "task_id": "sklearn-callers-check-x-y",
+  "repo": "scikit-learn",
+  "category": "callers",
+  "arm": "D",
+  "rep": 1,
+  "model": "claude-opus-5-5",
+  "effort": "high",
+  "embedding": "local",
+  "index_copy_s": 0.29987349989823997,
+  "index_build_s": 1014.4864400420338,
+  "wall_s": 13.383165166946128,
+  "transcript": {
+    "result_text": "Ten functions and methods outside the test files call `check_X_y` directly. I got the list from the code index, which reported it as complete. A text search found no calls through another name or through `validation.check_X_y`.\n\n| Caller | Call site |\n|---|---|\n| `BaseEstimator._validate_data` | `sklearn/base.py:650` |\n| `_estimate_mi` | `sklearn/feature_selection/_mutual_info.py:271` |\n| `f_classif` | `sklearn/feature_selection/_univariate_selection.py:171` |\n| `r_regression` | `sklearn/feature_selection/_univariate_selection.py:363` |\n| `silhouette_score` | `sklearn/metrics/cluster/_unsupervised.py:134` |\n| `silhouette_samples` | `sklearn/metrics/cluster/_unsupervised.py:279` |\n| `calinski_harabasz_score` | `sklearn/metrics/cluster/_unsupervised.py:368` |\n| `davies_bouldin_score` | `sklearn/metrics/cluster/_unsupervised.py:443` |\n| `MinimalClassifier.fit` | `sklearn/utils/_testing.py:955` |\n| `MinimalRegressor.fit` | `sklearn/utils/_testing.py:1004` |\n\nThe two `fit` methods are in `sklearn/utils/_testing.py`. That file is a test helper, but it isn't in a `tests/` directory and doesn't start with `test_`, so it counts under your rule.\n\n```json\n{\"answer\": [\"sklearn/base.py:BaseEstimator._validate_data\", \"sklearn/feature_selection/_mutual_info.py:_estimate_mi\", \"sklearn/feature_selection/_univariate_selection.py:f_classif\", \"sklearn/feature_selection/_univariate_selection.py:r_regression\", \"sklearn/metrics/cluster/_unsupervised.py:silhouette_score\", \"sklearn/metrics/cluster/_unsupervised.py:silhouette_samples\", \"sklearn/metrics/cluster/_unsupervised.py:calinski_harabasz_score\", \"sklearn/metrics/cluster/_unsupervised.py:davies_bouldin_score\", \"sklearn/utils/_testing.py:MinimalClassifier.fit\", \"sklearn/utils/_testing.py:MinimalRegressor.fit\"]}\n```",
+    "subtype": "success",
+    "is_error": false,
+    "api_error_status": null,
+    "num_turns": 3,
+    "duration_ms": 12359,
+    "cost_usd": 0.07326479999999999,
+    "usage": {
+      "input_tokens": 6,
+      "output_tokens": 1154,
+      "cache_creation_input_tokens": 5683,
+      "cache_read_input_tokens": 23484
+    },
+    "tool_calls": {
+      "Grep": 1,
+      "mcp__context-manager__context": 1
+    },
+    "mcp_status": "connected",
+    "api_key_source": "none",
+    "tools": [
+      "Bash",
+      "Edit",
+      "Glob",
+      "Grep",
+      "Read",
+      "Write",
+      "mcp__context-manager__context",
+      "mcp__context-manager__index_project"
+    ]
+  },
+  "score": {
+    "answered": true,
+    "recall": 1.0,
+    "precision": 1.0,
+    "missing": [],
+    "extra": [],
+    "edit_applied": null,
+    "stale": [],
+    "success": true
+  },
+  "failure": null,
+  "hook": {
+    "deny": 0,
+    "pass_": 1
+  }
+}

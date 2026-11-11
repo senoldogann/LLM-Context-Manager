@@ -1,0 +1,62 @@
+{
+  "record_version": 3,
+  "run_id": "sklearn-callers-check-x-y__E__1",
+  "task_id": "sklearn-callers-check-x-y",
+  "repo": "scikit-learn",
+  "category": "callers",
+  "arm": "E",
+  "rep": 1,
+  "model": "claude-opus-5-5",
+  "effort": "high",
+  "embedding": "local",
+  "index_copy_s": 0.2585789579898119,
+  "index_build_s": 1014.4864400420338,
+  "wall_s": 15.537032499909401,
+  "transcript": {
+    "result_text": "I found 10 functions and methods outside test files that call `check_X_y` directly. The code index says its list of callers is complete. I also searched for the function being imported under another name or called through its module (for example `validation.check_X_y(...)`), and found none.\n\n- `sklearn/base.py`: `BaseEstimator._validate_data` (line 650)\n- `sklearn/feature_selection/_mutual_info.py`: `_estimate_mi` (line 271)\n- `sklearn/feature_selection/_univariate_selection.py`: `f_classif` (line 171) and `r_regression` (line 363)\n- `sklearn/metrics/cluster/_unsupervised.py`: `silhouette_score` (line 134), `silhouette_samples` (line 279), `calinski_harabasz_score` (line 368) and `davies_bouldin_score` (line 443)\n- `sklearn/utils/_testing.py`: `MinimalClassifier.fit` (line 955) and `MinimalRegressor.fit` (line 1004)\n\n```json\n{\"answer\": [\n\"sklearn/base.py:BaseEstimator._validate_data\",\n\"sklearn/feature_selection/_mutual_info.py:_estimate_mi\",\n\"sklearn/feature_selection/_univariate_selection.py:f_classif\",\n\"sklearn/feature_selection/_univariate_selection.py:r_regression\",\n\"sklearn/metrics/cluster/_unsupervised.py:silhouette_score\",\n\"sklearn/metrics/cluster/_unsupervised.py:silhouette_samples\",\n\"sklearn/metrics/cluster/_unsupervised.py:calinski_harabasz_score\",\n\"sklearn/metrics/cluster/_unsupervised.py:davies_bouldin_score\",\n\"sklearn/utils/_testing.py:MinimalClassifier.fit\",\n\"sklearn/utils/_testing.py:MinimalRegressor.fit\"\n]}\n```",
+    "subtype": "success",
+    "is_error": false,
+    "api_error_status": null,
+    "num_turns": 5,
+    "duration_ms": 14268,
+    "cost_usd": 0.08045959999999999,
+    "usage": {
+      "input_tokens": 8,
+      "output_tokens": 1227,
+      "cache_creation_input_tokens": 6104,
+      "cache_read_input_tokens": 35278
+    },
+    "tool_calls": {
+      "Bash": 2,
+      "Grep": 1,
+      "mcp__context-manager__context": 1
+    },
+    "mcp_status": "connected",
+    "api_key_source": "none",
+    "tools": [
+      "Bash",
+      "Edit",
+      "Glob",
+      "Grep",
+      "Read",
+      "Write",
+      "mcp__context-manager__context",
+      "mcp__context-manager__index_project"
+    ]
+  },
+  "score": {
+    "answered": true,
+    "recall": 1.0,
+    "precision": 1.0,
+    "missing": [],
+    "extra": [],
+    "edit_applied": null,
+    "stale": [],
+    "success": true
+  },
+  "failure": null,
+  "hook": {
+    "deny": 1,
+    "pass_": 2
+  }
+}

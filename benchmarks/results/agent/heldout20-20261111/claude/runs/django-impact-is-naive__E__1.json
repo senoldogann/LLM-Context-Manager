@@ -1,0 +1,60 @@
+{
+  "record_version": 3,
+  "run_id": "django-impact-is-naive__E__1",
+  "task_id": "django-impact-is-naive",
+  "repo": "django",
+  "category": "files",
+  "arm": "E",
+  "rep": 1,
+  "model": "claude-opus-5-5",
+  "effort": "high",
+  "embedding": "local",
+  "index_copy_s": 0.472864167066291,
+  "index_build_s": 3239.4935852501076,
+  "wall_s": 11.724062249995768,
+  "transcript": {
+    "result_text": "I found eight files in `django/` that call `is_naive`, none of them test files:\n\n- **Five files** call it as `timezone.is_naive(...)` after `from django.utils import timezone`:\n  - `django/db/models/fields/__init__.py`\n  - `django/http/response.py`\n  - `django/templatetags/tz.py`\n  - `django/forms/utils.py`\n  - `django/contrib/sitemaps/views.py`\n- **Two files** import the name directly from `django.utils.timezone` and call `is_naive(...)`:\n  - `django/contrib/syndication/views.py`\n  - `django/utils/dateformat.py`\n- **`django/utils/timezone.py`** calls it inside its own functions at lines 158, 182 and 253.\n\nNo file imports it under a different name, and no other module re-exports it. I didn't find any place that passes it around as a value without calling it.\n\n```json\n{\"answer\": [\"django/db/models/fields/__init__.py\", \"django/http/response.py\", \"django/templatetags/tz.py\", \"django/forms/utils.py\", \"django/contrib/syndication/views.py\", \"django/utils/timezone.py\", \"django/utils/dateformat.py\", \"django/contrib/sitemaps/views.py\"]}\n```",
+    "subtype": "success",
+    "is_error": false,
+    "api_error_status": null,
+    "num_turns": 3,
+    "duration_ms": 10814,
+    "cost_usd": 0.0524072,
+    "usage": {
+      "input_tokens": 6,
+      "output_tokens": 867,
+      "cache_creation_input_tokens": 3834,
+      "cache_read_input_tokens": 21856
+    },
+    "tool_calls": {
+      "Grep": 2
+    },
+    "mcp_status": "connected",
+    "api_key_source": "none",
+    "tools": [
+      "Bash",
+      "Edit",
+      "Glob",
+      "Grep",
+      "Read",
+      "Write",
+      "mcp__context-manager__context",
+      "mcp__context-manager__index_project"
+    ]
+  },
+  "score": {
+    "answered": true,
+    "recall": 1.0,
+    "precision": 1.0,
+    "missing": [],
+    "extra": [],
+    "edit_applied": null,
+    "stale": [],
+    "success": true
+  },
+  "failure": null,
+  "hook": {
+    "deny": 0,
+    "pass_": 2
+  }
+}

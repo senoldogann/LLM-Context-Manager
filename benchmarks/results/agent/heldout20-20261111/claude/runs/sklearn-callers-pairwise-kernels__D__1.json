@@ -1,0 +1,62 @@
+{
+  "record_version": 3,
+  "run_id": "sklearn-callers-pairwise-kernels__D__1",
+  "task_id": "sklearn-callers-pairwise-kernels",
+  "repo": "scikit-learn",
+  "category": "callers",
+  "arm": "D",
+  "rep": 1,
+  "model": "claude-opus-5-5",
+  "effort": "high",
+  "embedding": "local",
+  "index_copy_s": 0.3886972500476986,
+  "index_build_s": 1014.4864400420338,
+  "wall_s": 17.97791941720061,
+  "transcript": {
+    "result_text": "Six functions and methods in `sklearn/` call `pairwise_kernels` directly. I found them with the code index and checked the list with a full-text search of the non-test files under `sklearn/`.\n\n- `sklearn/cluster/_spectral.py:730`: `SpectralClustering.fit`\n- `sklearn/decomposition/_kernel_pca.py:324`: `KernelPCA._get_kernel`\n- `sklearn/gaussian_process/kernels.py:2356` and `:2370`: `PairwiseKernel.__call__`. The call at line 2370 is inside a nested function `f`, so it is listed under the enclosing `__call__`.\n- `sklearn/kernel_approximation.py:1021`: `Nystroem.fit`\n- `sklearn/kernel_approximation.py:1058`: `Nystroem.transform`\n- `sklearn/kernel_ridge.py:168`: `KernelRidge._get_kernel`\n\nOther places mention the name without calling it, and none of them count. These are the re-export in `sklearn/metrics/__init__.py`, the import lines, references in docstrings, and doctest examples in `metrics/pairwise.py`, `cluster/_spectral.py` and `preprocessing/_data.py`. No file imports it under a different name.\n\n```json\n{\"answer\": [\"sklearn/cluster/_spectral.py:SpectralClustering.fit\", \"sklearn/decomposition/_kernel_pca.py:KernelPCA._get_kernel\", \"sklearn/gaussian_process/kernels.py:PairwiseKernel.__call__\", \"sklearn/kernel_approximation.py:Nystroem.fit\", \"sklearn/kernel_approximation.py:Nystroem.transform\", \"sklearn/kernel_ridge.py:KernelRidge._get_kernel\"]}\n```",
+    "subtype": "success",
+    "is_error": false,
+    "api_error_status": null,
+    "num_turns": 5,
+    "duration_ms": 15873,
+    "cost_usd": 0.09818460000000001,
+    "usage": {
+      "input_tokens": 8,
+      "output_tokens": 1324,
+      "cache_creation_input_tokens": 8047,
+      "cache_read_input_tokens": 36483
+    },
+    "tool_calls": {
+      "Bash": 2,
+      "Grep": 1,
+      "mcp__context-manager__context": 1
+    },
+    "mcp_status": "connected",
+    "api_key_source": "none",
+    "tools": [
+      "Bash",
+      "Edit",
+      "Glob",
+      "Grep",
+      "Read",
+      "Write",
+      "mcp__context-manager__context",
+      "mcp__context-manager__index_project"
+    ]
+  },
+  "score": {
+    "answered": true,
+    "recall": 1.0,
+    "precision": 1.0,
+    "missing": [],
+    "extra": [],
+    "edit_applied": null,
+    "stale": [],
+    "success": true
+  },
+  "failure": null,
+  "hook": {
+    "deny": 1,
+    "pass_": 0
+  }
+}
