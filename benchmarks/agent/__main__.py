@@ -42,7 +42,7 @@ from freshness.repos import run_git
 
 PACKAGE_DIR = Path(__file__).resolve().parent
 DEFAULT_ARMS = "A,B,C"
-KNOWN_ARMS: tuple[Arm, ...] = ("A", "B", "C", "D", "F", "H")
+KNOWN_ARMS: tuple[Arm, ...] = ("A", "B", "C", "D", "E", "F", "H")
 # Ön kayıttaki dengeli sıranın kolları; D gibi sonradan eklenen kollar her zaman bunlardan sonra
 # koşar, böylece A/B/C'nin kayıtlı sırası değişmez (ek 14).
 PREREGISTERED_ROTATION: tuple[Arm, ...] = ("A", "B", "C")
@@ -406,10 +406,10 @@ def command_run(
         raise HarnessError("--max-total-usd must be at least --max-budget-usd")
     if ("F" in arms or "H" in arms) and settings.profile != "context-first-pilot":
         raise HarnessError("arms F and H exist only in the context-first-pilot profile")
-    if "D" in arms and settings.profile != "preregistered":
-        raise HarnessError("arm D exists only in the preregistered profile")
-    if "H" in arms and settings.agent != "claude":
-        raise HarnessError("arm H (Claude Code Grep hook) is only defined for --agent claude")
+    if ("D" in arms or "E" in arms) and settings.profile != "preregistered":
+        raise HarnessError("arms D and E exist only in the preregistered profile")
+    if ("E" in arms or "H" in arms) and settings.agent != "claude":
+        raise HarnessError("arms E and H (Claude Code hooks) are only defined for --agent claude")
     with exclusive_out_dir(settings.out_dir), sigterm_raises():
         try:
             return run_missing(settings, repetitions, raw_tasks, arms, max_total_usd)
