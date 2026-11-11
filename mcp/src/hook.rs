@@ -13,13 +13,17 @@
 //!   `alıcı.üye` ifadesidir ve bir tanım araması (`def ad`, `fn ad`) değildir;
 //! - indeks tazedir (bekleyen değişiklik yoktur);
 //! - paket "call list complete" der;
-//! - paket, Grep'in aynı kapsamda döndüreceği tahmini çıktıdan kısadır;
-//! - aynı oturumda aynı sembol için daha önce reddedilmemiştir.
+//! - paket, Grep'in aynı kapsamda döndüreceği tahmini çıktıdan kısadır.
+//!
+//! Aynı oturumda aynı sembol için ikinci Grep, paketteki çağıranların satır
+//! aralıklarına düşen ham eşleşmelerle (`yol:satır: metin`) karşılanır: ajan ham
+//! satırları ister, yeni bir arama turu gerekmez. Bu cevap da Grep'ten kısa değilse
+//! ya da üçüncü kez sorulursa grep olduğu gibi çalışır.
 //!
 //! Hata ya da süre aşımı da grep'i geçirir; hook asla engelleyici bir hata üretmez.
 //! Her karar nedeniyle `CCM_HOOK_LOG` dosyasına (varsa) JSON satırı olarak yazılır.
 
-use std::collections::BTreeSet;
+use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::Duration;
@@ -45,11 +49,18 @@ pub(crate) struct GrepCall {
     pub file_type: Option<String>,
 }
 
-/// Hook'un kararı: grep geçer (nedeniyle) ya da paketle reddedilir.
+/// Hook'un kararı: grep geçer (nedeniyle) ya da modele gidecek cevap metniyle reddedilir.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum Decision {
     Pass(String),
-    Deny { symbol: String, packet: String },
+    Deny { answer: String },
+}
+
+/// Oturumda bir sembol için verilmiş cevap: önce paket, sonra ham çağrı satırları.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub(crate) enum Answered {
+    Packet,
+    CallSiteLines,
 }
 
 /// Stdin JSON'undan Grep çağrısı; Grep dışındaki araçlar `None`.
@@ -294,10 +305,59 @@ fn caller_label(line: &str) -> std::result::Result<String, String> {
     Ok(format!("{path}:{scope}"))
 }
 
-/// Reddin modele gösterilen metni: hata değil, cevaptır; ham çıktıya yol açıktır.
+/// İlk reddin modele gösterilen metni: hata değil, cevaptır.
 pub(crate) fn deny_reason(symbol: &str, packet: &str) -> String {
     format!(
-        "CCM answered this search for `{symbol}` from its code index (grep-equivalent check: call list complete). Run the same Grep again if you still need the raw matches.\n\n{packet}"
+        "CCM answered this search for `{symbol}` from its code index (grep-equivalent check: call list complete): every call of `{symbol}` in the indexed non-test files is inside the callers below.\n\n{packet}"
+    )
+}
+
+/// Paketteki çağıranların dosyası ve satır aralığı (`- Tür: ad · yol:a-b · …`).
+pub(crate) fn caller_ranges(packet: &str) -> Vec<(String, usize, usize)> {
+    let Some(start) = packet.lines().position(|line| line == "callers:") else {
+        return Vec::new();
+    };
+    packet
+        .lines()
+        .skip(start + 1)
+        .take_while(|line| line.starts_with("- ") || line.starts_with("  "))
+        .filter_map(|line| line.strip_prefix("- "))
+        .filter_map(|line| {
+            let location = line.split(" · ").nth(1)?;
+            let (path, range) = location.rsplit_once(':')?;
+            let (first, last) = range.split_once('-')?;
+            Some((path.to_string(), first.parse().ok()?, last.parse().ok()?))
+        })
+        .collect()
+}
+
+/// Eşleşmelerden çağıran aralıklarına düşenler, Grep'in `content` biçiminde
+/// (`yol:satır: metin`).
+pub(crate) fn call_site_lines(
+    ranges: &[(String, usize, usize)],
+    matches: &[(String, Vec<(usize, String)>)],
+) -> Vec<String> {
+    matches
+        .iter()
+        .flat_map(|(path, lines)| {
+            lines
+                .iter()
+                .filter(move |(number, _)| {
+                    ranges.iter().any(|(file, first, last)| {
+                        file == path && (*first..=*last).contains(number)
+                    })
+                })
+                .map(move |(number, text)| format!("{path}:{number}: {}", text.trim()))
+        })
+        .collect()
+}
+
+/// İkinci reddin metni: tekrarlanan Grep'e çağrı yerlerindeki ham satırlar.
+pub(crate) fn repeat_reason(symbol: &str, lines: &[String], other: usize) -> String {
+    format!(
+        "CCM: this repeats the search for `{symbol}` answered above. These are its raw matches at the call sites listed there ({} lines); the other {other} matching lines in the indexed non-test files are imports, definitions, comments, strings or non-call uses.\n\n{}",
+        lines.len(),
+        lines.join("\n")
     )
 }
 
@@ -310,10 +370,10 @@ fn session_state_path(session_id: &str) -> PathBuf {
     std::env::temp_dir().join(format!("ccm-hook-{safe}.json"))
 }
 
-fn denied_symbols(session_id: &str) -> Result<BTreeSet<String>> {
+fn answered_symbols(session_id: &str) -> Result<BTreeMap<String, Answered>> {
     let path = session_state_path(session_id);
     if !path.exists() {
-        return Ok(BTreeSet::new());
+        return Ok(BTreeMap::new());
     }
     let text = std::fs::read_to_string(&path)
         .with_context(|| format!("hook state {} could not be read", path.display()))?;
@@ -321,9 +381,9 @@ fn denied_symbols(session_id: &str) -> Result<BTreeSet<String>> {
         .with_context(|| format!("hook state {} is not valid JSON", path.display()))
 }
 
-fn remember_denied(session_id: &str, symbol: &str) -> Result<()> {
-    let mut symbols = denied_symbols(session_id)?;
-    symbols.insert(symbol.to_string());
+fn remember_answer(session_id: &str, symbol: &str, answered: Answered) -> Result<()> {
+    let mut symbols = answered_symbols(session_id)?;
+    symbols.insert(symbol.to_string(), answered);
     let path = session_state_path(session_id);
     let temporary = path.with_extension(format!("{}.tmp", std::process::id()));
     std::fs::write(&temporary, serde_json::to_string(&symbols)?)?;
@@ -331,14 +391,14 @@ fn remember_denied(session_id: &str, symbol: &str) -> Result<()> {
     Ok(())
 }
 
-/// Grep kapsamındaki indekslenmiş dosyalarda sembolün geçtiği satırlar.
+/// Grep kapsamındaki indekslenmiş dosyalarda sembolün geçtiği satırlar, numaralarıyla.
 async fn grep_matches(
     engine: &Arc<ccm_core::engine::RetrievalEngine>,
     root: &Path,
     scope: &str,
     excluded: &[String],
     symbol: &str,
-) -> Result<Vec<(String, Vec<String>)>> {
+) -> Result<Vec<(String, Vec<(usize, String)>)>> {
     let files: Vec<String> = {
         let graph = engine.graph.read().await;
         graph
@@ -358,13 +418,14 @@ async fn grep_matches(
             .with_context(|| format!("hook could not read {}", full.display()))?;
         let text = String::from_utf8(bytes)
             .with_context(|| format!("hook: {} is not UTF-8", full.display()))?;
-        let lines: Vec<String> = text
+        let lines: Vec<(usize, String)> = text
             .lines()
+            .enumerate()
             // Tam sembol, sözcük sınırlarıyla: tahmin Grep'in gerçek çıktısını hiçbir
             // zaman aşmaz (`res\.send` için ilgisiz `send` satırları sayılmaz), böylece
             // hook grep'i olduğundan pahalı sanıp engellemez.
-            .filter(|line| !crate::call_sites::needle_positions(line, symbol).is_empty())
-            .map(str::to_string)
+            .filter(|(_, line)| !crate::call_sites::needle_positions(line, symbol).is_empty())
+            .map(|(index, line)| (index + 1, line.to_string()))
             .collect();
         if !lines.is_empty() {
             matches.push((file, lines));
@@ -408,9 +469,10 @@ async fn decide(call: &GrepCall) -> Result<Decision> {
         Ok(scope) => scope,
         Err(reason) => return Ok(Decision::Pass(reason)),
     };
-    if denied_symbols(&call.session_id)?.contains(&symbol) {
+    let previous = answered_symbols(&call.session_id)?.get(&symbol).copied();
+    if previous == Some(Answered::CallSiteLines) {
         return Ok(Decision::Pass(
-            "already answered once in this session".to_string(),
+            "already answered twice in this session".to_string(),
         ));
     }
     let state = crate::server::ServerState::new().await?;
@@ -447,21 +509,42 @@ async fn decide(call: &GrepCall) -> Result<Decision> {
         Err(reason) => return Ok(Decision::Pass(reason)),
     };
     let compact = without_excluded_callers(&compact, &excluded);
-    let matches = grep_matches(&loaded.engine, &call.cwd, &scope, &excluded, &symbol).await?;
+    let numbered = grep_matches(&loaded.engine, &call.cwd, &scope, &excluded, &symbol).await?;
+    let matches: Vec<(String, Vec<String>)> = numbered
+        .iter()
+        .map(|(path, lines)| {
+            (
+                path.clone(),
+                lines.iter().map(|(_, text)| text.clone()).collect(),
+            )
+        })
+        .collect();
     // Karşılaştırma modele gidecek metnin tamamıyla ve Grep çıktısının alt sınırıyla:
     // hook yalnız gerçekten daha az metin verdiğinde cevaplar.
     let grep_chars = estimated_grep_chars(&call.output_mode, &matches);
-    let reason_chars = deny_reason(&symbol, &compact).chars().count();
-    if reason_chars >= grep_chars {
+    let (answer, answered) = match previous {
+        None => (deny_reason(&symbol, &compact), Answered::Packet),
+        Some(_) => {
+            let ranges: Vec<(String, usize, usize)> = caller_ranges(&packet)
+                .into_iter()
+                .filter(|(path, _, _)| !in_excluded_directory(path, &excluded))
+                .collect();
+            let lines = call_site_lines(&ranges, &numbered);
+            let total: usize = numbered.iter().map(|(_, lines)| lines.len()).sum();
+            (
+                repeat_reason(&symbol, &lines, total.saturating_sub(lines.len())),
+                Answered::CallSiteLines,
+            )
+        }
+    };
+    let answer_chars = answer.chars().count();
+    if answer_chars >= grep_chars {
         return Ok(Decision::Pass(format!(
-            "answer ({reason_chars} chars) is not shorter than the grep output (at least {grep_chars} chars)"
+            "answer ({answer_chars} chars) is not shorter than the grep output (at least {grep_chars} chars)"
         )));
     }
-    remember_denied(&call.session_id, &symbol)?;
-    Ok(Decision::Deny {
-        symbol,
-        packet: compact,
-    })
+    remember_answer(&call.session_id, &symbol, answered)?;
+    Ok(Decision::Deny { answer })
 }
 
 /// Karar satırını `CCM_HOOK_LOG` dosyasına ekler (ayarlıysa).
@@ -511,19 +594,19 @@ pub(crate) async fn run_claude_pre_tool_use() -> Result<()> {
     };
     match decision {
         Decision::Pass(reason) => log_decision(Some(&call), "pass", &reason, started.elapsed()),
-        Decision::Deny { symbol, packet } => {
+        Decision::Deny { answer } => {
             let output = json!({
                 "hookSpecificOutput": {
                     "hookEventName": "PreToolUse",
                     "permissionDecision": "deny",
-                    "permissionDecisionReason": deny_reason(&symbol, &packet),
+                    "permissionDecisionReason": answer,
                 }
             });
             println!("{output}");
             log_decision(
                 Some(&call),
                 "deny",
-                &format!("{} packet chars", packet.len()),
+                &format!("{} answer chars", answer.len()),
                 started.elapsed(),
             )
         }
@@ -601,6 +684,47 @@ mod tests {
             "Function `unbounded_channel` · tokio/src/sync/mpsc/unbounded.rs:1-2 · 3 callers\nCheck: call list complete.\ncallers:\n- tokio-test/src/io.rs:Inner.new (188)\n+ 2 callers in benches, examples not listed (excluded by the Grep's glob)"
         );
         assert_eq!(without_excluded_callers(compact, &[]), compact);
+    }
+
+    #[test]
+    fn repeated_grep_gets_only_the_lines_at_the_listed_call_sites() {
+        let packet = "Function `get_text_list` · django/utils/text.py:290-310 · 2 callers\nCheck: call list complete.\ncallers:\n- Method: get_change_message · django/contrib/admin/models.py:150-200 · calls; scope: LogEntry.get_change_message\n  191: x = get_text_list(a)\n- Function: handle · django/core/management/commands/makemessages.py:380-390 · calls\n  386: get_text_list(b)\n```\ndef get_text_list(list_, last_word):\n```";
+        let ranges = caller_ranges(packet);
+        assert_eq!(
+            ranges,
+            vec![
+                ("django/contrib/admin/models.py".to_string(), 150, 200),
+                (
+                    "django/core/management/commands/makemessages.py".to_string(),
+                    380,
+                    390
+                ),
+            ]
+        );
+        let matches = vec![
+            (
+                "django/contrib/admin/models.py".to_string(),
+                vec![
+                    (
+                        12,
+                        "from django.utils.text import get_text_list".to_string(),
+                    ),
+                    (191, "    x = get_text_list(a)".to_string()),
+                ],
+            ),
+            (
+                "django/utils/text.py".to_string(),
+                vec![(290, "def get_text_list(list_, last_word):".to_string())],
+            ),
+        ];
+        let lines = call_site_lines(&ranges, &matches);
+        assert_eq!(
+            lines,
+            vec!["django/contrib/admin/models.py:191: x = get_text_list(a)"]
+        );
+        let reason = repeat_reason("get_text_list", &lines, 2);
+        assert!(reason.contains("(1 lines)") && reason.contains("other 2 matching lines"));
+        assert!(!deny_reason("get_text_list", "p").contains("Run the same Grep again"));
     }
 
     #[test]
