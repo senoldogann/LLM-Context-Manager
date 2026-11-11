@@ -1,0 +1,61 @@
+{
+  "record_version": 3,
+  "run_id": "sklearn-callers-has-fit-parameter__D__1",
+  "task_id": "sklearn-callers-has-fit-parameter",
+  "repo": "scikit-learn",
+  "category": "callers",
+  "arm": "D",
+  "rep": 1,
+  "model": "claude-opus-5-5",
+  "effort": "high",
+  "embedding": "local",
+  "index_copy_s": 0.5654367920942605,
+  "index_build_s": 1014.4864400420338,
+  "wall_s": 13.259594042086974,
+  "transcript": {
+    "result_text": "Eight functions or methods in `sklearn/` call `has_fit_parameter` directly, outside test files:\n\n- `sklearn/ensemble/_bagging.py`: `_parallel_build_estimators` (lines 109 and 118)\n- `sklearn/ensemble/_weight_boosting.py`: `AdaBoostClassifier._validate_estimator` (line 544)\n- `sklearn/linear_model/_coordinate_descent.py`: `LinearModelCV.fit` (lines 1739 and 1751)\n- `sklearn/linear_model/_ransac.py`: `RANSACRegressor.fit` (line 430)\n- `sklearn/multioutput.py`: `_MultiOutputEstimator.partial_fit` (line 179) and `_MultiOutputEstimator.fit` (line 266)\n- `sklearn/utils/estimator_checks.py`: `_yield_checks` (line 98) and `check_classifiers_one_label_sample_weights` (line 2344)\n\nThe code index found these 10 call sites and reported the list as complete. I also searched for the function being imported under another name and found none. The other mentions don't count: one is a name in `doc/api_reference.py`, which is outside `sklearn/` and isn't a call, and the rest are in docstrings or test files.\n\n```json\n{\"answer\": [\"sklearn/ensemble/_bagging.py:_parallel_build_estimators\", \"sklearn/ensemble/_weight_boosting.py:AdaBoostClassifier._validate_estimator\", \"sklearn/linear_model/_coordinate_descent.py:LinearModelCV.fit\", \"sklearn/linear_model/_ransac.py:RANSACRegressor.fit\", \"sklearn/multioutput.py:_MultiOutputEstimator.partial_fit\", \"sklearn/multioutput.py:_MultiOutputEstimator.fit\", \"sklearn/utils/estimator_checks.py:_yield_checks\", \"sklearn/utils/estimator_checks.py:check_classifiers_one_label_sample_weights\"]}\n```",
+    "subtype": "success",
+    "is_error": false,
+    "api_error_status": null,
+    "num_turns": 3,
+    "duration_ms": 11563,
+    "cost_usd": 0.059086599999999996,
+    "usage": {
+      "input_tokens": 6,
+      "output_tokens": 944,
+      "cache_creation_input_tokens": 4451,
+      "cache_read_input_tokens": 22873
+    },
+    "tool_calls": {
+      "Grep": 1,
+      "mcp__context-manager__context": 1
+    },
+    "mcp_status": "connected",
+    "api_key_source": "none",
+    "tools": [
+      "Bash",
+      "Edit",
+      "Glob",
+      "Grep",
+      "Read",
+      "Write",
+      "mcp__context-manager__context",
+      "mcp__context-manager__index_project"
+    ]
+  },
+  "score": {
+    "answered": true,
+    "recall": 1.0,
+    "precision": 1.0,
+    "missing": [],
+    "extra": [],
+    "edit_applied": null,
+    "stale": [],
+    "success": true
+  },
+  "failure": null,
+  "hook": {
+    "deny": 0,
+    "pass_": 1
+  }
+}

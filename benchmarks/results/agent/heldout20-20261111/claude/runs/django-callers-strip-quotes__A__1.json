@@ -1,0 +1,56 @@
+{
+  "record_version": 3,
+  "run_id": "django-callers-strip-quotes__A__1",
+  "task_id": "django-callers-strip-quotes",
+  "repo": "django",
+  "category": "callers",
+  "arm": "A",
+  "rep": 1,
+  "model": "claude-opus-5-5",
+  "effort": "high",
+  "embedding": "local",
+  "index_copy_s": null,
+  "index_build_s": null,
+  "wall_s": 18.858692333102226,
+  "transcript": {
+    "result_text": "I found 9 functions that call `strip_quotes` directly. I searched `django/` for every use of the name and matched each call to the function that contains it:\n\n- **`django/db/models/fields/related.py`**: `ManyToManyField._get_m2m_db_table` calls it as `utils.strip_quotes`, where `utils` is `django.db.backends.utils` (line 1833).\n- **`django/db/backends/sqlite3/schema.py`**: `DatabaseSchemaEditor._remake_table` (line 223).\n- **`django/db/backends/oracle/operations.py`**: four methods of `DatabaseOperations`:\n  - `last_insert_id` (line 345)\n  - `sequence_reset_by_name_sql` (lines 540–541)\n  - `sequence_reset_sql` (lines 564–565)\n  - `_get_no_autofield_sequence_name` (line 659)\n- **`django/db/backends/postgresql/schema.py`**: `DatabaseSchemaEditor._alter_column_type_sql`, which has several calls (lines 169–232).\n- **`django/db/backends/postgresql/creation.py`**: `DatabaseCreation._database_exists` (line 36).\n- **`django/contrib/gis/db/backends/oracle/schema.py`**: `OracleGISSchemaEditor._create_spatial_index_name` (line 113).\n\nNone of the matches pass it as a value without calling it, and nothing in `django/test/` uses it.\n\n```json\n{\"answer\": [\"django/db/models/fields/related.py:ManyToManyField._get_m2m_db_table\", \"django/db/backends/sqlite3/schema.py:DatabaseSchemaEditor._remake_table\", \"django/db/backends/oracle/operations.py:DatabaseOperations.last_insert_id\", \"django/db/backends/oracle/operations.py:DatabaseOperations.sequence_reset_by_name_sql\", \"django/db/backends/oracle/operations.py:DatabaseOperations.sequence_reset_sql\", \"django/db/backends/oracle/operations.py:DatabaseOperations._get_no_autofield_sequence_name\", \"django/db/backends/postgresql/schema.py:DatabaseSchemaEditor._alter_column_type_sql\", \"django/db/backends/postgresql/creation.py:DatabaseCreation._database_exists\", \"django/contrib/gis/db/backends/oracle/schema.py:OracleGISSchemaEditor._create_spatial_index_name\"]}\n```",
+    "subtype": "success",
+    "is_error": false,
+    "api_error_status": null,
+    "num_turns": 4,
+    "duration_ms": 17945,
+    "cost_usd": 0.0912846,
+    "usage": {
+      "input_tokens": 8,
+      "output_tokens": 1808,
+      "cache_creation_input_tokens": 6099,
+      "cache_read_input_tokens": 31503
+    },
+    "tool_calls": {
+      "Bash": 2,
+      "Grep": 1
+    },
+    "mcp_status": "none",
+    "api_key_source": "none",
+    "tools": [
+      "Bash",
+      "Edit",
+      "Glob",
+      "Grep",
+      "Read",
+      "Write"
+    ]
+  },
+  "score": {
+    "answered": true,
+    "recall": 1.0,
+    "precision": 1.0,
+    "missing": [],
+    "extra": [],
+    "edit_applied": null,
+    "stale": [],
+    "success": true
+  },
+  "failure": null,
+  "hook": null
+}

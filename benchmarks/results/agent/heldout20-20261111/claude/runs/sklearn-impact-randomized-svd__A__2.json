@@ -1,0 +1,55 @@
+{
+  "record_version": 3,
+  "run_id": "sklearn-impact-randomized-svd__A__2",
+  "task_id": "sklearn-impact-randomized-svd",
+  "repo": "scikit-learn",
+  "category": "files",
+  "arm": "A",
+  "rep": 2,
+  "model": "claude-opus-5-5",
+  "effort": "high",
+  "embedding": "local",
+  "index_copy_s": null,
+  "index_build_s": null,
+  "wall_s": 17.100394916022196,
+  "transcript": {
+    "result_text": "Eight files call `randomized_svd` directly. I searched every non-test file under `sklearn/` for the name, for aliased imports and for module-qualified calls such as `extmath.randomized_svd`.\n\n- **`sklearn/utils/extmath.py`**: this is where the function is defined, and the same file calls it again at line 686, inside another function.\n- **`sklearn/decomposition/_dict_learning.py`**: called at line 2020.\n- **`sklearn/decomposition/_truncated_svd.py`**: called at line 246.\n- **`sklearn/decomposition/_pca.py`**: called at line 764.\n- **`sklearn/decomposition/_nmf.py`**: called at line 321.\n- **`sklearn/decomposition/_factor_analysis.py`**: called at line 270.\n- **`sklearn/cluster/_bicluster.py`**: called at line 147.\n\nEvery caller imports it as `from ..utils.extmath import randomized_svd`. None of them uses an alias.\n\n`sklearn/decomposition/__init__.py` imports the function and re-exports it in `__all__`, but never calls it, so it is not on the list. No non-test file calls it through that re-export (`sklearn.decomposition.randomized_svd`).\n\n```json\n{\"answer\": [\"sklearn/utils/extmath.py\", \"sklearn/decomposition/_dict_learning.py\", \"sklearn/decomposition/_truncated_svd.py\", \"sklearn/decomposition/_pca.py\", \"sklearn/decomposition/_nmf.py\", \"sklearn/decomposition/_factor_analysis.py\", \"sklearn/cluster/_bicluster.py\"]}\n```",
+    "subtype": "success",
+    "is_error": false,
+    "api_error_status": null,
+    "num_turns": 4,
+    "duration_ms": 15928,
+    "cost_usd": 0.07311000000000001,
+    "usage": {
+      "input_tokens": 8,
+      "output_tokens": 1223,
+      "cache_creation_input_tokens": 5302,
+      "cache_read_input_tokens": 31010
+    },
+    "tool_calls": {
+      "Grep": 3
+    },
+    "mcp_status": "none",
+    "api_key_source": "none",
+    "tools": [
+      "Bash",
+      "Edit",
+      "Glob",
+      "Grep",
+      "Read",
+      "Write"
+    ]
+  },
+  "score": {
+    "answered": true,
+    "recall": 1.0,
+    "precision": 1.0,
+    "missing": [],
+    "extra": [],
+    "edit_applied": null,
+    "stale": [],
+    "success": true
+  },
+  "failure": null,
+  "hook": null
+}

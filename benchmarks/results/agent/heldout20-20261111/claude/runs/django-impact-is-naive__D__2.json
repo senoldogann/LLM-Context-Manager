@@ -1,0 +1,60 @@
+{
+  "record_version": 3,
+  "run_id": "django-impact-is-naive__D__2",
+  "task_id": "django-impact-is-naive",
+  "repo": "django",
+  "category": "files",
+  "arm": "D",
+  "rep": 2,
+  "model": "claude-opus-5-5",
+  "effort": "high",
+  "embedding": "local",
+  "index_copy_s": 0.6441956250928342,
+  "index_build_s": 3239.4935852501076,
+  "wall_s": 15.011201250134036,
+  "transcript": {
+    "result_text": "Eight files in `django/` call `is_naive` directly. I found them by searching `django/` for every occurrence of the name and checking each file's imports.\n\n- **Through the module import** (`from django.utils import timezone`, then `timezone.is_naive(...)`):\n  - `django/db/models/fields/__init__.py`\n  - `django/http/response.py`\n  - `django/templatetags/tz.py`\n  - `django/contrib/sitemaps/views.py`\n  - `django/forms/utils.py`\n- **Through a direct import** (`from django.utils.timezone import ... is_naive ...`):\n  - `django/contrib/syndication/views.py`\n  - `django/utils/dateformat.py`\n- **In the defining module:** `django/utils/timezone.py` calls it internally at lines 158, 182 and 253.\n\nNothing imports it under a different name. A renamed import or a renamed `timezone` module would still contain the text `is_naive`, so the search would have found it.\n\n```json\n{\"answer\": [\"django/db/models/fields/__init__.py\", \"django/http/response.py\", \"django/templatetags/tz.py\", \"django/contrib/sitemaps/views.py\", \"django/forms/utils.py\", \"django/contrib/syndication/views.py\", \"django/utils/dateformat.py\", \"django/utils/timezone.py\"]}\n```",
+    "subtype": "success",
+    "is_error": false,
+    "api_error_status": null,
+    "num_turns": 3,
+    "duration_ms": 13724,
+    "cost_usd": 0.0577902,
+    "usage": {
+      "input_tokens": 6,
+      "output_tokens": 1073,
+      "cache_creation_input_tokens": 3992,
+      "cache_read_input_tokens": 21851
+    },
+    "tool_calls": {
+      "Grep": 2
+    },
+    "mcp_status": "connected",
+    "api_key_source": "none",
+    "tools": [
+      "Bash",
+      "Edit",
+      "Glob",
+      "Grep",
+      "Read",
+      "Write",
+      "mcp__context-manager__context",
+      "mcp__context-manager__index_project"
+    ]
+  },
+  "score": {
+    "answered": true,
+    "recall": 1.0,
+    "precision": 1.0,
+    "missing": [],
+    "extra": [],
+    "edit_applied": null,
+    "stale": [],
+    "success": true
+  },
+  "failure": null,
+  "hook": {
+    "deny": 0,
+    "pass_": 2
+  }
+}

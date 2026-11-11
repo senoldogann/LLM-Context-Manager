@@ -1,0 +1,61 @@
+{
+  "record_version": 3,
+  "run_id": "sklearn-callers-check-scalar__E__1",
+  "task_id": "sklearn-callers-check-scalar",
+  "repo": "scikit-learn",
+  "category": "callers",
+  "arm": "E",
+  "rep": 1,
+  "model": "claude-opus-5-5",
+  "effort": "high",
+  "embedding": "local",
+  "index_copy_s": 0.30643004085868597,
+  "index_build_s": 1014.4864400420338,
+  "wall_s": 13.91609845799394,
+  "transcript": {
+    "result_text": "`check_scalar` is called directly by six functions or methods in Python source under `sklearn/`. I found them by searching for every use of the name outside test files, and the code index confirmed its list of call sites was complete.\n\n1. `sklearn/_loss/loss.py`: `PinballLoss.__init__` (line 611)\n2. `sklearn/_loss/loss.py`: `HuberLoss.__init__` (line 678)\n3. `sklearn/cluster/_bicluster.py`: `SpectralBiclustering._check_parameters` (lines 533 and 540)\n4. `sklearn/covariance/_graph_lasso.py`: `GraphicalLassoCV.fit` (line 981)\n5. `sklearn/feature_selection/_from_model.py`: `SelectFromModel._check_max_features` (line 324)\n6. `sklearn/linear_model/_ridge.py`: `_ridge_regression` (line 693)\n\nMost of these import it through `sklearn.utils`, which re-exports it; those calls count.\n\n**Left out:**\n- `LinearModelCV.fit` (`linear_model/_coordinate_descent.py:1693`) and `_BaseRidgeCV.fit` (`linear_model/_ridge.py:2357`, `2364`) don't call `check_scalar` themselves. They wrap it in `functools.partial(check_scalar, ...)` and call the result, which only passes it as a value.\n- Three Cython template files (`.pyx.tp`) also call it, but I left them out because they aren't Python source and their class names are generated from the templates:\n  - `metrics/_pairwise_distances_reduction/_base.pyx.tp:144`\n  - `_argkmin.pyx.tp:115`\n  - `_radius_neighbors.pyx.tp:136`\n\n```json\n{\"answer\": [\"sklearn/_loss/loss.py:PinballLoss.__init__\", \"sklearn/_loss/loss.py:HuberLoss.__init__\", \"sklearn/cluster/_bicluster.py:SpectralBiclustering._check_parameters\", \"sklearn/covariance/_graph_lasso.py:GraphicalLassoCV.fit\", \"sklearn/feature_selection/_from_model.py:SelectFromModel._check_max_features\", \"sklearn/linear_model/_ridge.py:_ridge_regression\"]}\n```",
+    "subtype": "success",
+    "is_error": false,
+    "api_error_status": null,
+    "num_turns": 3,
+    "duration_ms": 12727,
+    "cost_usd": 0.07323660000000001,
+    "usage": {
+      "input_tokens": 4,
+      "output_tokens": 1195,
+      "cache_creation_input_tokens": 5831,
+      "cache_read_input_tokens": 13363
+    },
+    "tool_calls": {
+      "Grep": 1,
+      "mcp__context-manager__context": 1
+    },
+    "mcp_status": "connected",
+    "api_key_source": "none",
+    "tools": [
+      "Bash",
+      "Edit",
+      "Glob",
+      "Grep",
+      "Read",
+      "Write",
+      "mcp__context-manager__context",
+      "mcp__context-manager__index_project"
+    ]
+  },
+  "score": {
+    "answered": true,
+    "recall": 1.0,
+    "precision": 1.0,
+    "missing": [],
+    "extra": [],
+    "edit_applied": null,
+    "stale": [],
+    "success": true
+  },
+  "failure": null,
+  "hook": {
+    "deny": 0,
+    "pass_": 1
+  }
+}

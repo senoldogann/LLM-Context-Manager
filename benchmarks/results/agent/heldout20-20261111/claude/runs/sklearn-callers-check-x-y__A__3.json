@@ -1,0 +1,56 @@
+{
+  "record_version": 3,
+  "run_id": "sklearn-callers-check-x-y__A__3",
+  "task_id": "sklearn-callers-check-x-y",
+  "repo": "scikit-learn",
+  "category": "callers",
+  "arm": "A",
+  "rep": 3,
+  "model": "claude-opus-5-5",
+  "effort": "high",
+  "embedding": "local",
+  "index_copy_s": null,
+  "index_build_s": null,
+  "wall_s": 17.018377292202786,
+  "transcript": {
+    "result_text": "Ten functions and methods in `sklearn/` call `check_X_y` directly. I found them by searching for the name in all non-test files and taking the enclosing function for each call.\n\n- **`sklearn/base.py`**: `BaseEstimator._validate_data` calls it at line 650.\n- **`sklearn/metrics/cluster/_unsupervised.py`**: `silhouette_score` (line 134, only when `sample_size` is set), `silhouette_samples` (line 279), `calinski_harabasz_score` (line 368) and `davies_bouldin_score` (line 443). This file imports it through `sklearn.utils`, which re-exports it.\n- **`sklearn/feature_selection/_univariate_selection.py`**: `f_classif` (line 171) and `r_regression` (line 363), also imported through `sklearn.utils`.\n- **`sklearn/feature_selection/_mutual_info.py`**: `_estimate_mi` (line 271).\n- **`sklearn/utils/_testing.py`**: `MinimalClassifier.fit` (line 955) and `MinimalRegressor.fit` (line 1004).\n\nI left out the `_check_X_y` methods in `naive_bayes.py` and `utils/_mocking.py`. They are separate methods that happen to have a similar name, and none of them calls the validation function. No file imports it under a different name.\n\n```json\n{\"answer\": [\"sklearn/base.py:BaseEstimator._validate_data\", \"sklearn/metrics/cluster/_unsupervised.py:silhouette_score\", \"sklearn/metrics/cluster/_unsupervised.py:silhouette_samples\", \"sklearn/metrics/cluster/_unsupervised.py:calinski_harabasz_score\", \"sklearn/metrics/cluster/_unsupervised.py:davies_bouldin_score\", \"sklearn/feature_selection/_univariate_selection.py:f_classif\", \"sklearn/feature_selection/_univariate_selection.py:r_regression\", \"sklearn/feature_selection/_mutual_info.py:_estimate_mi\", \"sklearn/utils/_testing.py:MinimalClassifier.fit\", \"sklearn/utils/_testing.py:MinimalRegressor.fit\"]}\n```",
+    "subtype": "success",
+    "is_error": false,
+    "api_error_status": null,
+    "num_turns": 4,
+    "duration_ms": 16236,
+    "cost_usd": 0.0884012,
+    "usage": {
+      "input_tokens": 8,
+      "output_tokens": 1546,
+      "cache_creation_input_tokens": 6369,
+      "cache_read_input_tokens": 32486
+    },
+    "tool_calls": {
+      "Bash": 2,
+      "Grep": 1
+    },
+    "mcp_status": "none",
+    "api_key_source": "none",
+    "tools": [
+      "Bash",
+      "Edit",
+      "Glob",
+      "Grep",
+      "Read",
+      "Write"
+    ]
+  },
+  "score": {
+    "answered": true,
+    "recall": 1.0,
+    "precision": 1.0,
+    "missing": [],
+    "extra": [],
+    "edit_applied": null,
+    "stale": [],
+    "success": true
+  },
+  "failure": null,
+  "hook": null
+}

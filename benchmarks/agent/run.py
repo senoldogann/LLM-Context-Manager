@@ -39,7 +39,7 @@ from freshness.repos import WorkspaceError, export_corpus, init_git, run_git
 # gelen isteğe bağlı Grep hook'u (`ccm-mcp hook claude-pre-tool-use`). Doğal kullanım değildir.
 # D yalnız preregistered profilde (ek 14): B'nin güncel ürün sürümü, `context` + `index_project`
 # ve `context` notu. A, B ve C ön kayıttaki tanımlarıyla kalır.
-Arm = Literal["A", "B", "C", "D", "F", "H"]
+Arm = Literal["A", "B", "C", "D", "E", "F", "H"]
 Embedding = Literal["local", "openai"]
 # subscription: `claude setup-token` ile üretilen abonelik jetonu; api-key: ücretli API anahtarı.
 Auth = Literal["subscription", "api-key"]
@@ -417,11 +417,11 @@ def granted_tools(profile: ProductProfile, arm: Arm) -> tuple[str, ...]:
         return ()
     if arm in ("F", "H") and profile != "context-first-pilot":
         raise SetupError(f"arm {arm} exists only in the context-first-pilot profile")
-    if arm == "D" and profile != "preregistered":
-        raise SetupError("arm D exists only in the preregistered profile")
+    if arm in ("D", "E") and profile != "preregistered":
+        raise SetupError(f"arm {arm} exists only in the preregistered profile")
     if profile == "context-first-pilot":
         return CONTEXT_DEFAULT_TOOLS if arm in ("B", "F", "H") else LEGACY_CCM_TOOLS
-    if arm == "D":
+    if arm in ("D", "E"):
         return CONTEXT_DEFAULT_TOOLS
     return LEGACY_CCM_TOOLS if arm == "B" else ("search_code",)
 
@@ -430,7 +430,7 @@ def uses_legacy_discovery(profile: ProductProfile, arm: Arm) -> bool:
     """Bu kol eski yapısal araçların tools/list içinde görünmesini gerektiriyor mu."""
     if arm == "A":
         return False
-    if arm in ("D", "F", "H"):
+    if arm in ("D", "E", "F", "H"):
         return False
     return profile == "preregistered" or arm == "C"
 
@@ -441,9 +441,9 @@ def arm_note(profile: ProductProfile, arm: Arm) -> str:
         return ""
     if arm in ("F", "H") and profile != "context-first-pilot":
         raise SetupError(f"arm {arm} exists only in the context-first-pilot profile")
-    if arm == "D" and profile != "preregistered":
-        raise SetupError("arm D exists only in the preregistered profile")
-    if arm == "D":
+    if arm in ("D", "E") and profile != "preregistered":
+        raise SetupError(f"arm {arm} exists only in the preregistered profile")
+    if arm in ("D", "E"):
         return CONTEXT_NOTE
     if profile == "context-first-pilot":
         if arm == "F":
@@ -1117,16 +1117,22 @@ def clear_attempt(paths: RunPaths) -> None:
 
 
 def uses_grep_hook(agent: AgentName, arm: Arm) -> bool:
-    """Kolda Claude Code'un Grep hook'u kurulu mu: H ve (amendment 17'den beri) D, yalnız Claude.
+    """Kolda Claude Code'un PreToolUse hook'u kurulu mu: H, D (amendment 17'den beri) ve E.
 
-    D, ürünün Claude Code için önerilen kurulumudur (`context` + `index_project` + hook); Codex'te
-    hook mekanizması olmadığından D değişmez. A, B ve C'de hook yoktur.
+    D, ürünün Claude Code için önerilen kurulumudur (`context` + `index_project` + Grep hook).
+    E (amendment 20) D'ye Bash'teki `grep`/`rg` aramalarını ekler. Codex'te hook mekanizması
+    yoktur. A, B ve C'de hook yoktur.
     """
-    return agent == "claude" and arm in ("D", "H")
+    return agent == "claude" and arm in ("D", "E", "H")
 
 
-def hook_settings(settings: Settings, server_env: dict[str, str], hook_log: Path) -> str:
-    """H ve D kollarının Claude Code ayarı: Grep için PreToolUse hook'u (`--settings` dosyası)."""
+def hook_matcher(arm: Arm) -> str:
+    """Hook'un eşleştiği Claude Code araçları: E'de Grep ve Bash, diğerlerinde yalnız Grep."""
+    return "Grep|Bash" if arm == "E" else "Grep"
+
+
+def hook_settings(settings: Settings, server_env: dict[str, str], hook_log: Path, arm: Arm) -> str:
+    """Hook'lu kolların Claude Code ayarı: PreToolUse hook'u (`--settings` dosyası)."""
     environment = {**server_env, "CCM_HOOK_LOG": str(hook_log)}
     assignments = " ".join(f"{key}={shlex.quote(value)}" for key, value in environment.items())
     command = (
@@ -1135,7 +1141,10 @@ def hook_settings(settings: Settings, server_env: dict[str, str], hook_log: Path
     )
     hooks: dict[str, JsonValue] = {
         "PreToolUse": [
-            {"matcher": "Grep", "hooks": [{"type": "command", "command": command, "timeout": 10}]}
+            {
+                "matcher": hook_matcher(arm),
+                "hooks": [{"type": "command", "command": command, "timeout": 10}],
+            }
         ]
     }
     return json.dumps({"hooks": hooks}, indent=2)
@@ -1194,12 +1203,12 @@ def agent_invocation(
             write_private(config_path, json.dumps(mcp_config(settings, server_env), indent=2))
             if uses_grep_hook(settings.agent, arm):
                 hooks_path = work / "hooks.json"
-                write_private(hooks_path, hook_settings(settings, server_env, hook_log))
+                write_private(hooks_path, hook_settings(settings, server_env, hook_log, arm))
         return claude_command(settings, task, arm, config_path, hooks_path), claude_env(
             home, settings.auth, secrets
         )
-    if arm == "H":
-        raise SetupError("arm H (Claude Code Grep hook) is not available for Codex")
+    if arm in ("E", "H"):
+        raise SetupError(f"arm {arm} (Claude Code hook) is not available for Codex")
     if settings.codex_home is None:
         raise SetupError("--agent codex needs --codex-home")
     server = (

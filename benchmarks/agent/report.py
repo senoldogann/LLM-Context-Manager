@@ -15,7 +15,7 @@ from agent.prices import PRICES, estimated_cost
 from freshness.jsonio import as_bool, as_float, as_int, as_list, as_object, as_str
 from freshness.model import JsonValue
 
-ARMS = ("A", "B", "C", "D", "F", "H")
+ARMS = ("A", "B", "C", "D", "E", "F", "H")
 CCM_TOOL_PREFIX = "mcp__context-manager__"
 BOOTSTRAP_ROUNDS = 10_000
 BOOTSTRAP_SEED = 7

@@ -1,0 +1,62 @@
+{
+  "record_version": 3,
+  "run_id": "sklearn-callers-pairwise-distances-chunked__E__2",
+  "task_id": "sklearn-callers-pairwise-distances-chunked",
+  "repo": "scikit-learn",
+  "category": "callers",
+  "arm": "E",
+  "rep": 2,
+  "model": "claude-opus-5-5",
+  "effort": "high",
+  "embedding": "local",
+  "index_copy_s": 0.24179879110306501,
+  "index_build_s": 1014.4864400420338,
+  "wall_s": 16.538294583093375,
+  "transcript": {
+    "result_text": "Six functions and methods in `sklearn/` call `pairwise_distances_chunked` directly. I got this from the code index, which reports its caller list as complete. It found six call sites in non-test files, each inside one of the functions below:\n\n- `sklearn/impute/_knn.py:359`, in `KNNImputer.transform`\n- `sklearn/metrics/cluster/_unsupervised.py:305`, in `silhouette_samples`\n- `sklearn/metrics/pairwise.py:818`, in `pairwise_distances_argmin_min`\n- `sklearn/metrics/pairwise.py:960`, in `pairwise_distances_argmin`\n- `sklearn/neighbors/_base.py:887`, in `KNeighborsMixin.kneighbors`\n- `sklearn/neighbors/_base.py:1225`, in `RadiusNeighborsMixin.radius_neighbors`\n\nThe two other mentions in `sklearn/neighbors/_base.py` (lines 713 and 1048) are in docstrings for the callback functions, not calls. The index only finds calls where the name appears in the source, so a call made through `getattr` would not show up. I didn't open the four files that import the function to check them for import aliases myself.\n\n```json\n{\"answer\": [\"sklearn/impute/_knn.py:KNNImputer.transform\", \"sklearn/metrics/cluster/_unsupervised.py:silhouette_samples\", \"sklearn/metrics/pairwise.py:pairwise_distances_argmin_min\", \"sklearn/metrics/pairwise.py:pairwise_distances_argmin\", \"sklearn/neighbors/_base.py:KNeighborsMixin.kneighbors\", \"sklearn/neighbors/_base.py:RadiusNeighborsMixin.radius_neighbors\"]}\n```",
+    "subtype": "success",
+    "is_error": false,
+    "api_error_status": null,
+    "num_turns": 5,
+    "duration_ms": 15571,
+    "cost_usd": 0.08673040000000001,
+    "usage": {
+      "input_tokens": 8,
+      "output_tokens": 1301,
+      "cache_creation_input_tokens": 6683,
+      "cache_read_input_tokens": 36072
+    },
+    "tool_calls": {
+      "Bash": 2,
+      "Grep": 1,
+      "mcp__context-manager__context": 1
+    },
+    "mcp_status": "connected",
+    "api_key_source": "none",
+    "tools": [
+      "Bash",
+      "Edit",
+      "Glob",
+      "Grep",
+      "Read",
+      "Write",
+      "mcp__context-manager__context",
+      "mcp__context-manager__index_project"
+    ]
+  },
+  "score": {
+    "answered": true,
+    "recall": 1.0,
+    "precision": 1.0,
+    "missing": [],
+    "extra": [],
+    "edit_applied": null,
+    "stale": [],
+    "success": true
+  },
+  "failure": null,
+  "hook": {
+    "deny": 2,
+    "pass_": 1
+  }
+}

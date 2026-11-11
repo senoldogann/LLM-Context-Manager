@@ -1,0 +1,60 @@
+{
+  "record_version": 3,
+  "run_id": "django-impact-is-naive__D__1",
+  "task_id": "django-impact-is-naive",
+  "repo": "django",
+  "category": "files",
+  "arm": "D",
+  "rep": 1,
+  "model": "claude-opus-5-5",
+  "effort": "high",
+  "embedding": "local",
+  "index_copy_s": 0.630106917116791,
+  "index_build_s": 3239.4935852501076,
+  "wall_s": 14.210129166953266,
+  "transcript": {
+    "result_text": "I found 8 files in `django/` that call `is_naive`. A text search for `is_naive` across `django/` turned up no aliased imports; every match is one of the calls listed here.\n\n- **`django/utils/timezone.py`**: the module calls its own function inside other functions (lines 158, 182 and 253). I counted this file because those are direct calls.\n- **Imported by name with `from django.utils.timezone import ... is_naive`**:\n  - `django/utils/dateformat.py`\n  - `django/contrib/syndication/views.py`\n- **Called as `timezone.is_naive(...)` after `from django.utils import timezone`**:\n  - `django/db/models/fields/__init__.py`\n  - `django/http/response.py`\n  - `django/templatetags/tz.py` (this file also imports the standard library's `datetime.timezone`, but under the separate name `datetime_timezone`, so `timezone` here is Django's module)\n  - `django/forms/utils.py`\n  - `django/contrib/sitemaps/views.py`\n\n```json\n{\"answer\": [\"django/utils/timezone.py\", \"django/utils/dateformat.py\", \"django/db/models/fields/__init__.py\", \"django/http/response.py\", \"django/templatetags/tz.py\", \"django/forms/utils.py\", \"django/contrib/syndication/views.py\", \"django/contrib/sitemaps/views.py\"]}\n```",
+    "subtype": "success",
+    "is_error": false,
+    "api_error_status": null,
+    "num_turns": 3,
+    "duration_ms": 12883,
+    "cost_usd": 0.053808800000000004,
+    "usage": {
+      "input_tokens": 6,
+      "output_tokens": 940,
+      "cache_creation_input_tokens": 3827,
+      "cache_read_input_tokens": 21844
+    },
+    "tool_calls": {
+      "Grep": 2
+    },
+    "mcp_status": "connected",
+    "api_key_source": "none",
+    "tools": [
+      "Bash",
+      "Edit",
+      "Glob",
+      "Grep",
+      "Read",
+      "Write",
+      "mcp__context-manager__context",
+      "mcp__context-manager__index_project"
+    ]
+  },
+  "score": {
+    "answered": true,
+    "recall": 1.0,
+    "precision": 1.0,
+    "missing": [],
+    "extra": [],
+    "edit_applied": null,
+    "stale": [],
+    "success": true
+  },
+  "failure": null,
+  "hook": {
+    "deny": 0,
+    "pass_": 2
+  }
+}

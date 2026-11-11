@@ -1,0 +1,61 @@
+{
+  "record_version": 3,
+  "run_id": "sklearn-callers-pairwise-distances-chunked__D__2",
+  "task_id": "sklearn-callers-pairwise-distances-chunked",
+  "repo": "scikit-learn",
+  "category": "callers",
+  "arm": "D",
+  "rep": 2,
+  "model": "claude-opus-5-5",
+  "effort": "high",
+  "embedding": "local",
+  "index_copy_s": 0.20688825007528067,
+  "index_build_s": 1014.4864400420338,
+  "wall_s": 10.268124958965927,
+  "transcript": {
+    "result_text": "Six functions and methods in `sklearn/` call `pairwise_distances_chunked` directly. I got this from the code index, which says its list of callers is complete. I didn't read each call site myself.\n\n- `sklearn/impute/_knn.py`: `KNNImputer.transform` (line 359)\n- `sklearn/metrics/cluster/_unsupervised.py`: `silhouette_samples` (line 305)\n- `sklearn/metrics/pairwise.py`: `pairwise_distances_argmin_min` (line 818) and `pairwise_distances_argmin` (line 960)\n- `sklearn/neighbors/_base.py`: `KNeighborsMixin.kneighbors` (line 887) and `RadiusNeighborsMixin.radius_neighbors` (line 1225)\n\nThe function doesn't call itself. The other two non-test mentions, at `sklearn/neighbors/_base.py:713` and `:1048`, only refer to it in \"Callback to ...\" text, not as calls. The index found four files that import it, and none of them calls it under a different name.\n\n```json\n{\"answer\": [\"sklearn/impute/_knn.py:KNNImputer.transform\", \"sklearn/metrics/cluster/_unsupervised.py:silhouette_samples\", \"sklearn/metrics/pairwise.py:pairwise_distances_argmin_min\", \"sklearn/metrics/pairwise.py:pairwise_distances_argmin\", \"sklearn/neighbors/_base.py:KNeighborsMixin.kneighbors\", \"sklearn/neighbors/_base.py:RadiusNeighborsMixin.radius_neighbors\"]}\n```",
+    "subtype": "success",
+    "is_error": false,
+    "api_error_status": null,
+    "num_turns": 3,
+    "duration_ms": 9348,
+    "cost_usd": 0.065078,
+    "usage": {
+      "input_tokens": 4,
+      "output_tokens": 796,
+      "cache_creation_input_tokens": 5808,
+      "cache_read_input_tokens": 13390
+    },
+    "tool_calls": {
+      "Grep": 1,
+      "mcp__context-manager__context": 1
+    },
+    "mcp_status": "connected",
+    "api_key_source": "none",
+    "tools": [
+      "Bash",
+      "Edit",
+      "Glob",
+      "Grep",
+      "Read",
+      "Write",
+      "mcp__context-manager__context",
+      "mcp__context-manager__index_project"
+    ]
+  },
+  "score": {
+    "answered": true,
+    "recall": 1.0,
+    "precision": 1.0,
+    "missing": [],
+    "extra": [],
+    "edit_applied": null,
+    "stale": [],
+    "success": true
+  },
+  "failure": null,
+  "hook": {
+    "deny": 1,
+    "pass_": 0
+  }
+}

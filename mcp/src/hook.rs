@@ -15,6 +15,10 @@
 //! - paket "call list complete" der;
 //! - paket, Grep'in aynı kapsamda döndüreceği tahmini çıktıdan kısadır.
 //!
+//! Aynı hook, Bash'teki tek bir sembol aramasını da (`grep -r…`/`rg …`, isteğe bağlı baştaki
+//! `cd` ve sondaki `grep -v`/`head` süzgeçleriyle; bkz. `bash_search`) aynı kurallarla karşılar.
+//! Bash eşleştiricisi yalnız E kolunda kuruludur.
+//!
 //! Aynı oturumda aynı sembol için ikinci Grep, paketteki çağıranların satır
 //! aralıklarına düşen ham eşleşmelerle (`yol:satır: metin`) karşılanır: ajan ham
 //! satırları ister, yeni bir arama turu gerekmez. Bu cevap da Grep'ten kısa değilse
@@ -42,7 +46,11 @@ pub(crate) struct GrepCall {
     pub session_id: String,
     pub cwd: PathBuf,
     pub pattern: String,
-    pub path: Option<String>,
+    /// Aranan dizinler, proje köküne (`cwd`) göre; boşsa bütün proje.
+    pub paths: Vec<String>,
+    /// Bash'teki `| grep -v METİN` süzgeçlerinin sabit metinleri: `yol:satır:metin` çıktı
+    /// satırında geçenler Grep çıktısında yoktur. Grep aracında boştur.
+    pub dropped: Vec<String>,
     pub output_mode: String,
     pub case_insensitive: bool,
     pub glob: Option<String>,
@@ -74,12 +82,288 @@ pub(crate) fn parse_grep_call(input: &Value) -> Option<GrepCall> {
         session_id: input.get("session_id")?.as_str()?.to_string(),
         cwd: PathBuf::from(input.get("cwd")?.as_str()?),
         pattern: text("pattern")?,
-        path: text("path"),
+        paths: text("path").into_iter().collect(),
+        dropped: Vec::new(),
         output_mode: text("output_mode").unwrap_or_else(|| "files_with_matches".to_string()),
         case_insensitive: tool.get("-i").and_then(Value::as_bool) == Some(true),
         glob: text("glob"),
         file_type: text("type"),
     })
+}
+
+/// Bash komutunun sözcükleri: tırnaklar açılır (çift tırnak içinde ters bölü korunur: düzenli
+/// ifade kaçışları desenin parçasıdır), tırnak dışındaki `|`, `;` ve `&&` ayrı sözcüktür.
+/// Desteklenmeyen kabuk sözdiziminde (`$(`, ters tırnak, yönlendirme, kapanmayan tırnak) hata.
+pub(crate) fn shell_words(command: &str) -> std::result::Result<Vec<String>, String> {
+    let mut words: Vec<String> = Vec::new();
+    let mut current = String::new();
+    let mut started = false;
+    let mut chars = command.chars().peekable();
+    while let Some(character) = chars.next() {
+        match character {
+            '\'' => {
+                started = true;
+                loop {
+                    match chars.next() {
+                        Some('\'') => break,
+                        Some(inner) => current.push(inner),
+                        None => return Err("unclosed quote".to_string()),
+                    }
+                }
+            }
+            '"' => {
+                started = true;
+                loop {
+                    match chars.next() {
+                        Some('"') => break,
+                        Some('$') | Some('`') => {
+                            return Err("command substitution or variable".to_string())
+                        }
+                        Some('\\') => match chars.next() {
+                            Some(escaped @ ('"' | '\\')) => current.push(escaped),
+                            Some(other) => {
+                                current.push('\\');
+                                current.push(other);
+                            }
+                            None => return Err("unclosed quote".to_string()),
+                        },
+                        Some(inner) => current.push(inner),
+                        None => return Err("unclosed quote".to_string()),
+                    }
+                }
+            }
+            '$' | '`' | '>' | '<' | '(' | ')' | '\n' => {
+                return Err(format!("unsupported shell syntax {character:?}"))
+            }
+            '|' | ';' | '&' => {
+                if started {
+                    words.push(std::mem::take(&mut current));
+                    started = false;
+                }
+                if character == '&' {
+                    if chars.next() != Some('&') {
+                        return Err("background job".to_string());
+                    }
+                    words.push("&&".to_string());
+                } else if character == '|' && chars.peek() == Some(&'|') {
+                    return Err("|| list".to_string());
+                } else {
+                    words.push(character.to_string());
+                }
+            }
+            whitespace if whitespace.is_whitespace() => {
+                if started {
+                    words.push(std::mem::take(&mut current));
+                    started = false;
+                }
+            }
+            '\\' => {
+                started = true;
+                if let Some(next) = chars.next() {
+                    current.push(next);
+                }
+            }
+            other => {
+                started = true;
+                current.push(other);
+            }
+        }
+    }
+    if started {
+        words.push(current);
+    }
+    Ok(words)
+}
+
+/// Bash komutundaki tek arama: isteğe bağlı baştaki `cd DİZİN &&`/`;`, sonra `grep -r…` ya da
+/// `rg …`, ardından yalnız `grep -v…` ve `head` filtreleri. Çıktıyı değiştiren bayraklar
+/// (`-i`, `-l`, `-c`, `-o`, bağlam satırları), özyinelemesiz `grep` ve birden çok komut
+/// desteklenmez. Yollar proje köküne göre yazılır; `cd` dizini önlerine eklenir.
+pub(crate) fn bash_search(
+    session_id: &str,
+    cwd: &Path,
+    command: &str,
+) -> std::result::Result<GrepCall, String> {
+    let words = shell_words(command)?;
+    let mut rest: &[String] = &words;
+    let mut directory = String::new();
+    if rest.first().map(String::as_str) == Some("cd") {
+        let (Some(target), Some(separator)) = (rest.get(1), rest.get(2)) else {
+            return Err("cd without a following command".to_string());
+        };
+        if separator != "&&" && separator != ";" {
+            return Err("cd is not followed by a command".to_string());
+        }
+        directory = target.trim_end_matches('/').to_string();
+        rest = &rest[3..];
+    }
+    if rest.iter().any(|word| word == ";" || word == "&&") {
+        return Err("more than one command".to_string());
+    }
+    let segments: Vec<&[String]> = rest.split(|word| word == "|").collect();
+    let (search, filters) = segments
+        .split_first()
+        .ok_or_else(|| "empty command".to_string())?;
+    let mut dropped: Vec<String> = Vec::new();
+    for filter in filters {
+        dropped.push(fixed_inverse_filter(filter)?);
+    }
+    let program = search.first().map(String::as_str);
+    let mut pattern: Option<String> = None;
+    let mut positional: Vec<String> = Vec::new();
+    let mut excluded: Vec<String> = Vec::new();
+    let mut recursive = program == Some("rg");
+    let mut words = search.iter().skip(1);
+    while let Some(word) = words.next() {
+        let flag = word.as_str();
+        match (program, flag) {
+            (_, "-e") => pattern = words.next().cloned(),
+            (Some("rg"), "-g" | "--glob") => {
+                let glob = words
+                    .next()
+                    .ok_or_else(|| "glob without value".to_string())?;
+                excluded.extend(glob_exclusions(glob)?);
+            }
+            (Some("rg"), _) if flag.starts_with("--glob=") => {
+                excluded.extend(glob_exclusions(&flag["--glob=".len()..])?);
+            }
+            (Some("rg"), "-t" | "--type") => {
+                words.next();
+            }
+            (Some("rg"), "-n" | "-w" | "-F" | "--no-heading" | "-N" | "--line-number") => {}
+            (Some("grep"), _) if flag.starts_with("--include=") => {}
+            (Some("grep"), "--include") => {
+                words.next();
+            }
+            (Some("grep"), _) if flag.starts_with("--exclude-dir=") => {
+                let directory = &flag["--exclude-dir=".len()..];
+                let names: Vec<&str> = directory
+                    .trim_start_matches('{')
+                    .trim_end_matches('}')
+                    .split(',')
+                    .collect();
+                if !names
+                    .iter()
+                    .all(|name| NON_LIBRARY_DIRECTORIES.contains(name))
+                {
+                    return Err("exclude-dir other than tests, benches or examples".to_string());
+                }
+                excluded.extend(names.iter().map(|name| (*name).to_string()));
+            }
+            (Some("grep"), _)
+                if flag.starts_with('-')
+                    && !flag.starts_with("--")
+                    && flag.len() > 1
+                    && flag[1..].chars().all(|letter| "rRnEwHs".contains(letter)) =>
+            {
+                recursive |= flag.contains('r') || flag.contains('R');
+            }
+            (_, _) if flag.starts_with('-') => return Err(format!("unsupported flag {flag}")),
+            (_, _) => positional.push(word.clone()),
+        }
+    }
+    if !matches!(program, Some("grep") | Some("rg")) {
+        return Err("not a grep or rg search".to_string());
+    }
+    if !recursive {
+        return Err("grep without -r searches files or stdin".to_string());
+    }
+    let pattern = match pattern {
+        Some(pattern) => pattern,
+        None if !positional.is_empty() => positional.remove(0),
+        None => return Err("no pattern".to_string()),
+    };
+    let base = |path: &str| -> String {
+        let joined = if directory.is_empty() {
+            path.to_string()
+        } else if path == "." {
+            directory.clone()
+        } else {
+            format!("{directory}/{path}")
+        };
+        joined.trim_start_matches("./").to_string()
+    };
+    let paths: Vec<String> = if positional.is_empty() {
+        if directory.is_empty() {
+            Vec::new()
+        } else {
+            vec![base(".")]
+        }
+    } else {
+        positional.iter().map(|path| base(path)).collect()
+    };
+    excluded.sort();
+    excluded.dedup();
+    Ok(GrepCall {
+        session_id: session_id.to_string(),
+        cwd: cwd.to_path_buf(),
+        pattern,
+        paths,
+        output_mode: "content".to_string(),
+        case_insensitive: false,
+        glob: (!excluded.is_empty()).then(|| format!("!**/{{{}}}/**", excluded.join(","))),
+        file_type: None,
+        dropped,
+    })
+}
+
+/// `grep -v METİN` süzgecinin sabit metni. Düzenli ifade (özel karakterli, `-F` olmadan),
+/// birden çok desen ve `head` gibi başka aşamalar desteklenmez: çıktı boyutu doğru tahmin
+/// edilemez, hook komutu geçirir.
+fn fixed_inverse_filter(stage: &[String]) -> std::result::Result<String, String> {
+    if stage.first().map(String::as_str) != Some("grep") {
+        return Err("a pipe stage other than grep -v".to_string());
+    }
+    let (flags, patterns): (Vec<&String>, Vec<&String>) =
+        stage.iter().skip(1).partition(|word| word.starts_with('-'));
+    let plain_flags = flags
+        .iter()
+        .all(|flag| flag[1..].chars().all(|letter| "vF".contains(letter)));
+    if !plain_flags || !flags.iter().any(|flag| flag.contains('v')) {
+        return Err("a pipe stage other than a plain grep -v".to_string());
+    }
+    let [pattern] = patterns.as_slice() else {
+        return Err("grep -v with more than one pattern".to_string());
+    };
+    let special = pattern
+        .chars()
+        .any(|letter| "\\^$.*[]|()+?{}".contains(letter));
+    let fixed = flags.iter().any(|flag| flag.contains('F'));
+    if special && !fixed {
+        return Err("grep -v with a regular expression".to_string());
+    }
+    Ok((*pattern).clone())
+}
+
+/// `rg -g` değerinin dışladığı dizinler: dosya türü süzgeci (`*.py`) hiçbirini dışlamaz.
+fn glob_exclusions(glob: &str) -> std::result::Result<Vec<String>, String> {
+    if !glob.starts_with('!') {
+        return if glob.starts_with("*.") || glob.starts_with("**/*.") {
+            Ok(Vec::new())
+        } else {
+            Err(format!("glob {glob} narrows the search"))
+        };
+    }
+    excluded_directories(glob)
+        .or_else(|| {
+            glob.strip_prefix("!")
+                .and_then(|inner| inner.strip_suffix("/**"))
+                .map(|inner| inner.trim_start_matches("**/"))
+                .filter(|name| NON_LIBRARY_DIRECTORIES.contains(name))
+                .map(|name| vec![name.to_string()])
+        })
+        .ok_or_else(|| format!("glob {glob} is not a test, bench or example exclusion"))
+}
+
+/// Stdin JSON'undaki Bash aramasının çağrısı; Bash dışı araçlar `None`.
+fn bash_command(input: &Value) -> Option<std::result::Result<GrepCall, String>> {
+    if input.get("tool_name").and_then(Value::as_str) != Some("Bash") {
+        return None;
+    }
+    let session = input.get("session_id")?.as_str()?;
+    let cwd = PathBuf::from(input.get("cwd")?.as_str()?);
+    let command = input.get("tool_input")?.get("command")?.as_str()?;
+    Some(bash_search(session, &cwd, command))
 }
 
 /// Paketin kapsamı dışında kalan, glob'un dışlayabileceği dizinler.
@@ -434,11 +718,19 @@ async fn grep_matches(
     Ok(matches)
 }
 
-/// Grep kapsamı: kökten göreli dizin önekı; tek dosya hedefi kabul edilmez.
-fn grep_scope(call: &GrepCall) -> std::result::Result<String, String> {
-    let Some(path) = call.path.as_deref() else {
-        return Ok(String::new());
-    };
+/// Grep kapsamları: kökten göreli dizin önekleri (boş önek bütün proje); tek dosya hedefi
+/// kabul edilmez.
+fn grep_scopes(call: &GrepCall) -> std::result::Result<Vec<String>, String> {
+    if call.paths.is_empty() {
+        return Ok(vec![String::new()]);
+    }
+    call.paths
+        .iter()
+        .map(|path| grep_scope(call, path))
+        .collect()
+}
+
+fn grep_scope(call: &GrepCall, path: &str) -> std::result::Result<String, String> {
     let full = if Path::new(path).is_absolute() {
         PathBuf::from(path)
     } else {
@@ -465,8 +757,8 @@ async fn decide(call: &GrepCall) -> Result<Decision> {
         Ok(symbol) => symbol,
         Err(reason) => return Ok(Decision::Pass(reason)),
     };
-    let scope = match grep_scope(call) {
-        Ok(scope) => scope,
+    let scopes = match grep_scopes(call) {
+        Ok(scopes) => scopes,
         Err(reason) => return Ok(Decision::Pass(reason)),
     };
     let previous = answered_symbols(&call.session_id)?.get(&symbol).copied();
@@ -509,7 +801,34 @@ async fn decide(call: &GrepCall) -> Result<Decision> {
         Err(reason) => return Ok(Decision::Pass(reason)),
     };
     let compact = without_excluded_callers(&compact, &excluded);
-    let numbered = grep_matches(&loaded.engine, &call.cwd, &scope, &excluded, &symbol).await?;
+    let mut numbered: Vec<(String, Vec<(usize, String)>)> = Vec::new();
+    for scope in &scopes {
+        for (path, lines) in
+            grep_matches(&loaded.engine, &call.cwd, scope, &excluded, &symbol).await?
+        {
+            if !numbered.iter().any(|(seen, _)| *seen == path) {
+                numbered.push((path, lines));
+            }
+        }
+    }
+    // Bash süzgeçlerinin çıkardığı satırlar Grep çıktısında yoktur.
+    let numbered: Vec<(String, Vec<(usize, String)>)> = numbered
+        .into_iter()
+        .map(|(path, lines)| {
+            let kept: Vec<(usize, String)> = lines
+                .into_iter()
+                .filter(|(number, text)| {
+                    let shown = format!("{path}:{number}:{text}");
+                    !call
+                        .dropped
+                        .iter()
+                        .any(|dropped| shown.contains(dropped.as_str()))
+                })
+                .collect();
+            (path, kept)
+        })
+        .filter(|(_, lines)| !lines.is_empty())
+        .collect();
     let matches: Vec<(String, Vec<String>)> = numbered
         .iter()
         .map(|(path, lines)| {
@@ -561,7 +880,7 @@ fn log_decision(
         "decision": decision,
         "detail": detail,
         "pattern": call.map(|call| call.pattern.clone()),
-        "path": call.and_then(|call| call.path.clone()),
+        "path": call.map(|call| call.paths.join(" ")),
         "output_mode": call.map(|call| call.output_mode.clone()),
         "elapsed_ms": elapsed.as_millis() as u64,
     });
@@ -584,8 +903,15 @@ pub(crate) async fn run_claude_pre_tool_use() -> Result<()> {
     std::io::Read::read_to_string(&mut std::io::stdin(), &mut raw)
         .context("hook input could not be read from stdin")?;
     let input: Value = serde_json::from_str(&raw).context("hook input is not valid JSON")?;
-    let Some(call) = parse_grep_call(&input) else {
-        return log_decision(None, "pass", "not a Grep call", started.elapsed());
+    let call = match parse_grep_call(&input) {
+        Some(call) => call,
+        None => match bash_command(&input) {
+            None => return log_decision(None, "pass", "not a Grep call", started.elapsed()),
+            Some(Err(reason)) => {
+                return log_decision(None, "pass", &format!("bash: {reason}"), started.elapsed())
+            }
+            Some(Ok(call)) => call,
+        },
     };
     let decision = match tokio::time::timeout(HOOK_BUDGET, decide(&call)).await {
         Ok(Ok(decision)) => decision,
@@ -622,7 +948,8 @@ mod tests {
             session_id: "s".to_string(),
             cwd: PathBuf::from("/repo"),
             pattern: pattern.to_string(),
-            path: None,
+            paths: Vec::new(),
+            dropped: Vec::new(),
             output_mode: "content".to_string(),
             case_insensitive: false,
             glob: None,
@@ -725,6 +1052,50 @@ mod tests {
         let reason = repeat_reason("get_text_list", &lines, 2);
         assert!(reason.contains("(1 lines)") && reason.contains("other 2 matching lines"));
         assert!(!deny_reason("get_text_list", "p").contains("Run the same Grep again"));
+    }
+
+    #[test]
+    fn bash_searches_from_recorded_runs_are_parsed() {
+        let cwd = Path::new("/repo");
+        let call = bash_search("s", cwd, r#"grep -rn "get_current_timezone\b" django"#).unwrap();
+        assert_eq!(call.pattern, r"get_current_timezone\b");
+        assert_eq!(call.paths, vec!["django".to_string()]);
+        assert!(call.dropped.is_empty());
+        assert_eq!(grep_symbol(&call), Ok("get_current_timezone".to_string()));
+        let call = bash_search(
+            "s",
+            cwd,
+            r#"cd django && grep -rn "resolve_url" --include=*.py . | grep -v "/tests/""#,
+        )
+        .unwrap();
+        assert_eq!(call.paths, vec!["django".to_string()]);
+        assert_eq!(call.dropped, vec!["/tests/".to_string()]);
+        let call = bash_search(
+            "s",
+            cwd,
+            "rg -n '\\buninit\\(' tokio tokio-util -g '!**/tests/**' -g '!**/benches/**' | grep -v 'MaybeUninit::uninit'",
+        )
+        .unwrap();
+        assert_eq!(call.pattern, r"\buninit\(");
+        assert_eq!(
+            call.paths,
+            vec!["tokio".to_string(), "tokio-util".to_string()]
+        );
+        assert_eq!(call.glob.as_deref(), Some("!**/{benches,tests}/**"));
+        assert_eq!(grep_symbol(&call), Ok("uninit".to_string()));
+        assert_eq!(call.dropped, vec!["MaybeUninit::uninit".to_string()]);
+        for unsupported in [
+            "cd django; for f in a.py:1 b.py:2; do sed -n 1p $f; done",
+            r#"grep -n "^class " utils/dateformat.py"#,
+            r#"grep -rn "check_scoring" . | wc -l"#,
+            r#"grep -rni "x" django"#,
+            r#"rg -l "x" django"#,
+            // Düzenli ifade süzgeci: çıktı boyutu tahmin edilemez.
+            r#"grep -rn "x" django | grep -v "def x\b""#,
+            r#"grep -rn "x" django | head -5"#,
+        ] {
+            assert!(bash_search("s", cwd, unsupported).is_err(), "{unsupported}");
+        }
     }
 
     #[test]

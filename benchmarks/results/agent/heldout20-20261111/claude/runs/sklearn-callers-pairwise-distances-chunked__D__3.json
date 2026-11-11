@@ -1,0 +1,61 @@
+{
+  "record_version": 3,
+  "run_id": "sklearn-callers-pairwise-distances-chunked__D__3",
+  "task_id": "sklearn-callers-pairwise-distances-chunked",
+  "repo": "scikit-learn",
+  "category": "callers",
+  "arm": "D",
+  "rep": 3,
+  "model": "claude-opus-5-5",
+  "effort": "high",
+  "embedding": "local",
+  "index_copy_s": 0.2260846660938114,
+  "index_build_s": 1014.4864400420338,
+  "wall_s": 12.476993583142757,
+  "transcript": {
+    "result_text": "Six functions and methods in `sklearn/` call `pairwise_distances_chunked` directly. The code index reports its caller list as complete: all 6 non-test call sites it found by name fall inside these functions.\n\nI also searched for the function being imported under another name (`... as ...`), called as `pairwise.pairwise_distances_chunked`, or assigned to another variable. The only matches were two docstring mentions in `sklearn/neighbors/_base.py` (lines 713 and 1048), and those aren't calls. Calls that never write out the name, such as through `getattr`, wouldn't show up in either check.\n\n- `sklearn/impute/_knn.py:359`, in `KNNImputer.transform`\n- `sklearn/metrics/cluster/_unsupervised.py:305`, in `silhouette_samples`\n- `sklearn/metrics/pairwise.py:818`, in `pairwise_distances_argmin_min`\n- `sklearn/metrics/pairwise.py:960`, in `pairwise_distances_argmin`\n- `sklearn/neighbors/_base.py:887`, in `KNeighborsMixin.kneighbors`\n- `sklearn/neighbors/_base.py:1225`, in `RadiusNeighborsMixin.radius_neighbors`\n\n```json\n{\"answer\": [\"sklearn/impute/_knn.py:KNNImputer.transform\", \"sklearn/metrics/cluster/_unsupervised.py:silhouette_samples\", \"sklearn/metrics/pairwise.py:pairwise_distances_argmin_min\", \"sklearn/metrics/pairwise.py:pairwise_distances_argmin\", \"sklearn/neighbors/_base.py:KNeighborsMixin.kneighbors\", \"sklearn/neighbors/_base.py:RadiusNeighborsMixin.radius_neighbors\"]}\n```",
+    "subtype": "success",
+    "is_error": false,
+    "api_error_status": null,
+    "num_turns": 3,
+    "duration_ms": 11542,
+    "cost_usd": 0.0700278,
+    "usage": {
+      "input_tokens": 6,
+      "output_tokens": 1001,
+      "cache_creation_input_tokens": 5649,
+      "cache_read_input_tokens": 23959
+    },
+    "tool_calls": {
+      "Grep": 1,
+      "mcp__context-manager__context": 1
+    },
+    "mcp_status": "connected",
+    "api_key_source": "none",
+    "tools": [
+      "Bash",
+      "Edit",
+      "Glob",
+      "Grep",
+      "Read",
+      "Write",
+      "mcp__context-manager__context",
+      "mcp__context-manager__index_project"
+    ]
+  },
+  "score": {
+    "answered": true,
+    "recall": 1.0,
+    "precision": 1.0,
+    "missing": [],
+    "extra": [],
+    "edit_applied": null,
+    "stale": [],
+    "success": true
+  },
+  "failure": null,
+  "hook": {
+    "deny": 0,
+    "pass_": 1
+  }
+}

@@ -1,0 +1,61 @@
+{
+  "record_version": 3,
+  "run_id": "django-callers-strip-quotes__D__3",
+  "task_id": "django-callers-strip-quotes",
+  "repo": "django",
+  "category": "callers",
+  "arm": "D",
+  "rep": 3,
+  "model": "claude-opus-5-5",
+  "effort": "high",
+  "embedding": "local",
+  "index_copy_s": 0.7455402088817209,
+  "index_build_s": 3239.4935852501076,
+  "wall_s": 19.996698207920417,
+  "transcript": {
+    "result_text": "I found 9 functions and methods that call `strip_quotes` directly, in 15 calls. A grep and the code index found the same call sites.\n\n- **Oracle GIS schema:** `OracleGISSchemaEditor._create_spatial_index_name` (`django/contrib/gis/db/backends/oracle/schema.py:113`).\n- **Oracle operations** (`django/db/backends/oracle/operations.py`):\n  - `DatabaseOperations.last_insert_id` (line 345)\n  - `DatabaseOperations.sequence_reset_by_name_sql` (lines 540–541)\n  - `DatabaseOperations.sequence_reset_sql` (lines 564–565)\n  - `DatabaseOperations._get_no_autofield_sequence_name` (line 659)\n- **PostgreSQL creation:** `DatabaseCreation._database_exists` (`django/db/backends/postgresql/creation.py:36`).\n- **PostgreSQL schema:** `DatabaseSchemaEditor._alter_column_type_sql` (`django/db/backends/postgresql/schema.py`). It has five calls, at lines 169, 178, 207, 210 and 232, all inside this one method (lines 143–257).\n- **SQLite schema:** `DatabaseSchemaEditor._remake_table` (`django/db/backends/sqlite3/schema.py:223`).\n- **Related fields:** `ManyToManyField._get_m2m_db_table` (`django/db/models/fields/related.py:1833`). This one calls it through the module, as `utils.strip_quotes(...)`.\n\n```json\n{\"answer\": [\"django/contrib/gis/db/backends/oracle/schema.py:OracleGISSchemaEditor._create_spatial_index_name\", \"django/db/backends/oracle/operations.py:DatabaseOperations.last_insert_id\", \"django/db/backends/oracle/operations.py:DatabaseOperations.sequence_reset_by_name_sql\", \"django/db/backends/oracle/operations.py:DatabaseOperations.sequence_reset_sql\", \"django/db/backends/oracle/operations.py:DatabaseOperations._get_no_autofield_sequence_name\", \"django/db/backends/postgresql/creation.py:DatabaseCreation._database_exists\", \"django/db/backends/postgresql/schema.py:DatabaseSchemaEditor._alter_column_type_sql\", \"django/db/backends/sqlite3/schema.py:DatabaseSchemaEditor._remake_table\", \"django/db/models/fields/related.py:ManyToManyField._get_m2m_db_table\"]}\n```",
+    "subtype": "success",
+    "is_error": false,
+    "api_error_status": null,
+    "num_turns": 5,
+    "duration_ms": 18958,
+    "cost_usd": 0.0804764,
+    "usage": {
+      "input_tokens": 10,
+      "output_tokens": 1505,
+      "cache_creation_input_tokens": 5234,
+      "cache_read_input_tokens": 42322
+    },
+    "tool_calls": {
+      "Bash": 3,
+      "Grep": 1
+    },
+    "mcp_status": "connected",
+    "api_key_source": "none",
+    "tools": [
+      "Bash",
+      "Edit",
+      "Glob",
+      "Grep",
+      "Read",
+      "Write",
+      "mcp__context-manager__context",
+      "mcp__context-manager__index_project"
+    ]
+  },
+  "score": {
+    "answered": true,
+    "recall": 1.0,
+    "precision": 1.0,
+    "missing": [],
+    "extra": [],
+    "edit_applied": null,
+    "stale": [],
+    "success": true
+  },
+  "failure": null,
+  "hook": {
+    "deny": 1,
+    "pass_": 0
+  }
+}

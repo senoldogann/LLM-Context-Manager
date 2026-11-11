@@ -1,0 +1,61 @@
+{
+  "record_version": 3,
+  "run_id": "django-callers-number-format__E__2",
+  "task_id": "django-callers-number-format",
+  "repo": "django",
+  "category": "callers",
+  "arm": "E",
+  "rep": 2,
+  "model": "claude-opus-5-5",
+  "effort": "high",
+  "embedding": "local",
+  "index_copy_s": 0.5700922920368612,
+  "index_build_s": 3239.4935852501076,
+  "wall_s": 17.01398029201664,
+  "transcript": {
+    "result_text": "I found seven functions in `django/` that call `number_format` from `django/utils/formats.py` directly. In `defaultfilters.py` and `admin/utils.py` the calls go through `from django.utils import formats` as `formats.number_format(...)`. In `humanize.py` the function is imported by name. No other aliases or re-exports turned up.\n\n- **`django/template/defaultfilters.py`**\n  - `floatformat` calls it at lines 185 and 213.\n  - `filesizeformat` calls it through its nested helper `filesize_number_format` (line 907), so the outer function is listed.\n- **`django/contrib/admin/utils.py`**\n  - `display_for_field` calls it at lines 452 and 454.\n  - `display_for_value` calls it at line 480.\n- **`django/utils/formats.py`**\n  - `localize` calls it at line 208.\n  - `localize_input` calls it at line 228.\n- **`django/contrib/humanize/templatetags/humanize.py`**\n  - `intcomma` calls it at line 79.\n\n```json\n{\"answer\": [\"django/template/defaultfilters.py:floatformat\", \"django/template/defaultfilters.py:filesizeformat\", \"django/contrib/admin/utils.py:display_for_field\", \"django/contrib/admin/utils.py:display_for_value\", \"django/utils/formats.py:localize\", \"django/utils/formats.py:localize_input\", \"django/contrib/humanize/templatetags/humanize.py:intcomma\"]}\n```",
+    "subtype": "success",
+    "is_error": false,
+    "api_error_status": null,
+    "num_turns": 4,
+    "duration_ms": 15585,
+    "cost_usd": 0.06814819999999999,
+    "usage": {
+      "input_tokens": 8,
+      "output_tokens": 1114,
+      "cache_creation_input_tokens": 4925,
+      "cache_read_input_tokens": 32181
+    },
+    "tool_calls": {
+      "Bash": 1,
+      "Grep": 2
+    },
+    "mcp_status": "connected",
+    "api_key_source": "none",
+    "tools": [
+      "Bash",
+      "Edit",
+      "Glob",
+      "Grep",
+      "Read",
+      "Write",
+      "mcp__context-manager__context",
+      "mcp__context-manager__index_project"
+    ]
+  },
+  "score": {
+    "answered": true,
+    "recall": 1.0,
+    "precision": 1.0,
+    "missing": [],
+    "extra": [],
+    "edit_applied": null,
+    "stale": [],
+    "success": true
+  },
+  "failure": null,
+  "hook": {
+    "deny": 0,
+    "pass_": 3
+  }
+}
