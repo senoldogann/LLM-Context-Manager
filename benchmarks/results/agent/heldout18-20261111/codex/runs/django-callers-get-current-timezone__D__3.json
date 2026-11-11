@@ -1,0 +1,48 @@
+{
+  "record_version": 3,
+  "run_id": "django-callers-get-current-timezone__D__3",
+  "task_id": "django-callers-get-current-timezone",
+  "repo": "django",
+  "category": "callers",
+  "arm": "D",
+  "rep": 3,
+  "model": "gpt-6-luna",
+  "effort": "high",
+  "embedding": "local",
+  "index_copy_s": 0.6481704160105437,
+  "index_build_s": 1140.598946291022,
+  "wall_s": 21.886069667059928,
+  "transcript": {
+    "result_text": "```json\n{\"answer\":[\"django/db/backends/base/operations.py:BaseDatabaseOperations.year_lookup_bounds_for_datetime_field\",\"django/db/models/query.py:QuerySet.datetimes\",\"django/forms/utils.py:from_current_timezone\",\"django/template/defaulttags.py:NowNode.render\",\"django/templatetags/tz.py:localtime\",\"django/utils/timezone.py:get_current_timezone_name\",\"django/utils/timezone.py:localtime\",\"django/utils/timezone.py:make_aware\",\"django/utils/timezone.py:make_naive\"]}\n```",
+    "subtype": "completed",
+    "is_error": false,
+    "api_error_status": null,
+    "num_turns": null,
+    "duration_ms": 21886,
+    "cost_usd": null,
+    "usage": {
+      "input_tokens": 23033,
+      "output_tokens": 780,
+      "cache_creation_input_tokens": 0,
+      "cache_read_input_tokens": 9984
+    },
+    "tool_calls": {
+      "mcp__context-manager__context": 1
+    },
+    "mcp_status": "unreported",
+    "api_key_source": "chatgpt",
+    "tools": []
+  },
+  "score": {
+    "answered": true,
+    "recall": 1.0,
+    "precision": 1.0,
+    "missing": [],
+    "extra": [],
+    "edit_applied": null,
+    "stale": [],
+    "success": true
+  },
+  "failure": null,
+  "hook": null
+}

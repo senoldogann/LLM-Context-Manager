@@ -1,0 +1,52 @@
+{
+  "record_version": 3,
+  "run_id": "sklearn-callers-softmax__A__2",
+  "task_id": "sklearn-callers-softmax",
+  "repo": "scikit-learn",
+  "category": "callers",
+  "arm": "A",
+  "rep": 2,
+  "model": "gpt-6-luna",
+  "effort": "high",
+  "embedding": "local",
+  "index_copy_s": null,
+  "index_build_s": null,
+  "wall_s": 48.915171874919906,
+  "transcript": {
+    "result_text": "```json\n{\"answer\":[\"sklearn/_loss/link.py:MultinomialLogit.inverse\",\"sklearn/discriminant_analysis.py:LinearDiscriminantAnalysis.predict_proba\",\"sklearn/ensemble/_weight_boosting.py:AdaBoostClassifier._compute_proba_from_decision\",\"sklearn/linear_model/_logistic.py:LogisticRegression.predict_log_proba\",\"sklearn/neighbors/_nca.py:NeighborhoodComponentsAnalysis._loss_grad_lbfgs\"]}\n```",
+    "subtype": "completed",
+    "is_error": false,
+    "api_error_status": null,
+    "num_turns": null,
+    "duration_ms": 48915,
+    "cost_usd": null,
+    "usage": {
+      "input_tokens": 20298,
+      "output_tokens": 1412,
+      "cache_creation_input_tokens": 0,
+      "cache_read_input_tokens": 71040
+    },
+    "tool_calls": {
+      "command_execution": 5
+    },
+    "mcp_status": "unreported",
+    "api_key_source": "chatgpt",
+    "tools": []
+  },
+  "score": {
+    "answered": true,
+    "recall": 0.8,
+    "precision": 0.8,
+    "missing": [
+      "sklearn/linear_model/_logistic.py:predict_proba"
+    ],
+    "extra": [
+      "sklearn/linear_model/_logistic.py:predict_log_proba"
+    ],
+    "edit_applied": null,
+    "stale": [],
+    "success": false
+  },
+  "failure": null,
+  "hook": null
+}

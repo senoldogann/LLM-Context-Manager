@@ -1,0 +1,56 @@
+{
+  "record_version": 3,
+  "run_id": "sklearn-callers-label-binarize__A__1",
+  "task_id": "sklearn-callers-label-binarize",
+  "repo": "scikit-learn",
+  "category": "callers",
+  "arm": "A",
+  "rep": 1,
+  "model": "claude-opus-5-5",
+  "effort": "high",
+  "embedding": "local",
+  "index_copy_s": null,
+  "index_build_s": null,
+  "wall_s": 17.981265167007223,
+  "transcript": {
+    "result_text": "I found six functions and methods in `sklearn/` that call `label_binarize`. To find them, I searched non-test files for the name and looked up the function around each call. Each call either uses the name as it is defined in `sklearn/preprocessing/_label.py` or imports it through the `sklearn.preprocessing` package, which re-exports it. The search turned up no other names it is imported under.\n\n- `sklearn/calibration.py:664`: inside `_fit_calibrator`.\n- `sklearn/preprocessing/_label.py:357`: inside `LabelBinarizer.transform`.\n- `sklearn/naive_bayes.py:677`: inside `_BaseDiscreteNB.partial_fit`.\n- `sklearn/metrics/_ranking.py:263`: inside the main body of `average_precision_score`, not in its nested helper function.\n- `sklearn/metrics/_ranking.py:639`: inside `roc_auc_score`.\n- `sklearn/metrics/_ranking.py:770`: inside `_multiclass_roc_auc_score`.\n\n```json\n{\"answer\": [\"sklearn/calibration.py:_fit_calibrator\", \"sklearn/preprocessing/_label.py:LabelBinarizer.transform\", \"sklearn/naive_bayes.py:_BaseDiscreteNB.partial_fit\", \"sklearn/metrics/_ranking.py:average_precision_score\", \"sklearn/metrics/_ranking.py:roc_auc_score\", \"sklearn/metrics/_ranking.py:_multiclass_roc_auc_score\"]}\n```",
+    "subtype": "success",
+    "is_error": false,
+    "api_error_status": null,
+    "num_turns": 4,
+    "duration_ms": 16464,
+    "cost_usd": 0.0869008,
+    "usage": {
+      "input_tokens": 8,
+      "output_tokens": 1203,
+      "cache_creation_input_tokens": 7023,
+      "cache_read_input_tokens": 33124
+    },
+    "tool_calls": {
+      "Bash": 2,
+      "Grep": 1
+    },
+    "mcp_status": "none",
+    "api_key_source": "none",
+    "tools": [
+      "Bash",
+      "Edit",
+      "Glob",
+      "Grep",
+      "Read",
+      "Write"
+    ]
+  },
+  "score": {
+    "answered": true,
+    "recall": 1.0,
+    "precision": 1.0,
+    "missing": [],
+    "extra": [],
+    "edit_applied": null,
+    "stale": [],
+    "success": true
+  },
+  "failure": null,
+  "hook": null
+}

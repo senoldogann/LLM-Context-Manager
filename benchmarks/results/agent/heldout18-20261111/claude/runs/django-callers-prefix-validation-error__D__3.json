@@ -1,0 +1,61 @@
+{
+  "record_version": 3,
+  "run_id": "django-callers-prefix-validation-error__D__3",
+  "task_id": "django-callers-prefix-validation-error",
+  "repo": "django",
+  "category": "callers",
+  "arm": "D",
+  "rep": 3,
+  "model": "claude-opus-5-5",
+  "effort": "high",
+  "embedding": "local",
+  "index_copy_s": 0.7236673750448972,
+  "index_build_s": 1140.598946291022,
+  "wall_s": 15.6341431660112,
+  "transcript": {
+    "result_text": "I found eight functions that call `prefix_validation_error` directly, using a text search of `django/` and the line ranges of the surrounding definitions:\n\n- **`django/contrib/postgres/utils.py`**: `prefix_validation_error` calls itself on line 28, inside a list comprehension over `error.error_list`.\n- **`django/contrib/postgres/fields/array.py`** imports it with `from ..utils import prefix_validation_error` and calls it in:\n  - `ArrayField.validate` (line 201)\n  - `ArrayField.run_validators` (line 220)\n- **`django/contrib/postgres/forms/array.py`** imports it the same way and calls it in:\n  - `SimpleArrayField.to_python` (line 58)\n  - `SimpleArrayField.validate` (line 77)\n  - `SimpleArrayField.run_validators` (line 95)\n  - `SplitArrayField.clean` (line 224)\n\nNo other module imports or re-exports it.\n\n```json\n{\"answer\": [\"django/contrib/postgres/utils.py:prefix_validation_error\", \"django/contrib/postgres/fields/array.py:ArrayField.validate\", \"django/contrib/postgres/fields/array.py:ArrayField.run_validators\", \"django/contrib/postgres/forms/array.py:SimpleArrayField.to_python\", \"django/contrib/postgres/forms/array.py:SimpleArrayField.validate\", \"django/contrib/postgres/forms/array.py:SimpleArrayField.run_validators\", \"django/contrib/postgres/forms/array.py:SplitArrayField.clean\"]}\n```",
+    "subtype": "success",
+    "is_error": false,
+    "api_error_status": null,
+    "num_turns": 4,
+    "duration_ms": 14414,
+    "cost_usd": 0.06229380000000001,
+    "usage": {
+      "input_tokens": 8,
+      "output_tokens": 922,
+      "cache_creation_input_tokens": 4693,
+      "cache_read_input_tokens": 31389
+    },
+    "tool_calls": {
+      "Bash": 2,
+      "Grep": 1
+    },
+    "mcp_status": "connected",
+    "api_key_source": "none",
+    "tools": [
+      "Bash",
+      "Edit",
+      "Glob",
+      "Grep",
+      "Read",
+      "Write",
+      "mcp__context-manager__context",
+      "mcp__context-manager__index_project"
+    ]
+  },
+  "score": {
+    "answered": true,
+    "recall": 1.0,
+    "precision": 1.0,
+    "missing": [],
+    "extra": [],
+    "edit_applied": null,
+    "stale": [],
+    "success": true
+  },
+  "failure": null,
+  "hook": {
+    "deny": 0,
+    "pass_": 1
+  }
+}

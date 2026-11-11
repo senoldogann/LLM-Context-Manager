@@ -1,0 +1,61 @@
+{
+  "record_version": 3,
+  "run_id": "sklearn-callers-supported-float-dtypes__D__2",
+  "task_id": "sklearn-callers-supported-float-dtypes",
+  "repo": "scikit-learn",
+  "category": "callers",
+  "arm": "D",
+  "rep": 2,
+  "model": "claude-opus-5-5",
+  "effort": "high",
+  "embedding": "local",
+  "index_copy_s": 0.3304538337979466,
+  "index_build_s": 578.0081130419858,
+  "wall_s": 16.70436775009148,
+  "transcript": {
+    "result_text": "I found 12 functions and methods in `sklearn/` that call `supported_float_dtypes` (test files excluded):\n\n- **`sklearn/preprocessing/_data.py`** calls it through the module, as `_array_api.supported_float_dtypes(xp)`:\n  - `MinMaxScaler`: `partial_fit`, `transform` and `inverse_transform`\n  - `MaxAbsScaler`: `partial_fit`, `transform` and `inverse_transform`\n  - the top-level function `normalize`\n  - `KernelCenterer`: `fit` and `transform`\n- **`sklearn/linear_model/_base.py`** imports the function by name and calls it in `_preprocess_data`.\n- **`sklearn/utils/_array_api.py`** calls it in `_isdtype_single`, in the same file where it is defined.\n\nI located these by searching for the name and then finding the enclosing function for each call. Every line that mentions the function is either a call or an import, and neither import renames it.\n\n```json\n{\"answer\": [\n\"sklearn/preprocessing/_data.py:MinMaxScaler.partial_fit\",\n\"sklearn/preprocessing/_data.py:MinMaxScaler.transform\",\n\"sklearn/preprocessing/_data.py:MinMaxScaler.inverse_transform\",\n\"sklearn/preprocessing/_data.py:MaxAbsScaler.partial_fit\",\n\"sklearn/preprocessing/_data.py:MaxAbsScaler.transform\",\n\"sklearn/preprocessing/_data.py:MaxAbsScaler.inverse_transform\",\n\"sklearn/preprocessing/_data.py:normalize\",\n\"sklearn/preprocessing/_data.py:KernelCenterer.fit\",\n\"sklearn/preprocessing/_data.py:KernelCenterer.transform\",\n\"sklearn/linear_model/_base.py:_preprocess_data\",\n\"sklearn/utils/_array_api.py:_isdtype_single\"\n]}\n```",
+    "subtype": "success",
+    "is_error": false,
+    "api_error_status": null,
+    "num_turns": 4,
+    "duration_ms": 15648,
+    "cost_usd": 0.0770296,
+    "usage": {
+      "input_tokens": 8,
+      "output_tokens": 1409,
+      "cache_creation_input_tokens": 5307,
+      "cache_read_input_tokens": 31808
+    },
+    "tool_calls": {
+      "Bash": 2,
+      "Grep": 1
+    },
+    "mcp_status": "connected",
+    "api_key_source": "none",
+    "tools": [
+      "Bash",
+      "Edit",
+      "Glob",
+      "Grep",
+      "Read",
+      "Write",
+      "mcp__context-manager__context",
+      "mcp__context-manager__index_project"
+    ]
+  },
+  "score": {
+    "answered": true,
+    "recall": 1.0,
+    "precision": 1.0,
+    "missing": [],
+    "extra": [],
+    "edit_applied": null,
+    "stale": [],
+    "success": true
+  },
+  "failure": null,
+  "hook": {
+    "deny": 0,
+    "pass_": 1
+  }
+}

@@ -1,0 +1,48 @@
+{
+  "record_version": 3,
+  "run_id": "sklearn-callers-supported-float-dtypes__A__1",
+  "task_id": "sklearn-callers-supported-float-dtypes",
+  "repo": "scikit-learn",
+  "category": "callers",
+  "arm": "A",
+  "rep": 1,
+  "model": "gpt-6-luna",
+  "effort": "high",
+  "embedding": "local",
+  "index_copy_s": null,
+  "index_build_s": null,
+  "wall_s": 24.831602915888652,
+  "transcript": {
+    "result_text": "```json\n{\"answer\":[\"sklearn/preprocessing/_data.py:MinMaxScaler.partial_fit\",\"sklearn/preprocessing/_data.py:MinMaxScaler.transform\",\"sklearn/preprocessing/_data.py:MinMaxScaler.inverse_transform\",\"sklearn/preprocessing/_data.py:MaxAbsScaler.partial_fit\",\"sklearn/preprocessing/_data.py:MaxAbsScaler.transform\",\"sklearn/preprocessing/_data.py:MaxAbsScaler.inverse_transform\",\"sklearn/preprocessing/_data.py:normalize\",\"sklearn/preprocessing/_data.py:KernelCenterer.fit\",\"sklearn/preprocessing/_data.py:KernelCenterer.transform\",\"sklearn/linear_model/_base.py:_preprocess_data\",\"sklearn/utils/_array_api.py:_isdtype_single\"]}\n```",
+    "subtype": "completed",
+    "is_error": false,
+    "api_error_status": null,
+    "num_turns": null,
+    "duration_ms": 24832,
+    "cost_usd": null,
+    "usage": {
+      "input_tokens": 31109,
+      "output_tokens": 953,
+      "cache_creation_input_tokens": 0,
+      "cache_read_input_tokens": 20352
+    },
+    "tool_calls": {
+      "command_execution": 3
+    },
+    "mcp_status": "unreported",
+    "api_key_source": "chatgpt",
+    "tools": []
+  },
+  "score": {
+    "answered": true,
+    "recall": 1.0,
+    "precision": 1.0,
+    "missing": [],
+    "extra": [],
+    "edit_applied": null,
+    "stale": [],
+    "success": true
+  },
+  "failure": null,
+  "hook": null
+}

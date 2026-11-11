@@ -1,0 +1,49 @@
+{
+  "record_version": 3,
+  "run_id": "sklearn-callers-device__D__2",
+  "task_id": "sklearn-callers-device",
+  "repo": "scikit-learn",
+  "category": "callers",
+  "arm": "D",
+  "rep": 2,
+  "model": "gpt-6-luna",
+  "effort": "high",
+  "embedding": "local",
+  "index_copy_s": 0.21240316610783339,
+  "index_build_s": 578.0081130419858,
+  "wall_s": 27.275578917004168,
+  "transcript": {
+    "result_text": "```json\n{\"answer\":[\"sklearn/decomposition/_base.py:_BasePCA.get_covariance\",\"sklearn/decomposition/_base.py:_BasePCA.get_precision\",\"sklearn/discriminant_analysis.py:_class_means\",\"sklearn/linear_model/_ridge.py:_solve_svd\",\"sklearn/utils/_array_api.py:ensure_common_namespace_device\",\"sklearn/utils/_array_api.py:get_namespace_and_device\",\"sklearn/utils/_array_api.py:_nanmin\",\"sklearn/utils/_array_api.py:_nanmax\",\"sklearn/utils/estimator_checks.py:check_array_api_input\",\"sklearn/utils/extmath.py:randomized_range_finder\",\"sklearn/utils/extmath.py:svd_flip\"]}\n```",
+    "subtype": "completed",
+    "is_error": false,
+    "api_error_status": null,
+    "num_turns": null,
+    "duration_ms": 27276,
+    "cost_usd": null,
+    "usage": {
+      "input_tokens": 32056,
+      "output_tokens": 873,
+      "cache_creation_input_tokens": 0,
+      "cache_read_input_tokens": 30592
+    },
+    "tool_calls": {
+      "command_execution": 2,
+      "mcp__context-manager__context": 1
+    },
+    "mcp_status": "unreported",
+    "api_key_source": "chatgpt",
+    "tools": []
+  },
+  "score": {
+    "answered": true,
+    "recall": 1.0,
+    "precision": 1.0,
+    "missing": [],
+    "extra": [],
+    "edit_applied": null,
+    "stale": [],
+    "success": true
+  },
+  "failure": null,
+  "hook": null
+}

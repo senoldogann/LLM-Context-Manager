@@ -1,0 +1,61 @@
+{
+  "record_version": 3,
+  "run_id": "sklearn-callers-compute-sample-weight__D__1",
+  "task_id": "sklearn-callers-compute-sample-weight",
+  "repo": "scikit-learn",
+  "category": "callers",
+  "arm": "D",
+  "rep": 1,
+  "model": "claude-opus-5-5",
+  "effort": "high",
+  "embedding": "local",
+  "index_copy_s": 0.4126472498755902,
+  "index_build_s": 578.0081130419858,
+  "wall_s": 18.440460292156786,
+  "transcript": {
+    "result_text": "Five functions in `sklearn/` call `compute_sample_weight` directly. Each one imports it through the `sklearn.utils` re-export. I checked the code index's caller list against a plain-text grep of the non-test files, and the two agree:\n\n- `sklearn/ensemble/_forest.py:188, 190` — `_parallel_build_trees`\n- `sklearn/ensemble/_forest.py:879` — `ForestClassifier._validate_y_class_weight`\n- `sklearn/ensemble/_hist_gradient_boosting/gradient_boosting.py:2138` — `HistGradientBoostingClassifier._finalize_sample_weight`\n- `sklearn/linear_model/_ridge.py:1307` — `_RidgeClassifierMixin._prepare_data`\n- `sklearn/tree/_classes.py:311` — `BaseDecisionTree._fit`\n\n`sklearn/utils/class_weight.py:146` also mentions the function, but only in a docstring example, so it isn't a real call. `sklearn/utils/__init__.py` re-exports the function but never calls it.\n\n```json\n{\"answer\": [\"sklearn/ensemble/_forest.py:_parallel_build_trees\", \"sklearn/ensemble/_forest.py:ForestClassifier._validate_y_class_weight\", \"sklearn/ensemble/_hist_gradient_boosting/gradient_boosting.py:HistGradientBoostingClassifier._finalize_sample_weight\", \"sklearn/linear_model/_ridge.py:_RidgeClassifierMixin._prepare_data\", \"sklearn/tree/_classes.py:BaseDecisionTree._fit\"]}\n```",
+    "subtype": "success",
+    "is_error": false,
+    "api_error_status": null,
+    "num_turns": 4,
+    "duration_ms": 17063,
+    "cost_usd": 0.0641168,
+    "usage": {
+      "input_tokens": 8,
+      "output_tokens": 1044,
+      "cache_creation_input_tokens": 4627,
+      "cache_read_input_tokens": 30944
+    },
+    "tool_calls": {
+      "Bash": 2,
+      "Grep": 1
+    },
+    "mcp_status": "connected",
+    "api_key_source": "none",
+    "tools": [
+      "Bash",
+      "Edit",
+      "Glob",
+      "Grep",
+      "Read",
+      "Write",
+      "mcp__context-manager__context",
+      "mcp__context-manager__index_project"
+    ]
+  },
+  "score": {
+    "answered": true,
+    "recall": 1.0,
+    "precision": 1.0,
+    "missing": [],
+    "extra": [],
+    "edit_applied": null,
+    "stale": [],
+    "success": true
+  },
+  "failure": null,
+  "hook": {
+    "deny": 1,
+    "pass_": 0
+  }
+}

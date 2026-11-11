@@ -1,0 +1,62 @@
+{
+  "record_version": 3,
+  "run_id": "sklearn-callers-label-binarize__D__1",
+  "task_id": "sklearn-callers-label-binarize",
+  "repo": "scikit-learn",
+  "category": "callers",
+  "arm": "D",
+  "rep": 1,
+  "model": "claude-opus-5-5",
+  "effort": "high",
+  "embedding": "local",
+  "index_copy_s": 0.20565137499943376,
+  "index_build_s": 578.0081130419858,
+  "wall_s": 16.238831458147615,
+  "transcript": {
+    "result_text": "Six functions and methods in `sklearn/` call `label_binarize` directly:\n\n- `sklearn/calibration.py`: `_fit_calibrator` (line 664)\n- `sklearn/metrics/_ranking.py`: `average_precision_score` (line 263), `roc_auc_score` (line 639) and `_multiclass_roc_auc_score` (line 770)\n- `sklearn/naive_bayes.py`: `_BaseDiscreteNB.partial_fit` (line 677)\n- `sklearn/preprocessing/_label.py`: `LabelBinarizer.transform` (line 357)\n\nThe code index reported 7 call sites, all inside these six functions, so one of them calls it twice. Every non-test module imports it under its own name, either from `sklearn.preprocessing` (which re-exports it) or from `._label`. I checked the import lines and none of them renames it, so no call goes through a different name.\n\n```json\n{\"answer\": [\"sklearn/calibration.py:_fit_calibrator\", \"sklearn/metrics/_ranking.py:average_precision_score\", \"sklearn/metrics/_ranking.py:roc_auc_score\", \"sklearn/metrics/_ranking.py:_multiclass_roc_auc_score\", \"sklearn/naive_bayes.py:_BaseDiscreteNB.partial_fit\", \"sklearn/preprocessing/_label.py:LabelBinarizer.transform\"]}\n```",
+    "subtype": "success",
+    "is_error": false,
+    "api_error_status": null,
+    "num_turns": 5,
+    "duration_ms": 15088,
+    "cost_usd": 0.08360840000000001,
+    "usage": {
+      "input_tokens": 8,
+      "output_tokens": 1290,
+      "cache_creation_input_tokens": 6333,
+      "cache_read_input_tokens": 35562
+    },
+    "tool_calls": {
+      "Bash": 2,
+      "Grep": 1,
+      "mcp__context-manager__context": 1
+    },
+    "mcp_status": "connected",
+    "api_key_source": "none",
+    "tools": [
+      "Bash",
+      "Edit",
+      "Glob",
+      "Grep",
+      "Read",
+      "Write",
+      "mcp__context-manager__context",
+      "mcp__context-manager__index_project"
+    ]
+  },
+  "score": {
+    "answered": true,
+    "recall": 1.0,
+    "precision": 1.0,
+    "missing": [],
+    "extra": [],
+    "edit_applied": null,
+    "stale": [],
+    "success": true
+  },
+  "failure": null,
+  "hook": {
+    "deny": 1,
+    "pass_": 0
+  }
+}

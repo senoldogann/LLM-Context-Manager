@@ -1,0 +1,57 @@
+{
+  "record_version": 3,
+  "run_id": "django-callers-make-model-tuple__A__3",
+  "task_id": "django-callers-make-model-tuple",
+  "repo": "django",
+  "category": "callers",
+  "arm": "A",
+  "rep": 3,
+  "model": "claude-opus-5-5",
+  "effort": "high",
+  "embedding": "local",
+  "index_copy_s": null,
+  "index_build_s": null,
+  "wall_s": 17.89220158290118,
+  "transcript": {
+    "result_text": "I found 8 functions and methods in `django/` that call `make_model_tuple` directly. I searched for every use of the name. It is only ever imported directly from `django.db.models.utils`, under its own name, and no module re-exports it. I then matched each call to the function that contains it.\n\n- **`django/db/models/base.py`**: `ModelBase.__new__` calls it twice, at lines 245 and 277.\n- **`django/db/models/fields/related.py`**:\n  - `lazy_related_operation` (line 86)\n  - `create_many_to_many_intermediary_model` (line 1270). This call is in the outer function body, not in the nested `set_managed`.\n- **`django/db/models/signals.py`**: `ModelSignal._lazy_method` (line 22)\n- **`django/db/migrations/state.py`**:\n  - `ProjectState.get_concrete_model_key` (line 516)\n  - `ProjectState._find_concrete_model_from_proxy` (line 541)\n  - `StateApps.__init__` (line 632)\n\n```json\n{\"answer\": [\"django/db/models/base.py:ModelBase.__new__\", \"django/db/models/fields/related.py:lazy_related_operation\", \"django/db/models/fields/related.py:create_many_to_many_intermediary_model\", \"django/db/models/signals.py:ModelSignal._lazy_method\", \"django/db/migrations/state.py:ProjectState.get_concrete_model_key\", \"django/db/migrations/state.py:ProjectState._find_concrete_model_from_proxy\", \"django/db/migrations/state.py:StateApps.__init__\"]}\n```",
+    "subtype": "success",
+    "is_error": false,
+    "api_error_status": null,
+    "num_turns": 5,
+    "duration_ms": 17086,
+    "cost_usd": 0.0766578,
+    "usage": {
+      "input_tokens": 10,
+      "output_tokens": 1392,
+      "cache_creation_input_tokens": 5113,
+      "cache_read_input_tokens": 39369
+    },
+    "tool_calls": {
+      "Bash": 1,
+      "Grep": 1,
+      "Read": 2
+    },
+    "mcp_status": "none",
+    "api_key_source": "none",
+    "tools": [
+      "Bash",
+      "Edit",
+      "Glob",
+      "Grep",
+      "Read",
+      "Write"
+    ]
+  },
+  "score": {
+    "answered": true,
+    "recall": 1.0,
+    "precision": 1.0,
+    "missing": [],
+    "extra": [],
+    "edit_applied": null,
+    "stale": [],
+    "success": true
+  },
+  "failure": null,
+  "hook": null
+}

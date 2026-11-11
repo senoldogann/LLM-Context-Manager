@@ -1,0 +1,49 @@
+{
+  "record_version": 3,
+  "run_id": "django-trap-load-backend__D__2",
+  "task_id": "django-trap-load-backend",
+  "repo": "django",
+  "category": "trap",
+  "arm": "D",
+  "rep": 2,
+  "model": "gpt-6-luna",
+  "effort": "high",
+  "embedding": "local",
+  "index_copy_s": 0.8300380420405418,
+  "index_build_s": 1140.598946291022,
+  "wall_s": 29.9916733331047,
+  "transcript": {
+    "result_text": "The caller list is complete after excluding the database backend loader. `django/test/client.py` is included because `django/test/` counts.\n\n```json\n{\"answer\":[\"django/contrib/auth/__init__.py:_get_backends\",\"django/contrib/auth/__init__.py:get_user\",\"django/contrib/auth/middleware.py:RemoteUserMiddleware.clean_username\",\"django/contrib/auth/middleware.py:RemoteUserMiddleware._remove_invalid_user\",\"django/contrib/auth/models.py:UserManager.with_perm\",\"django/test/client.py:ClientMixin._get_backend\"]}\n```",
+    "subtype": "completed",
+    "is_error": false,
+    "api_error_status": null,
+    "num_turns": null,
+    "duration_ms": 29992,
+    "cost_usd": null,
+    "usage": {
+      "input_tokens": 8864,
+      "output_tokens": 1148,
+      "cache_creation_input_tokens": 0,
+      "cache_read_input_tokens": 37120
+    },
+    "tool_calls": {
+      "command_execution": 1,
+      "mcp__context-manager__context": 1
+    },
+    "mcp_status": "unreported",
+    "api_key_source": "chatgpt",
+    "tools": []
+  },
+  "score": {
+    "answered": true,
+    "recall": 1.0,
+    "precision": 1.0,
+    "missing": [],
+    "extra": [],
+    "edit_applied": null,
+    "stale": [],
+    "success": true
+  },
+  "failure": null,
+  "hook": null
+}

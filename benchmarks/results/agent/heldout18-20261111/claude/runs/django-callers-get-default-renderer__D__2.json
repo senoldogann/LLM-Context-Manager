@@ -1,0 +1,61 @@
+{
+  "record_version": 3,
+  "run_id": "django-callers-get-default-renderer__D__2",
+  "task_id": "django-callers-get-default-renderer",
+  "repo": "django",
+  "category": "callers",
+  "arm": "D",
+  "rep": 2,
+  "model": "claude-opus-5-5",
+  "effort": "high",
+  "embedding": "local",
+  "index_copy_s": 0.6297458750195801,
+  "index_build_s": 1140.598946291022,
+  "wall_s": 14.784276749938726,
+  "transcript": {
+    "result_text": "I found six functions in `django/` that call `get_default_renderer` directly:\n\n- `reset_loaders` in `django/template/autoreload.py` imports it inside the function and calls it on line 42.\n- `BaseForm.__init__` in `django/forms/forms.py` calls it on line 120.\n- `BaseFormSet.__init__` in `django/forms/formsets.py` calls it on line 103.\n- `Widget._render` in `django/forms/widgets.py` calls it on line 283.\n- `ErrorDict.__init__` in `django/forms/utils.py` calls it on line 126.\n- `ErrorList.__init__` in `django/forms/utils.py` calls it on line 157.\n\n`django/test/signals.py` doesn't count. It imports the function in two places, but only calls `get_default_renderer.cache_clear()`, never the function itself. A search of `django/` found no other aliases or re-exports.\n\n```json\n{\"answer\": [\"django/template/autoreload.py:reset_loaders\", \"django/forms/forms.py:BaseForm.__init__\", \"django/forms/formsets.py:BaseFormSet.__init__\", \"django/forms/widgets.py:Widget._render\", \"django/forms/utils.py:ErrorDict.__init__\", \"django/forms/utils.py:ErrorList.__init__\"]}\n```",
+    "subtype": "success",
+    "is_error": false,
+    "api_error_status": null,
+    "num_turns": 4,
+    "duration_ms": 13726,
+    "cost_usd": 0.0654846,
+    "usage": {
+      "input_tokens": 8,
+      "output_tokens": 1083,
+      "cache_creation_input_tokens": 4689,
+      "cache_read_input_tokens": 31403
+    },
+    "tool_calls": {
+      "Bash": 2,
+      "Grep": 1
+    },
+    "mcp_status": "connected",
+    "api_key_source": "none",
+    "tools": [
+      "Bash",
+      "Edit",
+      "Glob",
+      "Grep",
+      "Read",
+      "Write",
+      "mcp__context-manager__context",
+      "mcp__context-manager__index_project"
+    ]
+  },
+  "score": {
+    "answered": true,
+    "recall": 1.0,
+    "precision": 1.0,
+    "missing": [],
+    "extra": [],
+    "edit_applied": null,
+    "stale": [],
+    "success": true
+  },
+  "failure": null,
+  "hook": {
+    "deny": 0,
+    "pass_": 1
+  }
+}
