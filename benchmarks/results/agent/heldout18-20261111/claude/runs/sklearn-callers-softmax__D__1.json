@@ -1,0 +1,61 @@
+{
+  "record_version": 3,
+  "run_id": "sklearn-callers-softmax__D__1",
+  "task_id": "sklearn-callers-softmax",
+  "repo": "scikit-learn",
+  "category": "callers",
+  "arm": "D",
+  "rep": 1,
+  "model": "claude-opus-5-5",
+  "effort": "high",
+  "embedding": "local",
+  "index_copy_s": 0.19388487492688,
+  "index_build_s": 578.0081130419858,
+  "wall_s": 22.611797499936074,
+  "transcript": {
+    "result_text": "I found five functions or methods outside test files that call `softmax` from `sklearn/utils/extmath.py`. Each of their files imports it with `from ...utils.extmath import softmax`:\n\n1. `MultinomialLogit.inverse` in `sklearn/_loss/link.py`, lines 268 and 271.\n2. `LinearDiscriminantAnalysis.predict_proba` in `sklearn/discriminant_analysis.py`, line 711.\n3. `AdaBoostClassifier._compute_proba_from_decision` in `sklearn/ensemble/_weight_boosting.py`, line 889. The `softmax(...)` on line 878 is only in the docstring.\n4. `LogisticRegression.predict_proba` in `sklearn/linear_model/_logistic.py`, line 1440.\n5. `NeighborhoodComponentsAnalysis._loss_grad_lbfgs` in `sklearn/neighbors/_nca.py`, line 496.\n\nOther matches for \"softmax\" are not calls to this function:\n- `sklearn/_loss/loss.py` mentions it only in docstrings.\n- `inplace_softmax` in `sklearn/neural_network/_base.py` is a separate function.\n- The others are comments or strings, such as `\"multi:softmax\"`.\n\n```json\n{\"answer\": [\"sklearn/_loss/link.py:MultinomialLogit.inverse\", \"sklearn/discriminant_analysis.py:LinearDiscriminantAnalysis.predict_proba\", \"sklearn/ensemble/_weight_boosting.py:AdaBoostClassifier._compute_proba_from_decision\", \"sklearn/linear_model/_logistic.py:LogisticRegression.predict_proba\", \"sklearn/neighbors/_nca.py:NeighborhoodComponentsAnalysis._loss_grad_lbfgs\"]}\n```",
+    "subtype": "success",
+    "is_error": false,
+    "api_error_status": null,
+    "num_turns": 8,
+    "duration_ms": 21688,
+    "cost_usd": 0.0974158,
+    "usage": {
+      "input_tokens": 16,
+      "output_tokens": 1563,
+      "cache_creation_input_tokens": 6426,
+      "cache_read_input_tokens": 73419
+    },
+    "tool_calls": {
+      "Bash": 6,
+      "Grep": 1
+    },
+    "mcp_status": "connected",
+    "api_key_source": "none",
+    "tools": [
+      "Bash",
+      "Edit",
+      "Glob",
+      "Grep",
+      "Read",
+      "Write",
+      "mcp__context-manager__context",
+      "mcp__context-manager__index_project"
+    ]
+  },
+  "score": {
+    "answered": true,
+    "recall": 1.0,
+    "precision": 1.0,
+    "missing": [],
+    "extra": [],
+    "edit_applied": null,
+    "stale": [],
+    "success": true
+  },
+  "failure": null,
+  "hook": {
+    "deny": 1,
+    "pass_": 0
+  }
+}

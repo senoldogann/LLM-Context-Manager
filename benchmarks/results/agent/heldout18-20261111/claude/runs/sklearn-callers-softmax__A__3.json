@@ -1,0 +1,56 @@
+{
+  "record_version": 3,
+  "run_id": "sklearn-callers-softmax__A__3",
+  "task_id": "sklearn-callers-softmax",
+  "repo": "scikit-learn",
+  "category": "callers",
+  "arm": "A",
+  "rep": 3,
+  "model": "claude-opus-5-5",
+  "effort": "high",
+  "embedding": "local",
+  "index_copy_s": null,
+  "index_build_s": null,
+  "wall_s": 15.661229541990906,
+  "transcript": {
+    "result_text": "Five non-test functions in `sklearn/` call `softmax` from `sklearn/utils/extmath.py`. Each file imports it directly with `from ..utils.extmath import softmax` (or `.utils.extmath` at the top level). I found no aliased imports and no calls through `extmath.softmax`.\n\n- `sklearn/_loss/link.py:268` and `:271`: `MultinomialLogit.inverse`\n- `sklearn/discriminant_analysis.py:711`: `LinearDiscriminantAnalysis.predict_proba`\n- `sklearn/ensemble/_weight_boosting.py:889`: `AdaBoostClassifier._compute_proba_from_decision`\n- `sklearn/linear_model/_logistic.py:1440`: `LogisticRegression.predict_proba`\n- `sklearn/neighbors/_nca.py:496`: `NeighborhoodComponentsAnalysis._loss_grad_lbfgs`\n\nI left out these matches because they aren't calls:\n- Mentions inside docstrings in `sklearn/_loss/loss.py` and `sklearn/_loss/_loss.pyx.tp`.\n- The `\"multi:softmax\"` string in the gradient-boosting utils.\n- `inplace_softmax` in `sklearn/neural_network/_base.py`, which is a different function.\n\n```json\n{\"answer\": [\"sklearn/_loss/link.py:MultinomialLogit.inverse\", \"sklearn/discriminant_analysis.py:LinearDiscriminantAnalysis.predict_proba\", \"sklearn/ensemble/_weight_boosting.py:AdaBoostClassifier._compute_proba_from_decision\", \"sklearn/linear_model/_logistic.py:LogisticRegression.predict_proba\", \"sklearn/neighbors/_nca.py:NeighborhoodComponentsAnalysis._loss_grad_lbfgs\"]}\n```",
+    "subtype": "success",
+    "is_error": false,
+    "api_error_status": null,
+    "num_turns": 4,
+    "duration_ms": 14838,
+    "cost_usd": 0.0803478,
+    "usage": {
+      "input_tokens": 8,
+      "output_tokens": 1316,
+      "cache_creation_input_tokens": 5959,
+      "cache_read_input_tokens": 31619
+    },
+    "tool_calls": {
+      "Bash": 2,
+      "Grep": 1
+    },
+    "mcp_status": "none",
+    "api_key_source": "none",
+    "tools": [
+      "Bash",
+      "Edit",
+      "Glob",
+      "Grep",
+      "Read",
+      "Write"
+    ]
+  },
+  "score": {
+    "answered": true,
+    "recall": 1.0,
+    "precision": 1.0,
+    "missing": [],
+    "extra": [],
+    "edit_applied": null,
+    "stale": [],
+    "success": true
+  },
+  "failure": null,
+  "hook": null
+}

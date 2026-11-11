@@ -1,0 +1,48 @@
+{
+  "record_version": 3,
+  "run_id": "django-callers-make-model-tuple__A__2",
+  "task_id": "django-callers-make-model-tuple",
+  "repo": "django",
+  "category": "callers",
+  "arm": "A",
+  "rep": 2,
+  "model": "gpt-6-luna",
+  "effort": "high",
+  "embedding": "local",
+  "index_copy_s": null,
+  "index_build_s": null,
+  "wall_s": 22.784707375103608,
+  "transcript": {
+    "result_text": "```json\n{\"answer\":[\"django/db/models/base.py:ModelBase.__new__\",\"django/db/models/signals.py:ModelSignal._lazy_method\",\"django/db/models/fields/related.py:lazy_related_operation\",\"django/db/models/fields/related.py:create_many_to_many_intermediary_model\",\"django/db/migrations/state.py:ProjectState.get_concrete_model_key\",\"django/db/migrations/state.py:ProjectState._find_concrete_model_from_proxy\",\"django/db/migrations/state.py:StateApps.__init__\"]}\n```",
+    "subtype": "completed",
+    "is_error": false,
+    "api_error_status": null,
+    "num_turns": null,
+    "duration_ms": 22785,
+    "cost_usd": null,
+    "usage": {
+      "input_tokens": 29401,
+      "output_tokens": 795,
+      "cache_creation_input_tokens": 0,
+      "cache_read_input_tokens": 22784
+    },
+    "tool_calls": {
+      "command_execution": 3
+    },
+    "mcp_status": "unreported",
+    "api_key_source": "chatgpt",
+    "tools": []
+  },
+  "score": {
+    "answered": true,
+    "recall": 1.0,
+    "precision": 1.0,
+    "missing": [],
+    "extra": [],
+    "edit_applied": null,
+    "stale": [],
+    "success": true
+  },
+  "failure": null,
+  "hook": null
+}

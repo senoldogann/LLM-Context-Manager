@@ -1,0 +1,62 @@
+{
+  "record_version": 3,
+  "run_id": "sklearn-callers-compute-sample-weight__D__2",
+  "task_id": "sklearn-callers-compute-sample-weight",
+  "repo": "scikit-learn",
+  "category": "callers",
+  "arm": "D",
+  "rep": 2,
+  "model": "claude-opus-5-5",
+  "effort": "high",
+  "embedding": "local",
+  "index_copy_s": 0.21615304215811193,
+  "index_build_s": 578.0081130419858,
+  "wall_s": 15.871325292158872,
+  "transcript": {
+    "result_text": "Five functions in `sklearn/` call `compute_sample_weight` directly. I found them with the code index and checked with a grep over every non-test `.py` file. All of them import it through the `sklearn.utils` re-export. No module imports it under another name, and nothing calls it through the module path (`class_weight.compute_sample_weight`). The only other non-test match in `.py` files is an example in the function's own docstring, which is not a real call.\n\n- `sklearn/ensemble/_forest.py`: `_parallel_build_trees`, a module-level function, calls it on lines 188 and 190.\n- `sklearn/ensemble/_forest.py`: `ForestClassifier._validate_y_class_weight` calls it on line 879.\n- `sklearn/ensemble/_hist_gradient_boosting/gradient_boosting.py`: `HistGradientBoostingClassifier._finalize_sample_weight` calls it on line 2138.\n- `sklearn/linear_model/_ridge.py`: `_RidgeClassifierMixin._prepare_data` calls it on line 1307.\n- `sklearn/tree/_classes.py`: `BaseDecisionTree._fit` calls it on line 311.\n\n```json\n{\"answer\": [\"sklearn/ensemble/_forest.py:_parallel_build_trees\", \"sklearn/ensemble/_forest.py:ForestClassifier._validate_y_class_weight\", \"sklearn/ensemble/_hist_gradient_boosting/gradient_boosting.py:HistGradientBoostingClassifier._finalize_sample_weight\", \"sklearn/linear_model/_ridge.py:_RidgeClassifierMixin._prepare_data\", \"sklearn/tree/_classes.py:BaseDecisionTree._fit\"]}\n```",
+    "subtype": "success",
+    "is_error": false,
+    "api_error_status": null,
+    "num_turns": 5,
+    "duration_ms": 14708,
+    "cost_usd": 0.0840738,
+    "usage": {
+      "input_tokens": 8,
+      "output_tokens": 1186,
+      "cache_creation_input_tokens": 6663,
+      "cache_read_input_tokens": 35089
+    },
+    "tool_calls": {
+      "Bash": 2,
+      "Grep": 1,
+      "mcp__context-manager__context": 1
+    },
+    "mcp_status": "connected",
+    "api_key_source": "none",
+    "tools": [
+      "Bash",
+      "Edit",
+      "Glob",
+      "Grep",
+      "Read",
+      "Write",
+      "mcp__context-manager__context",
+      "mcp__context-manager__index_project"
+    ]
+  },
+  "score": {
+    "answered": true,
+    "recall": 1.0,
+    "precision": 1.0,
+    "missing": [],
+    "extra": [],
+    "edit_applied": null,
+    "stale": [],
+    "success": true
+  },
+  "failure": null,
+  "hook": {
+    "deny": 1,
+    "pass_": 0
+  }
+}

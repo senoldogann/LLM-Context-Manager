@@ -1,0 +1,56 @@
+{
+  "record_version": 3,
+  "run_id": "django-callers-prefix-validation-error__A__3",
+  "task_id": "django-callers-prefix-validation-error",
+  "repo": "django",
+  "category": "callers",
+  "arm": "A",
+  "rep": 3,
+  "model": "claude-opus-5-5",
+  "effort": "high",
+  "embedding": "local",
+  "index_copy_s": null,
+  "index_build_s": null,
+  "wall_s": 14.611037415917963,
+  "transcript": {
+    "result_text": "I found 8 functions and methods that call `prefix_validation_error` directly. I searched `django/` for the name and for any re-exports or aliases. The function is only imported by name, via `from ..utils import prefix_validation_error`, in two modules, and I didn't find any alias or re-export.\n\n- **`django/contrib/postgres/utils.py`**: `prefix_validation_error` calls itself on line 28, once for each error in a list, so it counts as its own caller.\n- **`django/contrib/postgres/fields/array.py`**, class `ArrayField`:\n  - `validate` (call at line 201)\n  - `run_validators` (call at line 220)\n- **`django/contrib/postgres/forms/array.py`**:\n  - `SimpleArrayField.to_python` (line 58)\n  - `SimpleArrayField.validate` (line 77)\n  - `SimpleArrayField.run_validators` (line 95)\n  - `SplitArrayField.clean` (line 224)\n\n```json\n{\"answer\": [\"django/contrib/postgres/utils.py:prefix_validation_error\", \"django/contrib/postgres/fields/array.py:ArrayField.validate\", \"django/contrib/postgres/fields/array.py:ArrayField.run_validators\", \"django/contrib/postgres/forms/array.py:SimpleArrayField.to_python\", \"django/contrib/postgres/forms/array.py:SimpleArrayField.validate\", \"django/contrib/postgres/forms/array.py:SimpleArrayField.run_validators\", \"django/contrib/postgres/forms/array.py:SplitArrayField.clean\"]}\n```",
+    "subtype": "success",
+    "is_error": false,
+    "api_error_status": null,
+    "num_turns": 4,
+    "duration_ms": 13699,
+    "cost_usd": 0.0645282,
+    "usage": {
+      "input_tokens": 8,
+      "output_tokens": 895,
+      "cache_creation_input_tokens": 5053,
+      "cache_read_input_tokens": 30861
+    },
+    "tool_calls": {
+      "Bash": 2,
+      "Grep": 1
+    },
+    "mcp_status": "none",
+    "api_key_source": "none",
+    "tools": [
+      "Bash",
+      "Edit",
+      "Glob",
+      "Grep",
+      "Read",
+      "Write"
+    ]
+  },
+  "score": {
+    "answered": true,
+    "recall": 1.0,
+    "precision": 1.0,
+    "missing": [],
+    "extra": [],
+    "edit_applied": null,
+    "stale": [],
+    "success": true
+  },
+  "failure": null,
+  "hook": null
+}

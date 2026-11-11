@@ -1,0 +1,48 @@
+{
+  "record_version": 3,
+  "run_id": "django-callers-get-default-renderer__A__1",
+  "task_id": "django-callers-get-default-renderer",
+  "repo": "django",
+  "category": "callers",
+  "arm": "A",
+  "rep": 1,
+  "model": "gpt-6-luna",
+  "effort": "high",
+  "embedding": "local",
+  "index_copy_s": null,
+  "index_build_s": null,
+  "wall_s": 23.730553708970547,
+  "transcript": {
+    "result_text": "```json\n{\"answer\":[\"django/template/autoreload.py:reset_loaders\",\"django/forms/utils.py:ErrorDict.__init__\",\"django/forms/utils.py:ErrorList.__init__\",\"django/forms/forms.py:BaseForm.__init__\",\"django/forms/formsets.py:BaseFormSet.__init__\",\"django/forms/widgets.py:Widget._render\"]}\n```",
+    "subtype": "completed",
+    "is_error": false,
+    "api_error_status": null,
+    "num_turns": null,
+    "duration_ms": 23731,
+    "cost_usd": null,
+    "usage": {
+      "input_tokens": 27702,
+      "output_tokens": 875,
+      "cache_creation_input_tokens": 0,
+      "cache_read_input_tokens": 33920
+    },
+    "tool_calls": {
+      "command_execution": 4
+    },
+    "mcp_status": "unreported",
+    "api_key_source": "chatgpt",
+    "tools": []
+  },
+  "score": {
+    "answered": true,
+    "recall": 1.0,
+    "precision": 1.0,
+    "missing": [],
+    "extra": [],
+    "edit_applied": null,
+    "stale": [],
+    "success": true
+  },
+  "failure": null,
+  "hook": null
+}

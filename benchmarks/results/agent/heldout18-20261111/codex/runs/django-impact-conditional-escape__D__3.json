@@ -1,0 +1,49 @@
+{
+  "record_version": 3,
+  "run_id": "django-impact-conditional-escape__D__3",
+  "task_id": "django-impact-conditional-escape",
+  "repo": "django",
+  "category": "files",
+  "arm": "D",
+  "rep": 3,
+  "model": "gpt-6-luna",
+  "effort": "high",
+  "embedding": "local",
+  "index_copy_s": 0.5861061669420451,
+  "index_build_s": 1140.598946291022,
+  "wall_s": 29.83070437517017,
+  "transcript": {
+    "result_text": "```json\n{\"answer\":[\"django/contrib/admin/helpers.py\",\"django/template/backends/dummy.py\",\"django/template/base.py\",\"django/template/defaultfilters.py\",\"django/template/defaulttags.py\",\"django/template/library.py\",\"django/templatetags/static.py\",\"django/utils/html.py\"]}\n```",
+    "subtype": "completed",
+    "is_error": false,
+    "api_error_status": null,
+    "num_turns": null,
+    "duration_ms": 29831,
+    "cost_usd": null,
+    "usage": {
+      "input_tokens": 15328,
+      "output_tokens": 789,
+      "cache_creation_input_tokens": 0,
+      "cache_read_input_tokens": 30336
+    },
+    "tool_calls": {
+      "command_execution": 1,
+      "mcp__context-manager__context": 1
+    },
+    "mcp_status": "unreported",
+    "api_key_source": "chatgpt",
+    "tools": []
+  },
+  "score": {
+    "answered": true,
+    "recall": 1.0,
+    "precision": 1.0,
+    "missing": [],
+    "extra": [],
+    "edit_applied": null,
+    "stale": [],
+    "success": true
+  },
+  "failure": null,
+  "hook": null
+}

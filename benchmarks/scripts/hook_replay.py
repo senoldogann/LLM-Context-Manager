@@ -5,6 +5,8 @@ Kullanım:
         <döküm deseni>
 
 Sonuç dizini `<set>/claude/transcripts/<run>.jsonl` dökümlerini içerir (ör. `results/agent`).
+Bir koşunun Grep'leri kayıttaki sırayla aynı hook oturumunda oynatılır: tekrarlanan Grep'in
+cevabı (ilk paket, ikinci kez çağrı satırları) koşudaki gibi görünür.
 Döküm deseni hangi koşuların oynatılacağını seçer, sonuç dizinine göre bir glob'dur: örneğin
 `*/claude/transcripts/*__[ABFH]__1.jsonl` (pilotların ilk tekrarları) ya da
 `large-repo-20261111/claude/transcripts/*__D__*.jsonl`.
@@ -44,6 +46,8 @@ class Replayed:
     decision: str
     detail: str
     answer_chars: int | None
+    # Reddedilen Grep'e verilen cevap: `packet` (ilk) ya da `call-site lines` (tekrar).
+    answer_kind: str
 
 
 def result_text(content: str | list[dict[str, str]]) -> str:
@@ -102,13 +106,14 @@ def replay_repo(
             "CCM_DB_PATH": str(index_db_path(workspace)),
             "CCM_HOOK_LOG": str(log),
         }
+        sessions: dict[str, str] = {}
         for grep in greps:
             tool_input = dict(grep.tool_input)
             path = tool_input.get("path")
             if isinstance(path, str):
                 tool_input["path"] = str(workspace / path)
             payload = {
-                "session_id": f"replay-{uuid.uuid4().hex}",
+                "session_id": sessions.setdefault(grep.run, f"replay-{uuid.uuid4().hex}"),
                 "cwd": str(workspace),
                 "hook_event_name": "PreToolUse",
                 "tool_name": "Grep",
@@ -129,12 +134,20 @@ def replay_repo(
                 if completed.stdout.strip()
                 else None
             )
+            kind = (
+                "-"
+                if answer is None
+                else "call-site lines"
+                if answer.startswith("CCM: this repeats")
+                else "packet"
+            )
             replayed.append(
                 Replayed(
                     grep=grep,
                     decision=decision["decision"],
                     detail=decision["detail"],
                     answer_chars=None if answer is None else len(answer),
+                    answer_kind=kind,
                 )
             )
     return replayed
@@ -154,12 +167,13 @@ def main() -> None:
         for repo, greps in sorted(by_repo.items())
         for item in replay_repo(bin_dir, corpus, repo, greps)
     ]
-    for item in sorted(replayed, key=lambda item: (item.decision != "deny", item.grep.run)):
+    for item in replayed:
         pattern = str(item.grep.tool_input.get("pattern"))[:28]
         detail = "" if item.decision == "deny" else item.detail[:70]
         print(
             f"{item.decision:4} {item.grep.run[:42]:42} {pattern:28} "
-            f"grep={item.grep.result_chars:6} answer={item.answer_chars} {detail}"
+            f"grep={item.grep.result_chars:6} answer={item.answer_chars} "
+            f"[{item.answer_kind}] {detail}"
         )
     denied = [item for item in replayed if item.decision == "deny"]
     print(dict(collections.Counter(item.decision for item in replayed)))

@@ -1,0 +1,48 @@
+{
+  "record_version": 3,
+  "run_id": "django-callers-prefix-validation-error__D__3",
+  "task_id": "django-callers-prefix-validation-error",
+  "repo": "django",
+  "category": "callers",
+  "arm": "D",
+  "rep": 3,
+  "model": "gpt-6-luna",
+  "effort": "high",
+  "embedding": "local",
+  "index_copy_s": 0.6918156249448657,
+  "index_build_s": 1140.598946291022,
+  "wall_s": 15.625993249937892,
+  "transcript": {
+    "result_text": "```json\n{\"answer\":[\"django/contrib/postgres/utils.py:prefix_validation_error\",\"django/contrib/postgres/fields/array.py:ArrayField.validate\",\"django/contrib/postgres/fields/array.py:ArrayField.run_validators\",\"django/contrib/postgres/forms/array.py:SimpleArrayField.to_python\",\"django/contrib/postgres/forms/array.py:SimpleArrayField.validate\",\"django/contrib/postgres/forms/array.py:SimpleArrayField.run_validators\",\"django/contrib/postgres/forms/array.py:SplitArrayField.clean\"]}\n```",
+    "subtype": "completed",
+    "is_error": false,
+    "api_error_status": null,
+    "num_turns": null,
+    "duration_ms": 15626,
+    "cost_usd": null,
+    "usage": {
+      "input_tokens": 4399,
+      "output_tokens": 474,
+      "cache_creation_input_tokens": 0,
+      "cache_read_input_tokens": 28544
+    },
+    "tool_calls": {
+      "mcp__context-manager__context": 1
+    },
+    "mcp_status": "unreported",
+    "api_key_source": "chatgpt",
+    "tools": []
+  },
+  "score": {
+    "answered": true,
+    "recall": 1.0,
+    "precision": 1.0,
+    "missing": [],
+    "extra": [],
+    "edit_applied": null,
+    "stale": [],
+    "success": true
+  },
+  "failure": null,
+  "hook": null
+}

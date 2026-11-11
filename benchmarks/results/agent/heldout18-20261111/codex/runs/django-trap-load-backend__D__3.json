@@ -1,0 +1,48 @@
+{
+  "record_version": 3,
+  "run_id": "django-trap-load-backend__D__3",
+  "task_id": "django-trap-load-backend",
+  "repo": "django",
+  "category": "trap",
+  "arm": "D",
+  "rep": 3,
+  "model": "gpt-6-luna",
+  "effort": "high",
+  "embedding": "local",
+  "index_copy_s": 0.6250923338811845,
+  "index_build_s": 1140.598946291022,
+  "wall_s": 26.61241133394651,
+  "transcript": {
+    "result_text": "```json\n{\"answer\":[\"django/contrib/auth/__init__.py:_get_backends\",\"django/contrib/auth/__init__.py:get_user\",\"django/contrib/auth/middleware.py:RemoteUserMiddleware.clean_username\",\"django/contrib/auth/middleware.py:RemoteUserMiddleware._remove_invalid_user\",\"django/contrib/auth/models.py:UserManager.with_perm\",\"django/test/client.py:ClientMixin._get_backend\"]}\n```",
+    "subtype": "completed",
+    "is_error": false,
+    "api_error_status": null,
+    "num_turns": null,
+    "duration_ms": 26612,
+    "cost_usd": null,
+    "usage": {
+      "input_tokens": 8828,
+      "output_tokens": 964,
+      "cache_creation_input_tokens": 0,
+      "cache_read_input_tokens": 23424
+    },
+    "tool_calls": {
+      "mcp__context-manager__context": 1
+    },
+    "mcp_status": "unreported",
+    "api_key_source": "chatgpt",
+    "tools": []
+  },
+  "score": {
+    "answered": true,
+    "recall": 1.0,
+    "precision": 1.0,
+    "missing": [],
+    "extra": [],
+    "edit_applied": null,
+    "stale": [],
+    "success": true
+  },
+  "failure": null,
+  "hook": null
+}

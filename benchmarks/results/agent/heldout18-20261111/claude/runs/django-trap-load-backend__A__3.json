@@ -1,0 +1,56 @@
+{
+  "record_version": 3,
+  "run_id": "django-trap-load-backend__A__3",
+  "task_id": "django-trap-load-backend",
+  "repo": "django",
+  "category": "trap",
+  "arm": "A",
+  "rep": 3,
+  "model": "claude-opus-5-5",
+  "effort": "high",
+  "embedding": "local",
+  "index_copy_s": null,
+  "index_build_s": null,
+  "wall_s": 14.774200583109632,
+  "transcript": {
+    "result_text": "I found six functions in `django/` that call `load_backend` from `django/contrib/auth/__init__.py`:\n\n- **`django/contrib/auth/__init__.py`**\n  - `_get_backends` calls `load_backend(backend_path)` for each entry in `AUTHENTICATION_BACKENDS`.\n  - `get_user` calls `load_backend(backend_path)` to load the backend stored in the session.\n- **`django/contrib/auth/middleware.py`**\n  - `RemoteUserMiddleware.clean_username` calls `auth.load_backend(...)`, reaching the function through the `django.contrib.auth` module.\n  - `RemoteUserMiddleware._remove_invalid_user` calls `load_backend(...)`, which the file imports directly from `django.contrib.auth`.\n- **`django/contrib/auth/models.py`**\n  - `UserManager.with_perm` calls `auth.load_backend(backend)`.\n- **`django/test/client.py`**\n  - `ClientMixin._get_backend` imports `load_backend` locally from `django.contrib.auth` and calls it.\n\nThe calls in `django/db/utils.py` are to that file's own `load_backend`, the database backend loader, so I left them out.\n\n```json\n{\"answer\": [\"django/contrib/auth/__init__.py:_get_backends\", \"django/contrib/auth/__init__.py:get_user\", \"django/contrib/auth/middleware.py:RemoteUserMiddleware.clean_username\", \"django/contrib/auth/middleware.py:RemoteUserMiddleware._remove_invalid_user\", \"django/contrib/auth/models.py:UserManager.with_perm\", \"django/test/client.py:ClientMixin._get_backend\"]}\n```",
+    "subtype": "success",
+    "is_error": false,
+    "api_error_status": null,
+    "num_turns": 4,
+    "duration_ms": 13943,
+    "cost_usd": 0.0772948,
+    "usage": {
+      "input_tokens": 8,
+      "output_tokens": 1142,
+      "cache_creation_input_tokens": 6035,
+      "cache_read_input_tokens": 30714
+    },
+    "tool_calls": {
+      "Bash": 2,
+      "Grep": 1
+    },
+    "mcp_status": "none",
+    "api_key_source": "none",
+    "tools": [
+      "Bash",
+      "Edit",
+      "Glob",
+      "Grep",
+      "Read",
+      "Write"
+    ]
+  },
+  "score": {
+    "answered": true,
+    "recall": 1.0,
+    "precision": 1.0,
+    "missing": [],
+    "extra": [],
+    "edit_applied": null,
+    "stale": [],
+    "success": true
+  },
+  "failure": null,
+  "hook": null
+}

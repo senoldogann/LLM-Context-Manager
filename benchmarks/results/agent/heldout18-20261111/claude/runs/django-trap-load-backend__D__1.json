@@ -1,0 +1,61 @@
+{
+  "record_version": 3,
+  "run_id": "django-trap-load-backend__D__1",
+  "task_id": "django-trap-load-backend",
+  "repo": "django",
+  "category": "trap",
+  "arm": "D",
+  "rep": 1,
+  "model": "claude-opus-5-5",
+  "effort": "high",
+  "embedding": "local",
+  "index_copy_s": 0.7864011249039322,
+  "index_build_s": 1140.598946291022,
+  "wall_s": 14.425584958866239,
+  "transcript": {
+    "result_text": "I searched `django/` for every use of `load_backend`, then read each call site. Six functions call the auth version:\n\n- `django/contrib/auth/__init__.py`: `_get_backends` (line 29) and `get_user` (line 215).\n- `django/contrib/auth/middleware.py`: `RemoteUserMiddleware.clean_username` calls it as `auth.load_backend` (line 156). `RemoteUserMiddleware._remove_invalid_user` calls the name imported directly at the top of the file (line 169).\n- `django/contrib/auth/models.py`: `UserManager.with_perm` calls it as `auth.load_backend` (line 192).\n- `django/test/client.py`: `ClientMixin._get_backend` imports it inside the function and calls it (line 870).\n\nI left out the two hits in `django/db/utils.py`, which define and call the database backend loader, not the auth one.\n\n```json\n{\"answer\": [\"django/contrib/auth/__init__.py:_get_backends\", \"django/contrib/auth/__init__.py:get_user\", \"django/contrib/auth/middleware.py:RemoteUserMiddleware.clean_username\", \"django/contrib/auth/middleware.py:RemoteUserMiddleware._remove_invalid_user\", \"django/contrib/auth/models.py:UserManager.with_perm\", \"django/test/client.py:ClientMixin._get_backend\"]}\n```",
+    "subtype": "success",
+    "is_error": false,
+    "api_error_status": null,
+    "num_turns": 4,
+    "duration_ms": 13287,
+    "cost_usd": 0.0754174,
+    "usage": {
+      "input_tokens": 8,
+      "output_tokens": 1017,
+      "cache_creation_input_tokens": 6073,
+      "cache_read_input_tokens": 32307
+    },
+    "tool_calls": {
+      "Bash": 2,
+      "Grep": 1
+    },
+    "mcp_status": "connected",
+    "api_key_source": "none",
+    "tools": [
+      "Bash",
+      "Edit",
+      "Glob",
+      "Grep",
+      "Read",
+      "Write",
+      "mcp__context-manager__context",
+      "mcp__context-manager__index_project"
+    ]
+  },
+  "score": {
+    "answered": true,
+    "recall": 1.0,
+    "precision": 1.0,
+    "missing": [],
+    "extra": [],
+    "edit_applied": null,
+    "stale": [],
+    "success": true
+  },
+  "failure": null,
+  "hook": {
+    "deny": 0,
+    "pass_": 1
+  }
+}

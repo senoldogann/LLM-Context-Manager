@@ -1,0 +1,60 @@
+{
+  "record_version": 3,
+  "run_id": "django-impact-conditional-escape__D__1",
+  "task_id": "django-impact-conditional-escape",
+  "repo": "django",
+  "category": "files",
+  "arm": "D",
+  "rep": 1,
+  "model": "claude-opus-5-5",
+  "effort": "high",
+  "embedding": "local",
+  "index_copy_s": 0.6239752909168601,
+  "index_build_s": 1140.598946291022,
+  "wall_s": 14.024525625165552,
+  "transcript": {
+    "result_text": "I searched `django/` for every mention of `conditional_escape`. I also looked for star imports, renamed imports and module-level imports of `django.utils.html` that could hide an indirect call, and found none.\n\nEight files call the function directly:\n\n- `django/utils/html.py` — the file that defines it. `format_html` calls it on keyword arguments (line 138) and `format_html_join` calls it on the separator (line 157). Line 137 only passes it to `map`, but the other calls are enough to include the file.\n- `django/templatetags/static.py:118`\n- `django/contrib/admin/helpers.py:179, 304`\n- `django/template/defaulttags.py:490`\n- `django/template/base.py:1051`\n- `django/template/defaultfilters.py:456, 466, 611`. Line 687 only assigns it to `escaper`, so it doesn't count on its own.\n- `django/template/backends/dummy.py:47`\n- `django/template/library.py:242`\n\n```json\n{\"answer\": [\"django/utils/html.py\", \"django/templatetags/static.py\", \"django/contrib/admin/helpers.py\", \"django/template/defaulttags.py\", \"django/template/base.py\", \"django/template/defaultfilters.py\", \"django/template/backends/dummy.py\", \"django/template/library.py\"]}\n```",
+    "subtype": "success",
+    "is_error": false,
+    "api_error_status": null,
+    "num_turns": 3,
+    "duration_ms": 12629,
+    "cost_usd": 0.05468780000000001,
+    "usage": {
+      "input_tokens": 6,
+      "output_tokens": 927,
+      "cache_creation_input_tokens": 3961,
+      "cache_read_input_tokens": 22179
+    },
+    "tool_calls": {
+      "Grep": 2
+    },
+    "mcp_status": "connected",
+    "api_key_source": "none",
+    "tools": [
+      "Bash",
+      "Edit",
+      "Glob",
+      "Grep",
+      "Read",
+      "Write",
+      "mcp__context-manager__context",
+      "mcp__context-manager__index_project"
+    ]
+  },
+  "score": {
+    "answered": true,
+    "recall": 1.0,
+    "precision": 1.0,
+    "missing": [],
+    "extra": [],
+    "edit_applied": null,
+    "stale": [],
+    "success": true
+  },
+  "failure": null,
+  "hook": {
+    "deny": 0,
+    "pass_": 2
+  }
+}

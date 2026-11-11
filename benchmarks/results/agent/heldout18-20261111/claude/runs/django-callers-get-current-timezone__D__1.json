@@ -1,0 +1,61 @@
+{
+  "record_version": 3,
+  "run_id": "django-callers-get-current-timezone__D__1",
+  "task_id": "django-callers-get-current-timezone",
+  "repo": "django",
+  "category": "callers",
+  "arm": "D",
+  "rep": 1,
+  "model": "claude-opus-5-5",
+  "effort": "high",
+  "embedding": "local",
+  "index_copy_s": 0.7472300408408046,
+  "index_build_s": 1140.598946291022,
+  "wall_s": 20.965483125066385,
+  "transcript": {
+    "result_text": "Nine functions in `django/` call `get_current_timezone` directly. The code index reported nine call sites, and a grep over the package found the same nine. I opened the two template and forms callers to confirm which function encloses each call.\n\nThe other grep hits are not calls:\n- `django/templatetags/tz.py` lines 183–200 are the template tag registered under the name `\"get_current_timezone\"`, not a call to the function.\n- `django/utils/timezone.py:18` is the name's entry in `__all__`.\n- `django/utils/timezone.py:64` is the function's own definition.\n\n```json\n{\"answer\": [\n\"django/db/backends/base/operations.py:BaseDatabaseOperations.year_lookup_bounds_for_datetime_field\",\n\"django/db/models/query.py:QuerySet.datetimes\",\n\"django/forms/utils.py:from_current_timezone\",\n\"django/template/defaulttags.py:NowNode.render\",\n\"django/templatetags/tz.py:localtime\",\n\"django/utils/timezone.py:get_current_timezone_name\",\n\"django/utils/timezone.py:localtime\",\n\"django/utils/timezone.py:make_aware\",\n\"django/utils/timezone.py:make_naive\"\n]}\n```",
+    "subtype": "success",
+    "is_error": false,
+    "api_error_status": null,
+    "num_turns": 6,
+    "duration_ms": 16626,
+    "cost_usd": 0.11284820000000001,
+    "usage": {
+      "input_tokens": 12,
+      "output_tokens": 1095,
+      "cache_creation_input_tokens": 10231,
+      "cache_read_input_tokens": 45261
+    },
+    "tool_calls": {
+      "Bash": 4,
+      "Grep": 1
+    },
+    "mcp_status": "connected",
+    "api_key_source": "none",
+    "tools": [
+      "Bash",
+      "Edit",
+      "Glob",
+      "Grep",
+      "Read",
+      "Write",
+      "mcp__context-manager__context",
+      "mcp__context-manager__index_project"
+    ]
+  },
+  "score": {
+    "answered": true,
+    "recall": 1.0,
+    "precision": 1.0,
+    "missing": [],
+    "extra": [],
+    "edit_applied": null,
+    "stale": [],
+    "success": true
+  },
+  "failure": null,
+  "hook": {
+    "deny": 1,
+    "pass_": 0
+  }
+}

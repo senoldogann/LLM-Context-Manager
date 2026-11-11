@@ -1,0 +1,55 @@
+{
+  "record_version": 3,
+  "run_id": "sklearn-impact-check-non-negative__A__3",
+  "task_id": "sklearn-impact-check-non-negative",
+  "repo": "scikit-learn",
+  "category": "files",
+  "arm": "A",
+  "rep": 3,
+  "model": "claude-opus-5-5",
+  "effort": "high",
+  "embedding": "local",
+  "index_copy_s": null,
+  "index_build_s": null,
+  "wall_s": 9.685401374939829,
+  "transcript": {
+    "result_text": "I searched `sklearn/` for every mention of `check_non_negative`. Nine files outside the test directories call it directly.\n\n- `sklearn/utils/validation.py` defines the function and also calls it once.\n- The other eight import it from `sklearn/utils/validation.py` (by relative imports such as `..utils.validation`) and call it by that same name.\n- No file imports it under a different name, and no module re-exports it; `sklearn/utils/__init__.py` doesn't mention it.\n- No file in the list just passes the function around without calling it.\n- The only other match is `sklearn/utils/tests/test_validation.py`, which is a test file and so excluded.\n\n```json\n{\"answer\": [\"sklearn/neighbors/_base.py\", \"sklearn/decomposition/_lda.py\", \"sklearn/decomposition/_nmf.py\", \"sklearn/metrics/pairwise.py\", \"sklearn/manifold/_t_sne.py\", \"sklearn/naive_bayes.py\", \"sklearn/kernel_approximation.py\", \"sklearn/utils/validation.py\"]}\n```",
+    "subtype": "success",
+    "is_error": false,
+    "api_error_status": null,
+    "num_turns": 2,
+    "duration_ms": 8760,
+    "cost_usd": 0.0459116,
+    "usage": {
+      "input_tokens": 4,
+      "output_tokens": 658,
+      "cache_creation_input_tokens": 3782,
+      "cache_read_input_tokens": 12398
+    },
+    "tool_calls": {
+      "Grep": 1
+    },
+    "mcp_status": "none",
+    "api_key_source": "none",
+    "tools": [
+      "Bash",
+      "Edit",
+      "Glob",
+      "Grep",
+      "Read",
+      "Write"
+    ]
+  },
+  "score": {
+    "answered": true,
+    "recall": 1.0,
+    "precision": 1.0,
+    "missing": [],
+    "extra": [],
+    "edit_applied": null,
+    "stale": [],
+    "success": true
+  },
+  "failure": null,
+  "hook": null
+}

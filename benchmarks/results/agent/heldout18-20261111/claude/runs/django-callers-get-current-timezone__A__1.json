@@ -1,0 +1,56 @@
+{
+  "record_version": 3,
+  "run_id": "django-callers-get-current-timezone__A__1",
+  "task_id": "django-callers-get-current-timezone",
+  "repo": "django",
+  "category": "callers",
+  "arm": "A",
+  "rep": 1,
+  "model": "claude-opus-5-5",
+  "effort": "high",
+  "embedding": "local",
+  "index_copy_s": null,
+  "index_build_s": null,
+  "wall_s": 15.549455541884527,
+  "transcript": {
+    "result_text": "I found nine functions and methods that call `get_current_timezone`. I searched `django/` for the name. Every call goes through `timezone.get_current_timezone()` or, inside `django/utils/timezone.py` itself, the bare name. No module imports it under another name.\n\n- `django/template/defaulttags.py:397` is in `NowNode.render`.\n- `django/templatetags/tz.py:28` is in `localtime`. The `{% get_current_timezone %}` template tag in the same file only uses the string as the tag's name and does not call the function.\n- `django/db/models/query.py:1434` is in `QuerySet.datetimes`.\n- `django/db/backends/base/operations.py:639` is in `BaseDatabaseOperations.year_lookup_bounds_for_datetime_field`.\n- `django/forms/utils.py:219` is in `from_current_timezone`.\n- `django/utils/timezone.py` has four callers: `get_current_timezone_name` (line 71), `localtime` (line 180), `make_aware` (line 240) and `make_naive` (line 251).\n\n```json\n{\"answer\": [\"django/template/defaulttags.py:NowNode.render\", \"django/templatetags/tz.py:localtime\", \"django/db/models/query.py:QuerySet.datetimes\", \"django/db/backends/base/operations.py:BaseDatabaseOperations.year_lookup_bounds_for_datetime_field\", \"django/forms/utils.py:from_current_timezone\", \"django/utils/timezone.py:get_current_timezone_name\", \"django/utils/timezone.py:localtime\", \"django/utils/timezone.py:make_aware\", \"django/utils/timezone.py:make_naive\"]}\n```",
+    "subtype": "success",
+    "is_error": false,
+    "api_error_status": null,
+    "num_turns": 4,
+    "duration_ms": 14266,
+    "cost_usd": 0.06780259999999999,
+    "usage": {
+      "input_tokens": 8,
+      "output_tokens": 1237,
+      "cache_creation_input_tokens": 4628,
+      "cache_read_input_tokens": 30033
+    },
+    "tool_calls": {
+      "Bash": 2,
+      "Grep": 1
+    },
+    "mcp_status": "none",
+    "api_key_source": "none",
+    "tools": [
+      "Bash",
+      "Edit",
+      "Glob",
+      "Grep",
+      "Read",
+      "Write"
+    ]
+  },
+  "score": {
+    "answered": true,
+    "recall": 1.0,
+    "precision": 1.0,
+    "missing": [],
+    "extra": [],
+    "edit_applied": null,
+    "stale": [],
+    "success": true
+  },
+  "failure": null,
+  "hook": null
+}

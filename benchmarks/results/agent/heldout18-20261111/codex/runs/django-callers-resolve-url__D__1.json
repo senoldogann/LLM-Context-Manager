@@ -1,0 +1,48 @@
+{
+  "record_version": 3,
+  "run_id": "django-callers-resolve-url__D__1",
+  "task_id": "django-callers-resolve-url",
+  "repo": "django",
+  "category": "callers",
+  "arm": "D",
+  "rep": 1,
+  "model": "gpt-6-luna",
+  "effort": "high",
+  "embedding": "local",
+  "index_copy_s": 0.8239761251024902,
+  "index_build_s": 1140.598946291022,
+  "wall_s": 21.203013999853283,
+  "transcript": {
+    "result_text": "```json\n{\"answer\":[\"django/contrib/auth/decorators.py:user_passes_test\",\"django/contrib/auth/middleware.py:LoginRequiredMiddleware.handle_no_permission\",\"django/contrib/auth/mixins.py:AccessMixin.handle_no_permission\",\"django/contrib/auth/views.py:RedirectURLMixin.get_default_redirect_url\",\"django/contrib/auth/views.py:LoginView.get_default_redirect_url\",\"django/contrib/auth/views.py:LogoutView.get_default_redirect_url\",\"django/contrib/auth/views.py:logout_then_login\",\"django/contrib/auth/views.py:redirect_to_login\",\"django/contrib/auth/views.py:PasswordResetCompleteView.get_context_data\",\"django/shortcuts.py:redirect\"]}\n```",
+    "subtype": "completed",
+    "is_error": false,
+    "api_error_status": null,
+    "num_turns": null,
+    "duration_ms": 21203,
+    "cost_usd": null,
+    "usage": {
+      "input_tokens": 12437,
+      "output_tokens": 737,
+      "cache_creation_input_tokens": 0,
+      "cache_read_input_tokens": 20480
+    },
+    "tool_calls": {
+      "mcp__context-manager__context": 1
+    },
+    "mcp_status": "unreported",
+    "api_key_source": "chatgpt",
+    "tools": []
+  },
+  "score": {
+    "answered": true,
+    "recall": 1.0,
+    "precision": 1.0,
+    "missing": [],
+    "extra": [],
+    "edit_applied": null,
+    "stale": [],
+    "success": true
+  },
+  "failure": null,
+  "hook": null
+}
