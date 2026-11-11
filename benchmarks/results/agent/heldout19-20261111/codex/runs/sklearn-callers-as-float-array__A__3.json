@@ -1,0 +1,48 @@
+{
+  "record_version": 3,
+  "run_id": "sklearn-callers-as-float-array__A__3",
+  "task_id": "sklearn-callers-as-float-array",
+  "repo": "scikit-learn",
+  "category": "callers",
+  "arm": "A",
+  "rep": 3,
+  "model": "gpt-6-luna",
+  "effort": "high",
+  "embedding": "local",
+  "index_copy_s": null,
+  "index_build_s": null,
+  "wall_s": 53.26870020898059,
+  "transcript": {
+    "result_text": "```json\n{\"answer\":[\"sklearn/cluster/_spectral.py:discretize\",\"sklearn/linear_model/_least_angle.py:_lars_path_residues\",\"sklearn/linear_model/_least_angle.py:LarsCV.fit\",\"sklearn/linear_model/_omp.py:_omp_path_residues\",\"sklearn/linear_model/_omp.py:OrthogonalMatchingPursuitCV.fit\",\"sklearn/feature_selection/_univariate_selection.py:_clean_nans\",\"sklearn/feature_selection/_univariate_selection.py:f_oneway\",\"sklearn/decomposition/_fastica.py:FastICA._fit_transform\"]}\n```",
+    "subtype": "completed",
+    "is_error": false,
+    "api_error_status": null,
+    "num_turns": null,
+    "duration_ms": 53269,
+    "cost_usd": null,
+    "usage": {
+      "input_tokens": 9782,
+      "output_tokens": 2260,
+      "cache_creation_input_tokens": 0,
+      "cache_read_input_tokens": 59776
+    },
+    "tool_calls": {
+      "command_execution": 5
+    },
+    "mcp_status": "unreported",
+    "api_key_source": "chatgpt",
+    "tools": []
+  },
+  "score": {
+    "answered": true,
+    "recall": 1.0,
+    "precision": 1.0,
+    "missing": [],
+    "extra": [],
+    "edit_applied": null,
+    "stale": [],
+    "success": true
+  },
+  "failure": null,
+  "hook": null
+}

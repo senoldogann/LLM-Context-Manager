@@ -1252,19 +1252,33 @@ pub(crate) fn caller_site_lines(
 ) -> Vec<String> {
     let first = content_first_line(start_line, end_line, content);
     let externals = PythonExternals::default();
-    let hits: Vec<Hit> = file_hits(path, content, spec, target_name, &externals)
-        .into_iter()
-        .filter(|hit| matches!(hit.kind, HitKind::Call | HitKind::Use))
-        .collect();
-    let mut lines: Vec<String> = hits
+    let hits: Vec<Hit> = file_hits(path, content, spec, target_name, &externals);
+    // Önce çağrılar; çağıranda hiç çağrı yoksa çağrı olmayan kullanımlar. Her satır bir kez:
+    // `let globals = globals();` iki isabet verir ama tek çağrı yeridir, ve aynı adlı yerel
+    // değişkenin sonraki kullanımları "+N more" diye görünmeyen çağrılar gibi sayılmaz.
+    let calls = distinct_lines(&hits, HitKind::Call);
+    let shown = if calls.is_empty() {
+        distinct_lines(&hits, HitKind::Use)
+    } else {
+        calls
+    };
+    let mut lines: Vec<String> = shown
         .iter()
         .take(SITES_PER_CALLER)
         .map(|hit| format!("  {}: {}", first + hit.line - 1, hit.text))
         .collect();
-    if hits.len() > SITES_PER_CALLER {
-        lines.push(format!("  +{} more", hits.len() - SITES_PER_CALLER));
+    if shown.len() > SITES_PER_CALLER {
+        lines.push(format!("  +{} more", shown.len() - SITES_PER_CALLER));
     }
     lines
+}
+
+/// Verilen türdeki isabetler, satır başına bir tane (ilk geçiş), satır sırasıyla.
+fn distinct_lines(hits: &[Hit], kind: HitKind) -> Vec<&Hit> {
+    let mut seen = std::collections::BTreeSet::new();
+    hits.iter()
+        .filter(|hit| hit.kind == kind && seen.insert(hit.line))
+        .collect()
 }
 
 /// Aranan metinlerin okunur adı: `` `ensure_sync` `` ya da `` `req.get(`, `this.get(` (lib/request.js) ``.

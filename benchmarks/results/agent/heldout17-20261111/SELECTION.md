@@ -12,8 +12,8 @@ Run in `benchmarks/` against the pinned corpus (Django 5.1 `373cb30`, scikit-lea
 
 ```bash
 EX_PY=escape,make_aware,get_random_string,capfirst,iri_to_uri,constant_time_compare,urlencode,is_aware,make_hashable,get_connection,get_resolver,check_cv,gen_batches,shuffle,get_config
-PYTHONPATH=. uv run python scripts/select_heldout.py corpus/django django 20261111 3 $EX_PY
-PYTHONPATH=. uv run python scripts/select_heldout.py corpus/scikit-learn sklearn 20261111 3 $EX_PY
+PYTHONPATH=. uv run python scripts/select_heldout.py corpus/django django 20261111 3 1 $EX_PY
+PYTHONPATH=. uv run python scripts/select_heldout.py corpus/scikit-learn sklearn 20261111 3 1 $EX_PY
 EX_RS=sleep_until,catch_unwind,async_op,yield_now,with_scheduler,poll_proceed,new_unnamed,unbounded_channel,try_with,enter_runtime
 uv run python scripts/rust_callers_gold.py corpus/tokio tokio,tokio-util,tokio-stream,tokio-test,tokio-macros --select 20261111 $EX_RS
 ```

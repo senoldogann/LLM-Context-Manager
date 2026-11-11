@@ -1,0 +1,48 @@
+{
+  "record_version": 3,
+  "run_id": "sklearn-impact-svd-flip__A__1",
+  "task_id": "sklearn-impact-svd-flip",
+  "repo": "scikit-learn",
+  "category": "files",
+  "arm": "A",
+  "rep": 1,
+  "model": "gpt-6-luna",
+  "effort": "high",
+  "embedding": "local",
+  "index_copy_s": null,
+  "index_build_s": null,
+  "wall_s": 50.40238795801997,
+  "transcript": {
+    "result_text": "```json\n{\"answer\":[\"sklearn/cross_decomposition/_pls.py\",\"sklearn/decomposition/_dict_learning.py\",\"sklearn/decomposition/_incremental_pca.py\",\"sklearn/decomposition/_kernel_pca.py\",\"sklearn/decomposition/_pca.py\",\"sklearn/decomposition/_sparse_pca.py\",\"sklearn/decomposition/_truncated_svd.py\",\"sklearn/utils/extmath.py\"]}\n```",
+    "subtype": "completed",
+    "is_error": false,
+    "api_error_status": null,
+    "num_turns": null,
+    "duration_ms": 50402,
+    "cost_usd": null,
+    "usage": {
+      "input_tokens": 7485,
+      "output_tokens": 980,
+      "cache_creation_input_tokens": 0,
+      "cache_read_input_tokens": 41472
+    },
+    "tool_calls": {
+      "command_execution": 3
+    },
+    "mcp_status": "unreported",
+    "api_key_source": "chatgpt",
+    "tools": []
+  },
+  "score": {
+    "answered": true,
+    "recall": 1.0,
+    "precision": 1.0,
+    "missing": [],
+    "extra": [],
+    "edit_applied": null,
+    "stale": [],
+    "success": true
+  },
+  "failure": null,
+  "hook": null
+}

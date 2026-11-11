@@ -4,14 +4,17 @@ The current state of CCM and the next steps, for the owner and for any agent tha
 work. Keep it current: replace lines that stop being true instead of appending history (git log and
 `benchmarks/results/` are the history).
 
-Last updated: 2026-11-11. Where work stopped: **three preregistered large-repository held-out
-sets are complete.** The latest is amendment 18 (`benchmarks/results/agent/heldout18-20261111/`,
-commit `ad29ffc`, 78 runs per agent).
+Last updated: 2026-11-11. Where work stopped: **four preregistered large-repository held-out
+sets are complete.** The latest is amendment 19 (`benchmarks/results/agent/heldout19-20261111/`,
+commit `5eba8f0`, Codex only, 72 runs). Arm E for Claude Code is the next step.
 
-- **Codex:** the product (D) lowers input tokens against built-ins (A) on held-out caller and
-  trap questions, on two independent sets. Amendment 17 gave D/A 0.72 (0.59–0.89) and
-  amendment 18 gave 0.60 (0.47–0.77). Success was equal or better: 38/39 against 35/39, and
-  39/39 against 36/39. "Which files call X" questions are the exception (1.30–1.70).
+- **Codex:** the product (D) lowers input tokens against built-ins (A) on held-out callers
+  and trap questions.
+  - Two sets show a saving overall: amendment 17, 0.72 (0.59–0.89), and amendment 18, 0.60
+    (0.47–0.77). Success was equal or better: 38/39 against 35/39, and 39/39 against 36/39.
+  - In a third set, amendment 19, seven of the twelve tasks were "which files call X". The
+    overall result was 0.91 (0.68–1.02), with callers 0.62 and impact 0.94 (0.90–1.11).
+  - "Which files" questions remain no better than built-ins.
 - **Claude Code, boundary result:** D-only changes (`context`, the PreToolUse Grep hook, the
   hook's handling of repeated Greps) gave no measurable saving on two held-out sets: 0.94
   (0.77–1.10) and 1.06 (0.87–1.38).
@@ -285,11 +288,16 @@ What the transcripts show:
    `context` itself rarely. Further work would have to change how Claude Code treats a tool
    answer (for example a Claude Code skill or plugin, or a hook on Bash `grep`). That needs a
    new preregistration and is not D-only.
-4. **Tokio cost for Codex.** `tokio-callers-globals` cost 2.13 times A and the trap 1.34 in
-   amendment 17. Read those transcripts before changing anything.
-5. **Codex on "which files call X".** The impact tasks cost Codex more in both sets:
-   `conditional_escape` 1.70, `check_non_negative` 1.30, and 0.88–0.99 in amendment 17. Read
-   those transcripts before changing anything.
+4. **Codex extra turns on Tokio and "which files" (amendment 19): done** (`heldout19-20261111/`).
+   - **Kept:** two `context` fixes, each call-site line listed once and `Type::name` resolved
+     by its owner.
+   - **Result:** on twelve held-out tasks (seven impact), D/A was 0.91 (0.68–1.02), so no
+     detectable difference. Callers tasks 0.62; impact tasks 0.94 (0.90–1.11).
+   - **Removed:** the new files line. It left out module-level calls and broke
+     `get_user_model` (D 0/3).
+   - Under the stopping rule, work on "which files" questions stops.
+5. **Claude Code: separate arm E** (a hook on Bash `grep`/`rg`, or a skill). It needs its own
+   preregistration, a tuned replay and a held-out run, and leaves A to D unchanged.
 6. **Second held-out set (amendment 17): done** (`heldout17-20261111/`). Codex shows a saving
    of 0.72 (0.59–0.89); Claude Code shows no detectable difference, 0.94 (0.77–1.10). The
    stopping rule (both intervals containing 1.00) was not met.

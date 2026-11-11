@@ -1,0 +1,48 @@
+{
+  "record_version": 3,
+  "run_id": "django-callers-flatten-fieldsets__A__1",
+  "task_id": "django-callers-flatten-fieldsets",
+  "repo": "django",
+  "category": "callers",
+  "arm": "A",
+  "rep": 1,
+  "model": "gpt-6-luna",
+  "effort": "high",
+  "embedding": "local",
+  "index_copy_s": null,
+  "index_build_s": null,
+  "wall_s": 43.597710041096434,
+  "transcript": {
+    "result_text": "```json\n{\"answer\":[\"django/contrib/contenttypes/admin.py:GenericInlineModelAdmin.get_formset\",\"django/contrib/admin/helpers.py:InlineAdminFormSet.__iter__\",\"django/contrib/admin/helpers.py:InlineAdminFormSet.fields\",\"django/contrib/admin/options.py:ModelAdmin.get_form\",\"django/contrib/admin/options.py:ModelAdmin._changeform_view\",\"django/contrib/admin/options.py:InlineModelAdmin.get_formset\"]}\n```",
+    "subtype": "completed",
+    "is_error": false,
+    "api_error_status": null,
+    "num_turns": null,
+    "duration_ms": 43598,
+    "cost_usd": null,
+    "usage": {
+      "input_tokens": 17161,
+      "output_tokens": 1273,
+      "cache_creation_input_tokens": 0,
+      "cache_read_input_tokens": 61952
+    },
+    "tool_calls": {
+      "command_execution": 5
+    },
+    "mcp_status": "unreported",
+    "api_key_source": "chatgpt",
+    "tools": []
+  },
+  "score": {
+    "answered": true,
+    "recall": 1.0,
+    "precision": 1.0,
+    "missing": [],
+    "extra": [],
+    "edit_applied": null,
+    "stale": [],
+    "success": true
+  },
+  "failure": null,
+  "hook": null
+}

@@ -1299,6 +1299,9 @@ struct ScopedSymbolHint {
     /// Noktalı Python yolu (`sklearn.utils.shuffle`): tanım dosyalarında yoksa
     /// paketlerin yeniden dışa aktarmaları üzerinden çözülür.
     dotted: Option<String>,
+    /// `Tip::ad` niteleyicisinin son parçası: aynı adlı birden çok tanımdan kapsayan
+    /// tipi (ya da modülü) bu olanı seçer.
+    owner: Option<String>,
 }
 
 /// Sorgudaki Python import bildirimlerinin hedefleri.
@@ -1469,9 +1472,15 @@ fn scoped_symbol_hints(query: &str) -> Vec<ScopedSymbolHint> {
                 definition_files: files,
                 code_like: false,
                 dotted: Some(part.to_string()),
+                owner: None,
             });
             continue;
         }
+        let owner = part
+            .rsplit_once("::")
+            .and_then(|(qualifier, _)| qualifier.rsplit("::").next())
+            .filter(|owner| identifier_part(owner))
+            .map(str::to_string);
         let symbol = if let Some((qualifier, symbol)) = part.rsplit_once("::") {
             if qualifier.is_empty()
                 || !identifier_part(symbol)
@@ -1491,6 +1500,7 @@ fn scoped_symbol_hints(query: &str) -> Vec<ScopedSymbolHint> {
             definition_files: definition_file.iter().cloned().collect(),
             code_like: part.contains("::") || backticked.contains(part) || code_like_name(symbol),
             dotted: None,
+            owner,
         });
     }
     for dotted in python_import_paths(query).symbols {
@@ -1501,6 +1511,7 @@ fn scoped_symbol_hints(query: &str) -> Vec<ScopedSymbolHint> {
                 definition_files: files,
                 code_like: false,
                 dotted: Some(dotted),
+                owner: None,
             });
         }
     }
@@ -1537,6 +1548,9 @@ async fn scoped_symbol_targets(engine: &Arc<RetrievalEngine>, query: &str) -> Sc
         })
         .collect();
     let mut resolved: Vec<petgraph::graph::NodeIndex> = Vec::new();
+    // Tek bir ipucunun birden çok tanıma uyduğu adaylar: hiçbir ipucu tek hedefe çözülmezse
+    // "indekste yok" demek yerine bunlar listelenir.
+    let mut ambiguous: Vec<petgraph::graph::NodeIndex> = Vec::new();
     for hint in &hints {
         // Düz sözcükler (`call`, `HTML`) kapsam olsa bile hedef olmaz; yalnız modül
         // yoluyla ya da kod gibi yazılmış ad aday olur.
@@ -1572,10 +1586,31 @@ async fn scoped_symbol_targets(engine: &Arc<RetrievalEngine>, query: &str) -> Sc
                 .collect(),
             _ => matches,
         };
-        if let [only] = matches.as_slice() {
-            if !resolved.contains(only) {
-                resolved.push(*only);
+        // `Tip::ad`: aynı adlı tanımlardan kapsayan tipi ya da dosya modülü `Tip` olan.
+        // Sahibi uyan tanım yoksa adaylar süzgeçsiz kalır: ad "indekste yok" sayılmaz.
+        let matches: Vec<petgraph::graph::NodeIndex> = match (&hint.owner, matches.len()) {
+            (Some(owner), count) if count > 1 => {
+                let owned: Vec<petgraph::graph::NodeIndex> = matches
+                    .iter()
+                    .copied()
+                    .filter(|idx| owner_names(&graph, *idx).iter().any(|name| name == owner))
+                    .collect();
+                if owned.is_empty() {
+                    matches
+                } else {
+                    owned
+                }
             }
+            _ => matches,
+        };
+        match matches.as_slice() {
+            [only] => {
+                if !resolved.contains(only) {
+                    resolved.push(*only);
+                }
+            }
+            [] => {}
+            many => ambiguous.extend(many.iter().copied()),
         }
     }
     // `import a.b as x`: hedef modül dosyasıdır.
@@ -1587,6 +1622,11 @@ async fn scoped_symbol_targets(engine: &Arc<RetrievalEngine>, query: &str) -> Sc
                 }
             }
         }
+    }
+    if resolved.is_empty() && !ambiguous.is_empty() {
+        ambiguous.sort_unstable();
+        ambiguous.dedup();
+        resolved = ambiguous;
     }
     match resolved.as_slice() {
         [] => ScopedTargets::None,
@@ -1608,15 +1648,66 @@ async fn scoped_symbol_targets(engine: &Arc<RetrievalEngine>, query: &str) -> Sc
     }
 }
 
+/// Düğümün sahip adları: kapsayan sınıf/yapı/enum/trait/satır içi modül ve dosyasının modül adı
+/// (`registration.rs` → `registration`, `mod.rs` → dizin adı).
+fn owner_names(graph: &ccm_core::graph::CodeGraph, idx: petgraph::graph::NodeIndex) -> Vec<String> {
+    let mut names: Vec<String> = graph
+        .graph
+        .edges_directed(idx, petgraph::Direction::Incoming)
+        .filter(|edge| matches!(edge.weight(), ccm_core::graph::EdgeType::Contains))
+        .map(|edge| &graph.graph[edge.source()])
+        .filter(|node| {
+            matches!(
+                node.node_type,
+                ccm_core::graph::NodeType::Class
+                    | ccm_core::graph::NodeType::Module
+                    | ccm_core::graph::NodeType::Struct
+                    | ccm_core::graph::NodeType::Enum
+                    | ccm_core::graph::NodeType::Trait
+            )
+        })
+        .map(|node| node.name.clone())
+        .collect();
+    let path = ccm_core::engine::extract_file_path(&graph.graph[idx].id);
+    let stem_path = Path::new(path.trim_start_matches("./")).with_extension("");
+    let parts: Vec<&str> = stem_path
+        .iter()
+        .filter_map(|part| part.to_str())
+        .rev()
+        .take(2)
+        .collect();
+    match parts.as_slice() {
+        [stem, parent, ..] if matches!(*stem, "mod" | "lib" | "__init__") => {
+            names.push((*parent).to_string())
+        }
+        [stem, ..] => names.push((*stem).to_string()),
+        [] => {}
+    }
+    names
+}
+
 /// Sorgu birden çok açık hedef adlandırdığında dönen metin: anlamsal aramaya
 /// düşmek yerine adaylar listelenir (yanlış paket, doğru soruyu tekrar sordurur).
-fn several_targets_text(candidates: &[String]) -> String {
+/// Liste `budget_chars` karakteri aşmaz; sığmayan aday sayısı sonda yazılır.
+fn several_targets_text(candidates: &[String], budget_chars: usize) -> String {
     let mut text = format!(
         "The query names {} different code targets; ask `context` about one of them (path:line or the dotted name):",
         candidates.len()
     );
+    let mut shown = 0;
     for candidate in candidates {
-        text.push_str(&format!("\n- {candidate}"));
+        let line = format!("\n- {candidate}");
+        if char_count(&text) + char_count(&line) > budget_chars {
+            break;
+        }
+        text.push_str(&line);
+        shown += 1;
+    }
+    if shown < candidates.len() {
+        text.push_str(&format!(
+            "\n+ {} more; name the file (path:line) to narrow the query",
+            candidates.len() - shown
+        ));
     }
     text
 }
@@ -2474,7 +2565,7 @@ pub async fn context(
             return Ok(ToolResult {
                 content: vec![ToolResultContent {
                     content_type: "text".to_string(),
-                    text: several_targets_text(&candidates),
+                    text: several_targets_text(&candidates, budget_chars),
                 }],
                 is_error: None,
             });
@@ -3607,6 +3698,18 @@ pub async fn diff_context(engine: &Arc<RetrievalEngine>, args: &Value) -> Result
 
 #[cfg(test)]
 mod tests {
+
+    #[test]
+    fn several_targets_text_keeps_to_the_budget_and_counts_the_rest() {
+        let candidates: Vec<String> = (0..50)
+            .map(|n| format!("src/f{n}.rs:1 Function new"))
+            .collect();
+        let text = super::several_targets_text(&candidates, 400);
+        assert!(text.chars().count() <= 400 + 80, "{text}");
+        assert!(text.contains("more; name the file"), "{text}");
+        let all = super::several_targets_text(&candidates[..2], 4_000);
+        assert!(!all.contains("more;"), "{all}");
+    }
 
     #[test]
     fn python_import_paths_reads_from_and_dotted_import_statements() {

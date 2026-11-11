@@ -2489,6 +2489,347 @@ LARGE_REPO_18_HELD_OUT_TASKS: tuple[Task, ...] = (
 )
 
 
+# Amendment 19: yeni held-out görevler (seçim `results/agent/heldout19-20261111/SELECTION.md`).
+LARGE_REPO_19_HELD_OUT_TASKS: tuple[Task, ...] = (
+    Task(
+        id="django-callers-flatten-fieldsets",
+        repo="django",
+        category="callers",
+        answer_kind="symbols",
+        question=(
+            "Which functions or methods in `django/` (not test files: `tests/` directories, "
+            "`test_*.py`; the `django/test/` package counts) call the function "
+            "`flatten_fieldsets` defined in `django/contrib/admin/utils.py` directly? Calls "
+            "through another name it is imported under, or through a module that re-exports it, "
+            "count; passing it as a value without calling it does not count; a function that "
+            "calls itself counts as its own caller. List each calling function or method once; a "
+            "call inside a nested function may be named by either function."
+        ),
+        expected=(
+            sym("django/contrib/admin/helpers.py", "__iter__"),
+            sym("django/contrib/admin/helpers.py", "fields"),
+            sym("django/contrib/admin/options.py", "_changeform_view"),
+            sym("django/contrib/admin/options.py", "get_form"),
+            sym("django/contrib/admin/options.py", "get_formset"),
+            sym("django/contrib/contenttypes/admin.py", "get_formset"),
+        ),
+        edit=None,
+        notes=(
+            "scripts/python_callers_gold.py: 7 call sites in 6 functions. "
+            "Held out (preregistration amendment 19)."
+        ),
+    ),
+    Task(
+        id="django-callers-call-command",
+        repo="django",
+        category="callers",
+        answer_kind="symbols",
+        question=(
+            "Which functions or methods in `django/` (not test files: `tests/` directories, "
+            "`test_*.py`; the `django/test/` package counts) call the function `call_command` "
+            "defined in `django/core/management/__init__.py` directly? Calls through another name "
+            "it is imported under, or through a module that re-exports it, count; passing it as a "
+            "value without calling it does not count; a function that calls itself counts as its "
+            "own caller. List each calling function or method once; a call inside a nested "
+            "function may be named by either function."
+        ),
+        expected=(
+            sym("django/core/management/commands/testserver.py", "handle"),
+            sym("django/db/backends/base/creation.py", "create_test_db"),
+            sym("django/test/runner.py", "run_checks"),
+            sym("django/test/testcases.py", "_fixture_setup"),
+            sym("django/test/testcases.py", "_fixture_teardown"),
+            sym("django/test/testcases.py", "setUpClass"),
+        ),
+        edit=None,
+        notes=(
+            "scripts/python_callers_gold.py: 9 call sites in 7 functions. "
+            "Held out (preregistration amendment 19)."
+        ),
+    ),
+    Task(
+        id="django-impact-get-user-model",
+        repo="django",
+        category="files",
+        answer_kind="files",
+        question=(
+            "Which files in `django/` (not test files: `tests/` directories, `test_*.py`; the "
+            "`django/test/` package counts) call the function `get_user_model` defined in "
+            "`django/contrib/auth/__init__.py` directly? Calls through another name it is "
+            "imported under, or through a module that re-exports it, count; passing it as a value "
+            "without calling it does not count."
+        ),
+        expected=(
+            path_item("django/contrib/auth/__init__.py"),
+            path_item("django/contrib/auth/apps.py"),
+            path_item("django/contrib/auth/backends.py"),
+            path_item("django/contrib/auth/forms.py"),
+            path_item("django/contrib/auth/handlers/modwsgi.py"),
+            path_item("django/contrib/auth/management/commands/changepassword.py"),
+            path_item("django/contrib/auth/management/commands/createsuperuser.py"),
+            path_item("django/contrib/auth/views.py"),
+            path_item("django/test/signals.py"),
+        ),
+        edit=None,
+        notes=(
+            "scripts/python_callers_gold.py: 10 call sites in 10 functions. "
+            "Held out (preregistration amendment 19)."
+        ),
+    ),
+    Task(
+        id="django-impact-safe-join",
+        repo="django",
+        category="files",
+        answer_kind="files",
+        question=(
+            "Which files in `django/` (not test files: `tests/` directories, `test_*.py`; the "
+            "`django/test/` package counts) call the function `safe_join` defined in "
+            "`django/utils/_os.py` directly? Calls through another name it is imported under, or "
+            "through a module that re-exports it, count; passing it as a value without calling it "
+            "does not count."
+        ),
+        expected=(
+            path_item("django/contrib/admindocs/views.py"),
+            path_item("django/contrib/staticfiles/finders.py"),
+            path_item("django/core/files/storage/filesystem.py"),
+            path_item("django/core/files/storage/memory.py"),
+            path_item("django/template/backends/base.py"),
+            path_item("django/template/loaders/filesystem.py"),
+            path_item("django/views/static.py"),
+        ),
+        edit=None,
+        notes=(
+            "scripts/python_callers_gold.py: 7 call sites in 7 functions. "
+            "Held out (preregistration amendment 19)."
+        ),
+    ),
+    Task(
+        id="django-impact-get-current-site",
+        repo="django",
+        category="files",
+        answer_kind="files",
+        question=(
+            "Which files in `django/` (not test files: `tests/` directories, `test_*.py`; the "
+            "`django/test/` package counts) call the function `get_current_site` defined in "
+            "`django/contrib/sites/shortcuts.py` directly? Calls through another name it is "
+            "imported under, or through a module that re-exports it, count; passing it as a value "
+            "without calling it does not count."
+        ),
+        expected=(
+            path_item("django/contrib/auth/forms.py"),
+            path_item("django/contrib/auth/views.py"),
+            path_item("django/contrib/contenttypes/views.py"),
+            path_item("django/contrib/flatpages/templatetags/flatpages.py"),
+            path_item("django/contrib/flatpages/views.py"),
+            path_item("django/contrib/redirects/middleware.py"),
+            path_item("django/contrib/sitemaps/views.py"),
+            path_item("django/contrib/sites/middleware.py"),
+            path_item("django/contrib/syndication/views.py"),
+        ),
+        edit=None,
+        notes=(
+            "scripts/python_callers_gold.py: 11 call sites in 11 functions. "
+            "Held out (preregistration amendment 19)."
+        ),
+    ),
+    Task(
+        id="django-trap-select-template",
+        repo="django",
+        category="trap",
+        answer_kind="symbols",
+        question=(
+            "Which functions or methods in `django/` (not test files: `tests/` directories, "
+            "`test_*.py`; the `django/test/` package counts) call the function `select_template` "
+            "defined in `django/template/loader.py` directly? Calls through another name it is "
+            "imported under, or through a module that re-exports it, count; passing it as a value "
+            "without calling it does not count; a function that calls itself counts as its own "
+            "caller. Calls to the `select_template` methods of template engines or backends do "
+            "not count. List each calling function or method once; a call inside a nested "
+            "function may be named by either function."
+        ),
+        expected=(
+            sym("django/contrib/flatpages/views.py", "render_flatpage"),
+            sym("django/template/loader.py", "render_to_string"),
+            sym("django/template/response.py", "resolve_template"),
+            sym("django/views/static.py", "directory_index"),
+        ),
+        edit=None,
+        notes=(
+            "scripts/python_callers_gold.py: 4 call sites in 4 functions. "
+            "Held out (preregistration amendment 19)."
+        ),
+    ),
+    Task(
+        id="sklearn-callers-compute-class-weight",
+        repo="scikit-learn",
+        category="callers",
+        answer_kind="symbols",
+        question=(
+            "Which functions or methods in `sklearn/` (not test files: `tests/` directories, "
+            "`test_*.py`) call the function `compute_class_weight` defined in "
+            "`sklearn/utils/class_weight.py` directly? Calls through another name it is imported "
+            "under, or through a module that re-exports it, count; passing it as a value without "
+            "calling it does not count; a function that calls itself counts as its own caller. "
+            "List each calling function or method once; a call inside a nested function may be "
+            "named by either function."
+        ),
+        expected=(
+            sym("sklearn/linear_model/_logistic.py", "_logistic_regression_path"),
+            sym("sklearn/linear_model/_logistic.py", "fit"),
+            sym("sklearn/linear_model/_stochastic_gradient.py", "_partial_fit"),
+            sym("sklearn/svm/_base.py", "_fit_liblinear"),
+            sym("sklearn/svm/_base.py", "_validate_targets"),
+            sym("sklearn/utils/class_weight.py", "compute_sample_weight"),
+        ),
+        edit=None,
+        notes=(
+            "scripts/python_callers_gold.py: 8 call sites in 6 functions. "
+            "Held out (preregistration amendment 19)."
+        ),
+    ),
+    Task(
+        id="sklearn-callers-as-float-array",
+        repo="scikit-learn",
+        category="callers",
+        answer_kind="symbols",
+        question=(
+            "Which functions or methods in `sklearn/` (not test files: `tests/` directories, "
+            "`test_*.py`) call the function `as_float_array` defined in "
+            "`sklearn/utils/validation.py` directly? Calls through another name it is imported "
+            "under, or through a module that re-exports it, count; passing it as a value without "
+            "calling it does not count; a function that calls itself counts as its own caller. "
+            "List each calling function or method once; a call inside a nested function may be "
+            "named by either function."
+        ),
+        expected=(
+            sym("sklearn/cluster/_spectral.py", "discretize"),
+            sym("sklearn/decomposition/_fastica.py", "_fit_transform"),
+            sym("sklearn/feature_selection/_univariate_selection.py", "_clean_nans"),
+            sym("sklearn/feature_selection/_univariate_selection.py", "f_oneway"),
+            sym("sklearn/linear_model/_least_angle.py", "_lars_path_residues"),
+            sym("sklearn/linear_model/_least_angle.py", "fit"),
+            sym("sklearn/linear_model/_omp.py", "_omp_path_residues"),
+            sym("sklearn/linear_model/_omp.py", "fit"),
+        ),
+        edit=None,
+        notes=(
+            "scripts/python_callers_gold.py: 11 call sites in 8 functions. "
+            "Held out (preregistration amendment 19)."
+        ),
+    ),
+    Task(
+        id="sklearn-impact-get-scorer-names",
+        repo="scikit-learn",
+        category="files",
+        answer_kind="files",
+        question=(
+            "Which files in `sklearn/` (not test files: `tests/` directories, `test_*.py`) call "
+            "the function `get_scorer_names` defined in `sklearn/metrics/_scorer.py` directly? "
+            "Calls through another name it is imported under, or through a module that re-exports "
+            "it, count; passing it as a value without calling it does not count."
+        ),
+        expected=(
+            path_item("sklearn/feature_selection/_sequential.py"),
+            path_item("sklearn/inspection/_permutation_importance.py"),
+            path_item("sklearn/linear_model/_logistic.py"),
+            path_item("sklearn/linear_model/_ridge.py"),
+            path_item("sklearn/metrics/_scorer.py"),
+            path_item("sklearn/model_selection/_classification_threshold.py"),
+            path_item("sklearn/model_selection/_search.py"),
+            path_item("sklearn/model_selection/_search_successive_halving.py"),
+            path_item("sklearn/model_selection/_validation.py"),
+        ),
+        edit=None,
+        notes=(
+            "scripts/python_callers_gold.py: 13 call sites in 13 functions. "
+            "Held out (preregistration amendment 19)."
+        ),
+    ),
+    Task(
+        id="sklearn-impact-svd-flip",
+        repo="scikit-learn",
+        category="files",
+        answer_kind="files",
+        question=(
+            "Which files in `sklearn/` (not test files: `tests/` directories, `test_*.py`) call "
+            "the function `svd_flip` defined in `sklearn/utils/extmath.py` directly? Calls "
+            "through another name it is imported under, or through a module that re-exports it, "
+            "count; passing it as a value without calling it does not count."
+        ),
+        expected=(
+            path_item("sklearn/cross_decomposition/_pls.py"),
+            path_item("sklearn/decomposition/_dict_learning.py"),
+            path_item("sklearn/decomposition/_incremental_pca.py"),
+            path_item("sklearn/decomposition/_kernel_pca.py"),
+            path_item("sklearn/decomposition/_pca.py"),
+            path_item("sklearn/decomposition/_sparse_pca.py"),
+            path_item("sklearn/decomposition/_truncated_svd.py"),
+            path_item("sklearn/utils/extmath.py"),
+        ),
+        edit=None,
+        notes=(
+            "scripts/python_callers_gold.py: 12 call sites in 9 functions. "
+            "Held out (preregistration amendment 19)."
+        ),
+    ),
+    Task(
+        id="sklearn-impact-pairwise-distances",
+        repo="scikit-learn",
+        category="files",
+        answer_kind="files",
+        question=(
+            "Which files in `sklearn/` (not test files: `tests/` directories, `test_*.py`) call "
+            "the function `pairwise_distances` defined in `sklearn/metrics/pairwise.py` directly? "
+            "Calls through another name it is imported under, or through a module that re-exports "
+            "it, count; passing it as a value without calling it does not count."
+        ),
+        expected=(
+            path_item("sklearn/cluster/_hdbscan/hdbscan.py"),
+            path_item("sklearn/cluster/_optics.py"),
+            path_item("sklearn/covariance/_empirical_covariance.py"),
+            path_item("sklearn/manifold/_t_sne.py"),
+            path_item("sklearn/metrics/cluster/_unsupervised.py"),
+            path_item("sklearn/metrics/pairwise.py"),
+            path_item("sklearn/neighbors/_nca.py"),
+            path_item("sklearn/utils/estimator_checks.py"),
+            path_item("sklearn/utils/graph.py"),
+        ),
+        edit=None,
+        notes=(
+            "scripts/python_callers_gold.py: 13 call sites in 11 functions. "
+            "Held out (preregistration amendment 19)."
+        ),
+    ),
+    Task(
+        id="sklearn-impact-accuracy-score",
+        repo="scikit-learn",
+        category="files",
+        answer_kind="files",
+        question=(
+            "Which files in `sklearn/` (not test files: `tests/` directories, `test_*.py`) call "
+            "the function `accuracy_score` defined in `sklearn/metrics/_classification.py` "
+            "directly? Calls through another name it is imported under, or through a module that "
+            "re-exports it, count; passing it as a value without calling it does not count."
+        ),
+        expected=(
+            path_item("sklearn/base.py"),
+            path_item("sklearn/covariance/_elliptic_envelope.py"),
+            path_item("sklearn/ensemble/_bagging.py"),
+            path_item("sklearn/ensemble/_weight_boosting.py"),
+            path_item("sklearn/metrics/_classification.py"),
+            path_item("sklearn/neural_network/_multilayer_perceptron.py"),
+            path_item("sklearn/utils/_testing.py"),
+            path_item("sklearn/utils/estimator_checks.py"),
+        ),
+        edit=None,
+        notes=(
+            "scripts/python_callers_gold.py: 8 call sites in 8 functions. "
+            "Held out (preregistration amendment 19)."
+        ),
+    ),
+)
+
+
 KNOWN_TASKS: tuple[Task, ...] = (
     TASKS
     + DJANGO_TASKS
@@ -2503,4 +2844,5 @@ KNOWN_TASKS: tuple[Task, ...] = (
     + LARGE_REPO_HELD_OUT_TASKS
     + LARGE_REPO_17_HELD_OUT_TASKS
     + LARGE_REPO_18_HELD_OUT_TASKS
+    + LARGE_REPO_19_HELD_OUT_TASKS
 )
